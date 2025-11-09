@@ -27,27 +27,9 @@
 	}
 
 	function render(){
-		const keyword = (document.getElementById('searchBox')?.value || '').trim().toLowerCase();
 		ROOT.innerHTML='';
 		const topUL = el('ul');
-		const matchFile = f => !keyword || f.name.toLowerCase().includes(keyword) || f.rel.toLowerCase().includes(keyword);
-		const filterNode = node => {
-			if(!keyword) return node; // 无关键词直接使用
-			// 复制结构
-			const nf = { name: node.name, rel: node.rel, dirs: [], files: [] };
-			(node.dirs||[]).forEach(d=>{
-				const sub = filterNode(d);
-				if(sub && (sub.files.length || sub.dirs.length)) nf.dirs.push(sub);
-			});
-			(node.files||[]).forEach(f=>{ if(matchFile(f)) nf.files.push(f); });
-			if(nf.files.length || nf.dirs.length) return nf;
-			return null;
-		};
 		let rootView = ctx.tree;
-		if(keyword){
-			const filtered = filterNode(ctx.tree);
-			rootView = filtered || {dirs:[],files:[]};
-		}
 		(rootView.dirs||[]).forEach(d=>topUL.appendChild(buildNode(d)));
 		(rootView.files||[]).forEach(f=>{ const fi = el('li','file',f.name); fi.dataset.rel = f.rel; fi.onclick=()=>play(f.rel,fi); topUL.appendChild(fi); });
 		ROOT.appendChild(topUL);
@@ -119,12 +101,6 @@
 
 	setTimeout(pollStatus, 1500);
 
-	// 搜索事件
-	const sb = document.getElementById('searchBox');
-	if(sb){
-		let t; sb.addEventListener('input', ()=>{ clearTimeout(t); t=setTimeout(render, 150); });
-	}
-
 	// 播放控制按钮
 	const prevBtn = document.getElementById('prevBtn');
 	const nextBtn = document.getElementById('nextBtn');
@@ -166,4 +142,56 @@
 	document.getElementById('expandAll').onclick=()=>document.querySelectorAll('#tree .dir').forEach(d=>d.classList.remove('collapsed'));
 	document.getElementById('collapseAll').onclick=()=>document.querySelectorAll('#tree .dir').forEach(d=>d.classList.add('collapsed'));
 	render();
+
+	// Upload handlers
+	const uploadBtn = document.getElementById('uploadBtn');
+	const uploadFile = document.getElementById('uploadFile');
+	if(uploadBtn && uploadFile){
+		uploadBtn.addEventListener('click', ()=> uploadFile.click());
+		uploadFile.addEventListener('change', ()=>{
+			const file = uploadFile.files[0];
+			if(!file) return;
+			const ext = file.name.split('.').pop().toLowerCase();
+			// Safely read ALLOWED from server-side boot data if present to avoid ReferenceError
+			const allowed = (typeof ALLOWED !== 'undefined' && Array.isArray(ALLOWED)) ? Array.from(ALLOWED) : [];
+			// ALLOWED in this file may not be global; fall back to common audio extensions
+			const can = allowed.length ? allowed : ['mp3','wav','flac'];
+			if(!can.includes(ext)){
+				alert('只允许上传音频文件 (.mp3 .wav .flac)');
+				uploadFile.value = '';
+				return;
+			}
+			const fd = new FormData();
+			fd.append('file', file, file.name);
+			const uploadStatus = document.getElementById('uploadStatus');
+			if(uploadStatus) uploadStatus.textContent = '正在上传...';
+			
+			fetch('/upload', {method:'POST', body: fd})
+				.then(r => {
+					if(!r.ok) {
+						throw new Error(`HTTP ${r.status} ${r.statusText}`);
+					}
+					return r.json();
+				})
+				.then(j=>{
+					if(j.status==='OK'){
+						alert('上传成功: '+ j.filename);
+						// refresh tree from server
+						fetch('/tree').then(r=>r.json()).then(tj=>{
+							if(tj.status==='OK'){ ctx.tree = tj.tree; render(); }
+						}).catch(e => console.warn('刷新目录失败:', e));
+					}else{
+						throw new Error(j.error || '未知错误');
+					}
+				})
+				.catch(e=>{ 
+					console.error('上传错误:', e);
+					alert('上传失败: ' + e.message); 
+				})
+				.finally(()=>{ 
+					uploadFile.value = ''; 
+					if(uploadStatus) uploadStatus.textContent = '';
+				});
+		});
+	}
 })();

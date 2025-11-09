@@ -1,5 +1,6 @@
 import os, sys, json, threading, time, subprocess, configparser
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
+from werkzeug.utils import secure_filename
 
 APP = Flask(__name__, template_folder='.')
 
@@ -503,6 +504,63 @@ def api_volume():
 	if not mpv_set('volume', f):
 		return jsonify({'status':'ERROR','error':'设置失败'}), 400
 	return jsonify({'status':'OK','volume': f})
+
+# Ensure upload directory exists inside MUSIC_DIR
+def _ensure_upload_dir():
+    upload_dir = os.path.join(MUSIC_DIR, 'upload')
+    try:
+        os.makedirs(upload_dir, exist_ok=True)
+    except Exception as e:
+        print('[WARN] 无法创建 upload 目录:', e)
+    return upload_dir
+
+@APP.route('/upload', methods=['POST'])
+def api_upload():
+    """接受单个文件上传，保存至 MUSIC_DIR/upload，仅允许 ALLOWED 扩展名。"""
+    if 'file' not in request.files:
+        return jsonify({'status':'ERROR','error':'缺少文件字段 file'}), 400
+    f = request.files['file']
+    if f.filename == '':
+        return jsonify({'status':'ERROR','error':'未选择文件'}), 400
+    filename = secure_filename(f.filename)
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in ALLOWED:
+        return jsonify({'status':'ERROR','error':'不允许的文件类型'}), 400
+    upload_dir = _ensure_upload_dir()
+    target = os.path.join(upload_dir, filename)
+    
+    # 打印上传信息
+    size_mb = f.content_length / (1024*1024) if f.content_length else 0
+    print(f"[UPLOAD] 接收文件:")
+    print(f"- 源文件: {f.filename}")
+    print(f"- 大小: {size_mb:.2f}MB")
+    print(f"- 类型: {f.content_type}")
+    print(f"- 来源IP: {request.remote_addr}")
+    print(f"- 目标: {target}")
+
+    # 防止覆盖已有文件：若存在则在文件名后追加数字
+    base, e = os.path.splitext(filename)
+    i = 1
+    while os.path.exists(target):
+        filename = f"{base}_{i}{e}"
+        target = os.path.join(upload_dir, filename)
+        i += 1
+        print(f"- 重命名为: {filename} (避免覆盖)")
+
+    try:
+        f.save(target)
+        print(f"[UPLOAD] 保存成功: {filename}")
+    except Exception as e:
+        print(f"[UPLOAD] 保存失败: {e}")
+        return jsonify({'status':'ERROR','error':f'保存失败: {e}'}), 500
+    # Optionally rebuild playlist now or let next playlist scan pick it up
+    # We will rebuild the in-memory PLAYLIST so it's immediately visible
+    try:
+        global PLAYLIST
+        PLAYLIST = _build_playlist()
+    except Exception:
+        pass
+    return jsonify({'status':'OK','filename': filename, 'path': os.path.relpath(target, os.path.abspath(MUSIC_DIR)).replace('\\','/')})
 
 print("Build marker:", time.time())
 
