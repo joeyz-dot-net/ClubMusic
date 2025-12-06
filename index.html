@@ -46,19 +46,34 @@
 	<header>
 		<div class="toolbar">
 			<input id="uploadFile" type="file" accept=".mp3,.wav,.flac" style="display:none;" />
-			<button id="uploadBtn" aria-label="上传">上传</button>
-			<button id="prevBtn" aria-label="上一首">⏮</button>
-			<button id="nextBtn" aria-label="下一首">⏭</button>
-			<button id="shuffleBtn" aria-label="随机" data-on="0">🔀</button>
-			<button id="expandAll" aria-label="展开全部">展开</button>
-			<button id="collapseAll" aria-label="折叠全部">折叠</button>
+			<button id="youtubeBtn" aria-label="YouTube">YouTube</button>
+			<button id="prevBtn" aria-label="上一首">上首</button>
+			<button id="nextBtn" aria-label="下一首">下首</button>
+			<button id="shuffleBtn" aria-label="随机" data-on="0">随机</button>
+			<button id="toggleExpand" aria-label="展开/折叠">展开</button>
+			
 		</div>
 	</header>
 	<main id="tree" aria-label="文件列表"></main>
 	<footer id="playerBar"><div id="nowPlaying">未播放</div><div class="volWrap"><input id="volSlider" type="range" min="0" max="130" value="50" /></div></footer>
 	<div id="playerProgress" aria-hidden="true"><div id="playerProgressFill"></div></div>
 		<script id="boot-data" type="application/json">{{ {'tree': tree, 'musicDir': music_dir}|tojson }}</script>
+	</main>
+
+	<!-- YouTube弹窗 -->
+	<div id="youtubeModal" class="youtube-modal" aria-hidden="true">
+		<div class="youtube-content">
+			<h3 class="youtube-title">输入YouTube视频地址</h3>
+			<input id="youtubeInput" type="text" class="youtube-input" value="https://youtu.be/P94RFMk1AcY?si=QjjXTdh_Lw6vl3Me" />
+			<div id="youtubeStatus" class="youtube-status"></div>
+			<div class="youtube-actions">
+				<button id="youtubeCancel" class="youtube-btn">取消</button>
+				<button id="youtubeSubmit" class="youtube-btn primary">提交</button>
+			</div>
+		</div>
+	</div>
+
 	<script src="/static/main.js"></script>
+	<script src="/static/youtube.js"></script>
 </body>
 </html>
-k

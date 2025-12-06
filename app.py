@@ -106,6 +106,56 @@ else:
 ALLOWED = set([e if e.startswith('.') else '.'+e for e in parts])
 MPV_CMD = cfg.get('MPV_CMD') or cfg.get('MPV') or ''
 
+def _find_ffmpeg():
+	"""尝试定位系统上的 ffmpeg 可执行文件：
+	1) 检查 PATH
+	2) 检查与 mpv.exe 相同目录（打包场景）
+	返回可执行路径或 None
+	"""
+	candidates = []
+	# 检查 PATH
+	for name in ('ffmpeg.exe','ffmpeg'):
+		for p in os.environ.get('PATH','').split(os.pathsep):
+			try:
+				full = os.path.join(p, name)
+				if os.path.isfile(full) and os.access(full, os.X_OK):
+					return os.path.abspath(full)
+			except Exception:
+				continue
+	# 如果 mpv 可执行位于同一目录，常见于打包后的 dist
+	try:
+		mpv_exec = None
+		# 从 MPV_CMD 中尝试解析带引号或不带引号的可执行路径
+		if MPV_CMD:
+			parts = MPV_CMD.split()
+			first = parts[0].strip('"')
+			if os.path.isfile(first):
+				mpv_exec = first
+			else:
+				# 尝试在 app dir 查找
+				cand = os.path.join(_get_app_dir(), 'mpv.exe')
+				if os.path.isfile(cand):
+					mpv_exec = cand
+		else:
+			cand = os.path.join(_get_app_dir(), 'mpv.exe')
+			if os.path.isfile(cand):
+				mpv_exec = cand
+		if mpv_exec:
+			mpv_dir = os.path.dirname(os.path.abspath(mpv_exec))
+			ff = os.path.join(mpv_dir, 'ffmpeg.exe')
+			if os.path.isfile(ff) and os.access(ff, os.X_OK):
+				return os.path.abspath(ff)
+	except Exception:
+		pass
+	return None
+
+# 尝试检测 ffmpeg
+FFMPEG_PATH = _find_ffmpeg()
+if FFMPEG_PATH:
+	print(f"[INFO] ffmpeg 已找到: {FFMPEG_PATH}")
+else:
+	print('[WARN] 未检测到 ffmpeg，可导致某些流/容器处理失败。建议安装 ffmpeg 或将 ffmpeg.exe 放在 mpv 同目录或 PATH 中。')
+
 def _extract_pipe_name(cmd: str, fallback: str = r'\\.\\pipe\\mpv-pipe') -> str:
 	"""从 MPV_CMD 中解析 --input-ipc-server 值; 支持两种形式:
 	1) --input-ipc-server=\\.\\pipe\\mpv-pipe
@@ -144,6 +194,10 @@ _STOP_FLAG = False
 _REQ_ID = 0
 CURRENT_META = {}  # 仅内存保存当前播放信息，不写入 settings.json
 SHUFFLE = False
+_LAST_PLAY_TIME = 0  # 记录最后一次启动播放的时间戳，用于跳过过早的结束检测
+# 保存被网络流打断前的播放状态，以便网络流结束后恢复本地播放列表
+PREV_INDEX = None
+PREV_META = None
 
 # =========== 文件树 / 安全路径 ===========
 def safe_path(rel: str):
@@ -216,17 +270,39 @@ def ensure_mpv():
 def mpv_command(cmd_list):
 	# 写命令，失败时自动尝试启动一次再重试
 	def _write():
+		# Debug: print the command being sent to mpv pipe
+		print(f"[DEBUG] mpv_command -> sending: {cmd_list} to pipe {PIPE_NAME}")
 		with open(PIPE_NAME, 'wb') as w:
 			w.write((json.dumps({'command': cmd_list})+'\n').encode('utf-8'))
 	try:
 		_write()
 	except Exception as e:
+		import traceback
 		print(f'[WARN] 首次写入失败: {e}. 尝试 ensure_mpv 后重试...')
+		print('[DEBUG] 异常类型:', type(e))
+		print('[DEBUG] PIPE_NAME value:', repr(PIPE_NAME))
+		try:
+			# On Windows, named pipe path may not be a real file; show os.path.exists result regardless
+			print('[DEBUG] os.path.exists(PIPE_NAME):', os.path.exists(PIPE_NAME))
+		except Exception as ex:
+			print('[DEBUG] os.path.exists raised:', ex)
+		print('[DEBUG] Traceback:')
+		traceback.print_exc()
+		# Try to list mpv process on Windows to help debugging
+		try:
+			if os.name == 'nt':
+				tl = subprocess.run(['tasklist','/FI','IMAGENAME eq mpv.exe'], capture_output=True, text=True)
+				print('[DEBUG] tasklist for mpv.exe:\n', tl.stdout)
+		except Exception:
+			pass
 		if ensure_mpv():
 			try:
 				_write()
 				return
 			except Exception as e2:
+				print(f'[ERROR] 重试写入失败: {e2}')
+				import traceback
+				traceback.print_exc()
 				raise RuntimeError(f'MPV 管道写入失败(重试): {e2}')
 		raise RuntimeError(f'MPV 管道写入失败: {e}')
 
@@ -283,14 +359,66 @@ def _ensure_playlist(force: bool = False):
 	return PLAYLIST
 
 def _play_index(idx: int):
-	global CURRENT_INDEX, CURRENT_META
+	global CURRENT_INDEX, CURRENT_META, _LAST_PLAY_TIME
 	if idx < 0 or idx >= len(PLAYLIST):
 		return False
 	rel = PLAYLIST[idx]
 	abs_file = safe_path(rel)
-	mpv_command(['loadfile', abs_file, 'replace'])
+	# Debug: print play info
+	print(f"[DEBUG] _play_index -> idx={idx}, rel={rel}, abs_file={abs_file}")
+	try:
+		mpv_command(['loadfile', abs_file, 'replace'])
+	except Exception as e:
+		print(f"[ERROR] mpv_command failed when playing {abs_file}: {e}")
+		raise
 	CURRENT_INDEX = idx
-	CURRENT_META = {'abs_path': abs_file, 'rel': rel, 'index': idx, 'ts': int(time.time())}
+	CURRENT_META = {'abs_path': abs_file, 'rel': rel, 'index': idx, 'ts': int(time.time()), 'name': os.path.basename(rel)}
+	_LAST_PLAY_TIME = time.time()  # 记录播放开始时间
+	print(f"[DEBUG] CURRENT_INDEX set to {CURRENT_INDEX}")
+	return True
+
+def _play_url(url: str):
+	"""播放网络 URL（如 YouTube）。使用 --ytdl-format=bestaudio 标志让 mpv 正确处理 YouTube。"""
+	#global CURRENT_INDEX, CURRENT_META, _LAST_PLAY_TIME
+	print(f"[DEBUG] _play_url -> url={url}")
+	try:
+		# 检查 mpv 进程是否运行
+		if not mpv_pipe_exists():
+			print(f"[WARN] mpv pipe 不存在，尝试启动 mpv...")
+			if not ensure_mpv():
+				raise RuntimeError("无法启动或连接到 mpv")
+		
+		# 注意：通过 IPC 发送选项标志（如 --ytdl-format）需要特殊处理。
+		# 更好的方法是先设置 ytdl-format 属性，再加载文件。
+		print(f"[DEBUG] 设置 mpv 属性: ytdl-format=bestaudio")
+		mpv_command(['set_property', 'ytdl-format', 'bestaudio'])
+		print(f"[DEBUG] 调用 mpv_command 播放 URL: {url}")
+		mpv_command(['loadfile', url, 'replace'])
+		print(f"[DEBUG] 已向 mpv 发送播放命令")
+		# 保存当前本地播放状态，以便网络流结束后恢复
+		global CURRENT_META, PREV_INDEX, PREV_META, CURRENT_INDEX
+		PREV_INDEX = CURRENT_INDEX
+		PREV_META = dict(CURRENT_META) if CURRENT_META else None
+		# 初始化 CURRENT_META，保留 rel 为 URL，但提供可用于显示的 name 字段
+		CURRENT_META = {'abs_path': url, 'rel': url, 'index': -1, 'ts': int(time.time()), 'name': url}
+		# 稍等让 mpv 初始化 media metadata，然后尝试读取 media-title 作为显示名称
+		time.sleep(0.8)
+		try:
+			media_title = mpv_get('media-title')
+			if media_title:
+				CURRENT_META['name'] = media_title
+				print(f"[DEBUG] mpv media-title 探测到: {media_title}")
+		except Exception as _e:
+			print(f"[WARN] 无法读取 mpv media-title: {_e}")
+	except Exception as e:
+		print(f"[ERROR] _play_url failed for {url}: {e}")
+		import traceback
+		traceback.print_exc()
+		raise
+	#CURRENT_INDEX = -1
+	#CURRENT_META = {'abs_path': url, 'rel': url, 'index': -1, 'ts': int(time.time())}
+	_LAST_PLAY_TIME = time.time()  # 记录播放开始时间（YouTube 需要更长的缓冲时间）
+	print(f"[DEBUG] 已设置为播放 URL: {url}，启动时间戳: {_LAST_PLAY_TIME}")
 	return True
 
 def _next_track():
@@ -333,36 +461,109 @@ def _prev_track():
 def _auto_loop():
 	print('[INFO] 自动播放线程已启动')
 	while not _STOP_FLAG:
-		print('[DEBUG] 自动播放检查...')
-		if CURRENT_INDEX < 0:
-			# 没有正在播放的，尝试自动加载并播第一首
-			_ensure_playlist()
-			if PLAYLIST:
-				_play_index(0)
-				time.sleep(1.0)
-				continue
 		try:
+			now_ts = time.time()
+			ts_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(now_ts))
+			print(f'[DEBUG] 自动播放检查... {ts_str}')
+
+			if CURRENT_INDEX < 0:
+				# 如果 CURRENT_INDEX < 0，可能是在播放网络流(如 YouTube)，此时不应自动加载本地播放列表或切换到下一首
+				cur_rel = CURRENT_META.get('rel') if CURRENT_META else None
+				if cur_rel and isinstance(cur_rel, str) and cur_rel.startswith('http'):
+					print(f"[DEBUG] 正在播放网络流 (rel={cur_rel})，跳过自动加载本地播放列表")
+					time.sleep(10)
+					continue
+				# 没有正在播放的本地项，尝试自动加载并播放第一首
+				_ensure_playlist()
+				if PLAYLIST:
+					print('[DEBUG] 当前无播放项，准备播放第一首:', PLAYLIST[0])
+					_play_index(0)
+					time.sleep(1.0)
+					continue
+				else:
+					print('[DEBUG] 播放列表为空，等待中...')
+					time.sleep(10)
+					continue
+
+			# 查询当前播放信息与进度
+			try:
+				pos = mpv_get('time-pos')
+				dur = mpv_get('duration')
+				paused = mpv_get('pause')
+			except Exception as e:
+				pos = dur = paused = None
+				print(f'[WARN] 获取 mpv 属性失败: {e}')
+
+			cur = CURRENT_META.get('rel') if CURRENT_META else None
+			if cur:
+				pct = None
+				try:
+					if isinstance(pos,(int,float)) and isinstance(dur,(int,float)) and dur>0:
+						pct = (pos/dur)*100
+				except Exception:
+					pct = None
+				print(f"[DEBUG] 当前播放: rel={cur} index={CURRENT_INDEX} pos={pos} dur={dur} pct={pct and f'{pct:.2f}%' or '--'} paused={paused}")
+
 			# 侦测曲目结束: 优先 eof-reached, 其次 time-pos≈duration, 再次 idle-active
+			# 但首先检查是否还在播放启动的 grace period 内，避免过早判断为结束
+			# YouTube 等网络流需要 8-10 秒来下载和缓冲，所以 grace period 是 10 秒
 			ended = False
-			pos = mpv_get('time-pos')
-			dur = mpv_get('duration')
-			eof = mpv_get('eof-reached')  # 可能为 None
-			if eof is True:
-				ended = True
-			elif isinstance(pos,(int,float)) and isinstance(dur,(int,float)) and dur>0 and (dur - pos) <= 0.3:
-				ended = True
-			else:
-				idle = mpv_get('idle-active')
-				if idle is True and (pos is None or (isinstance(pos,(int,float)) and pos==0)):
-					ended = True
+			try:
+				time_since_play = time.time() - _LAST_PLAY_TIME
+				grace_period = 10.0  # YouTube 需要这么长时间来初始化
+				if time_since_play < grace_period:
+					print(f'[DEBUG] 播放刚启动 ({time_since_play:.1f}s < {grace_period}s)，跳过结束检测')
+				else:
+					eof = mpv_get('eof-reached')  # 可能为 None
+					if eof is True:
+						ended = True
+					elif isinstance(pos,(int,float)) and isinstance(dur,(int,float)) and dur>0 and (dur - pos) <= 0.3:
+						ended = True
+					else:
+						idle = mpv_get('idle-active')
+						if idle is True and (pos is None or (isinstance(pos,(int,float)) and pos==0)):
+							ended = True
+			except Exception as e:
+				print(f'[WARN] 检查结束状态时出错: {e}')
+
 			if ended:
+				# 如果当前播放的是网络流（URL），不要自动跳到下一首
+				cur_rel = CURRENT_META.get('rel') if CURRENT_META else None
+				if cur_rel and isinstance(cur_rel, str) and cur_rel.startswith('http'):
+					print('[INFO] 网络流检测到结束，准备恢复本地播放列表 (若有)')
+					# 尝试恢复之前被网络流打断的播放状态
+					try:
+						global PREV_INDEX, PREV_META
+						if PREV_INDEX is not None and isinstance(PREV_INDEX, int) and PREV_INDEX >= 0 and PREV_INDEX < len(PLAYLIST):
+							print(f"[INFO] 恢复并播放之前的索引: {PREV_INDEX}")
+							# _play_index 会更新 CURRENT_INDEX/CURRENT_META
+							_play_index(PREV_INDEX)
+							# 清理保存状态
+							PREV_INDEX = None
+							PREV_META = None
+							# 继续下一轮检查
+							continue
+						# 如果没有已知的之前索引，但本地播放列表存在，则从头开始播放
+						if PLAYLIST:
+							print('[INFO] 恢复本地播放列表，从第一首开始')
+							_play_index(0)
+							PREV_INDEX = None
+							PREV_META = None
+							continue
+					except Exception as _e:
+						print(f"[WARN] 恢复本地播放列表时出错: {_e}")
+						# 若恢复失败，稍等后继续循环
+						time.sleep(5)
+						continue
 				print('[INFO] 当前曲目已结束，尝试播放下一首...')
 				if not _next_track():
 					# 到末尾，等待再尝试
+					print('[DEBUG] 已到播放列表末尾，稍后重试')
 					time.sleep(10)
 					continue
-		except Exception:
-			pass
+		except Exception as e:
+			print(f'[ERROR] 自动播放循环异常: {e}')
+		# 轮询间隔
 		time.sleep(10)
 
 def _ensure_auto_thread():
@@ -495,6 +696,8 @@ def api_debug_mpv():
 		'MPV_CMD': MPV_CMD,
 		'PIPE_NAME': PIPE_NAME,
 		'pipe_exists': mpv_pipe_exists(),
+		'ffmpeg_path': FFMPEG_PATH,
+		'ffmpeg_exists': bool(FFMPEG_PATH),
 		'playlist_len': len(PLAYLIST),
 		'current_index': CURRENT_INDEX,
 		'shuffle': 'SHUFFLE' in globals() and globals().get('SHUFFLE')
@@ -652,7 +855,7 @@ def preview_image():
             print("[WARN] 使用默认字体")
 
         # 定义要显示的文本
-        title = "支持上传音乐"
+        title = "支持YouTube串流"
         description = ""
 	
         # 绘制界面元素
@@ -791,13 +994,16 @@ def api_volume():
 	return jsonify({'status':'OK','volume': f})
 
 # Ensure upload directory exists inside MUSIC_DIR
+
 def _ensure_upload_dir():
-    upload_dir = os.path.join(MUSIC_DIR, 'upload')
-    try:
-        os.makedirs(upload_dir, exist_ok=True)
-    except Exception as e:
-        print('[WARN] 无法创建 upload 目录:', e)
-    return upload_dir
+	upload_dir = os.path.join(MUSIC_DIR, 'upload')
+	try:
+		os.makedirs(upload_dir, exist_ok=True)
+	except Exception as e:
+		print('[WARN] 无法创建 upload 目录:', e)
+	return upload_dir
+
+# Note: download directory helper removed — download-by-URL functionality was removed.
 
 @APP.route('/upload', methods=['POST'])
 def api_upload():
@@ -847,7 +1053,35 @@ def api_upload():
         pass
     return jsonify({'status':'OK','filename': filename, 'path': os.path.relpath(target, os.path.abspath(MUSIC_DIR)).replace('\\','/')})
 
-print("Build marker:", time.time())
+"""
+Removed: previously supported `/youtube` download route that used yt-dlp to save video/audio to
+the local `download` directory. Download functionality was removed per user request; streaming
+via `/play_youtube` remains.
+"""
+
+
+@APP.route('/play_youtube', methods=['POST'])
+def api_play_youtube():
+	"""播放 YouTube 链接。使用 mpv 的 --ytdl-format=bestaudio 标志。
+	请求参数：url（必需）
+	"""
+	from flask import request, jsonify
+	url = (request.form.get('url') or '').strip()
+	if not url or not url.startswith('http'):
+		return jsonify({'status':'ERROR','error':'缺少或非法的 url'}), 400
+	try:
+		# 确保 mpv 就绪
+		if not ensure_mpv():
+			return jsonify({'status':'ERROR','error':'mpv 启动失败或未就绪'}), 500
+		# 使用 _play_url 播放，它会设置 ytdl-format=bestaudio 并加载 URL
+		print(f"[YOUTUBE] 开始播放 YouTube 链接: {url}")
+		_play_url(url)
+		return jsonify({'status':'OK','msg':'已开始流式播放 (mpv ytdl-format=bestaudio)', 'url': url})
+	except Exception as e:
+		print(f"[ERROR] 播放 YouTube 异常: {e}")
+		import traceback
+		traceback.print_exc()
+		return jsonify({'status':'ERROR','error': str(e)}), 500
 
 if __name__ == '__main__':
 	APP.run(host=cfg.get('FLASK_HOST','0.0.0.0'), port=cfg.get('FLASK_PORT',8000), debug=cfg.get('DEBUG',False))

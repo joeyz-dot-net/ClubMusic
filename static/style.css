@@ -120,3 +120,30 @@ button:hover { background:#4a5058; }
 	.dir > .label { padding:8px 2px; }
 	#playerBar { font-size:15px; }
 }
+
+/* YouTube modal responsiveness */
+#youtubeModal { z-index:9999; }
+/* Modal layout */
+#youtubeModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9999; align-items:center; justify-content:center; }
+#youtubeModal .youtube-content { max-width:640px; width:90vw; box-sizing:border-box; background:#130000; padding:24px 32px; border-radius:8px; box-shadow:0 2px 16px #0003; }
+
+#youtubeModal .youtube-title { margin:0 0 8px 0; font-size:1.1rem; }
+#youtubeModal .youtube-input { width:100%; padding:12px 10px; font-size:16px; border-radius:6px; border:1px solid #444; background:#0f0f10; color:#fff; box-sizing:border-box; }
+#youtubeModal .youtube-status { margin-top:8px; min-height:20px; color:#1976d2; font-size:0.95rem; }
+#youtubeModal .youtube-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+#youtubeModal .youtube-actions .youtube-btn { padding:8px 14px; min-width:88px; border-radius:6px; }
+#youtubeModal .youtube-actions .youtube-btn.primary { background:#1976d2; color:#fff; border-color:transparent; }
+
+@media (max-width: 520px) {
+    /* On small screens make modal full-width bottom sheet style */
+    #youtubeModal { align-items:flex-end; }
+    #youtubeModal .youtube-content {
+        width:100vw; max-width:100vw; margin:0; border-radius:12px 12px 0 0; padding:16px; min-height:140px;
+        box-shadow:0 -6px 24px rgba(0,0,0,0.6);
+    }
+    #youtubeModal input#youtubeInput { font-size:18px; padding:14px; }
+    #youtubeModal .youtube-actions { flex-direction:column-reverse; }
+    #youtubeModal .youtube-actions button { width:100%; min-width:0; }
+    /* Make sure toolbar buttons don't overflow under modal */
+    body.modal-open { overflow:hidden; }
+}

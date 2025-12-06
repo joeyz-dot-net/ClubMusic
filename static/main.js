@@ -54,15 +54,17 @@
 	}
 
 	function play(rel, dom){
+		console.debug('[PLAY] 请求播放:', rel);
 		fetch('/play', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'path='+encodeURIComponent(rel)})
 			.then(r=>r.json())
 			.then(j=>{
-				if(j.status!=='OK') { alert('播放失败: '+ j.error); return; }
+				console.debug('[PLAY] /play 响应:', j);
+				if(j.status!=='OK') { console.warn('播放失败: ', j.error); alert('播放失败: '+ j.error); return; }
 				document.querySelectorAll('.file.playing').forEach(e=>e.classList.remove('playing'));
 				dom.classList.add('playing');
 				const bar = document.getElementById('nowPlaying');
 				bar.textContent = '▶ '+ rel;
-			}).catch(e=>alert('请求错误: '+ e));
+			}).catch(e=>{ console.error('[PLAY] 请求错误', e); alert('请求错误: '+ e); });
 	}
 
 	function pollStatus(){
@@ -71,7 +73,8 @@
 			const bar = document.getElementById('nowPlaying');
 			if(!j.playing || !j.playing.rel){ bar.textContent='未播放'; return; }
 			const rel = j.playing.rel;
-			let label = '▶ '+ rel;
+			const displayName = j.playing.name || rel;
+			let label = '▶ '+ displayName;
 			if(j.mpv && j.mpv.time!=null && j.mpv.duration){
 				const t = j.mpv.time||0, d = j.mpv.duration||0;
 				const fmt = s=>{ if(isNaN(s)) return '--:--'; const m=Math.floor(s/60), ss=Math.floor(s%60); return m+':'+(ss<10?'0':'')+ss; };
@@ -139,9 +142,28 @@
 		}).catch(()=>{});
 	}
 
-	document.getElementById('expandAll').onclick=()=>document.querySelectorAll('#tree .dir').forEach(d=>d.classList.remove('collapsed'));
-	document.getElementById('collapseAll').onclick=()=>document.querySelectorAll('#tree .dir').forEach(d=>d.classList.add('collapsed'));
+	const toggleBtn = document.getElementById('toggleExpand');
+	function updateToggleLabel(){
+		if(!toggleBtn) return;
+		const dirs = Array.from(document.querySelectorAll('#tree .dir'));
+		const anyCollapsed = dirs.some(d=>d.classList.contains('collapsed'));
+		toggleBtn.textContent = anyCollapsed ? '展开' : '折叠';
+	}
+	if(toggleBtn){
+		toggleBtn.onclick = ()=>{
+			const dirs = document.querySelectorAll('#tree .dir');
+			const anyCollapsed = Array.from(dirs).some(d=>d.classList.contains('collapsed'));
+			if(anyCollapsed){
+				dirs.forEach(d=>d.classList.remove('collapsed'));
+			} else {
+				dirs.forEach(d=>d.classList.add('collapsed'));
+			}
+			updateToggleLabel();
+		};
+	}
 	render();
+	// Update toggle button label after render so it reflects current tree state
+	setTimeout(()=>{ try{ updateToggleLabel(); }catch(e){} }, 50);
 
 	// Upload handlers
 	const uploadBtn = document.getElementById('uploadBtn');
