@@ -3,7 +3,7 @@
 <head>
 	<meta charset="UTF-8" />
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-	<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+	<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=yes,viewport-fit=cover" />
 	
 	<!-- Primary Metadata -->
 	<title>音乐点播 支持YouTube串流</title>
@@ -53,46 +53,41 @@
 	<link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-	<header>
-	<nav class="tabs-nav">
-		<button class="tab-btn active" data-tab="youtube">YouTube</button>
-		<button class="tab-btn" data-tab="local">本地</button>
-	</nav>
-		<div class="toolbar">
-		<script id="boot-data" type="application/json">{{ {'tree': tree, 'musicDir': music_dir}|tojson }}</script>
-		<input id="volSlider" type="range" min="0" max="100" value="50" class="header-volume-slider" />
+	<header id="headerBar" class="header-expanded">
+		<div id="headerContent">
+			<div class="toolbar">
+				<script id="boot-data" type="application/json">{{ {'tree': tree, 'musicDir': music_dir}|tojson }}</script>
+				<div class="youtube-search-section" id="youtubeSearchSection">
+					<div class="youtube-search-group">
+						<input id="youtubeSearchInput" class="youtube-search-input" type="text" placeholder="搜索或粘贴YouTube链接..." autocomplete="off" />
+						<button id="youtubeSearchBtn" class="youtube-btn primary">搜索</button>
+						<button id="youtubeMenuBtn" class="youtube-menu-btn" title="更多选项">⋮</button>
+						<!-- 搜索历史下拉列表 -->
+						<div id="youtubeSearchHistory" class="youtube-search-history" style="display:none;">
+							<div id="youtubeSearchHistoryList" class="youtube-search-history-list"></div>
+						</div>
+						<!-- 下拉菜单 -->
+						<div id="youtubeMenu" class="youtube-menu" style="display:none;">
+							<button id="historyMenuBtn" class="youtube-menu-item" data-action="history" disabled="true">📋 播放历史</button>
+							<button id="localMenuBtn" class="youtube-menu-item" data-action="local">🎵 本地歌曲</button>
+							<button id="clearQueueMenuBtn" class="youtube-menu-item" data-action="clear">🗑️ 清空队列</button>
+						</div>
+					</div>
+				</div>
+			</div>
 		</div>
 	</header>
 	<main id="tree" class="tab-content local-tab local-theme" style="display:none;" aria-label="文件列表"></main>
 	<div id="youtubePlaylist" class="tab-content youtube-tab youtube-theme" aria-label="YouTube播放列表">
 		
-		<div class="youtube-search-section" id="youtubeSearchSection">
-			<div class="youtube-search-group">
-				<input id="youtubeSearchInput" class="youtube-search-input" type="text" placeholder="搜索YouTube视频..." />
-				<button id="youtubeSearchBtn" class="youtube-btn primary">搜索</button>
-			</div>
-			<div id="youtubeSearchResults" class="youtube-search-results" style="display:none;">
-				<h4 class="youtube-search-title">搜索结果</h4>
-				<div id="youtubeSearchList" class="youtube-search-list"></div>
-			</div>
+		<div id="youtubeSearchResults" class="youtube-search-results" style="display:none;">
+			<h4 class="youtube-search-title">搜索结果</h4>
+			<div id="youtubeSearchList" class="youtube-search-list"></div>
 		</div>
 		
 		<div class="youtube-queue-section" id="youtubeQueueSection">
-			<h4 class="youtube-queue-title">当前播放队列</h4>
+		
 			<div id="youtubeQueueList" class="youtube-queue-list"></div>
-		</div>
-		<!-- YouTube输入模态框 -->
-		<div id="youtubeInputModal" class="youtube-input-modal" style="display:none;">
-			<div class="youtube-input-modal-content">
-				<div class="youtube-input-modal-header">
-					<h3>输入YouTube地址</h3>
-					<button class="youtube-input-modal-close" data-icon="✕">✕</button>
-				</div>
-				<div class="youtube-input-modal-body">
-					<textarea id="youtubeInputTextarea" class="youtube-input" placeholder="输入YouTube视频或播放列表地址" rows="4"></textarea>
-					<button id="youtubeInputSubmit" class="youtube-btn primary youtube-input-submit-btn">播放</button>
-				</div>
-			</div>
 		</div>
 		<!-- YouTube搜索结果模态框 -->
 		<div id="youtubeSearchModal" class="youtube-search-modal" style="display:none;">
@@ -108,21 +103,25 @@
 		</div>
 	</div>
 	
-	<footer id="playerBar">
-		<div id="playerProgress" aria-hidden="true"><div id="playerProgressFill"></div></div>
-		<div id="nowPlaying">未播放</div>
-		<div class="footer-controls-wrapper">
-		<div class="footer-controls-left">
-			<button id="youtubeInputBtn" class="control-btn" data-icon="📝" title="输入地址">📝</button>
-			<button id="historyBtn" class="control-btn" data-icon="📋" title="历史">📋</button>
-			<button id="prevBtn" class="control-btn" data-icon="⏮" title="上一首">⏮</button>
+	<footer id="playerBar" class="footer-collapsed">
+		<div id="playerProgress" aria-hidden="true">
+			<div id="playerProgressFill"></div>
+			<div id="playerProgressThumb"></div>
 		</div>
-			<button id="playPauseBtn" class="control-btn play-pause-large" data-icon="▶" title="播放/暂停">▶</button>
-		<div class="footer-controls-right">
-			<button id="nextBtn" class="control-btn" data-icon="⏭" title="下一首">⏭</button>
-			<button id="loopBtn" class="control-btn loop-btn" data-icon="↻" title="循环模式">↻</button>
-			<button id="volumePopupBtn" class="control-btn" data-icon="🔊" title="音量">🔊</button>
-		</div>
+		<div id="footerContent" class="footer-content">
+			<div id="nowPlaying">未播放</div>
+			<div class="footer-controls-wrapper">
+			<div class="footer-controls-left">
+				<button id="loopBtn" class="control-btn loop-btn" data-icon="↻" title="循环模式">↻</button>
+				<button id="prevBtn" class="control-btn" data-icon="⼮" title="上一首">⏮</button>
+			</div>
+				<button id="playPauseBtn" class="control-btn play-pause-large" data-icon="▶" title="播放/暂停">▶</button>
+			<div class="footer-controls-right">
+				<button id="nextBtn" class="control-btn" data-icon="⏭" title="下一首">⏭</button>
+				
+				<button id="volumePopupBtn" class="control-btn" data-icon="🔊" title="音量">🔊</button>
+			</div>
+			</div>
 		</div>
 		<!-- Volume popup slider - entire popup is the slider -->
 		<div id="volumePopup" class="volume-popup" style="display:none;">
@@ -141,6 +140,17 @@
 				<button class="history-modal-close" data-icon="✕">✕</button>
 			</div>
 			<div class="history-modal-list" id="historyList"></div>
+		</div>
+	</div>
+
+	<!-- Local songs modal -->
+	<div id="localSongsModal" class="history-modal" style="display:none;">
+		<div class="history-modal-content" style="width: 90%; max-width: 600px; max-height: 80vh;">
+			<div class="history-modal-header">
+				<h3>本地歌曲</h3>
+				<button class="local-songs-modal-close" data-icon="✕">✕</button>
+			</div>
+			<div class="history-modal-list" id="localSongsModalBody" style="overflow:auto; max-height: calc(80vh - 64px);"></div>
 		</div>
 	</div>
 	

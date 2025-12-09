@@ -54,25 +54,61 @@
 	}
 
 	function play(rel, dom){
-		console.debug('[PLAY] 请求播放:', rel);
-		fetch('/play', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'path='+encodeURIComponent(rel)})
-			.then(r=>r.json())
-			.then(j=>{
-				console.debug('[PLAY] /play 响应:', j);
-				if(j.status!=='OK') { console.warn('播放失败: ', j.error); alert('播放失败: '+ j.error); return; }
-				document.querySelectorAll('.file.playing').forEach(e=>e.classList.remove('playing'));
-				dom.classList.add('playing');
-				const bar = document.getElementById('nowPlaying');
-				bar.textContent = '▶ '+ rel;
-			}).catch(e=>{ console.error('[PLAY] 请求错误', e); alert('请求错误: '+ e); });
+		// 添加本地文件到播放队列末尾（不立即播放）
+		const title = dom?.textContent || rel;
+		console.log('[PLAY] 被点击的DOM元素:', dom);
+		console.log('[PLAY] 被点击的DOM的data-rel属性:', dom?.dataset?.rel);
+		console.log('[PLAY] 收到的rel参数:', rel);
+		console.log('[PLAY] 标题:', title);
+		console.debug('[PLAY] 请求添加本地文件到队列:', rel, '标题:', title);
+		
+		// 立即高亮显示该文件
+		document.querySelectorAll('.file.playing').forEach(e=>e.classList.remove('playing'));
+		if(dom) {
+			dom.classList.add('playing');
+			console.log('[PLAY] 已高亮DOM元素，rel值:', dom?.dataset?.rel);
+			expandTo(rel);
+		}
+		
+		// 调用 /play 端点：添加到队列末尾，不立即播放
+		const encodedPath = encodeURIComponent(rel);
+		console.log('[PLAY] 编码后的路径:', encodedPath);
+		const body = `path=${encodedPath}&play_now=0`;
+		console.log('[PLAY] 请求body:', body);
+		
+		fetch('/play', {
+			method:'POST',
+			headers:{'Content-Type':'application/x-www-form-urlencoded'},
+			body: body
+		})
+		.then(r=>r.json())
+		.then(j=>{
+			console.debug('[PLAY] /play 响应:', j);
+			console.log('[PLAY] 响应状态:', j.status, '消息:', j.message || j.error);
+			if(j.status!=='OK') { 
+				console.warn('添加队列失败: ', j.error); 
+				alert('添加队列失败: '+ j.error); 
+				return; 
+			}
+			console.debug('[PLAY] 本地文件已添加到队列末尾');
+			// 刷新队列UI显示新添加的项
+			if(window.loadYoutubeQueue) {
+				console.debug('[PLAY] 刷新队列UI');
+				window.loadYoutubeQueue();
+			}
+		}).catch(e=>{ 
+			console.error('[PLAY] 请求错误', e); 
+			alert('添加队列请求错误: '+ e); 
+		});
 	}
 
 	function pollStatus(){
 		fetch('/status').then(r=>r.json()).then(j=>{
 			if(j.status!=='OK') return;
 			const bar = document.getElementById('nowPlaying');
-			if(!j.playing || !j.playing.rel){ bar.textContent='未播放'; return; }
-			const rel = j.playing.rel;
+			// 兼容 rel 和 url 字段名
+			const rel = j.playing ? (j.playing.rel || j.playing.url) : null;
+			if(!j.playing || !rel){ bar.textContent='未播放'; return; }
 			// 优先使用服务器提供的 media_title（mpv 的 media-title）
 			// 若不存在，则使用 name（仅当 name 不是 URL 时）；若仍为 URL，则显示加载占位文本
 			let displayName = (j.playing.media_title && j.playing.media_title.length) ? j.playing.media_title : null;
@@ -86,15 +122,55 @@
 				}
 			}
 			let label = '▶ '+ displayName;
-			if(j.mpv && j.mpv.time!=null && j.mpv.duration){
-				const t = j.mpv.time||0, d = j.mpv.duration||0;
+			// 获取时长：优先使用 mpv duration，其次从队列数据中获取
+			let duration = (j.mpv && j.mpv.duration) || 0;
+			
+			if(j.mpv && j.mpv.time!=null){
+				const t = j.mpv.time||0;
 				const fmt = s=>{ if(isNaN(s)) return '--:--'; const m=Math.floor(s/60), ss=Math.floor(s%60); return m+':'+(ss<10?'0':'')+ss; };
-				label += ' ['+ fmt(t) +' / '+ fmt(d) + (j.mpv.paused?' | 暂停':'') +']';
-				// 进度条
-				if(d>0){
-					const pct = Math.min(100, Math.max(0, t/d*100));
+				
+				if(duration > 0) {
+					label += ' ['+ fmt(t) +' / '+ fmt(duration) + (j.mpv.paused?' | 暂停':'') +']';
+					// 进度条
+					const pct = Math.min(100, Math.max(0, t/duration*100));
 					const fill = document.getElementById('playerProgressFill');
-					if(fill) fill.style.width = pct.toFixed(2)+'%';
+					const thumb = document.getElementById('playerProgressThumb');
+					if(fill && !window._progressDragging) {
+						fill.style.width = pct.toFixed(2)+'%';
+						if(thumb) thumb.style.left = pct.toFixed(2)+'%';
+					}
+					// 同步更新当前播放项的进度背景
+					const currentQueueItem = document.querySelector('.youtube-queue-item.current');
+					if(currentQueueItem) {
+						currentQueueItem.style.setProperty('--progress-width', pct.toFixed(2) + '%');
+					}
+				} else {
+					// 没有时长信息，尝试从队列数据中获取
+					const currentQueueItem = document.querySelector('.youtube-queue-item.current');
+					if(currentQueueItem && window._queueData && window._queueData.queue) {
+						const currentIndex = window._queueData.current_index;
+						if(currentIndex >= 0 && currentIndex < window._queueData.queue.length) {
+							const queueItem = window._queueData.queue[currentIndex];
+							const queueDuration = queueItem.duration || 0;
+							if(queueDuration > 0) {
+								label += ' ['+ fmt(t) +' / '+ fmt(queueDuration) + (j.mpv.paused?' | 暂停':'') +']';
+								const pct = Math.min(100, Math.max(0, t/queueDuration*100));
+								const fill = document.getElementById('playerProgressFill');
+								const thumb = document.getElementById('playerProgressThumb');
+								if(fill && !window._progressDragging) {
+									fill.style.width = pct.toFixed(2)+'%';
+									if(thumb) thumb.style.left = pct.toFixed(2)+'%';
+								}
+								currentQueueItem.style.setProperty('--progress-width', pct.toFixed(2) + '%');
+							} else {
+								label += ' ['+ fmt(t) + (j.mpv.paused?' | 暂停':'') +']';
+							}
+						} else {
+							label += ' ['+ fmt(t) + (j.mpv.paused?' | 暂停':'') +']';
+						}
+					} else {
+						label += ' ['+ fmt(t) + (j.mpv.paused?' | 暂停':'') +']';
+					}
 				}
 			}
 			// 同步音量显示
@@ -118,6 +194,14 @@
 				target.classList.add('playing');
 				expandTo(rel);
 			}
+			// 当播放的歌曲发生变化时，刷新队列显示
+			if(rel && window.loadYoutubeQueue){
+				if(window._lastPlayingUrl !== rel) {
+					window._lastPlayingUrl = rel;
+					// 延迟一下刷新，确保后端队列状态已更新
+					setTimeout(() => window.loadYoutubeQueue(), 100);
+				}
+			}
 		}).catch(()=>{}).finally(()=> setTimeout(pollStatus, 2000));
 	}
 
@@ -127,28 +211,29 @@
 	const playPauseBtn = document.getElementById('playPauseBtn');
 	const prevBtn = document.getElementById('prevBtn');
 	const nextBtn = document.getElementById('nextBtn');
-	const shuffleBtn = document.getElementById('shuffleBtn');
 	if(playPauseBtn) playPauseBtn.onclick = ()=>{
 		fetch('/toggle_pause', {method:'POST'}).then(r=>r.json()).then(j=>{
 			if(j.status==='OK'){
 				playPauseBtn.textContent = j.paused ? '▶' : '⏸';
 				playPauseBtn.dataset.icon = j.paused ? '▶' : '⏸';
+			} else {
+				console.warn('切换播放/暂停失败:', j.error);
 			}
-		});
+		}).catch(e => console.error('切换播放/暂停请求失败:', e));
 	};
 	if(prevBtn) prevBtn.onclick = ()=>{
 		// 检查是否在 YouTube 页面并且有队列
 		const youtubeTab = document.getElementById('youtubePlaylist');
 		if(youtubeTab && youtubeTab.style.display !== 'none') {
 			// 在 YouTube 页面，控制队列
-			fetch('/youtube_queue')
+			fetch('/play_queue')
 				.then(r => r.json())
 				.then(res => {
 					if(res && res.status === 'OK' && res.queue && res.queue.length > 0) {
 						const currentIndex = res.current_index || 0;
 						const prevIndex = currentIndex - 1;
 						if(prevIndex >= 0) {
-							fetch('/youtube_queue_play', {
+							fetch('/play_queue_play', {
 								method: 'POST',
 								headers: {'Content-Type': 'application/x-www-form-urlencoded'},
 								body: `index=${prevIndex}`
@@ -184,14 +269,14 @@
 		const youtubeTab = document.getElementById('youtubePlaylist');
 		if(youtubeTab && youtubeTab.style.display !== 'none') {
 			// 在 YouTube 页面，控制队列
-			fetch('/youtube_queue')
+			fetch('/play_queue')
 				.then(r => r.json())
 				.then(res => {
 					if(res && res.status === 'OK' && res.queue && res.queue.length > 0) {
 						const currentIndex = res.current_index || 0;
 						const nextIndex = currentIndex + 1;
 						if(nextIndex < res.queue.length) {
-							fetch('/youtube_queue_play', {
+							fetch('/play_queue_play', {
 								method: 'POST',
 								headers: {'Content-Type': 'application/x-www-form-urlencoded'},
 								body: `index=${nextIndex}`
@@ -221,13 +306,6 @@
 			// 本地文件页面，使用原有逻辑
 			fetch('/next', {method:'POST'}).then(r=>r.json()).then(j=>{ if(j.status!=='OK'){ console.warn(j.error); } });
 		}
-	};
-	if(shuffleBtn) shuffleBtn.onclick = ()=>{
-		fetch('/shuffle', {method:'POST'}).then(r=>r.json()).then(j=>{
-			if(j.status==='OK'){
-				shuffleBtn.dataset.on = j.shuffle ? '1':'0';
-			}
-		});
 	};
 
 	// 循环模式按钮 (0=不循环, 1=单曲循环, 2=全部循环)
@@ -275,7 +353,9 @@
 		});
 		// 初始化: 获取当前音量
 		fetch('/volume', {method:'POST'}).then(r=>r.json()).then(j=>{
-			if(j.status==='OK' && j.volume!=null){ vol.value = Math.round(j.volume); }
+			if(j.status==='OK' && j.volume!=null){ 
+				vol.value = Math.round(j.volume);
+			}
 		}).catch(()=>{});
 	}
 
@@ -305,42 +385,66 @@
 
 
 	// ========== 标签页切换 ==========
+	const headerBar = document.getElementById('headerBar');
+	const headerContent = document.getElementById('headerContent');
 	const tabBtns = document.querySelectorAll('.tab-btn');
 	const localTab = document.querySelector('.local-tab');
 	const youtubeTab = document.querySelector('.youtube-tab');
 	const youtubePlaylist = document.getElementById('youtubePlaylist');
 	const tabsNav = document.querySelector('.tabs-nav');
+	const hasTabs = tabsNav && tabBtns.length > 0 && localTab && youtubeTab;
 
-	tabBtns.forEach(btn => {
-		btn.addEventListener('click', () => {
-			const tab = btn.dataset.tab;
-			// 更新按钮状态
-			tabBtns.forEach(b => b.classList.remove('active'));
-			btn.classList.add('active');
-			
-			// 更新标签导航的主题
-			tabsNav.classList.remove('local-tab-nav', 'youtube-tab-nav');
-			if(tab === 'local') {
-				tabsNav.classList.add('local-tab-nav');
-			} else if(tab === 'youtube') {
-				tabsNav.classList.add('youtube-tab-nav');
-			}
-			
-			// 显示/隐藏内容
-			if(tab === 'local'){
-				localTab.style.display = '';
-				youtubeTab.style.display = 'none';
-			} else if(tab === 'youtube'){
-				localTab.style.display = 'none';
-				youtubeTab.style.display = '';
-				// 触发自定义事件，让youtube.js知道标签页已切换
-				window.dispatchEvent(new CustomEvent('tabswitched', { detail: { tab: 'youtube' } }));
-			}
+	// 头部始终显示，设置为 expanded 状态
+	if(headerBar) {
+		headerBar.classList.remove('header-collapsed');
+		headerBar.classList.add('header-expanded');
+	}
+
+	if(hasTabs) {
+		tabBtns.forEach(btn => {
+			btn.addEventListener('click', () => {
+				const tab = btn.dataset.tab;
+				
+				// 如果头部被折叠，先展开
+				if(headerBar && headerBar.classList.contains('header-collapsed')) {
+					headerBar.classList.remove('header-collapsed');
+					headerBar.classList.add('header-expanded');
+					console.debug('[Header] 展开头部导航栏');
+				}
+				resetHeaderAutoCollapseTimer();
+				
+				// 更新按钮状态
+				tabBtns.forEach(b => b.classList.remove('active'));
+				btn.classList.add('active');
+				
+				// 更新标签导航的主题
+				tabsNav.classList.remove('local-tab-nav', 'youtube-tab-nav');
+				if(tab === 'local') {
+					tabsNav.classList.add('local-tab-nav');
+				} else if(tab === 'youtube') {
+					tabsNav.classList.add('youtube-tab-nav');
+				}
+				
+				// 显示/隐藏内容
+				if(tab === 'local'){
+					localTab.style.display = '';
+					youtubeTab.style.display = 'none';
+				} else if(tab === 'youtube'){
+					localTab.style.display = 'none';
+					youtubeTab.style.display = '';
+					// 触发自定义事件，让youtube.js知道标签页已切换
+					window.dispatchEvent(new CustomEvent('tabswitched', { detail: { tab: 'youtube' } }));
+				}
+			}, { passive: true });
 		});
-	});
-	
-	// 初始化标签导航主题为YouTube配色
-	tabsNav.classList.add('youtube-tab-nav');
+
+		// 初始化标签导航主题为YouTube配色
+		tabsNav.classList.add('youtube-tab-nav');
+	} else {
+		// 无标签时默认展示YouTube区域，隐藏本地区域（如果存在）
+		if(youtubeTab) youtubeTab.style.display = '';
+		if(localTab) localTab.style.display = 'none';
+	}
 
 	// ========== 音量弹出控制 ==========
 	const volumePopupBtn = document.getElementById('volumePopupBtn');
@@ -396,11 +500,23 @@
 	// Show/hide volume popup
 	volumePopupBtn && volumePopupBtn.addEventListener('click', () => {
 		if(volumePopup.style.display === 'none'){
+			// 获取当前音量并更新弹出框显示
+			fetch('/volume', {method:'POST'})
+				.then(r=>r.json())
+				.then(j=>{
+					if(j.status==='OK' && j.volume!=null){ 
+						const currentVolume = Math.round(j.volume);
+						if(volSlider) volSlider.value = currentVolume;
+						updateVolumeDisplay(currentVolume);
+					}
+				})
+				.catch(e => {
+					// 降级：使用主滑块的值
+					if(volSlider) {
+						updateVolumeDisplay(volSlider.value);
+					}
+				});
 			volumePopup.style.display = 'block';
-			// Sync popup with main slider
-			if(volSlider) {
-				updateVolumeDisplay(volSlider.value);
-			}
 			volumePopupBtn.classList.add('active');
 		} else {
 			volumePopup.style.display = 'none';
@@ -467,6 +583,146 @@
 		isDraggingVolume = false;
 	});
 
+	// ========== 进度条拖动功能 ==========
+	const playerProgress = document.getElementById('playerProgress');
+	const playerProgressFill = document.getElementById('playerProgressFill');
+	const playerProgressThumb = document.getElementById('playerProgressThumb');
+	
+	window._progressDragging = false;
+	
+	if(playerProgress) {
+		// 鼠标点击进度条
+		playerProgress.addEventListener('mousedown', (e) => {
+			// 检查是否在折叠状态，如果是则不拖动进度条
+			const playerBar = document.getElementById('playerBar');
+			if(playerBar && playerBar.classList.contains('footer-collapsed')) {
+				return; // 在折叠状态下，不处理拖动
+			}
+			window._progressDragging = true;
+			playerProgress.classList.add('dragging');
+			seekToPosition(e);
+		});
+		
+		// 鼠标移动
+		document.addEventListener('mousemove', (e) => {
+			if(window._progressDragging) {
+				seekToPosition(e);
+			}
+		});
+		
+		// 鼠标释放
+		document.addEventListener('mouseup', () => {
+			if(window._progressDragging) {
+				window._progressDragging = false;
+				playerProgress.classList.remove('dragging');
+			}
+		});
+		
+		// 触摸支持
+		playerProgress.addEventListener('touchstart', (e) => {
+			// 检查是否在折叠状态，如果是则不拖动进度条
+			const playerBar = document.getElementById('playerBar');
+			if(playerBar && playerBar.classList.contains('footer-collapsed')) {
+				return; // 在折叠状态下，不处理拖动
+			}
+			e.preventDefault(); // 防止触发其他事件
+			window._progressDragging = true;
+			playerProgress.classList.add('dragging');
+			seekToPositionTouch(e);
+		}, { passive: false });
+		
+		document.addEventListener('touchmove', (e) => {
+			if(window._progressDragging) {
+				e.preventDefault(); // 防止页面滚动
+				seekToPositionTouch(e);
+			}
+		}, { passive: false });
+		
+		document.addEventListener('touchend', () => {
+			if(window._progressDragging) {
+				window._progressDragging = false;
+				playerProgress.classList.remove('dragging');
+			}
+		});
+		
+	// 计算并跳转到指定位置
+	function seekToPosition(e) {
+		const rect = playerProgress.getBoundingClientRect();
+		const x = e.clientX - rect.left;
+		const percent = Math.max(0, Math.min(100, (x / rect.width) * 100));
+		
+		// 更新视觉显示
+		if(playerProgressFill) playerProgressFill.style.width = percent + '%';
+		if(playerProgressThumb) playerProgressThumb.style.left = percent + '%';
+		
+		// 同步更新当前播放项的进度背景
+		const currentQueueItem = document.querySelector('.youtube-queue-item.current');
+		if(currentQueueItem) {
+			currentQueueItem.style.setProperty('--progress-width', percent + '%');
+		}
+		
+		// 发送跳转请求
+		sendSeekRequest(percent);
+	}	function seekToPositionTouch(e) {
+		const touch = e.touches[0];
+		const rect = playerProgress.getBoundingClientRect();
+		const x = touch.clientX - rect.left;
+		const percent = Math.max(0, Math.min(100, (x / rect.width) * 100));
+		
+		// 更新视觉显示
+		if(playerProgressFill) playerProgressFill.style.width = percent + '%';
+		if(playerProgressThumb) playerProgressThumb.style.left = percent + '%';
+		
+		// 同步更新当前播放项的进度背景
+		const currentQueueItem = document.querySelector('.youtube-queue-item.current');
+		if(currentQueueItem) {
+			currentQueueItem.style.setProperty('--progress-width', percent + '%');
+		}
+		
+		// 发送跳转请求
+		sendSeekRequest(percent);
+	}		// 发送跳转请求到服务器
+		let seekTimer = null;
+		let lastSeekTime = 0;
+		let pendingSeekPercent = null;
+		
+		function sendSeekRequest(percent) {
+			pendingSeekPercent = percent;
+			const now = Date.now();
+			
+			// 如果距离上次请求已超过 2 秒，立即发送
+			if(now - lastSeekTime >= 2000) {
+				executeSeek();
+			} else {
+				// 否则安排在 2 秒后发送
+				clearTimeout(seekTimer);
+				seekTimer = setTimeout(() => {
+					executeSeek();
+				}, 2000 - (now - lastSeekTime));
+			}
+		}
+		
+		function executeSeek() {
+			if(pendingSeekPercent === null) return;
+			
+			lastSeekTime = Date.now();
+			const percent = pendingSeekPercent;
+			
+			fetch('/seek', {
+				method: 'POST',
+				headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+				body: 'percent=' + percent
+			})
+			.then(r => r.json())
+			.then(j => {
+				if(j.status !== 'OK') {
+					console.warn('跳转失败:', j.error);
+				}
+			})
+			.catch(e => console.error('跳转请求失败:', e));
+		}
+	}
+
 	// Close popup when clicking outside
 	document.addEventListener('click', (e) => {
 		if(volumePopup && volumePopup.style.display === 'block' && 
@@ -482,11 +738,14 @@
 	const historyList = document.getElementById('historyList');
 	const historyModalClose = document.querySelector('.history-modal-close');
 
+	// 展示播放历史函数
+	function showYoutubeHistory() {
+		loadHistoryModal();
+		historyModal.classList.add('show');
+	}
+
 	if(historyBtn) {
-		historyBtn.addEventListener('click', () => {
-			loadHistoryModal();
-			historyModal.classList.add('show');
-		});
+		historyBtn.addEventListener('click', showYoutubeHistory);
 	}
 
 	if(historyModalClose) {
@@ -548,13 +807,18 @@
 			// Add click handlers for playback
 			historyList.querySelectorAll('.history-item').forEach(item => {
 				item.addEventListener('click', (e) => {
-					if(!e.target.classList.contains('history-item-delete')) {
-						const url = item.dataset.url;
-						const itemType = item.dataset.type;
-						if(url) {
-							playHistoryItem(url, itemType);
-							historyModal.classList.remove('show');
-						}
+					// 忽略删除按钮的点击
+					if(e.target.classList.contains('history-item-delete') || 
+					   e.target.closest('.history-item-delete')) {
+						return;
+					}
+					const url = item.dataset.url;
+					const itemType = item.dataset.type;
+					const titleEl = item.querySelector('.history-item-name');
+					const title = titleEl ? titleEl.textContent : '';
+					console.debug('[HISTORY-CLICK] url=', url, 'type=', itemType, 'title=', title);
+					if(url) {
+						playHistoryItem(url, itemType, title);
 					}
 				});
 			});				// Add delete handlers
@@ -573,39 +837,184 @@
 			});
 	}
 
-	function playHistoryItem(url, itemType) {
-		console.debug('[HISTORY] 播放历史项目:', url, '类型:', itemType);
+	function playHistoryItem(url, itemType, title) {
+		console.debug('[HISTORY] 播放历史项目:', url, '类型:', itemType, '标题:', title);
+		
+		if(!url) {
+			console.warn('[HISTORY] URL为空，中止操作');
+			return;
+		}
 		
 		if(itemType === 'local') {
-			// 本地文件，使用 /play API
+			// 本地文件：添加到队列末尾（不立即播放）
+			console.debug('[HISTORY] 添加本地文件到队列:', url);
+			const body = 'path=' + encodeURIComponent(url) + '&play_now=0';
 			fetch('/play', {
 				method: 'POST',
 				headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-				body: 'path=' + encodeURIComponent(url)
+				body: body
 			})
 			.then(r => r.json())
 			.then(j => {
-				if(j.status !== 'OK') {
-					console.warn('播放失败:', j.error);
-					alert('播放失败: ' + j.error);
+				console.debug('[HISTORY] /play API响应:', j);
+				if(j.status === 'OK') {
+					console.debug('[HISTORY] 本地文件已添加到队列:', url);
+					// 刷新队列显示
+					setTimeout(() => {
+						console.debug('[HISTORY] 开始刷新队列显示...');
+						if(window.loadYoutubeQueue) {
+							window.loadYoutubeQueue();
+						}
+					}, 500);
+				} else {
+					console.warn('添加失败:', j.error);
+					alert('添加失败: ' + j.error);
 				}
 			})
-			.catch(e => console.error('播放请求错误:', e));
+			.catch(e => console.error('请求错误:', e));
 		} else {
-			// YouTube URL，使用 /play_youtube API
-			fetch('/play_youtube', {
+			// YouTube URL：添加到队列末尾（不立即播放）
+			const body = 'url=' + encodeURIComponent(url) + '&type=youtube' +
+						(title ? '&title=' + encodeURIComponent(title) : '');
+			console.debug('[HISTORY] 添加YouTube视频到队列:', url);
+			fetch('/play_queue_add', {
 				method: 'POST',
 				headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-				body: 'url=' + encodeURIComponent(url)
+				body: body
 			})
 			.then(r => r.json())
 			.then(j => {
-				if(j.status !== 'OK') {
-					console.warn('播放失败:', j.error);
-					alert('播放失败: ' + j.error);
+				console.debug('[HISTORY] /play_queue_add API响应:', j);
+				if(j.status === 'OK') {
+					console.debug('[HISTORY] YouTube视频已添加到队列:', url, '队列长度:', j.queue_length);
+					// 刷新队列显示
+					setTimeout(() => {
+						console.debug('[HISTORY] 开始刷新队列显示...');
+						if(window.loadYoutubeQueue) {
+							window.loadYoutubeQueue();
+						}
+					}, 500);
+				} else {
+					console.warn('添加失败:', j.error);
+					alert('添加失败: ' + j.error);
 				}
 			})
-			.catch(e => console.error('播放请求错误:', e));
+			.catch(e => console.error('请求错误:', e));
 		}
 	}
+
+	// ===== 页脚展开/折叠逻辑 =====
+	const playerBar = document.getElementById('playerBar');
+	const footerContent = document.getElementById('footerContent');
+	let autoCollapseTimer = null;
+
+	// 自动折叠功能 (10秒无操作)
+	function resetAutoCollapseTimer() {
+		if(autoCollapseTimer) clearTimeout(autoCollapseTimer);
+		
+		if(playerBar && playerBar.classList.contains('footer-expanded')) {
+			autoCollapseTimer = setTimeout(() => {
+				if(playerBar && playerBar.classList.contains('footer-expanded')) {
+					playerBar.classList.remove('footer-expanded');
+					playerBar.classList.add('footer-collapsed');
+					console.debug('[Footer] 10秒无操作，自动折叠页脚控制栏');
+					// 显示三个点
+					const nowPlayingEl = document.getElementById('nowPlaying');
+					if(nowPlayingEl) {
+						nowPlayingEl._originalText = nowPlayingEl.textContent;
+						nowPlayingEl.textContent = '...';
+					}
+				}
+			}, 10000); // 10秒
+		}
+	}
+
+	// 初始状态: 折叠
+	if(playerBar) {
+		playerBar.classList.add('footer-collapsed');
+	}
+
+	// 点击整个控制栏区域展开/折叠页脚
+	if(playerBar) {
+		playerBar.addEventListener('click', (e) => {
+			// 如果点击的是进度条且展开状态，不处理展开/折叠逻辑（让进度条拖拽处理）
+			if(playerProgress && playerProgress.contains(e.target) && playerBar.classList.contains('footer-expanded')) {
+				return;
+			}
+			
+			e.stopPropagation();
+			
+			const nowPlayingEl = document.getElementById('nowPlaying');
+			
+			// 折叠状态：展开控制栏
+			if(playerBar.classList.contains('footer-collapsed')) {
+				playerBar.classList.remove('footer-collapsed');
+				playerBar.classList.add('footer-expanded');
+				console.debug('[Footer] 展开页脚控制栏');
+				// 恢复正常文本
+				if(nowPlayingEl && nowPlayingEl._originalText) {
+					nowPlayingEl.textContent = nowPlayingEl._originalText;
+				}
+				resetAutoCollapseTimer(); // 启动自动折叠计时器
+			} else {
+				// 展开状态：点击非进度条区域折叠
+				playerBar.classList.remove('footer-expanded');
+				playerBar.classList.add('footer-collapsed');
+				console.debug('[Footer] 折叠页脚控制栏');
+				// 保存原始文本，显示三个点
+				if(nowPlayingEl) {
+					nowPlayingEl._originalText = nowPlayingEl.textContent;
+					nowPlayingEl.textContent = '...';
+				}
+				if(autoCollapseTimer) clearTimeout(autoCollapseTimer);
+			}
+		}, { passive: false });
+	}
+
+	// 进度条单独处理（用于展开状态下的拖拽，而不是展开/折叠）
+	if(playerProgress) {
+		playerProgress.addEventListener('click', (e) => {
+			// 只在展开状态下处理进度条点击（用于调整进度）
+			if(playerBar && playerBar.classList.contains('footer-expanded')) {
+				e.stopPropagation();
+				// 进度条拖拽逻辑由 mousedown/touchstart 处理
+			}
+		}, { passive: false });
+	}
+
+	// 点击footer-content区域不触发关闭，并重置计时器
+	if(footerContent) {
+		footerContent.addEventListener('click', (e) => {
+			e.stopPropagation(); // 防止冒泡到playerBar的展开/折叠逻辑
+			resetAutoCollapseTimer(); // 用户操作，重置计时器
+		}, { passive: false });
+	}
+
+	// 页脚区域内的鼠标移动重置计时器
+	if(playerBar) {
+		playerBar.addEventListener('mousemove', () => {
+			resetAutoCollapseTimer();
+		}, { passive: true });
+	}
+
+	// 移动设备触摸事件也要重置计时器
+	if(footerContent) {
+		footerContent.addEventListener('touchstart', resetAutoCollapseTimer, { passive: true });
+		footerContent.addEventListener('touchmove', resetAutoCollapseTimer, { passive: true });
+		footerContent.addEventListener('touchend', resetAutoCollapseTimer, { passive: true });
+	}
+
+	// 可选: 点击页脚外部时自动折叠 (防止占用太多屏幕空间)
+	document.addEventListener('click', (e) => {
+		if(playerBar && playerBar.classList.contains('footer-expanded')) {
+			// 检查点击是否在playerBar内
+			if(!playerBar.contains(e.target)) {
+				// 点击在页脚外，自动折叠
+				playerBar.classList.remove('footer-expanded');
+				playerBar.classList.add('footer-collapsed');
+				console.debug('[Footer] 自动折叠页脚控制栏');
+				if(autoCollapseTimer) clearTimeout(autoCollapseTimer);
+			}
+		}
+	}, { passive: true });
 })();
