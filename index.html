@@ -6,34 +6,34 @@
 	<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=yes,viewport-fit=cover" />
 	
 	<!-- Primary Metadata -->
-	<title>音乐点播 支持YouTube串流</title>
+	<title>YouTube音乐点播 上麦可选高音质</title>
 	<meta name="description" content="音乐点播系统，支持串流" />
 	<meta name="keywords" content="音乐,点播,串流,mp3,flac,wav" />
 	
 	<!-- Open Graph -->
 	<meta property="og:type" content="website" />
-	<meta property="og:title" content="音乐点播 支持YouTube串流" />
-	<meta property="og:site_name" content="音乐点播 支持YouTube串流" />
+	<meta property="og:title" content="YouTube音乐点播 上麦可选高音质" />
+	<meta property="og:site_name" content="YouTube音乐点播 上麦可选高音质" />
 	<meta property="og:url" content="{{ request.url }}" />
 	<meta property="og:description" content="音乐点播系统，支持YouTube串流" />
-	<meta property="og:image" content="preview.png" />
-	<meta property="og:image:secure_url" content="preview.png" />
+	<meta property="og:image" content="/static/preview.png" />
+	<meta property="og:image:secure_url" content="/static/preview.png" />
 	<meta property="og:image:width" content="1200" />
 	<meta property="og:image:height" content="630" />
-	<meta property="og:image:alt" content="音乐点播 支持YouTube串流预览图" />
-	<link rel="image_src" href="preview.png" />
+	<meta property="og:image:alt" content="YouTube音乐点播 上麦可选高音质预览图" />
+	<link rel="image_src" href="/static/preview.png" />
 	<!-- Twitter / Summary card -->
 	<meta name="twitter:card" content="summary_large_image" />
-	<meta name="twitter:title" content="音乐点播 支持YouTube串流" />
+	<meta name="twitter:title" content="YouTube音乐点播 上麦可选高音质" />
 	<meta name="twitter:description" content="音乐点播系统，支持YouTube串流" />
-	<meta name="twitter:image" content="preview.png" />
+	<meta name="twitter:image" content="/static/preview.png" />
 	<meta property="og:image:width" content="1200" />
 	<meta property="og:image:height" content="630" />
 	<meta property="og:locale" content="en_US" />
 	
 	<!-- Clubhouse Frames -->
 	<meta property="fc:frame" content="vNext" />
-	<meta property="fc:frame:image" content="preview.png" />
+	<meta property="fc:frame:image" content="/static/preview.png" />
 	<meta property="fc:frame:image:aspect_ratio" content="1.91:1" />
 	<meta property="fc:frame:button:1" content="进入点播" />
 	<meta property="fc:frame:button:1:action" content="post_redirect" />
@@ -51,43 +51,25 @@
 	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
 	<meta name="renderer" content="webkit" />
 	<link rel="stylesheet" href="/static/style.css" />
+	<style>
+		.footer {
+			height: calc(100% - (2/5 * 100%));
+		}
+	</style>
 </head>
 <body>
-	<header id="headerBar" class="header-expanded">
-		<div id="headerContent">
-			<div class="toolbar">
-				<script id="boot-data" type="application/json">{{ {'tree': tree, 'musicDir': music_dir}|tojson }}</script>
-				<div class="youtube-search-section" id="youtubeSearchSection">
-					<div class="youtube-search-group">
-						<input id="youtubeSearchInput" class="youtube-search-input" type="text" placeholder="搜索或粘贴YouTube链接..." autocomplete="off" />
-						<button id="youtubeSearchBtn" class="youtube-btn primary">搜索</button>
-						<button id="youtubeMenuBtn" class="youtube-menu-btn" title="更多选项">⋮</button>
-						<!-- 搜索历史下拉列表 -->
-						<div id="youtubeSearchHistory" class="youtube-search-history" style="display:none;">
-							<div id="youtubeSearchHistoryList" class="youtube-search-history-list"></div>
-						</div>
-						<!-- 下拉菜单 -->
-						<div id="youtubeMenu" class="youtube-menu" style="display:none;">
-							<button id="historyMenuBtn" class="youtube-menu-item" data-action="history" disabled="true">📋 播放历史</button>
-							<button id="localMenuBtn" class="youtube-menu-item" data-action="local">🎵 本地歌曲</button>
-							<button id="clearQueueMenuBtn" class="youtube-menu-item" data-action="clear">🗑️ 清空队列</button>
-						</div>
-					</div>
-				</div>
-			</div>
-		</div>
-	</header>
+	<script id="boot-data" type="application/json">{{ {'tree': tree, 'musicDir': music_dir}|tojson }}</script>
 	<main id="tree" class="tab-content local-tab local-theme" style="display:none;" aria-label="文件列表"></main>
-	<div id="youtubePlaylist" class="tab-content youtube-tab youtube-theme" aria-label="YouTube播放列表">
+	<div id="youtubePlaylist" class="tab-content playlist-tab youtube-theme" aria-label="播放列表">
 		
 		<div id="youtubeSearchResults" class="youtube-search-results" style="display:none;">
 			<h4 class="youtube-search-title">搜索结果</h4>
 			<div id="youtubeSearchList" class="youtube-search-list"></div>
 		</div>
 		
-		<div class="youtube-queue-section" id="youtubeQueueSection">
+		<div class="play-list-section" id="playListSection">
 		
-			<div id="youtubeQueueList" class="youtube-queue-list"></div>
+			<div id="playListContainer" class="play-list-container"></div>
 		</div>
 		<!-- YouTube搜索结果模态框 -->
 		<div id="youtubeSearchModal" class="youtube-search-modal" style="display:none;">
@@ -103,13 +85,141 @@
 		</div>
 	</div>
 	
-	<footer id="playerBar" class="footer-collapsed">
+	<!-- Full Screen Player Modal -->
+	<div id="fullPlayer" class="full-player" style="display:none;">
+		<div class="full-player-content">
+			<!-- Header -->
+			<div class="full-player-header">
+				<button class="full-player-back" id="fullPlayerBack">
+					<svg width="28" height="16" viewBox="0 0 28 16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M2 2l12 12L26 2"/>
+					</svg>
+				</button>
+			</div>
+
+			<!-- Album Art -->
+			<div class="full-player-artwork">
+				<div class="full-player-artwork-container">
+					<img id="fullPlayerCover" src="" alt="" onerror="this.style.display='none';" />
+					<div class="full-player-artwork-placeholder" id="fullPlayerPlaceholder">🎵</div>
+				</div>
+			</div>
+
+			<!-- Song Info -->
+			<div class="full-player-info">
+				<div class="full-player-title" id="fullPlayerTitle">未播放</div>
+				<div class="full-player-artist" id="fullPlayerArtist">--</div>
+			</div>
+
+			<!-- Progress Bar -->
+			<div class="full-player-progress-section">
+				<div class="full-player-progress-bar" id="fullPlayerProgressBar">
+					<div class="full-player-progress-fill" id="fullPlayerProgressFill"></div>
+					<div class="full-player-progress-thumb" id="fullPlayerProgressThumb"></div>
+				</div>
+				<div class="full-player-time">
+					<span id="fullPlayerCurrentTime">0:00</span>
+					<span id="fullPlayerDuration">0:00</span>
+				</div>
+			</div>
+
+			<!-- Controls -->
+			<div class="full-player-controls">
+				<button class="full-player-control-btn full-player-shuffle" id="fullPlayerShuffle" title="随机播放">
+					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/>
+					</svg>
+				</button>
+				<button class="full-player-control-btn full-player-prev" id="fullPlayerPrev" title="上一首">
+					<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+						<path d="M16 6h2v12h-2V6zM8 12l8.5-6v12L8 12z"/>
+					</svg>
+				</button>
+				<button class="full-player-control-btn full-player-play-pause" id="fullPlayerPlayPause" title="播放/暂停">
+					<svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
+						<path d="M8 5v14l11-7z"/>
+					</svg>
+				</button>
+				<button class="full-player-control-btn full-player-next" id="fullPlayerNext" title="下一首">
+					<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+						<path d="M6 6h2v12H6V6zm10 6l-8.5 6V6L16 12z"/>
+					</svg>
+				</button>
+				<button class="full-player-control-btn full-player-repeat" id="fullPlayerRepeat" title="循环模式">
+					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M17 1l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/>
+					</svg>
+				</button>
+			</div>
+
+			<!-- Volume Control -->
+			<div class="full-player-volume">
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+					<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+				</svg>
+				<div class="full-player-volume-slider">
+						<input type="range" id="fullPlayerVolumeSlider" min="0" max="110" value="50" />
+				</div>
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+					<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+				</svg>
+			</div>
+
+		</div>
+	</div>
+
+	<!-- Mini Player -->
+	<div id="miniPlayer" class="mini-player">
+		<div class="mini-player-content">
+			<div class="mini-player-info">
+				<div class="mini-player-cover">
+					<img id="miniPlayerCover" src="" alt="" style="display:none;" />
+					<div class="mini-player-cover-placeholder">🎵</div>
+				</div>
+				<div class="mini-player-text">
+					<div class="mini-player-title" id="miniPlayerTitle">未播放</div>
+					<div class="mini-player-artist" id="miniPlayerArtist">--</div>
+				</div>
+			</div>
+			<div class="mini-player-controls">
+				<button id="miniPlayPauseBtn" class="mini-control-btn" title="播放/暂停">▶</button>
+				<button id="miniNextBtn" class="mini-control-btn" title="下一首">⏭</button>
+			</div>
+		</div>
+		<div class="mini-player-progress">
+			<div id="miniPlayerProgressFill" class="mini-player-progress-fill"></div>
+		</div>
+	</div>
+	
+	<!-- Bottom Navigation -->
+	<nav id="bottomNav" class="bottom-nav">
+		<button class="nav-item active" data-tab="playlist">
+			<span class="nav-icon">📚</span>
+			<span class="nav-label">歌单</span>
+		</button>
+		<button class="nav-item" data-tab="browse">
+			<span class="nav-icon">🎵</span>
+			<span class="nav-label">浏览</span>
+		</button>
+		<button class="nav-item" data-tab="ranking">
+			<span class="nav-icon">🏆</span>
+			<span class="nav-label">排行</span>
+		</button>
+		<button class="nav-item" data-tab="search">
+			<span class="nav-icon">🔍</span>
+			<span class="nav-label">搜索</span>
+		</button>
+	</nav>
+	
+	<footer id="playerBar" class="footer-collapsed" style="display:none;">
+		<button id="footerExpandBtn" class="footer-expand-btn" title="展开控制栏" style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;margin:0 auto;background:transparent;border:none;font-size:28px;cursor:pointer;">
+			⋯
+		</button>
 		<div id="playerProgress" aria-hidden="true">
 			<div id="playerProgressFill"></div>
 			<div id="playerProgressThumb"></div>
 		</div>
 		<div id="footerContent" class="footer-content">
-			<div id="nowPlaying">未播放</div>
 			<div class="footer-controls-wrapper">
 			<div class="footer-controls-left">
 				<button id="loopBtn" class="control-btn loop-btn" data-icon="↻" title="循环模式">↻</button>
@@ -153,8 +263,176 @@
 			<div class="history-modal-list" id="localSongsModalBody" style="overflow:auto; max-height: calc(80vh - 64px);"></div>
 		</div>
 	</div>
+
+	<!-- Search Modal -->
+	<div id="searchModal" class="search-modal" style="display:none;">
+		<div class="search-modal-overlay"></div>
+		<div class="search-modal-content">
+			<div class="search-modal-header">
+				<button class="search-modal-back" id="searchModalBack">✕</button>
+				<input type="text" id="searchModalInput" class="search-modal-input" placeholder="搜索歌曲、艺术家..." autocomplete="off" />
+			</div>
+			<div id="searchModalHistory" class="search-modal-history" style="display:none;">
+				<div class="search-modal-history-actions">
+					<button id="searchModalHistoryClear" class="search-modal-history-clear" type="button">清空历史</button>
+				</div>
+				<div id="searchModalHistoryList" class="search-modal-history-list"></div>
+			</div>
+			<div class="search-modal-body" id="searchModalBody">
+				<div class="search-suggestions">
+					<div class="search-placeholder">
+						<span class="search-placeholder-icon">🔍</span>
+						<p>搜索串流音乐</p>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- Currently Playing Modal -->
+	<div id="nowPlayingModal" class="now-playing-modal" style="display:none;">
+		<div class="now-playing-content">
+			<div class="now-playing-header">
+				<div class="now-playing-header-left">
+					<button class="now-playing-close" id="nowPlayingClose">
+						<svg width="20" height="20" viewBox="0 0 20 20">
+							<path d="M10 8.586L3.707 2.293 2.293 3.707 8.586 10l-6.293 6.293 1.414 1.414L10 11.414l6.293 6.293 1.414-1.414L11.414 10l6.293-6.293-1.414-1.414L10 8.586z" fill="currentColor"/>
+						</svg>
+					</button>
+					<div class="now-playing-status">
+						
+					</div>
+				</div>
+				<button class="now-playing-menu-btn">⋯</button>
+			</div>
+
+			<div class="now-playing-body">
+				<!-- Current Playing Card -->
+				<div class="now-playing-current-card">
+					<div class="current-card-cover">
+						<img id="nowPlayingCover" src="" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+						<div class="current-card-cover-placeholder">🎵</div>
+					</div>
+					<div class="current-card-info">
+						<div class="current-card-badge">
+							<span class="badge-icon">🔥</span>
+							<span class="badge-text">CURRENTLY PLAYING</span>
+						</div>
+						<div class="current-card-title" id="nowPlayingTitle">未播放</div>
+						<div class="current-card-subtitle" id="nowPlayingSubtitle">--</div>
+						<div class="current-card-meta">
+							<span id="nowPlayingTrackInfo">Track 1 of 1</span>
+						</div>
+						<div class="current-card-next" id="nowPlayingNext">▶ NEXT</div>
+					</div>
+					<button class="current-card-menu">☰</button>
+				</div>
+
+				<!-- Queue List -->
+				<div class="now-playing-queue">
+					<div id="nowPlayingQueueList" class="now-playing-queue-list"></div>
+				</div>
+			</div>
+
+			<div class="now-playing-controls">
+				<div class="now-playing-progress">
+					<span class="progress-time" id="nowPlayingCurrentTime">0:00</span>
+					<div class="progress-bar-container">
+						<div class="progress-bar-track">
+							<div class="progress-bar-fill" id="nowPlayingProgressFill"></div>
+							<div class="progress-bar-thumb" id="nowPlayingProgressThumb"></div>
+						</div>
+					</div>
+					<span class="progress-time" id="nowPlayingDuration">0:00</span>
+				</div>
+				<div class="now-playing-buttons">
+					<button class="control-btn-large" id="nowPlayingShuffleBtn" title="随机播放">
+						<svg width="24" height="24" viewBox="0 0 24 24">
+							<path d="M10.59 9.17L6.12 4.7A1 1 0 0 0 4.7 6.12l4.47 4.47 1.42-1.42zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z" fill="currentColor"/>
+						</svg>
+					</button>
+					<button class="control-btn-large" id="nowPlayingPrevBtn" title="上一首">
+						<svg width="28" height="28" viewBox="0 0 24 24">
+							<path d="M6 6h2v12H6V6zm3.5 6l8.5 6V6l-8.5 6z" fill="currentColor"/>
+						</svg>
+					</button>
+					<button class="control-btn-play" id="nowPlayingPlayBtn" title="播放/暂停">
+						<svg width="32" height="32" viewBox="0 0 24 24">
+							<path d="M8 5v14l11-7z" fill="currentColor"/>
+						</svg>
+					</button>
+					<button class="control-btn-large" id="nowPlayingNextBtn" title="下一首">
+						<svg width="28" height="28" viewBox="0 0 24 24">
+							<path d="M6 18l8.5-6L6 6v12zm10-12v12h2V6h-2z" fill="currentColor"/>
+						</svg>
+					</button>
+					<button class="control-btn-large" id="nowPlayingRepeatBtn" title="循环模式">
+						<svg width="24" height="24" viewBox="0 0 24 24">
+							<path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z" fill="currentColor"/>
+						</svg>
+					</button>
+				</div>
+				<div class="now-playing-secondary">
+					<button class="secondary-btn" title="歌词">
+						<svg width="20" height="20" viewBox="0 0 24 24">
+							<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" fill="currentColor"/>
+						</svg>
+					</button>
+					<button class="secondary-btn" title="隔空播放">
+						<svg width="20" height="20" viewBox="0 0 24 24">
+							<path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor"/>
+						</svg>
+					</button>
+					<button class="secondary-btn" title="列表">
+						<svg width="20" height="20" viewBox="0 0 24 24">
+							<path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z" fill="currentColor"/>
+						</svg>
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+	
+	<!-- 歌单选择模态框 -->
+	<div id="playlistsModal" class="playlists-modal" style="display:none;">
+		<div class="playlists-modal-content">
+			<div class="playlists-modal-header">
+				<button class="playlists-back-btn" id="playlistsBackBtn">
+					<svg width="24" height="24" viewBox="0 0 24 24">
+						<path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" fill="currentColor"/>
+					</svg>
+				</button>
+				<h2>我的歌单</h2>
+				<button class="playlists-add-btn" id="playlistsAddBtn">
+					<svg width="24" height="24" viewBox="0 0 24 24">
+						<path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor"/>
+					</svg>
+				</button>
+			</div>
+			<div class="playlists-modal-body" id="playlistsModalBody">
+				<!-- 歌单列表将在这里动态生成 -->
+			</div>
+		</div>
+	</div>
+
+	<!-- 排行榜 Modal -->
+	<div id="rankingModal" class="modal" style="display:none;">
+		<div class="modal-content ranking-modal-content">
+			<div class="modal-header">
+				<button class="ranking-modal-close" id="rankingModalClose">✕</button>
+				<h2 class="modal-title">播放排行榜</h2>
+			</div>
+			<div class="ranking-tabs">
+				<button class="ranking-tab active" data-period="all">全部</button>
+				<button class="ranking-tab" data-period="week">本周</button>
+				<button class="ranking-tab" data-period="month">本月</button>
+			</div>
+			<div class="ranking-modal-body" id="rankingModalBody">
+				<!-- 排行榜列表将在这里动态生成 -->
+			</div>
+		</div>
+	</div>
 	
 	<script src="/static/main.js"></script>
-	<script src="/static/youtube.js"></script>
 </body>
 </html>

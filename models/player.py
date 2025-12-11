@@ -1,6 +1,7 @@
 """
 音乐播放器主类
 """
+
 import os
 import json
 import threading
@@ -13,68 +14,76 @@ from models import Song, LocalSong, StreamSong, PlayQueue, PlayHistory
 
 class MusicPlayer:
     """音乐播放器类 - 包含所有播放器配置和状态"""
-    
+
     # 默认配置常量
     DEFAULT_CONFIG = {
-        'MUSIC_DIR': 'Z:',
-        'ALLOWED_EXTENSIONS': '.mp3,.wav,.flac',
-        'FLASK_HOST': '0.0.0.0',
-        'FLASK_PORT': '9000',
-        'DEBUG': 'false',
-        'MPV_CMD': None
+        "MUSIC_DIR": "Z:",
+        "ALLOWED_EXTENSIONS": ".mp3,.wav,.flac",
+        "FLASK_HOST": "0.0.0.0",
+        "FLASK_PORT": "9000",
+        "DEBUG": "false",
+        "MPV_CMD": None,
     }
-    
+
     @staticmethod
     def _get_app_dir():
         """获取应用程序目录，支持打包和开发环境"""
         import sys
-        if getattr(sys, 'frozen', False):
+
+        if getattr(sys, "frozen", False):
             return os.path.dirname(sys.executable)
         return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    
+
     @staticmethod
     def _get_default_mpv_cmd():
         """获取默认的 MPV 命令"""
         app_dir = MusicPlayer._get_app_dir()
-        mpv_path = os.path.join(app_dir, 'mpv.exe')
+        mpv_path = os.path.join(app_dir, "mpv.exe")
         if os.path.exists(mpv_path):
             return f'"{mpv_path}" --input-ipc-server=\\\\.\\\pipe\\\\mpv-pipe --idle=yes --force-window=no'
-        return r'c:\mpv\mpv.exe --input-ipc-server=\\.\pipe\mpv-pipe --idle=yes --force-window=no'
-    
+        return r"c:\mpv\mpv.exe --input-ipc-server=\\.\pipe\mpv-pipe --idle=yes --force-window=no"
+
     @staticmethod
     def _get_default_ini_path():
         """获取默认配置文件路径"""
-        return os.path.join(MusicPlayer._get_app_dir(), 'settings.ini')
-    
+        return os.path.join(MusicPlayer._get_app_dir(), "settings.ini")
+
     @staticmethod
     def ensure_ini_exists(ini_path: str = None):
         """确保INI配置文件存在，不存在则创建默认配置
-        
+
         参数:
           ini_path: 配置文件路径，为None时使用默认路径
         """
         if ini_path is None:
             ini_path = MusicPlayer._get_default_ini_path()
-        
+
         if os.path.exists(ini_path):
             return
-        
+
         # 设置默认的 MPV 命令
         default_cfg = MusicPlayer.DEFAULT_CONFIG.copy()
-        default_cfg['MPV_CMD'] = MusicPlayer._get_default_mpv_cmd()
-        
+        default_cfg["MPV_CMD"] = MusicPlayer._get_default_mpv_cmd()
+
         parser = configparser.ConfigParser()
-        parser['app'] = default_cfg
-        with open(ini_path, 'w', encoding='utf-8') as w:
+        parser["app"] = default_cfg
+        with open(ini_path, "w", encoding="utf-8") as w:
             parser.write(w)
-        print('[INFO] 已生成默认 settings.ini')
-    
-    def __init__(self, music_dir='Z:', allowed_extensions='.mp3,.wav,.flac',
-                 flask_host='0.0.0.0', flask_port=9000, debug=False,
-                 mpv_cmd=None, data_dir='.'):
+        print("[INFO] 已生成默认 settings.ini")
+
+    def __init__(
+        self,
+        music_dir="Z:",
+        allowed_extensions=".mp3,.wav,.flac",
+        flask_host="0.0.0.0",
+        flask_port=9000,
+        debug=False,
+        mpv_cmd=None,
+        data_dir=".",
+    ):
         """
         初始化音乐播放器
-        
+
         参数:
           music_dir: 音乐库目录路径
           allowed_extensions: 允许的文件扩展名（逗号分隔）
@@ -92,15 +101,17 @@ class MusicPlayer:
         self.debug = debug
         self.mpv_cmd = mpv_cmd or self._get_default_mpv_cmd()
         self.data_dir = data_dir
-        
+
         # 确保数据目录存在
         if not os.path.exists(self.data_dir):
             os.makedirs(self.data_dir, exist_ok=True)
-        
+
         # 文件路径
-        self.playback_history_file = os.path.join(self.data_dir, 'playback_history.json')
-        self.play_queue_file = os.path.join(self.data_dir, 'play_queue.json')
-        
+        self.playback_history_file = os.path.join(
+            self.data_dir, "playback_history.json"
+        )
+        self.play_queue_file = os.path.join(self.data_dir, "play_queue.json")
+
         # 播放器状态
         self.playlist = []  # 存储相对路径
         self.current_index = -1
@@ -109,135 +120,146 @@ class MusicPlayer:
         self._last_play_time = 0
         self._prev_index = None
         self._prev_meta = None
-        
+
         # 自动播放线程
         self._auto_thread = None
         self._stop_flag = False
         self._req_id = 0
-        
+
         # 播放管道名称（用于与mpv通信）
         self.pipe_name = None
-        
+
         # 播放历史 - 使用 PlayHistory 类
-        self.playback_history_file = os.path.join(self.data_dir, 'playback_history.json')
-        self.playback_history = PlayHistory(max_size=50, file_path=self.playback_history_file)
+        self.playback_history_file = os.path.join(
+            self.data_dir, "playback_history.json"
+        )
+        self.playback_history = PlayHistory(
+            max_size=50, file_path=self.playback_history_file
+        )
         self.playback_history_max = 50  # 保留以保持兼容性
-        
+
         # 播放队列
         self.play_queue = PlayQueue()
-        self.play_queue_file = os.path.join(self.data_dir, 'play_queue.json')
-        
+        self.play_queue_file = os.path.join(self.data_dir, "play_queue.json")
+
         # 线程锁
         self._lock = threading.RLock()
-        
+
         # 加载持久化数据
         self.load_playback_history()
         self.load_play_queue()
-        
+
         # 初始化 MPV IPC（只加载一次）
         self._init_mpv_ipc()
-        
-        print(f"[INFO] 播放器初始化完成: music_dir={self.music_dir}, extensions={self.allowed_extensions}")
-    
+
+        print(
+            f"[INFO] 播放器初始化完成: music_dir={self.music_dir}, extensions={self.allowed_extensions}"
+        )
+
     @classmethod
-    def initialize(cls, data_dir: str = '.'):
+    def initialize(cls, data_dir: str = "."):
         """初始化播放器 - 确保配置文件存在，然后创建并返回播放器实例
-        
+
         这是在主程序中调用的单一入口点，处理所有初始化逻辑
-        
+
         参数:
           data_dir: 数据文件存储目录
-        
+
         返回:
           已初始化的 MusicPlayer 实例
         """
         # 确保配置文件存在
         ini_path = cls._get_default_ini_path()
         cls.ensure_ini_exists(ini_path)
-        
+
         # 从配置文件创建播放器实例
         player = cls.from_ini_file(ini_path, data_dir=data_dir)
-        
+
         print("[INFO] 播放器已初始化，所有模块就绪")
         return player
-    
+
     @classmethod
-    def from_ini_file(cls, ini_path: str, data_dir: str = '.'):
+    def from_ini_file(cls, ini_path: str, data_dir: str = "."):
         """从INI配置文件创建播放器实例
-        
+
         参数:
           ini_path: 配置文件路径
           data_dir: 数据文件存储目录
-        
+
         返回:
           MusicPlayer 实例
         """
         cfg = cls._read_ini_file(ini_path)
         return cls(
-            music_dir=cfg.get('MUSIC_DIR', cls.DEFAULT_CONFIG['MUSIC_DIR']),
-            allowed_extensions=cfg.get('ALLOWED_EXTENSIONS', cls.DEFAULT_CONFIG['ALLOWED_EXTENSIONS']),
-            flask_host=cfg.get('FLASK_HOST', cls.DEFAULT_CONFIG['FLASK_HOST']),
-            flask_port=int(cfg.get('FLASK_PORT', cls.DEFAULT_CONFIG['FLASK_PORT'])),
-            debug=cfg.get('DEBUG', cls.DEFAULT_CONFIG['DEBUG']).lower() in ('true', '1', 'yes'),
-            mpv_cmd=cfg.get('MPV_CMD'),
-            data_dir=data_dir
+            music_dir=cfg.get("MUSIC_DIR", cls.DEFAULT_CONFIG["MUSIC_DIR"]),
+            allowed_extensions=cfg.get(
+                "ALLOWED_EXTENSIONS", cls.DEFAULT_CONFIG["ALLOWED_EXTENSIONS"]
+            ),
+            flask_host=cfg.get("FLASK_HOST", cls.DEFAULT_CONFIG["FLASK_HOST"]),
+            flask_port=int(cfg.get("FLASK_PORT", cls.DEFAULT_CONFIG["FLASK_PORT"])),
+            debug=cfg.get("DEBUG", cls.DEFAULT_CONFIG["DEBUG"]).lower()
+            in ("true", "1", "yes"),
+            mpv_cmd=cfg.get("MPV_CMD"),
+            data_dir=data_dir,
         )
-    
+
     @classmethod
-    def from_json_file(cls, json_path: str, data_dir: str = '.'):
+    def from_json_file(cls, json_path: str, data_dir: str = "."):
         """从JSON配置文件创建播放器实例
-        
+
         参数:
           json_path: 配置文件路径
           data_dir: 数据文件存储目录
-        
+
         返回:
           MusicPlayer 实例
         """
         cfg = cls._read_json_file(json_path)
         return cls(
-            music_dir=cfg.get('music_dir', cls.DEFAULT_CONFIG['MUSIC_DIR']),
-            allowed_extensions=cfg.get('allowed_extensions', cls.DEFAULT_CONFIG['ALLOWED_EXTENSIONS']),
-            flask_host=cfg.get('flask_host', cls.DEFAULT_CONFIG['FLASK_HOST']),
-            flask_port=int(cfg.get('flask_port', cls.DEFAULT_CONFIG['FLASK_PORT'])),
-            debug=cfg.get('debug', False),
-            mpv_cmd=cfg.get('mpv_cmd'),
-            data_dir=data_dir
+            music_dir=cfg.get("music_dir", cls.DEFAULT_CONFIG["MUSIC_DIR"]),
+            allowed_extensions=cfg.get(
+                "allowed_extensions", cls.DEFAULT_CONFIG["ALLOWED_EXTENSIONS"]
+            ),
+            flask_host=cfg.get("flask_host", cls.DEFAULT_CONFIG["FLASK_HOST"]),
+            flask_port=int(cfg.get("flask_port", cls.DEFAULT_CONFIG["FLASK_PORT"])),
+            debug=cfg.get("debug", False),
+            mpv_cmd=cfg.get("mpv_cmd"),
+            data_dir=data_dir,
         )
-    
+
     @classmethod
-    def from_config_file(cls, config_path: str, data_dir: str = '.'):
+    def from_config_file(cls, config_path: str, data_dir: str = "."):
         """从配置文件创建播放器实例（自动检测文件格式）
-        
+
         支持 .ini 和 .json 格式
-        
+
         参数:
           config_path: 配置文件路径
           data_dir: 数据文件存储目录
-        
+
         返回:
           MusicPlayer 实例
         """
         if not os.path.exists(config_path):
             raise FileNotFoundError(f"配置文件不存在: {config_path}")
-        
+
         _, ext = os.path.splitext(config_path)
-        if ext.lower() == '.ini':
+        if ext.lower() == ".ini":
             return cls.from_ini_file(config_path, data_dir)
-        elif ext.lower() == '.json':
+        elif ext.lower() == ".json":
             return cls.from_json_file(config_path, data_dir)
         else:
             raise ValueError(f"不支持的配置文件格式: {ext}（支持 .ini 和 .json）")
-    
+
     @staticmethod
     def _read_ini_file(ini_path: str) -> dict:
         """读取INI配置文件"""
         cfg = MusicPlayer.DEFAULT_CONFIG.copy()
         try:
             parser = configparser.ConfigParser()
-            parser.read(ini_path, encoding='utf-8')
-            if 'app' in parser:
-                for key, value in parser['app'].items():
+            parser.read(ini_path, encoding="utf-8")
+            if "app" in parser:
+                for key, value in parser["app"].items():
                     cfg[key.upper()] = value
             try:
                 print(f"[INFO] 已从 {ini_path} 加载配置")
@@ -249,114 +271,116 @@ class MusicPlayer:
             except UnicodeEncodeError:
                 print(f"[WARN] Failed to read config file: {e}, using default")
         return cfg
-    
+
     @staticmethod
     def _read_json_file(json_path: str) -> dict:
         """读取JSON配置文件"""
         cfg = MusicPlayer.DEFAULT_CONFIG.copy()
         try:
-            with open(json_path, 'r', encoding='utf-8') as f:
+            with open(json_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 # 支持两种格式：
                 # 1. 直接配置项
                 # 2. 嵌套在 'player' 或 'app' 字段下
                 if isinstance(data, dict):
-                    if 'player' in data:
-                        cfg.update(data['player'])
-                    elif 'app' in data:
-                        cfg.update(data['app'])
+                    if "player" in data:
+                        cfg.update(data["player"])
+                    elif "app" in data:
+                        cfg.update(data["app"])
                     else:
                         cfg.update(data)
             print(f"[INFO] 已从 {json_path} 加载配置")
         except Exception as e:
             print(f"[WARN] 读取配置文件失败: {e}，使用默认配置")
         return cfg
-    
+
     @staticmethod
     def save_config_to_ini(ini_path: str, config: dict):
         """将配置保存为INI文件
-        
+
         参数:
           ini_path: 输出文件路径
           config: 配置字典
         """
         parser = configparser.ConfigParser()
-        parser['app'] = {}
+        parser["app"] = {}
         for key, value in config.items():
-            parser['app'][key] = str(value) if value is not None else ''
-        
+            parser["app"][key] = str(value) if value is not None else ""
+
         try:
-            with open(ini_path, 'w', encoding='utf-8') as f:
+            with open(ini_path, "w", encoding="utf-8") as f:
                 parser.write(f)
             print(f"[INFO] 配置已保存到 {ini_path}")
         except Exception as e:
             print(f"[ERROR] 保存配置文件失败: {e}")
-    
+
     @staticmethod
     def save_config_to_json(json_path: str, config: dict):
         """将配置保存为JSON文件
-        
+
         参数:
           json_path: 输出文件路径
           config: 配置字典
         """
         try:
-            with open(json_path, 'w', encoding='utf-8') as f:
+            with open(json_path, "w", encoding="utf-8") as f:
                 json.dump(config, f, ensure_ascii=False, indent=2)
             print(f"[INFO] 配置已保存到 {json_path}")
         except Exception as e:
             print(f"[ERROR] 保存配置文件失败: {e}")
-    
+
     def save_config(self, config_path: str):
         """将当前配置保存到文件
-        
+
         参数:
           config_path: 输出文件路径
         """
         config = self.to_dict()
         _, ext = os.path.splitext(config_path)
-        if ext.lower() == '.ini':
+        if ext.lower() == ".ini":
             self.save_config_to_ini(config_path, config)
-        elif ext.lower() == '.json':
+        elif ext.lower() == ".json":
             self.save_config_to_json(config_path, config)
         else:
             raise ValueError(f"不支持的配置文件格式: {ext}（支持 .ini 和 .json）")
-    
+
     def _normalize_music_dir(self, path: str) -> str:
         """规范化音乐目录路径"""
-        if len(path) == 2 and path[1] == ':' and path[0].isalpha():
-            path += '\\'
+        if len(path) == 2 and path[1] == ":" and path[0].isalpha():
+            path += "\\"
         return os.path.abspath(path)
-    
+
     def _parse_extensions(self, ext_str: str) -> set:
         """解析扩展名字符串"""
         if isinstance(ext_str, str):
-            parts = [e.strip() for e in ext_str.replace(';', ',').split(',') if e.strip()]
+            parts = [
+                e.strip() for e in ext_str.replace(";", ",").split(",") if e.strip()
+            ]
         else:
             parts = list(ext_str)
-        return set([e if e.startswith('.') else '.' + e for e in parts])
-    
+        return set([e if e.startswith(".") else "." + e for e in parts])
+
     def _get_default_mpv_cmd(self) -> str:
         """获取默认mpv命令"""
         app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        mpv_path = os.path.join(app_dir, 'mpv.exe')
+        mpv_path = os.path.join(app_dir, "mpv.exe")
         if os.path.exists(mpv_path):
             return f'"{mpv_path}" --input-ipc-server=\\\\.\\\pipe\\\\mpv-pipe --idle=yes --force-window=no'
-        return r'c:\mpv\mpv.exe --input-ipc-server=\\.\pipe\mpv-pipe --idle=yes --force-window=no'
-    
+        return r"c:\mpv\mpv.exe --input-ipc-server=\\.\pipe\mpv-pipe --idle=yes --force-window=no"
+
     def load_playback_history(self):
         """从文件加载播放历史"""
         self.playback_history.load()
-    
+
     def save_playback_history(self):
         """保存播放历史到文件"""
         self.playback_history.save()
-    
+
     def load_play_queue(self):
         """从文件加载播放队列"""
         try:
             if os.path.exists(self.play_queue_file):
-                with open(self.play_queue_file, 'r', encoding='utf-8') as f:
+                with open(self.play_queue_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     if isinstance(data, dict):
                         self.play_queue.from_dict(data)
@@ -368,186 +392,201 @@ class MusicPlayer:
         except Exception as e:
             print(f"[ERROR] 加载播放队列失败: {e}")
             self.play_queue = PlayQueue()
-    
+
     def save_play_queue(self):
         """保存播放队列到文件"""
         try:
             data = self.play_queue.to_dict()
-            with open(self.play_queue_file, 'w', encoding='utf-8') as f:
+            with open(self.play_queue_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"[ERROR] 保存播放队列失败: {e}")
-    
+
     # ========== MPV IPC 初始化方法 ==========
-    
+
     def _init_mpv_ipc(self):
         """初始化 MPV IPC 连接（在播放器初始化时只调用一次）"""
         self._extract_pipe_name_from_cmd()
         self.ensure_mpv()
-    
+
     def _extract_pipe_name_from_cmd(self):
         """从 MPV 命令行中提取管道名称"""
         if not self.mpv_cmd:
             self.pipe_name = r"\\.\pipe\mpv-pipe"  # 默认管道名称
             return
-        
-        match = re.search(r'--input-ipc-server\s*=?\s*(["\']?)(.+?)\1(?:\s|$)', self.mpv_cmd)
+
+        match = re.search(
+            r'--input-ipc-server\s*=?\s*(["\']?)(.+?)\1(?:\s|$)', self.mpv_cmd
+        )
         if match:
             self.pipe_name = match.group(2)
         else:
             self.pipe_name = r"\\.\pipe\mpv-pipe"  # 默认管道名称
-    
+
     def mpv_pipe_exists(self) -> bool:
         """检查 MPV 管道是否存在（仅在 Windows 上检查）"""
         if not self.pipe_name:
             return False
         try:
-            with open(self.pipe_name, 'wb') as _:
+            with open(self.pipe_name, "wb") as _:
                 return True
         except (OSError, IOError):
             return False
-    
+
     def _wait_pipe(self, timeout=6.0) -> bool:
         """等待 MPV 管道就绪"""
         end = time.time() + timeout
         while time.time() < end:
             try:
-                with open(self.pipe_name, 'wb') as _:
+                with open(self.pipe_name, "wb") as _:
                     return True
             except Exception:
                 time.sleep(0.15)
         return False
-    
+
     def ensure_mpv(self) -> bool:
         """确保 MPV 进程运行并且 IPC 管道就绪
-        
+
         返回:
           True 如果 mpv 管道可用，False 否则
         """
         # 每次调用重新解析，允许运行期间修改 MPV_CMD 并热加载
         self._extract_pipe_name_from_cmd()
-        
+
         if not self.mpv_cmd:
-            print('[WARN] 未配置 MPV_CMD')
+            print("[WARN] 未配置 MPV_CMD")
             return False
-        
+
         if self.mpv_pipe_exists():
             return True
-        
+
         # 清理任何现存的 mpv 进程，防止重复启动
         try:
-            if os.name == 'nt':
-                subprocess.run(['taskkill', '/IM', 'mpv.exe', '/F'], capture_output=True, timeout=2)
+            if os.name == "nt":
+                subprocess.run(
+                    ["taskkill", "/IM", "mpv.exe", "/F"], capture_output=True, timeout=2
+                )
                 time.sleep(0.3)  # 让进程完全退出
         except Exception as e:
-            print(f'[DEBUG] 清理 mpv 进程时的异常（可忽略）: {e}')
-        
-        print(f'[INFO] 尝试启动 mpv: {self.mpv_cmd}')
+            print(f"[DEBUG] 清理 mpv 进程时的异常（可忽略）: {e}")
+
+        print(f"[INFO] 尝试启动 mpv: {self.mpv_cmd}")
         try:
             subprocess.Popen(self.mpv_cmd, shell=True)
         except Exception as e:
-            print('[ERROR] 启动 mpv 进程失败:', e)
+            print("[ERROR] 启动 mpv 进程失败:", e)
             return False
-        
+
         ready = self._wait_pipe()
         if not ready:
-            print('[ERROR] 等待 mpv 管道超时: ', self.pipe_name)
+            print("[ERROR] 等待 mpv 管道超时: ", self.pipe_name)
         return ready
-    
+
     def mpv_command(self, cmd_list) -> bool:
         """向 MPV 发送命令
-        
+
         写命令，失败时自动尝试启动一次再重试
         """
+
         def _write():
             # Debug: print the command being sent to mpv pipe
-            print(f"[DEBUG] mpv_command -> sending: {cmd_list} to pipe {self.pipe_name}")
-            with open(self.pipe_name, 'wb') as w:
-                w.write((json.dumps({'command': cmd_list})+'\n').encode('utf-8'))
-        
+            print(
+                f"[DEBUG] mpv_command -> sending: {cmd_list} to pipe {self.pipe_name}"
+            )
+            with open(self.pipe_name, "wb") as w:
+                w.write((json.dumps({"command": cmd_list}) + "\n").encode("utf-8"))
+
         try:
             _write()
             return True
         except Exception as e:
             import traceback
-            print(f'[WARN] 首次写入失败: {e}. 尝试 ensure_mpv 后重试...')
-            print('[DEBUG] 异常类型:', type(e))
-            print('[DEBUG] PIPE_NAME value:', repr(self.pipe_name))
+
+            print(f"[WARN] 首次写入失败: {e}. 尝试 ensure_mpv 后重试...")
+            print("[DEBUG] 异常类型:", type(e))
+            print("[DEBUG] PIPE_NAME value:", repr(self.pipe_name))
             try:
                 # On Windows, named pipe path may not be a real file; show os.path.exists result regardless
-                print('[DEBUG] os.path.exists(PIPE_NAME):', os.path.exists(self.pipe_name))
+                print(
+                    "[DEBUG] os.path.exists(PIPE_NAME):", os.path.exists(self.pipe_name)
+                )
             except Exception as ex:
-                print('[DEBUG] os.path.exists raised:', ex)
-            print('[DEBUG] Traceback:')
+                print("[DEBUG] os.path.exists raised:", ex)
+            print("[DEBUG] Traceback:")
             traceback.print_exc()
             # Try to list mpv process on Windows to help debugging
             try:
-                if os.name == 'nt':
-                    tl = subprocess.run(['tasklist','/FI','IMAGENAME eq mpv.exe'], capture_output=True, text=True)
-                    print('[DEBUG] tasklist for mpv.exe:\n', tl.stdout)
+                if os.name == "nt":
+                    tl = subprocess.run(
+                        ["tasklist", "/FI", "IMAGENAME eq mpv.exe"],
+                        capture_output=True,
+                        text=True,
+                    )
+                    print("[DEBUG] tasklist for mpv.exe:\n", tl.stdout)
             except Exception:
                 pass
-            
+
             if self.ensure_mpv():
                 try:
                     _write()
                     return True
                 except Exception as e2:
-                    print(f'[ERROR] 重试写入失败: {e2}')
+                    print(f"[ERROR] 重试写入失败: {e2}")
                     import traceback
+
                     traceback.print_exc()
                     return False
             return False
-    
+
     def mpv_request(self, payload: dict):
         """向 MPV 发送请求并等待响应"""
-        with open(self.pipe_name, 'r+b', 0) as f:
-            f.write((json.dumps(payload)+'\n').encode('utf-8'))
+        with open(self.pipe_name, "r+b", 0) as f:
+            f.write((json.dumps(payload) + "\n").encode("utf-8"))
             f.flush()
             while True:
                 line = f.readline()
                 if not line:
                     break
                 try:
-                    obj = json.loads(line.decode('utf-8','ignore'))
+                    obj = json.loads(line.decode("utf-8", "ignore"))
                 except Exception:
                     continue
-                if obj.get('request_id') == payload.get('request_id'):
+                if obj.get("request_id") == payload.get("request_id"):
                     return obj
         return None
-    
+
     def mpv_get(self, prop: str):
         """获取 MPV 属性值"""
         self._req_id += 1
-        req = {"command":["get_property", prop], "request_id": self._req_id}
+        req = {"command": ["get_property", prop], "request_id": self._req_id}
         resp = self.mpv_request(req)
         if not resp:
             return None
-        return resp.get('data')
-    
+        return resp.get("data")
+
     def mpv_set(self, prop: str, value) -> bool:
         """设置 MPV 属性值"""
         try:
-            self.mpv_command(['set_property', prop, value])
+            self.mpv_command(["set_property", prop, value])
             return True
         except Exception:
             return False
-    
+
     # ========== 播放控制方法（音量、seek、暂停等） ==========
-    
+
     def get_volume(self) -> float:
         """获取当前音量（0-130）"""
-        vol = self.mpv_get('volume')
+        vol = self.mpv_get("volume")
         if vol is not None:
             return vol
         return 0.0
-    
+
     def set_volume(self, volume: float) -> bool:
         """设置音量
-        
+
         参数:
           volume: 音量值（0-130）
-        
+
         返回:
           bool: 设置是否成功
         """
@@ -556,15 +595,15 @@ class MusicPlayer:
             volume = 0
         elif volume > 130:
             volume = 130
-        
-        return self.mpv_set('volume', volume)
-    
+
+        return self.mpv_set("volume", volume)
+
     def seek(self, percent: float) -> bool:
         """跳转到指定播放位置
-        
+
         参数:
           percent: 播放进度百分比（0-100）
-        
+
         返回:
           bool: 跳转是否成功
         """
@@ -573,48 +612,50 @@ class MusicPlayer:
             percent = 0
         elif percent > 100:
             percent = 100
-        
-        return self.mpv_command(['seek', str(percent), 'absolute-percent'])
-    
+
+        return self.mpv_command(["seek", str(percent), "absolute-percent"])
+
     def toggle_pause(self) -> bool:
         """切换暂停/播放状态
-        
+
         返回:
           bool: 操作是否成功
         """
-        return self.mpv_command(['cycle', 'pause'])
-    
+        return self.mpv_command(["cycle", "pause"])
+
     def get_pause_state(self) -> bool:
         """获取暂停状态
-        
+
         返回:
           bool: True 表示已暂停，False 表示播放中
         """
-        paused = self.mpv_get('pause')
+        paused = self.mpv_get("pause")
         return paused if paused is not None else False
-    
+
     def stop_playback(self) -> bool:
         """停止播放
-        
+
         返回:
           bool: 停止是否成功
         """
-        return self.mpv_command(['stop'])
-    
-    def add_to_playback_history(self, url_or_path: str, name: str, is_local: bool = False):
+        return self.mpv_command(["stop"])
+
+    def add_to_playback_history(
+        self, url_or_path: str, name: str, is_local: bool = False, thumbnail_url: str = None
+    ):
         """添加播放历史"""
-        self.playback_history.add_to_history(url_or_path, name, is_local)
-    
+        self.playback_history.add_to_history(url_or_path, name, is_local, thumbnail_url)
+
     def safe_path(self, rel: str) -> str:
         """验证并返回安全的文件路径"""
         base = os.path.abspath(self.music_dir)
         target = os.path.abspath(os.path.join(base, rel))
         if not target.startswith(base):
-            raise ValueError('非法路径')
+            raise ValueError("非法路径")
         if not os.path.exists(target):
-            raise ValueError('不存在的文件')
+            raise ValueError("不存在的文件")
         return target
-    
+
     def gather_tracks(self, root: str) -> list:
         """收集目录下的所有音乐文件"""
         tracks = []
@@ -627,42 +668,42 @@ class MusicPlayer:
         except Exception as e:
             print(f"[WARN] 遍历目录失败: {e}")
         return tracks
-    
+
     def build_tree(self) -> dict:
         """构建音乐目录树结构
-        
+
         返回:
           包含目录和文件信息的嵌套字典
         """
         abs_root = os.path.abspath(self.music_dir)
-        
+
         def walk(path):
-            rel = os.path.relpath(path, abs_root).replace('\\', '/')
+            rel = os.path.relpath(path, abs_root).replace("\\", "/")
             node = {
-                'name': os.path.basename(path) or '根目录',
-                'rel': '' if rel == '.' else rel,
-                'dirs': [],
-                'files': []
+                "name": os.path.basename(path) or "根目录",
+                "rel": "" if rel == "." else rel,
+                "dirs": [],
+                "files": [],
             }
             try:
                 for name in sorted(os.listdir(path), key=str.lower):
                     full = os.path.join(path, name)
                     if os.path.isdir(full):
-                        node['dirs'].append(walk(full))
+                        node["dirs"].append(walk(full))
                     else:
                         ext = os.path.splitext(name)[1].lower()
                         if ext in self.allowed_extensions:
-                            rp = os.path.relpath(full, abs_root).replace('\\', '/')
-                            node['files'].append({'name': name, 'rel': rp})
+                            rp = os.path.relpath(full, abs_root).replace("\\", "/")
+                            node["files"].append({"name": name, "rel": rp})
             except Exception:
                 pass
             return node
-        
+
         return walk(abs_root)
-    
+
     def build_playlist(self) -> list:
         """构建播放列表（所有音乐文件的相对路径列表）
-        
+
         返回:
           排序后的相对路径列表
         """
@@ -672,34 +713,38 @@ class MusicPlayer:
             for f in files:
                 ext = os.path.splitext(f)[1].lower()
                 if ext in self.allowed_extensions:
-                    rel = os.path.relpath(os.path.join(dp, f), abs_root).replace('\\', '/')
+                    rel = os.path.relpath(os.path.join(dp, f), abs_root).replace(
+                        "\\", "/"
+                    )
                     tracks.append(rel)
         tracks.sort(key=str.lower)
         return tracks
-    
-    def build_local_queue(self, folder_path: str = None, clear_existing: bool = True) -> int:
+
+    def build_local_queue(
+        self, folder_path: str = None, clear_existing: bool = True
+    ) -> int:
         """从本地文件夹构建播放队列
-        
+
         参数:
           folder_path: 文件夹路径（相对于music_dir），为None时使用整个music_dir
           clear_existing: 是否清空现有队列
-        
+
         返回:
           添加到队列的歌曲数量
         """
         if clear_existing:
             self.play_queue.clear()
-        
+
         # 确定扫描路径
         if folder_path:
             abs_path = os.path.join(os.path.abspath(self.music_dir), folder_path)
         else:
             abs_path = os.path.abspath(self.music_dir)
-        
+
         if not os.path.exists(abs_path) or not os.path.isdir(abs_path):
             print(f"[WARN] 路径不存在或不是文件夹: {abs_path}")
             return 0
-        
+
         # 收集所有音乐文件
         abs_root = os.path.abspath(self.music_dir)
         tracks = []
@@ -707,30 +752,41 @@ class MusicPlayer:
             for f in files:
                 ext = os.path.splitext(f)[1].lower()
                 if ext in self.allowed_extensions:
-                    rel = os.path.relpath(os.path.join(dp, f), abs_root).replace('\\', '/')
+                    rel = os.path.relpath(os.path.join(dp, f), abs_root).replace(
+                        "\\", "/"
+                    )
                     tracks.append(rel)
-        
+
         # 排序
         tracks.sort(key=str.lower)
-        
+
         # 添加到播放队列
         for rel_path in tracks:
             song = LocalSong(rel_path, os.path.basename(rel_path))
             self.play_queue.add(song)
-        
+
         # 如果队列不为空，设置当前索引为第一首
         if not self.play_queue.is_empty():
             self.play_queue.set_current_index(0)
-        
-        print(f"[INFO] 已从 {folder_path or 'music_dir'} 添加 {len(tracks)} 首歌曲到队列")
+
+        print(
+            f"[INFO] 已从 {folder_path or 'music_dir'} 添加 {len(tracks)} 首歌曲到队列"
+        )
         return len(tracks)
-    
+
     # ========== 播放控制方法 ==========
-    
-    def play_index(self, playlist: list, idx: int, mpv_command_func, mpv_pipe_exists_func, 
-                   ensure_mpv_func, save_history: bool = True):
+
+    def play_index(
+        self,
+        playlist: list,
+        idx: int,
+        mpv_command_func,
+        mpv_pipe_exists_func,
+        ensure_mpv_func,
+        save_history: bool = True,
+    ):
         """播放播放列表中指定索引的本地文件
-        
+
         参数:
           playlist: 播放列表（相对路径列表）
           idx: 要播放的索引
@@ -738,51 +794,59 @@ class MusicPlayer:
           mpv_pipe_exists_func: mpv 管道检查函数
           ensure_mpv_func: mpv 确保启动函数
           save_history: 是否保存到播放历史
-        
+
         返回:
           成功返回 True，失败返回 False
         """
         if idx < 0 or idx >= len(playlist):
             return False
-        
+
         rel = playlist[idx]
         abs_file = self.safe_path(rel)
-        
+
         # Debug: print play info
         print(f"[DEBUG] play_index -> idx={idx}, rel={rel}, abs_file={abs_file}")
-        
+
         try:
             # 确保 mpv 管道存在，否则尝试启动 mpv
             if not mpv_pipe_exists_func():
                 print(f"[WARN] mpv 管道不存在，尝试启动 mpv...")
                 if not ensure_mpv_func():
                     raise RuntimeError("无法启动或连接到 mpv")
-            mpv_command_func(['loadfile', abs_file, 'replace'])
+            mpv_command_func(["loadfile", abs_file, "replace"])
         except Exception as e:
             print(f"[ERROR] mpv_command failed when playing {abs_file}: {e}")
             raise
-        
+
         self.current_index = idx
         self.current_meta = {
-            'abs_path': abs_file, 
-            'rel': rel, 
-            'index': idx, 
-            'ts': int(time.time()), 
-            'name': os.path.basename(rel)
+            "abs_path": abs_file,
+            "rel": rel,
+            "index": idx,
+            "ts": int(time.time()),
+            "name": os.path.basename(rel),
         }
         self._last_play_time = time.time()  # 记录播放开始时间
-        
+
         # 添加到播放历史（存储相对路径，以便 /play 接口使用）
         if save_history:
             self.add_to_playback_history(rel, os.path.basename(rel), is_local=True)
-        
+
         print(f"[DEBUG] CURRENT_INDEX set to {self.current_index}")
         return True
-    
-    def play_url(self, url: str, mpv_command_func, mpv_pipe_exists_func, ensure_mpv_func,
-                 mpv_get_func, save_to_history: bool = True, update_queue: bool = True):
+
+    def play_url(
+        self,
+        url: str,
+        mpv_command_func,
+        mpv_pipe_exists_func,
+        ensure_mpv_func,
+        mpv_get_func,
+        save_to_history: bool = True,
+        update_queue: bool = True,
+    ):
         """播放网络 URL（如 YouTube）。使用 --ytdl-format=bestaudio 标志让 mpv 正确处理 YouTube。
-        
+
         参数:
           url: 要播放的 URL
           mpv_command_func: mpv 命令执行函数
@@ -791,94 +855,108 @@ class MusicPlayer:
           mpv_get_func: mpv 属性获取函数
           save_to_history: 是否保存该 URL 到历史记录（仅保存用户直接输入的URL）
           update_queue: 是否更新播放队列（如果False则只播放该URL，保持现有队列）
-        
+
         返回:
           成功返回 True，失败返回 False
         """
         import subprocess
         import sys
-        
-        print(f"[DEBUG] play_url -> url={url}, save_to_history={save_to_history}, update_queue={update_queue}")
+
+        print(
+            f"[DEBUG] play_url -> url={url}, save_to_history={save_to_history}, update_queue={update_queue}"
+        )
         try:
             # 检查 mpv 进程是否运行
             if not mpv_pipe_exists_func():
                 print(f"[WARN] mpv pipe 不存在，尝试启动 mpv...")
                 if not ensure_mpv_func():
                     raise RuntimeError("无法启动或连接到 mpv")
-            
+
             # 注意：通过 IPC 发送选项标志（如 --ytdl-format）需要特殊处理。
             # 更好的方法是先设置 ytdl-format 属性，再加载文件。
             print(f"[DEBUG] 设置 mpv 属性: ytdl-format=bestaudio")
-            mpv_command_func(['set_property', 'ytdl-format', 'bestaudio'])
+            mpv_command_func(["set_property", "ytdl-format", "bestaudio"])
             print(f"[DEBUG] 调用 mpv_command 播放 URL: {url}")
-            mpv_command_func(['loadfile', url, 'replace'])
+            mpv_command_func(["loadfile", url, "replace"])
             print(f"[DEBUG] 已向 mpv 发送播放命令")
-            
+
             # 保存当前本地播放状态，以便网络流结束后恢复
             self._prev_index = self.current_index
             self._prev_meta = dict(self.current_meta) if self.current_meta else None
-            
+
             # 初始化 CURRENT_META：保留 raw_url，并使用占位名（避免将原始 URL 直接显示给用户）
             # 同时准备 media_title 字段供客户端优先显示
             self.current_meta = {
-                'abs_path': url, 
-                'rel': url, 
-                'index': -1, 
-                'ts': int(time.time()), 
-                'name': '加载中…', 
-                'raw_url': url, 
-                'media_title': None
+                "abs_path": url,
+                "rel": url,
+                "index": -1,
+                "ts": int(time.time()),
+                "name": "加载中…",
+                "raw_url": url,
+                "media_title": None,
             }
-            
+
             # 检测是否为播放列表 URL
             is_playlist = False
             playlist_entries = []
-            if 'youtube.com/playlist' in url or 'youtu.be' in url or 'youtube.com/watch' in url:
+            if (
+                "youtube.com/playlist" in url
+                or "youtu.be" in url
+                or "youtube.com/watch" in url
+            ):
                 try:
                     # 使用 yt-dlp 获取播放列表信息
                     print(f"[DEBUG] 尝试使用 yt-dlp 提取播放列表信息...")
                     # 查找 yt-dlp 可执行文件
-                    yt_dlp_exe = 'yt-dlp'
-                    if getattr(sys, 'frozen', False):
+                    yt_dlp_exe = "yt-dlp"
+                    if getattr(sys, "frozen", False):
                         # 打包后，在应用目录查找
-                        yt_dlp_path = os.path.join(sys._MEIPASS, 'yt-dlp.exe')
+                        yt_dlp_path = os.path.join(sys._MEIPASS, "yt-dlp.exe")
                         if os.path.exists(yt_dlp_path):
                             yt_dlp_exe = yt_dlp_path
-                    cmd = [yt_dlp_exe, '--flat-playlist', '-j', url]
-                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                    cmd = [yt_dlp_exe, "--flat-playlist", "-j", url]
+                    result = subprocess.run(
+                        cmd, capture_output=True, text=True, timeout=30
+                    )
                     if result.returncode == 0:
-                        lines = result.stdout.strip().split('\n')
+                        lines = result.stdout.strip().split("\n")
                         for line in lines:
                             if line.strip():
                                 try:
                                     entry = json.loads(line)
                                     if isinstance(entry, dict):
-                                        entry_url = entry.get('url') or entry.get('id')
-                                        entry_title = entry.get('title', '未知')
+                                        entry_url = entry.get("url") or entry.get("id")
+                                        entry_title = entry.get("title", "未知")
                                         # 构建完整 YouTube URL
-                                        if entry_url and not entry_url.startswith('http'):
+                                        if entry_url and not entry_url.startswith(
+                                            "http"
+                                        ):
                                             if len(entry_url) == 11:  # 可能是视频 ID
-                                                entry_url = f'https://www.youtube.com/watch?v={entry_url}'
-                                        playlist_entries.append({
-                                            'url': entry_url,
-                                            'title': entry_title,
-                                            'ts': int(time.time())
-                                        })
+                                                entry_url = f"https://www.youtube.com/watch?v={entry_url}"
+                                        playlist_entries.append(
+                                            {
+                                                "url": entry_url,
+                                                "title": entry_title,
+                                                "ts": int(time.time()),
+                                            }
+                                        )
                                 except json.JSONDecodeError:
                                     pass
                         if playlist_entries:
                             is_playlist = True
-                            print(f"[DEBUG] 检测到播放列表，共 {len(playlist_entries)} 项")
+                            print(
+                                f"[DEBUG] 检测到播放列表，共 {len(playlist_entries)} 项"
+                            )
                 except Exception as e:
                     print(f"[WARN] 提取播放列表失败: {e}")
                     is_playlist = False
                     playlist_entries = []
-            
+
             # 添加到播放历史
             if is_playlist:
                 # 如果是播放列表，仅在save_to_history为True时添加原始URL（播放列表URL）
                 if save_to_history:
-                    playlist_name = f'播放列表 ({len(playlist_entries)} 首)'
+                    playlist_name = f"播放列表 ({len(playlist_entries)} 首)"
                     self.add_to_playback_history(url, playlist_name, is_local=False)
                 else:
                     print(f"[DEBUG] 跳过添加播放列表到历史记录 (save_to_history=False)")
@@ -887,37 +965,27 @@ class MusicPlayer:
                     # 清空现有队列并添加播放列表项
                     self.play_queue.clear()
                     for entry in playlist_entries:
-                        song = StreamSong(entry['url'], entry['title'])
+                        song = StreamSong(entry["url"], entry["title"])
                         self.play_queue.add(song)
                     self.play_queue.set_current_index(0)
-                    print(f"[DEBUG] 已将播放列表添加到队列，共 {len(playlist_entries)} 项")
+                    print(
+                        f"[DEBUG] 已将播放列表添加到队列，共 {len(playlist_entries)} 项"
+                    )
             else:
                 # 单个视频的添加逻辑
                 if save_to_history:
-                    self.add_to_playback_history(url, '加载中…', is_local=False)
+                    self.add_to_playback_history(url, "加载中…", is_local=False)
                 else:
                     print(f"[DEBUG] 跳过添加单个视频到历史记录 (save_to_history=False)")
                 # 单个视频的队列（仅当update_queue为True时）
                 if update_queue:
-                    # 检查该URL是否已在队列中
-                    existing_index = -1
-                    for idx, song in enumerate(self.play_queue.get_all()):
-                        if song.url == url:
-                            existing_index = idx
-                            break
-                    
-                    if existing_index == -1:
-                        # URL不在队列中，创建新队列（保持原有行为）
-                        self.play_queue.clear()
-                        song = StreamSong(url, '加载中…')
-                        self.play_queue.add(song)
-                        self.play_queue.set_current_index(0)
-                        print(f"[DEBUG] 创建新播放队列（单个视频）")
-                    else:
-                        # URL已在队列中，设置当前索引为该URL的位置
-                        self.play_queue.set_current_index(existing_index)
-                        print(f"[DEBUG] URL已在队列中，设置索引为 {existing_index}")
-            
+                    # 允许重复添加相同的URL，不进行去重检查
+                    self.play_queue.clear()
+                    song = StreamSong(url, "加载中…")
+                    self.play_queue.add(song)
+                    self.play_queue.set_current_index(0)
+                    print(f"[DEBUG] 创建新播放队列（单个视频）")
+
             # 尝试轮询获取 mpv 的 media-title，最多尝试 20 次（大约 10 秒）
             def _is_invalid_title(tit, urlraw):
                 try:
@@ -927,13 +995,18 @@ class MusicPlayer:
                     if not s:
                         return True
                     # 如果返回看起来像 URL 或直接包含原始 URL，则视为无效
-                    if s.startswith('http') or s.startswith('https') or urlraw and s == urlraw:
+                    if (
+                        s.startswith("http")
+                        or s.startswith("https")
+                        or urlraw
+                        and s == urlraw
+                    ):
                         return True
                     # 常见 YouTube ID（11字符且仅字母数字-_）不作为有效标题
-                    if len(s) == 11 and all(c.isalnum() or c in ('-','_') for c in s):
+                    if len(s) == 11 and all(c.isalnum() or c in ("-", "_") for c in s):
                         return True
                     # 含有 youtube 域名或 youtu 标记也可能是无效（如 mpv 暂时返回片段）
-                    if 'youtu' in s.lower():
+                    if "youtu" in s.lower():
                         return True
                     return False
                 except Exception:
@@ -942,99 +1015,129 @@ class MusicPlayer:
             for attempt in range(20):
                 time.sleep(0.5)
                 try:
-                    media_title = mpv_get_func('media-title')
-                    if media_title and isinstance(media_title, str) and not _is_invalid_title(media_title, url):
+                    media_title = mpv_get_func("media-title")
+                    if (
+                        media_title
+                        and isinstance(media_title, str)
+                        and not _is_invalid_title(media_title, url)
+                    ):
                         # 将获得的媒体标题写入 media_title 字段，并同步更新用户可见的 name
-                        self.current_meta['media_title'] = media_title
-                        self.current_meta['name'] = media_title
+                        self.current_meta["media_title"] = media_title
+                        self.current_meta["name"] = media_title
                         # 更新历史记录中最新项的标题（仅当save_to_history为True时）
                         if save_to_history and not self.playback_history.is_empty():
                             history_items = self.playback_history.get_all()
-                            if history_items and history_items[0]['url'] == url:
+                            if history_items and history_items[0]["url"] == url:
                                 self.playback_history.update_item(0, name=media_title)
-                        print(f"[DEBUG] mpv media-title 探测到 (尝试 {attempt+1}): {media_title}")
+                        print(
+                            f"[DEBUG] mpv media-title 探测到 (尝试 {attempt+1}): {media_title}"
+                        )
                         break
                     else:
                         if attempt < 4:
-                            print(f"[DEBUG] media-title 未就绪或不符合 (尝试 {attempt+1}), 值: {repr(media_title)}")
+                            print(
+                                f"[DEBUG] media-title 未就绪或不符合 (尝试 {attempt+1}), 值: {repr(media_title)}"
+                            )
                 except Exception as _e:
                     if attempt == 19:
                         print(f"[WARN] 无法读取 mpv media-title (最终失败): {_e}")
-            
+
             # 记录播放开始时间
             self._last_play_time = time.time()
-            print(f"[DEBUG] 已设置为播放 URL: {url}，启动时间戳: {self._last_play_time}")
+            print(
+                f"[DEBUG] 已设置为播放 URL: {url}，启动时间戳: {self._last_play_time}"
+            )
             return True
         except Exception as e:
             print(f"[ERROR] play_url failed for {url}: {e}")
             import traceback
+
             traceback.print_exc()
             raise
-    
-    def next_track(self, playlist: list, mpv_command_func, mpv_pipe_exists_func, 
-                   ensure_mpv_func, save_history: bool = True):
+
+    def next_track(
+        self,
+        playlist: list,
+        mpv_command_func,
+        mpv_pipe_exists_func,
+        ensure_mpv_func,
+        save_history: bool = True,
+    ):
         """播放播放列表中的下一首歌曲
-        
+
         参数:
           playlist: 播放列表（相对路径列表）
           mpv_command_func: mpv 命令执行函数
           mpv_pipe_exists_func: mpv 管道检查函数
           ensure_mpv_func: mpv 确保启动函数
           save_history: 是否保存到播放历史
-        
+
         返回:
           成功返回 True，失败返回 False
         """
         if self.current_index < 0:
             return False
-        
+
         nxt = self.current_index + 1
         if nxt >= len(playlist):
             return False
-        
+
         return self.play_index(
             playlist=playlist,
             idx=nxt,
             mpv_command_func=mpv_command_func,
             mpv_pipe_exists_func=mpv_pipe_exists_func,
             ensure_mpv_func=ensure_mpv_func,
-            save_history=save_history
+            save_history=save_history,
         )
-    
-    def previous_track(self, playlist: list, mpv_command_func, mpv_pipe_exists_func, 
-                       ensure_mpv_func, save_history: bool = True):
+
+    def previous_track(
+        self,
+        playlist: list,
+        mpv_command_func,
+        mpv_pipe_exists_func,
+        ensure_mpv_func,
+        save_history: bool = True,
+    ):
         """播放播放列表中的上一首歌曲
-        
+
         参数:
           playlist: 播放列表（相对路径列表）
           mpv_command_func: mpv 命令执行函数
           mpv_pipe_exists_func: mpv 管道检查函数
           ensure_mpv_func: mpv 确保启动函数
           save_history: 是否保存到播放历史
-        
+
         返回:
           成功返回 True，失败返回 False
         """
         if self.current_index < 0:
             return False
-        
+
         prv = self.current_index - 1
         if prv < 0:
             return False
-        
+
         return self.play_index(
             playlist=playlist,
             idx=prv,
             mpv_command_func=mpv_command_func,
             mpv_pipe_exists_func=mpv_pipe_exists_func,
             ensure_mpv_func=ensure_mpv_func,
-            save_history=save_history
+            save_history=save_history,
         )
-    
-    def play(self, song, mpv_command_func, mpv_pipe_exists_func, ensure_mpv_func,
-             add_to_history_func=None, save_to_history: bool = True):
+
+    def play(
+        self,
+        song,
+        mpv_command_func,
+        mpv_pipe_exists_func,
+        ensure_mpv_func,
+        add_to_history_func=None,
+        save_to_history: bool = True,
+    ):
         """统一的播放接口，根据歌曲对象类型调用相应的播放方法
-        
+
         参数:
           song: Song 对象（LocalSong 或 StreamSong）
           mpv_command_func: mpv 命令执行函数
@@ -1042,16 +1145,16 @@ class MusicPlayer:
           ensure_mpv_func: 确保 mpv 运行的函数
           add_to_history_func: 添加到历史记录的函数（可选）
           save_to_history: 是否保存到播放历史
-        
+
         返回:
           成功返回 True，失败返回 False
         """
         if not song:
             print(f"[ERROR] play() called with None song")
             return False
-        
+
         print(f"[DEBUG] play() -> 播放歌曲: {song}")
-        
+
         try:
             # 根据歌曲类型调用相应的播放方法
             success = song.play(
@@ -1060,75 +1163,98 @@ class MusicPlayer:
                 ensure_mpv_func=ensure_mpv_func,
                 add_to_history_func=add_to_history_func,
                 save_to_history=save_to_history,
-                music_dir=self.music_dir
+                music_dir=self.music_dir,
             )
-            
+
             if not success:
                 return False
-            
+
             # 更新当前播放的元数据
             self.current_meta = song.to_dict()
             self._last_play_time = time.time()
             print(f"[DEBUG] 已更新 current_meta: {self.current_meta}")
-            
+
             # 对于串流媒体，尝试获取真实的媒体标题
             if song.is_stream():
-                import time
                 import threading
-                
+
                 def _fetch_media_title():
                     """后台线程：获取串流媒体的真实标题"""
+
                     def _is_invalid_title(title, raw_url):
                         if not title or not isinstance(title, str):
                             return True
                         s = title.strip()
-                        if not s or s.startswith('http'):
+                        if not s or s.startswith("http"):
                             return True
                         if raw_url and s == raw_url:
                             return True
-                        if 'youtu' in s.lower():
+                        if "youtu" in s.lower():
                             return True
-                        if len(s) == 11 and all(c.isalnum() or c in ('-','_') for c in s):
+                        if len(s) == 11 and all(
+                            c.isalnum() or c in ("-", "_") for c in s
+                        ):
                             return True
                         return False
-                    
+
                     url = song.url
                     for attempt in range(20):
                         time.sleep(0.5)
                         try:
-                            media_title = self.mpv_get('media-title')
-                            if media_title and isinstance(media_title, str) and not _is_invalid_title(media_title, url):
+                            media_title = self.mpv_get("media-title")
+                            if (
+                                media_title
+                                and isinstance(media_title, str)
+                                and not _is_invalid_title(media_title, url)
+                            ):
                                 # 更新当前元数据
-                                self.current_meta['media_title'] = media_title
-                                self.current_meta['name'] = media_title
+                                self.current_meta["media_title"] = media_title
+                                self.current_meta["name"] = media_title
                                 # 更新历史记录中的标题
-                                if save_to_history and not self.playback_history.is_empty():
+                                if (
+                                    save_to_history
+                                    and not self.playback_history.is_empty()
+                                ):
                                     history_items = self.playback_history.get_all()
-                                    if history_items and history_items[0]['url'] == url:
-                                        self.playback_history.update_item(0, name=media_title)
-                                print(f"[DEBUG] 获取到串流媒体标题 (尝试 {attempt+1}): {media_title}")
+                                    if history_items and history_items[0]["url"] == url:
+                                        self.playback_history.update_item(
+                                            0, name=media_title
+                                        )
+                                print(
+                                    f"[DEBUG] 获取到串流媒体标题 (尝试 {attempt+1}): {media_title}"
+                                )
                                 break
                             else:
                                 if attempt < 4:
-                                    print(f"[DEBUG] 媒体标题未就绪 (尝试 {attempt+1}), 值: {repr(media_title)}")
+                                    print(
+                                        f"[DEBUG] 媒体标题未就绪 (尝试 {attempt+1}), 值: {repr(media_title)}"
+                                    )
                         except Exception as e:
                             if attempt == 19:
                                 print(f"[WARN] 无法获取媒体标题: {e}")
-                
+
                 # 启动后台线程获取标题
-                threading.Thread(target=_fetch_media_title, daemon=True, name='FetchMediaTitle').start()
-            
+                threading.Thread(
+                    target=_fetch_media_title, daemon=True, name="FetchMediaTitle"
+                ).start()
+
             return True
         except Exception as e:
             print(f"[ERROR] play() failed: {e}")
             import traceback
+
             traceback.print_exc()
             return False
 
-    def handle_track_end(self, mpv_command_func=None, mpv_pipe_exists_func=None,
-                         ensure_mpv_func=None, add_to_history_func=None) -> bool:
+    def handle_track_end(
+        self,
+        mpv_command_func=None,
+        mpv_pipe_exists_func=None,
+        ensure_mpv_func=None,
+        add_to_history_func=None,
+    ) -> bool:
         """根据循环模式处理曲目结束后的自动播放逻辑
-        
+
         返回 True 表示已启动下一首或重新播放当前首，False 表示无需自动播放。
         """
         mpv_command_func = mpv_command_func or self.mpv_command
@@ -1137,7 +1263,7 @@ class MusicPlayer:
         add_to_history_func = add_to_history_func or self.add_to_playback_history
 
         if self.play_queue.is_empty():
-            print('[INFO] handle_track_end: 播放队列为空，停止自动播放')
+            print("[INFO] handle_track_end: 播放队列为空，停止自动播放")
             return False
 
         current_idx = self.play_queue.get_current_index()
@@ -1145,7 +1271,9 @@ class MusicPlayer:
 
         def _play_at(index: int) -> bool:
             if not (0 <= index < queue_size):
-                print(f"[WARN] handle_track_end: 无效的索引 {index}，队列大小 {queue_size}")
+                print(
+                    f"[WARN] handle_track_end: 无效的索引 {index}，队列大小 {queue_size}"
+                )
                 return False
             return self.play_queue.play_at_index(
                 index=index,
@@ -1154,49 +1282,51 @@ class MusicPlayer:
                 mpv_pipe_exists_func=mpv_pipe_exists_func,
                 ensure_mpv_func=ensure_mpv_func,
                 add_to_history_func=add_to_history_func,
-                music_dir=self.music_dir
+                music_dir=self.music_dir,
             )
 
-        action_desc = 'none'
+        action_desc = "none"
         success = False
 
         if self.loop_mode == 1:
             # 单曲循环：重新播放当前索引（若无效则回到0）
             target_idx = current_idx if 0 <= current_idx < queue_size else 0
-            action_desc = f'单曲循环 -> 重新播放索引 {target_idx}'
+            action_desc = f"单曲循环 -> 重新播放索引 {target_idx}"
             success = _play_at(target_idx)
         elif self.loop_mode == 2:
             # 全部循环：先尝试下一首，末尾则回到第一首
             if self.play_queue.has_next():
-                action_desc = '全部循环 -> 下一首'
+                action_desc = "全部循环 -> 下一首"
                 success = self.play_queue.play_next(
                     save_to_history=True,
                     mpv_command_func=mpv_command_func,
                     mpv_pipe_exists_func=mpv_pipe_exists_func,
                     ensure_mpv_func=ensure_mpv_func,
                     add_to_history_func=add_to_history_func,
-                    music_dir=self.music_dir
+                    music_dir=self.music_dir,
                 )
             elif queue_size > 0:
-                action_desc = '全部循环 -> 回到第一首'
+                action_desc = "全部循环 -> 回到第一首"
                 success = _play_at(0)
         else:
             # 顺序播放（loop_mode=0）：仅在有下一首时继续
             if self.play_queue.has_next():
-                action_desc = '顺序播放 -> 下一首'
+                action_desc = "顺序播放 -> 下一首"
                 success = self.play_queue.play_next(
                     save_to_history=True,
                     mpv_command_func=mpv_command_func,
                     mpv_pipe_exists_func=mpv_pipe_exists_func,
                     ensure_mpv_func=ensure_mpv_func,
                     add_to_history_func=add_to_history_func,
-                    music_dir=self.music_dir
+                    music_dir=self.music_dir,
                 )
             else:
-                action_desc = '顺序播放 -> 末尾已停止'
+                action_desc = "顺序播放 -> 末尾已停止"
                 success = False
 
-        print(f"[INFO] handle_track_end: {action_desc}, success={success}, current_idx={current_idx}, queue_size={queue_size}")
+        print(
+            f"[INFO] handle_track_end: {action_desc}, success={success}, current_idx={current_idx}, queue_size={queue_size}"
+        )
 
         if success:
             # 成功启动后更新时间戳并持久化队列
@@ -1206,19 +1336,21 @@ class MusicPlayer:
             except Exception as e:
                 print(f"[WARN] 保存播放队列失败: {e}")
         return success
-    
+
     def to_dict(self) -> dict:
         """转换为字典（用于序列化保存配置）"""
         return {
-            'MUSIC_DIR': self.music_dir,
-            'ALLOWED_EXTENSIONS': ','.join(sorted(self.allowed_extensions)),
-            'FLASK_HOST': self.flask_host,
-            'FLASK_PORT': str(self.flask_port),
-            'DEBUG': 'true' if self.debug else 'false',
-            'MPV_CMD': self.mpv_cmd or ''
+            "MUSIC_DIR": self.music_dir,
+            "ALLOWED_EXTENSIONS": ",".join(sorted(self.allowed_extensions)),
+            "FLASK_HOST": self.flask_host,
+            "FLASK_PORT": str(self.flask_port),
+            "DEBUG": "true" if self.debug else "false",
+            "MPV_CMD": self.mpv_cmd or "",
         }
-    
+
     def __repr__(self):
-        return (f"MusicPlayer(music_dir='{self.music_dir}', "
-                f"queue_size={self.play_queue.size()}, "
-                f"history_size={len(self.playback_history)})")
+        return (
+            f"MusicPlayer(music_dir='{self.music_dir}', "
+            f"queue_size={self.play_queue.size()}, "
+            f"history_size={len(self.playback_history)})"
+        )
