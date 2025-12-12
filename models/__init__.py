@@ -1,3 +1,15 @@
+# -*- coding: utf-8 -*-
+import sys
+import os
+
+# 确保 stdout 使用 UTF-8 编码（Windows 兼容性）
+if sys.stdout and sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    try:
+        import io
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 """
 音乐播放器数据模型模块
 """

@@ -1,8 +1,19 @@
-﻿"""
+﻿# -*- coding: utf-8 -*-
+import sys
+import os
+
+# 确保 stdout 使用 UTF-8 编码（Windows 兼容性）
+if sys.stdout and sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    try:
+        import io
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+"""
 音乐播放器主类
 """
 
-import os
 import json
 import threading
 import time
@@ -21,8 +32,8 @@ class MusicPlayer:
         "ALLOWED_EXTENSIONS": ".mp3,.wav,.flac",
         "FLASK_HOST": "0.0.0.0",
         "FLASK_PORT": "9000",
-        "DEBUG": "false",
-        "MPV_CMD": None,
+        "DEBUG": "true",
+        "MPV_CMD": r"c:\mpv\mpv.exe --input-ipc-server=\\.\pipe\mpv-pipe --idle=yes --force-window=no",
     }
 
     @staticmethod
@@ -36,12 +47,35 @@ class MusicPlayer:
 
     @staticmethod
     def _get_default_mpv_cmd():
-        """获取默认的 MPV 命令"""
+        """获取默认的 MPV 命令，支持打包环境和开发环境"""
+        import sys
+
+        # 打包环境：mpv.exe 与可执行文件同目录
+        if getattr(sys, "frozen", False):
+            base_path = os.path.dirname(sys.executable)
+            mpv_path = os.path.join(base_path, "mpv.exe")
+            if os.path.exists(mpv_path):
+                return (
+                    f'"{mpv_path}" '
+                    "--input-ipc-server=\\\\.\\\pipe\\\\mpv-pipe "
+                    "--idle=yes --force-window=no"
+                )
+
+        # 开发环境：优先使用项目根目录的 mpv.exe
         app_dir = MusicPlayer._get_app_dir()
         mpv_path = os.path.join(app_dir, "mpv.exe")
         if os.path.exists(mpv_path):
-            return f'"{mpv_path}" --input-ipc-server=\\\\.\\\pipe\\\\mpv-pipe --idle=yes --force-window=no'
-        return r"c:\mpv\mpv.exe --input-ipc-server=\\.\pipe\mpv-pipe --idle=yes --force-window=no"
+            return (
+                f'"{mpv_path}" '
+                "--input-ipc-server=\\\\.\\\pipe\\\\mpv-pipe "
+                "--idle=yes --force-window=no"
+            )
+
+        # 回退到默认安装路径
+        return (
+            r"c:\mpv\mpv.exe "
+            r"--input-ipc-server=\\.\pipe\mpv-pipe --idle=yes --force-window=no"
+        )
 
     @staticmethod
     def _get_default_ini_path():
@@ -58,18 +92,26 @@ class MusicPlayer:
         if ini_path is None:
             ini_path = MusicPlayer._get_default_ini_path()
 
+        print(f"[DEBUG] 配置文件路径: {ini_path}")
         if os.path.exists(ini_path):
+            print(f"[DEBUG] 配置文件已存在，跳过创建")
             return
 
-        # 设置默认的 MPV 命令
+        print(f"[INFO] 配置文件不存在，创建默认配置...")
+        # 使用默认配置（包括默认的 MPV 命令）
         default_cfg = MusicPlayer.DEFAULT_CONFIG.copy()
-        default_cfg["MPV_CMD"] = MusicPlayer._get_default_mpv_cmd()
 
+        print(f"[DEBUG] 默认配置内容:")
+        for key, value in default_cfg.items():
+            if key == "MPV_CMD":
+                print(f"  {key}: {value}")
+            else:
+                print(f"  {key}: {value}")
         parser = configparser.ConfigParser()
         parser["app"] = default_cfg
         with open(ini_path, "w", encoding="utf-8") as w:
             parser.write(w)
-        print("[INFO] 已生成默认 settings.ini")
+        print(f"[INFO] 已生成默认配置文件: {ini_path}")
 
     def __init__(
         self,
@@ -99,7 +141,8 @@ class MusicPlayer:
         self.flask_host = flask_host
         self.flask_port = int(flask_port)
         self.debug = debug
-        self.mpv_cmd = mpv_cmd or self._get_default_mpv_cmd()
+        # 使用类方法避免实例绑定问题
+        self.mpv_cmd = mpv_cmd or MusicPlayer._get_default_mpv_cmd()
         self.data_dir = data_dir
 
         # 确保数据目录存在
@@ -192,17 +235,44 @@ class MusicPlayer:
         返回:
           MusicPlayer 实例
         """
+        print(f"\n[INFO] ===== 开始加载配置文件 =====")
+        print(f"[DEBUG] 配置文件路径: {ini_path}")
         cfg = cls._read_ini_file(ini_path)
+        
+        print(f"\n[DEBUG] 解析后的配置内容:")
+        for key, value in cfg.items():
+            if key == "MPV_CMD":
+                print(f"[DEBUG]   {key}: {value[:60]}..." if value and len(str(value)) > 60 else f"[DEBUG]   {key}: {value}")
+            else:
+                print(f"[DEBUG]   {key}: {value}")
+        
+        # 提取配置参数
+        music_dir = cfg.get("MUSIC_DIR", cls.DEFAULT_CONFIG["MUSIC_DIR"])
+        allowed_ext = cfg.get(
+            "ALLOWED_EXTENSIONS", cls.DEFAULT_CONFIG["ALLOWED_EXTENSIONS"]
+        )
+        flask_host = cfg.get("FLASK_HOST", cls.DEFAULT_CONFIG["FLASK_HOST"])
+        flask_port_str = cfg.get("FLASK_PORT", cls.DEFAULT_CONFIG["FLASK_PORT"])
+        debug_str = cfg.get("DEBUG", cls.DEFAULT_CONFIG["DEBUG"])
+        debug_flag = debug_str.lower() in ("true", "1", "yes")
+        mpv_cmd = cfg.get("MPV_CMD")
+        
+        print(f"\n[INFO] 配置参数摘要:")
+        print(f"[INFO]   MUSIC_DIR: {music_dir}")
+        print(f"[INFO]   ALLOWED_EXTENSIONS: {allowed_ext}")
+        print(f"[INFO]   FLASK_HOST: {flask_host}")
+        print(f"[INFO]   FLASK_PORT: {flask_port_str}")
+        print(f"[INFO]   DEBUG: {debug_flag} (原始值: {debug_str})")
+        print(f"[INFO]   MPV_CMD: {'已配置' if mpv_cmd else '使用默认'}")
+        print(f"[INFO] ===== 配置加载完成 =====\n")
+        
         return cls(
-            music_dir=cfg.get("MUSIC_DIR", cls.DEFAULT_CONFIG["MUSIC_DIR"]),
-            allowed_extensions=cfg.get(
-                "ALLOWED_EXTENSIONS", cls.DEFAULT_CONFIG["ALLOWED_EXTENSIONS"]
-            ),
-            flask_host=cfg.get("FLASK_HOST", cls.DEFAULT_CONFIG["FLASK_HOST"]),
-            flask_port=int(cfg.get("FLASK_PORT", cls.DEFAULT_CONFIG["FLASK_PORT"])),
-            debug=cfg.get("DEBUG", cls.DEFAULT_CONFIG["DEBUG"]).lower()
-            in ("true", "1", "yes"),
-            mpv_cmd=cfg.get("MPV_CMD"),
+            music_dir=music_dir,
+            allowed_extensions=allowed_ext,
+            flask_host=flask_host,
+            flask_port=int(flask_port_str),
+            debug=debug_flag,
+            mpv_cmd=mpv_cmd,
             data_dir=data_dir,
         )
 
@@ -363,14 +433,6 @@ class MusicPlayer:
             parts = list(ext_str)
         return set([e if e.startswith(".") else "." + e for e in parts])
 
-    def _get_default_mpv_cmd(self) -> str:
-        """获取默认mpv命令"""
-        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        mpv_path = os.path.join(app_dir, "mpv.exe")
-        if os.path.exists(mpv_path):
-            return f'"{mpv_path}" --input-ipc-server=\\\\.\\\pipe\\\\mpv-pipe --idle=yes --force-window=no'
-        return r"c:\mpv\mpv.exe --input-ipc-server=\\.\pipe\mpv-pipe --idle=yes --force-window=no"
-
     def load_playback_history(self):
         """从文件加载播放历史"""
         self.playback_history.load()
@@ -480,7 +542,37 @@ class MusicPlayer:
 
         print(f"[INFO] 尝试启动 mpv: {self.mpv_cmd}")
         try:
-            subprocess.Popen(self.mpv_cmd, shell=True)
+            # 查找 yt-dlp 可执行文件路径
+            yt_dlp_path = None
+            
+            # 1. 优先检查应用主目录
+            app_dir = MusicPlayer._get_app_dir()
+            app_root_yt_dlp = os.path.join(app_dir, "yt-dlp.exe")
+            if os.path.exists(app_root_yt_dlp):
+                yt_dlp_path = app_root_yt_dlp
+                print(f"[INFO] 在应用目录找到 yt-dlp: {app_root_yt_dlp}")
+            # 2. 然后检查 sys._MEIPASS（打包后）
+            elif getattr(sys, "frozen", False):
+                candidate = os.path.join(sys._MEIPASS, "yt-dlp.exe")
+                if os.path.exists(candidate):
+                    yt_dlp_path = candidate
+                    print(f"[INFO] 在打包目录找到 yt-dlp: {candidate}")
+            
+            # 构建完整的启动命令
+            mpv_launch_cmd = self.mpv_cmd
+            # 确保启用 mpv 的 ytdl 集成
+            if "--ytdl=" not in mpv_launch_cmd:
+                mpv_launch_cmd += " --ytdl=yes"
+            if yt_dlp_path:
+                # 将路径中的反斜杠转换为正斜杠，避免转义问题
+                yt_dlp_path_escaped = yt_dlp_path.replace("\\", "/")
+                mpv_launch_cmd += f' --script-opts=ytdl_hook-ytdl_path="{yt_dlp_path_escaped}"'
+                print(f"[INFO] 配置 MPV 使用 yt-dlp: {yt_dlp_path}")
+            else:
+                print(f"[INFO] 未找到 yt-dlp，将使用系统 PATH")
+            
+            print(f"[DEBUG] 完整启动命令: {mpv_launch_cmd}")
+            subprocess.Popen(mpv_launch_cmd, shell=True)
         except Exception as e:
             print("[ERROR] 启动 mpv 进程失败:", e)
             return False
@@ -884,8 +976,41 @@ class MusicPlayer:
             # 更好的方法是先设置 ytdl-format 属性，再加载文件。
             print(f"[DEBUG] 设置 mpv 属性: ytdl-format=bestaudio")
             mpv_command_func(["set_property", "ytdl-format", "bestaudio"])
-            print(f"[DEBUG] 调用 mpv_command 播放 URL: {url}")
-            mpv_command_func(["loadfile", url, "replace"])
+            
+            # 对于 YouTube URL，优先使用 yt-dlp 获取直链来确保播放成功
+            actual_url = url
+            if "youtube.com" in url or "youtu.be" in url:
+                print(f"[DEBUG] 检测到 YouTube URL，尝试通过 yt-dlp 获取直链...")
+                yt_dlp_exe = "yt-dlp"
+                app_dir = MusicPlayer._get_app_dir()
+                app_root_yt_dlp = os.path.join(app_dir, "yt-dlp.exe")
+                if os.path.exists(app_root_yt_dlp):
+                    yt_dlp_exe = app_root_yt_dlp
+                elif getattr(sys, "frozen", False):
+                    candidate = os.path.join(sys._MEIPASS, "yt-dlp.exe")
+                    if os.path.exists(candidate):
+                        yt_dlp_exe = candidate
+                
+                try:
+                    print(f"[DEBUG] 运行 yt-dlp -g 获取直链...")
+                    result = subprocess.run(
+                        [yt_dlp_exe, "-g", url],
+                        capture_output=True,
+                        text=True,
+                        timeout=30
+                    )
+                    if result.returncode == 0:
+                        direct_urls = result.stdout.strip().split("\n")
+                        if direct_urls and direct_urls[0]:
+                            actual_url = direct_urls[-1].strip()  # 通常最后一个是音频/最优质
+                            print(f"[DEBUG] ✓ 获取到直链: {actual_url[:100]}...")
+                    else:
+                        print(f"[WARN] yt-dlp -g 失败 (code={result.returncode}): {result.stderr[:200]}")
+                except Exception as e:
+                    print(f"[WARN] yt-dlp 获取直链异常: {e}，使用原始 URL")
+            
+            print(f"[DEBUG] 调用 mpv_command 播放 URL: {actual_url[:80]}...")
+            mpv_command_func(["loadfile", actual_url, "replace"])
             print(f"[DEBUG] 已向 mpv 发送播放命令")
 
             # 保存当前本地播放状态，以便网络流结束后恢复
@@ -917,11 +1042,17 @@ class MusicPlayer:
                     print(f"[DEBUG] 尝试使用 yt-dlp 提取播放列表信息...")
                     # 查找 yt-dlp 可执行文件
                     yt_dlp_exe = "yt-dlp"
-                    if getattr(sys, "frozen", False):
-                        # 打包后，在应用目录查找
-                        yt_dlp_path = os.path.join(sys._MEIPASS, "yt-dlp.exe")
-                        if os.path.exists(yt_dlp_path):
-                            yt_dlp_exe = yt_dlp_path
+                    # 1. 优先检查应用主目录
+                    app_dir = MusicPlayer._get_app_dir()
+                    app_root_yt_dlp = os.path.join(app_dir, "yt-dlp.exe")
+                    if os.path.exists(app_root_yt_dlp):
+                        yt_dlp_exe = app_root_yt_dlp
+                    # 2. 然后检查打包目录
+                    elif getattr(sys, "frozen", False):
+                        candidate = os.path.join(sys._MEIPASS, "yt-dlp.exe")
+                        if os.path.exists(candidate):
+                            yt_dlp_exe = candidate
+                    # 3. 否则使用 PATH 中的 yt-dlp
                     cmd = [yt_dlp_exe, "--flat-playlist", "-j", url]
                     result = subprocess.run(
                         cmd, capture_output=True, text=True, timeout=30
