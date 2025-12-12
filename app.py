@@ -1373,6 +1373,7 @@ def api_playlist_add():
     path = (request.form.get("path") or "").strip()
     title = (request.form.get("title") or "").strip()
     song_type = (request.form.get("type") or "").strip().lower() or "youtube"
+    insert_next = (request.form.get("insert_next") or "").strip() in ("1", "true", "yes")
 
     source = url or path
     if not source:
@@ -1392,14 +1393,34 @@ def api_playlist_add():
         else:
             song = StreamSong(stream_url=source, title=title or "加载中…", stream_type=song_type or "youtube")
 
-        CURRENT_PLAYLIST.add(song)
-        if CURRENT_PLAYLIST.get_current_index() == -1:
-            CURRENT_PLAYLIST.set_current_index(0)
+        # 根据 insert_next 决定插入位置
+        if insert_next:
+            # 插入到下一曲位置（当前播放歌曲之后）
+            current_idx = CURRENT_PLAYLIST.get_current_index()
+            if isinstance(current_idx, int) and current_idx >= 0:
+                insert_pos = current_idx + 1
+                CURRENT_PLAYLIST.insert(insert_pos, song)
+                index = insert_pos
+                print(f"[QUEUE] 已添加到下一曲位置 (index={insert_pos}): {title or source}")
+            else:
+                # 队列为空，添加到开头
+                CURRENT_PLAYLIST.add(song)
+                CURRENT_PLAYLIST.set_current_index(0)
+                index = 0
+                print(f"[QUEUE] 队列为空，已添加为第一首: {title or source}")
+        else:
+            # 默认行为：添加到末尾
+            CURRENT_PLAYLIST.add(song)
+            if CURRENT_PLAYLIST.get_current_index() == -1:
+                CURRENT_PLAYLIST.set_current_index(0)
+            index = CURRENT_PLAYLIST.size() - 1
+            print(f"[QUEUE] 已添加到队列末尾 (index={index}): {title or source}")
+        
         PLAYER.save_current_playlist()
         return jsonify(
             {
                 "status": "OK",
-                "index": CURRENT_PLAYLIST.size() - 1,
+                "index": index,
                 "message": "已添加到播放列表",
             }
         )

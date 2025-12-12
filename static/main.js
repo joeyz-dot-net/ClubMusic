@@ -2504,8 +2504,8 @@
 									const url = item.dataset.url;
 									const title = item.dataset.title;
 									if(url) {
-										console.debug('[YouTube] 添加播放列表项到队列:', title, url);
-										addToPlaylist(url, title, 'youtube');
+										console.debug('[YouTube] 添加播放列表项到队列 (添加到下一曲):', title, url);
+										addToPlaylist(url, title, 'youtube', true);
 										item.classList.add('added-to-playlist');
 									}
 								});
@@ -2597,8 +2597,8 @@
 							const url = item.dataset.url;
 							const title = item.dataset.title;
 							if(url) {
-								console.debug('[YouTube] 添加搜索结果到队列:', title, url);
-								addToPlaylist(url, title, 'youtube');
+								console.debug('[YouTube] 添加搜索结果到队列 (添加到下一曲):', title, url);
+								addToPlaylist(url, title, 'youtube', true);
 								item.classList.add('added-to-playlist');
 							}
 						});
@@ -2841,8 +2841,8 @@
 			});
 		} else if(isYouTubeUrl && !isPlaylist) {
 			// 是单个视频 URL，直接添加到队列
-			console.debug('[Search] 检测到单个视频 URL，添加到队列');
-			addToPlaylist(query, '加载中…', 'youtube');
+			console.debug('[Search] 检测到单个视频 URL，添加到队列（下一曲）');
+			addToPlaylist(query, '加载中…', 'youtube', true);
 			searchModalBody.innerHTML = '<div class="search-suggestions"><div class="search-placeholder"><span class="search-placeholder-icon">✅</span><p>已添加到播放列表</p></div></div>';
 			setTimeout(() => {
 				closeSearchModal();
@@ -2932,8 +2932,8 @@
 					return;
 				}
 				
-				console.debug('[UI] 添加播放列表项到队列:', title, url);
-				addToPlaylist(url, title, 'youtube');
+				console.debug('[UI] 添加播放列表项到队列 (添加到下一曲):', title, url);
+				addToPlaylist(url, title, 'youtube', true);
 				item.classList.add('added-to-playlist');
 			});
 			
@@ -2953,8 +2953,8 @@
 						return;
 					}
 					
-					console.debug('[UI] 添加播放列表项到队列 (按钮):', title, url);
-					addToPlaylist(url, title, 'youtube');
+					console.debug('[UI] 添加播放列表项到队列 (按钮) (添加到下一曲):', title, url);
+					addToPlaylist(url, title, 'youtube', true);
 					item.classList.add('added-to-playlist');
 				});
 			}
@@ -3053,8 +3053,8 @@
 					console.warn('[UI] 无效的 URL:', url);
 					return;
 				}
-				console.debug('[UI] 添加搜索结果到队列:', title, url);
-				addToPlaylist(url, title, 'youtube');
+				console.debug('[UI] 添加搜索结果到队列 (添加到下一曲):', title, url);
+				addToPlaylist(url, title, 'youtube', true);
 				item.classList.add('added-to-playlist');
 			});
 			
@@ -3067,8 +3067,8 @@
 						console.warn('[UI] 无效的 URL:', url);
 						return;
 					}
-					console.debug('[UI] 添加搜索结果到队列 (按钮):', title, url);
-					addToPlaylist(url, title, 'youtube');
+					console.debug('[UI] 添加搜索结果到队列 (按钮) (添加到下一曲):', title, url);
+					addToPlaylist(url, title, 'youtube', true);
 					item.classList.add('added-to-playlist');
 				});
 			}
@@ -3076,7 +3076,7 @@
 	}
 	
 	// Add to playlist helper
-	function addToPlaylist(url, title, type) {
+	function addToPlaylist(url, title, type, insertNext=false) {
 		// 检查该歌曲是否已在播放列表中
 		if(window._playlistUrlSet && window._playlistUrlSet.has(url)) {
 			console.debug('[UI] 该歌曲已在播放列表中:', title);
@@ -3084,15 +3084,21 @@
 			return;
 		}
 		
+		const body = new URLSearchParams();
+		body.append('url', url);
+		body.append('title', title);
+		body.append('type', type);
+		if(insertNext) body.append('insert_next', '1');
+		
 		fetch('/playlist_add', {
 			method: 'POST',
 			headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-			body: `url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}&type=${type}`
+			body: body.toString()
 		})
 		.then(r => r.json())
 		.then(res => {
 			if(res && res.status === 'OK') {
-				console.debug('[UI] 已添加到播放列表:', title);
+				console.debug('[UI] 已添加到播放列表:', title, insertNext ? '(插入到下一曲)' : '');
 				// 添加到播放列表URL集合
 				if(window._playlistUrlSet) {
 					window._playlistUrlSet.add(url);
