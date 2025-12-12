@@ -1,3 +1,69 @@
+﻿# -*- coding: utf-8 -*-
+import os, sys, json, threading, time, subprocess, configparser, platform
+
+# 确保 stdout 使用 UTF-8 编码（Windows 兼容性）
+if sys.stdout.encoding != "utf-8":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+
+from flask import Flask, render_template, jsonify, request, abort, send_file
+from werkzeug.utils import secure_filename
+from PIL import Image, ImageDraw, ImageFont
+from io import BytesIO
+
+#############################################
+# 导入数据模型
+#############################################
+print("\n" + "="*50)
+print("初始化应用程序...")
+print("="*50 + "\n")
+
+from models import (
+    Song,
+    LocalSong,
+    StreamSong,
+    Playlist,
+    LocalPlaylist,
+    MusicPlayer,
+    Playlists,
+    HitRank,
+)
+
+print("\n✓ 所有模块初始化完成！\n")
+
+#############################################
+# 资源路径辅助函数
+#############################################
+
+def _get_resource_path(relative_path):
+    """获取资源文件的绝对路径，支持打包后的环境"""
+    if getattr(sys, "frozen", False):
+        # 打包后，资源在 _MEIPASS 目录
+        base_path = sys._MEIPASS
+    else:
+        # 开发环境
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_path, relative_path)
+
+# 初始化 Flask 应用，使用正确的路径
+template_folder = _get_resource_path(".")
+static_folder = _get_resource_path("static")
+APP = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
+
+# 当前歌单歌曲列表 API
+@APP.route("/playlist_songs")
+def api_playlist_songs():
+    """
+    返回当前歌单的所有歌曲
+    """
+    playlist = PLAYLISTS_MANAGER.get_playlist(CURRENT_PLAYLIST_ID)
+    songs = playlist.songs if playlist else []
+    return jsonify({
+        "status": "OK",
+        "songs": songs,
+        "playlist_id": CURRENT_PLAYLIST_ID,
+        "playlist_name": playlist.name if playlist else "--"
+    })
 # -*- coding: utf-8 -*-
 import os, sys, json, threading, time, subprocess, configparser, platform
 
@@ -15,7 +81,7 @@ from io import BytesIO
 #############################################
 # 导入数据模型
 #############################################
-from models import Song, LocalSong, StreamSong, PlayQueue, MusicPlayer, Playlists
+from models import Song, LocalSong, StreamSong, CurrentPlaylist, MusicPlayer, Playlists
 
 #############################################
 # 资源路径辅助函数
@@ -38,6 +104,11 @@ template_folder = _get_resource_path(".")
 static_folder = _get_resource_path("static")
 APP = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
 
+# 禁用 Flask/Werkzeug 的 HTTP 访问日志
+import logging
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
+
 #############################################
 # 配置: settings.ini (仅使用 INI, 已彻底移除 settings.json 支持)
 #############################################
@@ -56,6 +127,9 @@ PLAYER = MusicPlayer.initialize(data_dir=".")
 # 初始化多歌单管理器
 PLAYLISTS_MANAGER = Playlists(data_file="playlists.json")
 
+# 初始化排行榜管理器
+RANK_MANAGER = HitRank(max_size=100)
+
 # 默认歌单 ID（不可删除）
 DEFAULT_PLAYLIST_ID = "default"
 
@@ -65,14 +139,17 @@ CURRENT_PLAYLIST_ID = DEFAULT_PLAYLIST_ID
 # 用于向前端传递MUSIC_DIR的便利变量
 PLAYLIST = []
 
-# 播放队列和历史的便捷访问
-PLAY_QUEUE = PLAYER.play_queue
+
 PLAYBACK_HISTORY = PLAYER.playback_history
+
+CURRENT_PLAYLIST = PLAYER.current_playlist
+# 兼容旧代码：CURRENT_PLAYLIST 指向 CURRENT_PLAYLIST
+CURRENT_PLAYLIST = CURRENT_PLAYLIST
 
 # 初始化默认歌单 =============
 def _init_default_playlist():
     """初始化系统默认歌单"""
-    global CURRENT_PLAYLIST_ID, PLAY_QUEUE
+    global CURRENT_PLAYLIST_ID
     
     # 检查默认歌单是否存在
     default_pl = PLAYLISTS_MANAGER.get_playlist(DEFAULT_PLAYLIST_ID)
@@ -87,26 +164,7 @@ def _init_default_playlist():
     
     CURRENT_PLAYLIST_ID = DEFAULT_PLAYLIST_ID
     
-    # 从默认歌单加载歌曲到播放队列（如果队列为空）
-    if default_pl and default_pl.songs and PLAY_QUEUE.is_empty():
-        print(f"[DEBUG] 从默认歌单加载 {len(default_pl.songs)} 首歌曲到播放队列")
-        PLAY_QUEUE.clear()
-        for song_data in default_pl.songs:
-            try:
-                if isinstance(song_data, dict):
-                    # 从dict重新构造song对象
-                    song = Song.from_dict(song_data)
-                    print(f"[DEBUG] 加载歌曲: {song.title} (类型: {song.type})")
-                    PLAY_QUEUE.add(song)
-                else:
-                    # 兼容旧的字符串路径格式
-                    song = LocalSong(file_path=song_data)
-                    print(f"[DEBUG] 加载本地歌曲: {song_data}")
-                    PLAY_QUEUE.add(song)
-            except Exception as e:
-                print(f"[WARN] 加载歌曲失败: {e}")
-        PLAYER.save_play_queue()
-    
+    # 当前歌单初始化逻辑（如有需要可在此处扩展）
     return default_pl
 
 # 初始化默认歌单
@@ -170,7 +228,15 @@ def _ensure_playlist(force: bool = False):
     """确保内存 PLAYLIST 存在; force=True 时强制重建."""
     global PLAYLIST
     if force or not PLAYLIST:
-        PLAYLIST = PLAYER.build_playlist()
+        # 使用 LocalPlaylist 封装本地浏览歌单
+        rel_paths = PLAYER.build_playlist()
+        lp = LocalPlaylist()
+        for rel in rel_paths:
+            lp.add_path(rel)
+        # 将 legacy 兼容的纯字符串列表同时维护（尽量保持旧逻辑不崩）
+        PLAYLIST = [s.url if hasattr(s, 'url') else s for s in lp.get_all()]
+        # 暴露一个对象以供新接口使用
+        globals()["LOCAL_BROWSE_PLAYLIST_OBJ"] = lp
     return PLAYLIST
 
 
@@ -313,7 +379,7 @@ def _update_current_meta_and_fetch_title(song):
 
                         # 更新队列中的歌曲对象
                         song.title = media_title
-                        PLAYER.save_play_queue()
+                        PLAYER.save_current_playlist()
 
                         print(
                             f"[DEBUG] 获取到串流标题 (尝试 {attempt+1}): {media_title}"
@@ -385,7 +451,7 @@ def _start_track_monitor():
                         continue
 
                     # 检测歌曲是否刚开始播放（设置宽限期）
-                    current_song = PLAY_QUEUE.get_current()
+                    current_song = CURRENT_PLAYLIST.get_current()
                     if current_song and time_pos < 3:
                         # 本地文件：2秒宽限期
                         # 流媒体：5秒宽限期
@@ -431,7 +497,7 @@ def _start_track_monitor():
 
                         # 如果成功播放了下一首，更新 current_meta
                         if success:
-                            current_song = PLAY_QUEUE.get_current()
+                            current_song = CURRENT_PLAYLIST.get_current()
                             if current_song:
                                 _update_current_meta_and_fetch_title(current_song)
 
@@ -469,10 +535,12 @@ def index():
 @APP.route("/play", methods=["POST"])
 def play_route():
     from flask import request
+    from urllib.parse import unquote
 
     # 支持 path（本地）或 url（串流）参数
     path = (request.form.get("path") or "").strip()
     url = (request.form.get("url") or "").strip()
+    title = unquote((request.form.get("title") or "").strip())
     skip_history = (request.form.get("skip_history") or "").strip() in (
         "1",
         "true",
@@ -503,29 +571,43 @@ def play_route():
 
     def _insert_next(song_obj):
         """将歌曲插入到当前播放的下一首位置；若队列为空则添加为首项。"""
-        if PLAY_QUEUE.is_empty():
-            PLAY_QUEUE.add(song_obj)
-            return PLAY_QUEUE.size() - 1
-        current_idx = PLAY_QUEUE.get_current_index()
+        if CURRENT_PLAYLIST.is_empty():
+            CURRENT_PLAYLIST.add(song_obj)
+            return CURRENT_PLAYLIST.size() - 1
+        current_idx = CURRENT_PLAYLIST.get_current_index()
         insert_pos = (
             current_idx + 1
             if (isinstance(current_idx, int) and current_idx >= 0)
-            else PLAY_QUEUE.size()
+            else CURRENT_PLAYLIST.size()
         )
-        PLAY_QUEUE.insert(insert_pos, song_obj)
+        CURRENT_PLAYLIST.insert(insert_pos, song_obj)
         return insert_pos
 
     def _insert_front(song_obj):
         """将歌曲插入到当前播放歌曲之前（若无当前则插入首位），并将当前索引指向该曲目。"""
-        if PLAY_QUEUE.is_empty():
-            PLAY_QUEUE.add(song_obj)
-            PLAY_QUEUE.set_current_index(0)
+        if CURRENT_PLAYLIST.is_empty():
+            CURRENT_PLAYLIST.add(song_obj)
+            CURRENT_PLAYLIST.set_current_index(0)
             return 0
-        current_idx = PLAY_QUEUE.get_current_index()
+        current_idx = CURRENT_PLAYLIST.get_current_index()
         insert_pos = current_idx if (isinstance(current_idx, int) and current_idx >= 0) else 0
-        PLAY_QUEUE.insert(insert_pos, song_obj)
-        PLAY_QUEUE.set_current_index(insert_pos)
+        CURRENT_PLAYLIST.insert(insert_pos, song_obj)
+        CURRENT_PLAYLIST.set_current_index(insert_pos)
         return insert_pos
+
+    def _find_existing_index(song_obj):
+        """在当前播放列表中查找同一歌曲的索引"""
+        items = CURRENT_PLAYLIST.get_all()
+        for i, s in enumerate(items):
+            try:
+                # 本地歌曲：匹配文件路径；流媒体：匹配 URL
+                if isinstance(song_obj, LocalSong) and hasattr(s, "file_path") and s.file_path == song_obj.file_path:
+                    return i
+                if isinstance(song_obj, StreamSong) and hasattr(s, "url") and s.url == song_obj.url:
+                    return i
+            except Exception:
+                continue
+        return None
 
     # 判断是本地文件还是串流URL
     if path:
@@ -545,11 +627,28 @@ def play_route():
             idx = PLAYLIST.index(path)
             print(f"[PLAY API] 找到文件索引={idx}, 文件={path}")
 
-            # 创建 LocalSong 对象
-            song = LocalSong(file_path=path)
+            # 创建 LocalSong 对象（使用提供的标题或从文件名提取）
+            song = LocalSong(file_path=path, title=title)
 
             # 根据 play_now 参数决定是否立即播放
             if play_now:
+                existing_idx = None if add_to_queue else _find_existing_index(song)
+                if existing_idx is not None:
+                    target_song = CURRENT_PLAYLIST.get_item(existing_idx)
+                    if not _play_song(target_song, save_to_history=not skip_history):
+                        return jsonify({"status": "ERROR", "error": "播放失败"}), 400
+                    PLAYER.current_index = idx
+                    CURRENT_PLAYLIST.set_current_index(existing_idx)
+                    PLAYER.save_current_playlist()
+                    return jsonify(
+                        {
+                            "status": "OK",
+                            "rel": path,
+                            "index": idx,
+                            "total": len(PLAYLIST),
+                            "playlist_index": existing_idx,
+                        }
+                    )
                 if not _play_song(song, save_to_history=not skip_history):
                     return jsonify({"status": "ERROR", "error": "播放失败"}), 400
                 PLAYER.current_index = idx
@@ -559,20 +658,20 @@ def play_route():
                     else:
                         _insert_next(song)
                 else:
-                    PLAY_QUEUE.clear()
-                    PLAY_QUEUE.add(song)
-                    PLAY_QUEUE.set_current_index(0)
-                PLAYER.save_play_queue()
+                    CURRENT_PLAYLIST.clear()
+                    CURRENT_PLAYLIST.add(song)
+                    CURRENT_PLAYLIST.set_current_index(0)
+                PLAYER.save_current_playlist()
                 return jsonify(
                     {"status": "OK", "rel": path, "index": idx, "total": len(PLAYLIST)}
                 )
             else:
-                queue_was_empty = PLAY_QUEUE.is_empty()
+                queue_was_empty = CURRENT_PLAYLIST.is_empty()
                 insert_pos = _insert_next(song)
-                PLAYER.save_play_queue()
+                PLAYER.save_current_playlist()
                 if queue_was_empty:
                     print(f"[QUEUE] 队列为空，立即播放新添加的本地歌曲: {song.title}")
-                    success = PLAY_QUEUE.play_at_index(
+                    success = CURRENT_PLAYLIST.play_at_index(
                         index=insert_pos,
                         save_to_history=not skip_history,
                         mpv_command_func=mpv_command,
@@ -584,12 +683,12 @@ def play_route():
                     if success:
                         PLAYER.current_index = idx
                         _update_current_meta_and_fetch_title(song)
-                        PLAY_QUEUE.set_current_index(insert_pos)
+                        CURRENT_PLAYLIST.set_current_index(insert_pos)
                         return jsonify(
                             {
                                 "status": "OK",
                                 "message": "队列为空，已立即播放",
-                                "queue_length": PLAY_QUEUE.size(),
+                                "queue_length": CURRENT_PLAYLIST.size(),
                                 "auto_played": True,
                             }
                         )
@@ -600,7 +699,7 @@ def play_route():
                         {
                             "status": "OK",
                             "message": "已添加到队列",
-                            "queue_length": PLAY_QUEUE.size(),
+                            "queue_length": CURRENT_PLAYLIST.size(),
                             "auto_played": False,
                         }
                     )
@@ -618,11 +717,28 @@ def play_route():
                     500,
                 )
 
-            # 创建 StreamSong 对象
-            song = StreamSong(stream_url=url, title="加载中…")
+            # 创建 StreamSong 对象（使用提供的标题或默认加载中）
+            song = StreamSong(stream_url=url, title=title or "加载中…")
 
             # 根据 play_now 参数决定是否立即播放
             if play_now:
+                existing_idx = None if add_to_queue else _find_existing_index(song)
+                if existing_idx is not None:
+                    target_song = CURRENT_PLAYLIST.get_item(existing_idx)
+                    print(f"[PLAY] 切换到已存在的流媒体索引 {existing_idx}: {url}")
+                    if not _play_song(target_song, save_to_history=not skip_history):
+                        return jsonify({"status": "ERROR", "error": "播放失败"}), 500
+                    PLAYER.current_index = -1
+                    CURRENT_PLAYLIST.set_current_index(existing_idx)
+                    PLAYER.save_current_playlist()
+                    return jsonify(
+                        {
+                            "status": "OK",
+                            "msg": "已开始播放",
+                            "url": url,
+                            "playlist_index": existing_idx,
+                        }
+                    )
                 print(f"[PLAY] 开始播放 URL: {url}")
                 if not _play_song(song, save_to_history=not skip_history):
                     return jsonify({"status": "ERROR", "error": "播放失败"}), 500
@@ -632,21 +748,21 @@ def play_route():
                     else:
                         _insert_next(song)
                 else:
-                    PLAY_QUEUE.clear()
-                    PLAY_QUEUE.add(song)
-                    PLAY_QUEUE.set_current_index(0)
-                PLAYER.save_play_queue()
+                    CURRENT_PLAYLIST.clear()
+                    CURRENT_PLAYLIST.add(song)
+                    CURRENT_PLAYLIST.set_current_index(0)
+                PLAYER.save_current_playlist()
                 return jsonify({"status": "OK", "msg": "已开始播放", "url": url})
             else:
-                queue_was_empty = PLAY_QUEUE.is_empty()
+                queue_was_empty = CURRENT_PLAYLIST.is_empty()
                 print(
                     f"[PLAY] 添加 URL 到下一首位置: {url}, queue_was_empty={queue_was_empty}"
                 )
                 insert_pos = _insert_next(song)
-                PLAYER.save_play_queue()
+                PLAYER.save_current_playlist()
                 if queue_was_empty:
                     print(f"[QUEUE] 队列为空，立即播放新添加的流媒体: {song.title}")
-                    success = PLAY_QUEUE.play_at_index(
+                    success = CURRENT_PLAYLIST.play_at_index(
                         index=insert_pos,
                         save_to_history=not skip_history,
                         mpv_command_func=mpv_command,
@@ -658,12 +774,12 @@ def play_route():
                     if success:
                         PLAYER.current_index = -1
                         _update_current_meta_and_fetch_title(song)
-                        PLAY_QUEUE.set_current_index(insert_pos)
+                        CURRENT_PLAYLIST.set_current_index(insert_pos)
                         return jsonify(
                             {
                                 "status": "OK",
                                 "message": "队列为空，已立即播放",
-                                "queue_length": PLAY_QUEUE.size(),
+                                "queue_length": CURRENT_PLAYLIST.size(),
                                 "auto_played": True,
                             }
                         )
@@ -674,7 +790,7 @@ def play_route():
                         {
                             "status": "OK",
                             "message": "已添加到队列",
-                            "queue_length": PLAY_QUEUE.size(),
+                            "queue_length": CURRENT_PLAYLIST.size(),
                             "auto_played": False,
                         }
                     )
@@ -750,13 +866,27 @@ def api_status():
                 pass
     except Exception:
         pass
-    # 计算一个服务器端的友好显示名，优先使用 mpv 的 media-title
+    # 计算一个服务器端的友好显示名，优先使用当前播放列表中的 title
     try:
         pd = {}
         pd.update(playing or {})
+        
+        # 首先尝试从当前播放列表中获取正确的 title (current_title)
+        current_title = None
+        try:
+            current_index = CURRENT_PLAYLIST.get_current_index()
+            if current_index >= 0:
+                playlist_items = CURRENT_PLAYLIST.get_all()
+                if current_index < len(playlist_items):
+                    current_song = playlist_items[current_index]
+                    current_title = current_song.title
+        except Exception as e:
+            pass
+        
         media_title = pd.get("media_title") or pd.get("mediaTitle")
+        title_field = pd.get("title") or ""
         name_field = pd.get("name") or pd.get("rel") or ""
-
+        
         # 简单校验 media_title，避免使用看起来像 URL 或视频 ID 的值
         def _valid_title(t, raw):
             try:
@@ -777,20 +907,32 @@ def api_status():
             except Exception:
                 return False
 
-        if _valid_title(media_title, pd.get("raw_url")):
+        # 优先级：current_title > media_title > title > name > 加载中/未播放
+        if _valid_title(current_title, pd.get("url")):
+            pd["display_name"] = current_title
+            pd["current_title"] = current_title
+        elif _valid_title(media_title, pd.get("raw_url") or pd.get("url")):
             pd["display_name"] = media_title
+        elif _valid_title(title_field, pd.get("url")):
+            # 如果 media_title 无效但 title 字段有效，使用 title
+            pd["display_name"] = title_field
+        elif _valid_title(name_field, pd.get("url")):
+            # 如果 title 也无效但 name 字段有效，使用 name
+            pd["display_name"] = name_field
         else:
-            # 如果 name 看起来像 URL，则返回加载占位；否则使用 name
-            try:
-                if isinstance(name_field, str) and name_field.startswith("http"):
-                    pd["display_name"] = "加载中…"
-                else:
-                    pd["display_name"] = name_field or "未播放"
-            except Exception:
-                pd["display_name"] = name_field or "未播放"
-    except Exception:
+            # 如果都无效，检查是否是 URL，返回加载占位
+            if isinstance(name_field, str) and name_field.startswith("http"):
+                pd["display_name"] = "加载中…"
+            elif isinstance(title_field, str) and title_field.startswith("http"):
+                pd["display_name"] = "加载中…"
+            else:
+                pd["display_name"] = name_field or title_field or "未播放"
+    except Exception as e:
+        print(f"[ERROR /status] Exception in display_name logic: {e}")
         pd = playing
-        pd["display_name"] = pd.get("name") if pd else "未播放"
+        pd["display_name"] = pd.get("name") or pd.get("title") or "未播放"
+    
+    pd["current_title"] = pd.get("current_title") or pd.get("display_name")
     return jsonify({"status": "OK", "playing": pd, "mpv": mpv_info})
 
 
@@ -801,8 +943,8 @@ def api_loop():
     return jsonify({"status": "OK", "loop_mode": PLAYER.loop_mode})
 
 
-@APP.route("/playlist")
-def api_playlist():
+@APP.route("/local_playlist")
+def api_local_playlist():
     """返回当前播放列表。
 
     参数:
@@ -822,15 +964,18 @@ def api_playlist():
             limit_i = 0
     else:
         limit_i = 0
-    data = plist
+    # 新：提供基于 LocalPlaylist 的歌曲字典数据（供“浏览”模块使用）
+    lp_obj = globals().get("LOCAL_BROWSE_PLAYLIST_OBJ")
+    lp_items = [s.to_dict() if hasattr(s, 'to_dict') else {"url": s, "type": "local"} for s in (lp_obj.get_all() if lp_obj else [])]
+    data = lp_items
     if offset < 0:
         offset = 0
     if limit_i > 0:
-        data = plist[offset : offset + limit_i]
+        data = data[offset : offset + limit_i]
     return jsonify(
         {
             "status": "OK",
-            "total": len(plist),
+            "total": len(lp_items),
             "index": CURRENT_INDEX,
             "current": CURRENT_META.get("rel") if CURRENT_META else None,
             "offset": offset,
@@ -885,58 +1030,16 @@ def api_local_queue():
 
 @APP.route("/combined_queue")
 def api_combined_queue():
-    """返回播放队列
-
-    仅返回当前的播放队列，不包括历史记录
-    """
-    combined_queue = []
-    current_combined_index = -1
-    youtube_count = 0
-
-    # 使用面向对象队列
-    if not PLAY_QUEUE.is_empty():
-        for idx, song in enumerate(PLAY_QUEUE.get_all()):
-            song_dict = song.to_dict()
-            song_dict["in_queue"] = True
-            combined_queue.append(song_dict)
-            if song.is_stream():
-                youtube_count += 1
-
-            # 检查是否为当前播放项
-            if idx == PLAY_QUEUE.get_current_index() and current_combined_index == -1:
-                current_combined_index = idx
-            elif current_combined_index == -1:
-                # 通过URL匹配检查
-                if song.is_stream():
-                    current_raw_url = (
-                        PLAYER.current_meta.get("raw_url")
-                        or PLAYER.current_meta.get("url")
-                        if PLAYER.current_meta
-                        else None
-                    )
-                    if current_raw_url and song.url == current_raw_url:
-                        current_combined_index = idx
-                else:
-                    current_rel = (
-                        PLAYER.current_meta.get("rel") if PLAYER.current_meta else None
-                    )
-                    if current_rel and song.url == current_rel:
-                        current_combined_index = idx
-
-    # 构建响应数据
-    return jsonify(
-        {
-            "status": "OK",
-            "queue": combined_queue,
-            "current_index": current_combined_index,
-            "current_title": (
-                combined_queue[current_combined_index]["title"]
-                if 0 <= current_combined_index < len(combined_queue)
-                else None
-            ),
-            "youtube_count": youtube_count,
-        }
-    )
+    """返回当前歌单的所有歌曲"""
+    playlist = PLAYLISTS_MANAGER.get_playlist(CURRENT_PLAYLIST_ID)
+    songs = playlist.songs if playlist else []
+    return jsonify({
+        "status": "OK",
+        "queue": songs,
+        "current_index": _get_current_index(),
+        "youtube_count": sum(1 for s in songs if isinstance(s, dict) and s.get('type') == 'youtube'),
+        "current_title": songs[0]["title"] if songs and isinstance(songs[0], dict) else None,
+    })
 
 
 @APP.route("/debug/mpv")
@@ -1147,31 +1250,162 @@ def api_play_youtube_queue():
         return jsonify({"status": "ERROR", "error": str(e)}), 500
 
 
-@APP.route("/youtube_queue")
-def api_youtube_queue():
-    """返回当前播放队列。
+@APP.route("/playlist")
+def api_playlist():
+    """返回当前播放列表。
 
     返回:
-      queue  当前播放列表的所有项目
+      playlist  当前播放列表的所有项目
       current_index  当前播放的索引
       current_title  当前播放的标题
     """
-    queue_items = PLAY_QUEUE.get_all()
-    current_index = PLAY_QUEUE.get_current_index()
+    playlist_items = CURRENT_PLAYLIST.get_all()
+    current_index = CURRENT_PLAYLIST.get_current_index()
     current_title = None
 
-    if 0 <= current_index < len(queue_items):
-        current_song = queue_items[current_index]
+    if 0 <= current_index < len(playlist_items):
+        current_song = playlist_items[current_index]
         current_title = current_song.title
 
     return jsonify(
         {
             "status": "OK",
-            "queue": [song.to_dict() for song in queue_items],
+            "playlist": [song.to_dict() for song in playlist_items],
             "current_index": current_index,
             "current_title": current_title,
         }
     )
+
+
+@APP.route("/playlist_play", methods=["POST"])
+def api_playlist_play():
+    """播放当前播放列表中指定索引的歌曲"""
+    from flask import request
+
+    try:
+        index = int(request.form.get("index", -1))
+    except (ValueError, TypeError):
+        return jsonify({"status": "ERROR", "error": "索引参数非法"}), 400
+
+    if CURRENT_PLAYLIST.is_empty() or index < 0 or index >= CURRENT_PLAYLIST.size():
+        return jsonify({"status": "ERROR", "error": "索引超出范围"}), 400
+
+    try:
+        success = CURRENT_PLAYLIST.play_at_index(
+            index=index,
+            save_to_history=True,
+            mpv_command_func=mpv_command,
+            mpv_pipe_exists_func=mpv_pipe_exists,
+            ensure_mpv_func=ensure_mpv,
+            add_to_history_func=add_to_playback_history,
+            music_dir=PLAYER.music_dir,
+        )
+
+        if not success:
+            return jsonify({"status": "ERROR", "error": "播放失败"}), 500
+
+        song = CURRENT_PLAYLIST.get_item(index)
+        _update_current_meta_and_fetch_title(song)
+        CURRENT_PLAYLIST.set_current_index(index)
+        _start_track_monitor()
+        PLAYER.save_current_playlist()
+
+        return jsonify(
+            {"status": "OK", "current_index": index, "current_title": song.title}
+        )
+    except Exception as e:
+        print(f"[ERROR] 队列播放指定索引失败: {e}")
+        import traceback
+
+        traceback.print_exc()
+        return jsonify({"status": "ERROR", "error": str(e)}), 500
+
+
+@APP.route("/playlist_reorder", methods=["POST"])
+def api_playlist_reorder():
+    """重排当前播放列表顺序"""
+    from flask import request
+
+    if CURRENT_PLAYLIST.is_empty():
+        return jsonify({"status": "ERROR", "error": "列表为空"}), 400
+
+    try:
+        from_index = int(request.form.get("from_index", -1))
+        to_index = int(request.form.get("to_index", -1))
+    except (ValueError, TypeError):
+        return jsonify({"status": "ERROR", "error": "索引参数非法"}), 400
+
+    if from_index < 0 or from_index >= CURRENT_PLAYLIST.size():
+        return jsonify({"status": "ERROR", "error": "from_index 超出范围"}), 400
+
+    if to_index < 0 or to_index > CURRENT_PLAYLIST.size():
+        return jsonify({"status": "ERROR", "error": "to_index 超出范围"}), 400
+
+    try:
+        CURRENT_PLAYLIST.reorder(from_index, to_index)
+        PLAYER.save_current_playlist()
+        return jsonify(
+            {
+                "status": "OK",
+                "message": "播放列表已重排序",
+                "current_index": CURRENT_PLAYLIST.get_current_index(),
+            }
+        )
+    except Exception as e:
+        print(f"[ERROR] 播放列表重排序失败: {e}")
+        return jsonify({"status": "ERROR", "error": str(e)}), 500
+
+
+@APP.route("/playlist_clear", methods=["POST"])
+def api_playlist_clear():
+    """清空当前播放列表"""
+    CURRENT_PLAYLIST.clear()
+    PLAYER.save_current_playlist()
+    return jsonify({"status": "OK", "message": "播放列表已清空"})
+
+
+@APP.route("/playlist_add", methods=["POST"])
+def api_playlist_add():
+    """添加歌曲到当前播放列表（不立即播放，防止重复）"""
+    from flask import request
+
+    url = (request.form.get("url") or "").strip()
+    path = (request.form.get("path") or "").strip()
+    title = (request.form.get("title") or "").strip()
+    song_type = (request.form.get("type") or "").strip().lower() or "youtube"
+
+    source = url or path
+    if not source:
+        return jsonify({"status": "ERROR", "error": "缺少 url/path"}), 400
+
+    try:
+        # 检查是否已存在相同的歌曲
+        for existing_song in CURRENT_PLAYLIST.get_all():
+            if hasattr(existing_song, 'url') and existing_song.url == source:
+                return jsonify({
+                    "status": "ERROR",
+                    "error": "该歌曲已在播放列表中，无法重复添加"
+                }), 400
+        
+        if song_type == "local" or (path and not source.startswith("http")):
+            song = LocalSong(file_path=source, title=title or None)
+        else:
+            song = StreamSong(stream_url=source, title=title or "加载中…", stream_type=song_type or "youtube")
+
+        CURRENT_PLAYLIST.add(song)
+        if CURRENT_PLAYLIST.get_current_index() == -1:
+            CURRENT_PLAYLIST.set_current_index(0)
+        PLAYER.save_current_playlist()
+        return jsonify(
+            {
+                "status": "OK",
+                "index": CURRENT_PLAYLIST.size() - 1,
+                "message": "已添加到播放列表",
+            }
+        )
+    except Exception as e:
+        print(f"[ERROR] 添加歌曲到播放列表失败: {e}")
+        return jsonify({"status": "ERROR", "error": str(e)}), 500
 
 
 @APP.route("/youtube_queue_play", methods=["POST"])
@@ -1188,12 +1422,12 @@ def api_youtube_queue_play():
     except (ValueError, TypeError):
         return jsonify({"status": "ERROR", "error": "索引参数非法"}), 400
 
-    if PLAY_QUEUE.is_empty() or index < 0 or index >= PLAY_QUEUE.size():
+    if CURRENT_PLAYLIST.is_empty() or index < 0 or index >= CURRENT_PLAYLIST.size():
         return jsonify({"status": "ERROR", "error": "索引超出范围"}), 400
 
     try:
         # 使用队列的播放方法，自动处理两种歌曲类型
-        success = PLAY_QUEUE.play_at_index(
+        success = CURRENT_PLAYLIST.play_at_index(
             index=index,
             save_to_history=True,
             mpv_command_func=mpv_command,
@@ -1206,38 +1440,19 @@ def api_youtube_queue_play():
         if not success:
             return jsonify({"status": "ERROR", "error": "播放失败"}), 500
 
-        song = PLAY_QUEUE.get_all()[index]
+        song = CURRENT_PLAYLIST.get_all()[index]
         title = song.title
 
         # 更新播放器当前状态并获取串流标题
         _update_current_meta_and_fetch_title(song)
         _start_track_monitor()
-        PLAYER.save_play_queue()
+        PLAYER.save_current_playlist()
 
         return jsonify({"status": "OK", "current_index": index, "current_title": title})
     except Exception as e:
         print(f"[ERROR] 播放队列中的歌曲失败: {e}")
         return jsonify({"status": "ERROR", "error": str(e)}), 500
 
-
-@APP.route("/play_queue_clear", methods=["POST"])
-@APP.route("/play_queue_clear", methods=["POST"])
-def api_play_queue_clear():
-    """清空当前播放队列（调用 PlayQueue.clear_queue() 方法）"""
-    try:
-        # 清空播放队列
-        PLAY_QUEUE.clear_queue()
-        PLAYER.save_play_queue()
-
-        # 停止当前播放
-        print("[QUEUE] 清空播放队列，停止当前播放")
-        if mpv_pipe_exists():
-            mpv_command(["stop"])
-
-        return jsonify({"status": "OK", "message": "队列已清空，播放已停止"})
-    except Exception as e:
-        print(f"[ERROR] 清空队列失败: {e}")
-        return jsonify({"status": "ERROR", "error": str(e)}), 500
 
 
 @APP.route("/youtube_queue_clear", methods=["POST"])
@@ -1247,7 +1462,8 @@ def api_youtube_queue_clear():
 
 
 @APP.route("/youtube_queue_add", methods=["POST"])
-@APP.route("/youtube_queue_add", methods=["POST"])
+@APP.route("/play_song", methods=["POST"])
+@APP.route("/youtube_queue_add", methods=["POST"])  # 保留向后兼容
 def api_youtube_queue_add():
     """添加条目到播放队列（支持 YouTube 与本地）
 
@@ -1273,7 +1489,7 @@ def api_youtube_queue_add():
 
     try:
         # 检查队列是否为空
-        queue_was_empty = PLAY_QUEUE.is_empty()
+        queue_was_empty = CURRENT_PLAYLIST.is_empty()
 
         # 使用面向对象的方式创建歌曲对象
         if item_type == "local":
@@ -1283,17 +1499,17 @@ def api_youtube_queue_add():
 
         # 添加到队列 - 如果队列非空，插入到当前播放歌曲的下一首位置
         if queue_was_empty:
-            PLAY_QUEUE.add(song)
+            CURRENT_PLAYLIST.add(song)
         else:
             # 获取当前播放歌曲的索引，插入到下一首位置
-            current_index = PLAY_QUEUE.get_current_index()
+            current_index = CURRENT_PLAYLIST.get_current_index()
             insert_position = (
-                current_index + 1 if current_index >= 0 else PLAY_QUEUE.size()
+                current_index + 1 if current_index >= 0 else CURRENT_PLAYLIST.size()
             )
-            PLAY_QUEUE.insert(insert_position, song)
+            CURRENT_PLAYLIST.insert(insert_position, song)
 
         # 保存队列到文件
-        PLAYER.save_play_queue()
+        PLAYER.save_current_playlist()
 
         print(
             f"[DEBUG] 已添加到队列: {song.title} (type={item_type}, queue_was_empty={queue_was_empty})"
@@ -1303,8 +1519,8 @@ def api_youtube_queue_add():
         if queue_was_empty:
             print(f"[QUEUE] 队列为空，立即播放新添加的歌曲: {song.title}")
             # 播放队列中的最后一项（刚添加的）
-            last_index = PLAY_QUEUE.size() - 1
-            success = PLAY_QUEUE.play_at_index(
+            last_index = CURRENT_PLAYLIST.size() - 1
+            success = CURRENT_PLAYLIST.play_at_index(
                 index=last_index,
                 save_to_history=True,
                 mpv_command_func=mpv_command,
@@ -1318,12 +1534,12 @@ def api_youtube_queue_add():
                 # 同步播放器状态（流媒体没有本地播放列表索引）
                 PLAYER.current_index = -1 if song.is_stream() else PLAYER.current_index
                 _update_current_meta_and_fetch_title(song)
-                PLAY_QUEUE.set_current_index(last_index)
+                CURRENT_PLAYLIST.set_current_index(last_index)
                 _start_track_monitor()
                 return jsonify(
                     {
                         "status": "OK",
-                        "queue_length": PLAY_QUEUE.size(),
+                        "queue_length": CURRENT_PLAYLIST.size(),
                         "msg": "队列为空，已立即播放",
                         "auto_played": True,
                     }
@@ -1335,7 +1551,7 @@ def api_youtube_queue_add():
             return jsonify(
                 {
                     "status": "OK",
-                    "queue_length": PLAY_QUEUE.size(),
+                    "queue_length": CURRENT_PLAYLIST.size(),
                     "msg": "已添加为下一首播放",
                     "auto_played": False,
                 }
@@ -1349,9 +1565,9 @@ def api_youtube_queue_add():
 
 
 @APP.route("/play_queue_remove", methods=["POST"])
-@APP.route("/youtube_queue_remove", methods=["POST"])
-def api_play_queue_remove():
-    """从播放队列删除指定索引的条目"""
+@APP.route("/playlist_remove", methods=["POST"])
+def api_playlist_remove():
+    """从当前播放列表删除指定索引的歌曲（作用于 CURRENT_PLAYLIST）"""
     from flask import request
 
     try:
@@ -1359,37 +1575,39 @@ def api_play_queue_remove():
     except (TypeError, ValueError):
         return jsonify({"status": "ERROR", "error": "索引参数非法"}), 400
 
-    if idx < 0 or idx >= PLAY_QUEUE.size():
+    if CURRENT_PLAYLIST.is_empty():
+        return jsonify({"status": "ERROR", "error": "当前播放列表为空"}), 400
+
+    size = CURRENT_PLAYLIST.size()
+    if idx < 0 or idx >= size:
         return jsonify({"status": "ERROR", "error": "索引越界"}), 400
 
-    removed_song = PLAY_QUEUE.get_item(idx)
-    removed_title = getattr(removed_song, "title", "") or ""
-
-    PLAY_QUEUE.remove(idx)
-    PLAYER.save_play_queue()
-
-    # 如果队列为空，尝试停止当前播放
-    if PLAY_QUEUE.is_empty():
-        try:
-            if mpv_pipe_exists():
-                mpv_command(["stop"])
-        except Exception:
-            pass
-
-    return jsonify(
-        {
-            "status": "OK",
-            "removed_index": idx,
-            "removed_title": removed_title,
-            "queue_length": PLAY_QUEUE.size(),
-        }
+    removed_song = CURRENT_PLAYLIST.get_item(idx)
+    removed_title = (
+        removed_song.title
+        if hasattr(removed_song, "title")
+        else str(removed_song)
     )
+
+    CURRENT_PLAYLIST.remove(idx)
+
+    # 确保当前索引有效
+    if not CURRENT_PLAYLIST.is_empty():
+        cur_idx = CURRENT_PLAYLIST.get_current_index()
+        fixed_idx = min(cur_idx, CURRENT_PLAYLIST.size() - 1)
+        CURRENT_PLAYLIST.set_current_index(fixed_idx)
+    else:
+        CURRENT_PLAYLIST.set_current_index(-1)
+
+    PLAYER.save_current_playlist()
+    print(f"[PLAYLIST] 已移除当前播放列表中的歌曲: {removed_title}")
+    return jsonify({"status": "OK", "message": f"已移除歌曲: {removed_title}"})
 
 
 @APP.route("/queue_next", methods=["POST"])
 def api_queue_next():
     """播放队列中的下一首歌曲"""
-    if PLAY_QUEUE.is_empty():
+    if CURRENT_PLAYLIST.is_empty():
         # If queue is empty, try the local playlist
         if not ensure_mpv():
             return jsonify({"status": "ERROR", "error": "mpv 未就绪"}), 400
@@ -1399,15 +1617,15 @@ def api_queue_next():
 
     try:
         # Get current index
-        current_idx = PLAY_QUEUE.get_current_index()
+        current_idx = CURRENT_PLAYLIST.get_current_index()
         next_idx = current_idx + 1
 
         # Check if there's a next song
-        if next_idx >= PLAY_QUEUE.size():
+        if next_idx >= CURRENT_PLAYLIST.size():
             return jsonify({"status": "ERROR", "error": "已到达队列末尾"}), 400
 
         # Play the next song
-        success = PLAY_QUEUE.play_at_index(
+        success = CURRENT_PLAYLIST.play_at_index(
             index=next_idx,
             save_to_history=True,
             mpv_command_func=mpv_command,
@@ -1420,10 +1638,10 @@ def api_queue_next():
         if not success:
             return jsonify({"status": "ERROR", "error": "播放失败"}), 500
 
-        song = PLAY_QUEUE.get_all()[next_idx]
+        song = CURRENT_PLAYLIST.get_all()[next_idx]
         _update_current_meta_and_fetch_title(song)
         _start_track_monitor()
-        PLAYER.save_play_queue()
+        PLAYER.save_current_playlist()
 
         return jsonify(
             {"status": "OK", "current_index": next_idx, "current_title": song.title}
@@ -1449,7 +1667,7 @@ def api_play_queue_sort():
     """
     from flask import request
 
-    if PLAY_QUEUE.is_empty():
+    if CURRENT_PLAYLIST.is_empty():
         return jsonify({"status": "ERROR", "error": "队列为空"}), 400
 
     try:
@@ -1462,10 +1680,10 @@ def api_play_queue_sort():
             sort_by = "add_order"  # 默认按添加顺序排序
 
         # 调用播放队列的排序方法
-        PLAY_QUEUE.sort_queue(sort_by=sort_by, reverse=reverse)
+        CURRENT_PLAYLIST.sort_queue(sort_by=sort_by, reverse=reverse)
 
         # 保存队列到文件
-        PLAYER.save_play_queue()
+        PLAYER.save_current_playlist()
 
         print(f"[DEBUG] 播放队列已排序: sort_by={sort_by}, reverse={reverse}")
         return jsonify(
@@ -1474,8 +1692,8 @@ def api_play_queue_sort():
                 "message": "队列已排序",
                 "sort_by": sort_by,
                 "reverse": reverse,
-                "queue_length": PLAY_QUEUE.size(),
-                "queue": [song.to_dict() for song in PLAY_QUEUE.get_all()],
+                "queue_length": CURRENT_PLAYLIST.size(),
+                "queue": [song.to_dict() for song in CURRENT_PLAYLIST.get_all()],
             }
         )
     except Exception as e:
@@ -1486,66 +1704,55 @@ def api_play_queue_sort():
         return jsonify({"status": "ERROR", "error": str(e)}), 500
 
 
-@APP.route("/youtube_queue_sort", methods=["POST"])
-def api_youtube_queue_sort():
-    """对播放队列进行排序（别名到 /play_queue_sort）"""
-    return api_play_queue_sort()
-
-
-@APP.route("/youtube_history")
-def api_youtube_history():
-    """返回 YouTube 播放历史记录。
+@APP.route("/playlist_sort", methods=["POST"])
+def api_playlist_sort():
+    """对当前歌单进行排序（改变歌曲顺序）
 
     参数:
-      limit  返回最多多少条记录（默认 20，最大 100）
+      sort_by: 排序方式
+              - 'add_order': 按添加顺序（默认）
+              - 'type': 按歌曲类型排序（本地在前，串流在后）
+      reverse: 是否反向排序 (0/false=否, 1/true=是)
     """
     from flask import request
 
-    limit = min(int(request.args.get("limit", 50)), 100)
-    return jsonify({"status": "OK", "history": PLAYBACK_HISTORY.get_all()[:limit]})
+    playlist = PLAYLISTS_MANAGER.get_playlist(CURRENT_PLAYLIST_ID)
+    if not playlist or not playlist.songs:
+        return jsonify({"status": "ERROR", "error": "歌单为空或不存在"}), 400
 
-
-@APP.route("/playback_history")
-def api_playback_history():
-    """返回完整的播放历史记录（包含本地和YouTube）
+    try:
+        sort_by = (request.form.get("sort_by") or "add_order").strip().lower()
+        reverse_str = (request.form.get("reverse") or "0").strip()
+        reverse = reverse_str in ("1", "true", "True")
+        if sort_by == "type":
+            playlist.songs.sort(key=lambda s: s.get("type", "") if isinstance(s, dict) else "local", reverse=reverse)
+        else:
+            # 默认按添加顺序（不变）
+            if reverse:
+                playlist.songs.reverse()
+        PLAYLISTS_MANAGER.save()
+        print(f"[PLAYLIST] 歌单已排序 sort_by={sort_by}, reverse={reverse}")
+        return jsonify({"status": "OK", "message": "歌单已排序"})
+    except Exception as e:
+        print(f"[ERROR] 歌单排序失败: {e}")
+        return jsonify({"status": "ERROR", "error": str(e)}), 500
     
+    """
     用于排行榜等功能
     """
     return jsonify({"status": "OK", "items": PLAYBACK_HISTORY.get_all()})
 
 
 #############################################
-# 统一的播放队列 API（别名）
+# 播放队列重排
 #############################################
-@APP.route("/play_queue")
-def api_play_queue():
-    """统一的播放队列 API（别名到 /youtube_queue）"""
-    return api_youtube_queue()
-
-
-@APP.route("/play_queue_play", methods=["POST"])
-def api_play_queue_play():
-    """统一的播放队列播放 API（别名到 /youtube_queue_play）"""
-    return api_youtube_queue_play()
-
-
-@APP.route("/play_queue_add", methods=["POST"])
-def api_play_queue_add():
-    """统一的播放队列添加 API（别名到 /youtube_queue_add）"""
-    return api_youtube_queue_add()
 
 
 @APP.route("/play_queue_reorder", methods=["POST"])
 def api_play_queue_reorder():
-    """统一的播放队列重排序 API（调用 PlayQueue.reorder() 方法）
-
-    参数:
-      from_index  源位置索引
-      to_index    目标位置索引
-    """
     from flask import request
 
-    if PLAY_QUEUE.is_empty():
+    if CURRENT_PLAYLIST.is_empty():
         return jsonify({"status": "ERROR", "error": "队列为空"}), 400
 
     try:
@@ -1554,25 +1761,21 @@ def api_play_queue_reorder():
     except (ValueError, TypeError):
         return jsonify({"status": "ERROR", "error": "索引参数非法"}), 400
 
-    if from_index < 0 or from_index >= PLAY_QUEUE.size():
+    if from_index < 0 or from_index >= CURRENT_PLAYLIST.size():
         return jsonify({"status": "ERROR", "error": "from_index 超出范围"}), 400
 
-    if to_index < 0 or to_index > PLAY_QUEUE.size():
+    if to_index < 0 or to_index > CURRENT_PLAYLIST.size():
         return jsonify({"status": "ERROR", "error": "to_index 超出范围"}), 400
 
     try:
-        # 使用队列的重排序方法
-        PLAY_QUEUE.reorder(from_index, to_index)
-
-        # 保存队列到文件
-        PLAYER.save_play_queue()
-
+        CURRENT_PLAYLIST.reorder(from_index, to_index)
+        PLAYER.save_current_playlist()
         print(f"[DEBUG] 队列重排序完成: {from_index} -> {to_index}")
         return jsonify(
             {
                 "status": "OK",
                 "message": "队列已重排序",
-                "current_index": PLAY_QUEUE.get_current_index(),
+                "current_index": CURRENT_PLAYLIST.get_current_index(),
             }
         )
     except Exception as e:
@@ -1582,7 +1785,7 @@ def api_play_queue_reorder():
 
 @APP.route("/youtube_queue_reorder", methods=["POST"])
 def api_youtube_queue_reorder():
-    """播放队列重排序（别名到 /play_queue_reorder）"""
+    """播放队列重排序(别名到 /play_queue_reorder)"""
     return api_play_queue_reorder()
 
 
@@ -1789,6 +1992,9 @@ def api_update_playlist(playlist_id):
 
     try:
         if "name" in data:
+            # 禁止重命名默认歌单
+            if playlist_id == DEFAULT_PLAYLIST_ID:
+                return jsonify({"error": "默认歌单名称不可修改"}), 400
             PLAYLISTS_MANAGER.rename_playlist(playlist_id, data["name"].strip())
         if "songs" in data:
             PLAYLISTS_MANAGER.reorder_playlist_songs(playlist_id, data["songs"])
@@ -1813,7 +2019,7 @@ def api_delete_playlist(playlist_id):
 @APP.route("/playlists/<playlist_id>/switch", methods=["POST"])
 def api_switch_playlist(playlist_id):
     """切换到指定歌单"""
-    global CURRENT_PLAYLIST_ID, PLAYLIST, PLAY_QUEUE
+    global CURRENT_PLAYLIST_ID, PLAYLIST, CURRENT_PLAYLIST
     
     playlist = PLAYLISTS_MANAGER.get_playlist(playlist_id)
     if not playlist:
@@ -1825,7 +2031,7 @@ def api_switch_playlist(playlist_id):
         if current_pl:
             # 序列化所有song对象为dict，保留所有字段
             songs_to_save = []
-            for song in PLAY_QUEUE.get_all():
+            for song in CURRENT_PLAYLIST.get_all():
                 if hasattr(song, 'to_dict'):
                     song_dict = song.to_dict()
                     songs_to_save.append(song_dict)
@@ -1843,20 +2049,20 @@ def api_switch_playlist(playlist_id):
         PLAYLIST = playlist.songs
         
         # 更新播放队列（但不改变当前播放）
-        PLAY_QUEUE.clear()
+        CURRENT_PLAYLIST.clear()
         print(f"[DEBUG] 加载歌单 {playlist_id} 的 {len(playlist.songs)} 首歌曲")
         for song_data in playlist.songs:
             if isinstance(song_data, dict):
                 # 从dict重新构造song对象
                 song = Song.from_dict(song_data)
                 print(f"[DEBUG] 加载歌曲: {song.title} (类型: {song.type}, 字段数: {len(song_data)})")
-                PLAY_QUEUE.add(song)
+                CURRENT_PLAYLIST.add(song)
             else:
                 # 兼容旧的字符串路径格式
                 song = LocalSong(file_path=song_data)
                 print(f"[DEBUG] 加载本地歌曲: {song_data}")
-                PLAY_QUEUE.add(song)
-        PLAYER.save_play_queue()
+                CURRENT_PLAYLIST.add(song)
+        PLAYER.save_current_playlist()
 
         return jsonify({
             "status": "ok",
@@ -1940,6 +2146,79 @@ def api_clear_playlist(playlist_id):
     if PLAYLISTS_MANAGER.clear_playlist(playlist_id):
         return jsonify({"success": True})
     return jsonify({"error": "歌单不存在"}), 404
+
+
+@APP.route('/playback_history')
+def api_playback_history():
+    """返回播放历史，供排行榜等功能使用"""
+    items = PLAYER.playback_history.get_all() if hasattr(PLAYER, 'playback_history') else []
+    
+    # 清理"加载中…"的标题，用"未知歌曲"替换
+    cleaned_items = []
+    for item in items:
+        if item.get('title') == '加载中…' or item.get('name') == '加载中…':
+            # 尝试从URL提取更好的名称
+            url = item.get('url', '')
+            if item.get('type') == 'local' and url:
+                # 本地文件：提取文件名
+                import os
+                filename = os.path.basename(url)
+                item['title'] = filename
+                item['name'] = filename
+            else:
+                # 无法提取，设置为"未知歌曲"
+                item['title'] = '未知歌曲'
+                item['name'] = '未知歌曲'
+        cleaned_items.append(item)
+    
+    return jsonify({
+        'status': 'OK',
+        'items': cleaned_items
+    })
+
+
+@APP.route('/rankings')
+def api_rankings():
+    """获取排行榜（使用HitRank计算）
+    
+    查询参数:
+      period: 时间周期 ('all', 'week', 'month')，默认 'all'
+      limit: 返回条数，默认 100
+    """
+    period = request.args.get('period', 'all').lower()
+    limit = request.args.get('limit', '100')
+    
+    try:
+        limit = int(limit)
+    except (ValueError, TypeError):
+        limit = 100
+    
+    # 获取播放历史
+    items = PLAYER.playback_history.get_all() if hasattr(PLAYER, 'playback_history') else []
+    
+    # 使用 HitRank 计算排行
+    rankings = RANK_MANAGER.get_rankings(items, period=period, limit=limit)
+    
+    return jsonify({
+        'status': 'OK',
+        'period': period,
+        'rankings': rankings
+    })
+
+
+
+
+@APP.route('/playback_history', methods=['DELETE'])
+def api_clear_playback_history():
+    """清除所有播放历史"""
+    try:
+        if hasattr(PLAYER, 'playback_history'):
+            PLAYER.playback_history.clear()
+            print("[INFO] 播放历史已清除")
+        return jsonify({'status': 'OK'})
+    except Exception as e:
+        print(f"[ERROR] 清除播放历史失败: {e}")
+        return jsonify({'status': 'ERROR', 'error': str(e)}), 500
 
 
 if __name__ == "__main__":

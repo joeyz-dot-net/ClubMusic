@@ -1,4 +1,4 @@
-"""
+﻿"""
 音乐播放器主类
 """
 
@@ -9,7 +9,7 @@ import time
 import configparser
 import subprocess
 import re
-from models import Song, LocalSong, StreamSong, PlayQueue, PlayHistory
+from models import Song, LocalSong, StreamSong, Playlist, PlayHistory
 
 
 class MusicPlayer:
@@ -110,7 +110,7 @@ class MusicPlayer:
         self.playback_history_file = os.path.join(
             self.data_dir, "playback_history.json"
         )
-        self.play_queue_file = os.path.join(self.data_dir, "play_queue.json")
+        self.current_playlist_file = os.path.join(self.data_dir, "playlist.json")
 
         # 播放器状态
         self.playlist = []  # 存储相对路径
@@ -139,15 +139,18 @@ class MusicPlayer:
         self.playback_history_max = 50  # 保留以保持兼容性
 
         # 播放队列
-        self.play_queue = PlayQueue()
-        self.play_queue_file = os.path.join(self.data_dir, "play_queue.json")
+        from models import CurrentPlaylist
+        self.current_playlist = CurrentPlaylist()
+        self.current_playlist_file = os.path.join(self.data_dir, "playlist.json")
 
         # 线程锁
         self._lock = threading.RLock()
 
         # 加载持久化数据
         self.load_playback_history()
-        self.load_play_queue()
+        #print('[DEBUG] 调用 load_current_playlist 前，current_playlist 类型:', type(self.current_playlist))
+        self.load_current_playlist()
+        #print('[DEBUG] 调用 load_current_playlist 后，current_playlist 类型:', type(self.current_playlist))
 
         # 初始化 MPV IPC（只加载一次）
         self._init_mpv_ipc()
@@ -376,31 +379,36 @@ class MusicPlayer:
         """保存播放历史到文件"""
         self.playback_history.save()
 
-    def load_play_queue(self):
-        """从文件加载播放队列"""
+    def load_current_playlist(self):
+        """从文件加载当前播放列表"""
+        import traceback
         try:
-            if os.path.exists(self.play_queue_file):
-                with open(self.play_queue_file, "r", encoding="utf-8") as f:
+            if os.path.exists(self.current_playlist_file):
+                with open(self.current_playlist_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     if isinstance(data, dict):
-                        self.play_queue.from_dict(data)
-                        print(f"[INFO] 已加载播放队列: {self.play_queue.size()} 首歌曲")
+                        self.current_playlist.from_dict(data)
+                        print(f"[INFO] 已加载播放列表: {self.current_playlist.size()} 首歌曲")
                     else:
-                        self.play_queue = PlayQueue()
+                        from models import CurrentPlaylist
+                        self.current_playlist = CurrentPlaylist()
             else:
-                self.play_queue = PlayQueue()
+                from models import CurrentPlaylist
+                self.current_playlist = CurrentPlaylist()
         except Exception as e:
-            print(f"[ERROR] 加载播放队列失败: {e}")
-            self.play_queue = PlayQueue()
+            print(f"[ERROR] 加载播放列表失败: {e}")
+            traceback.print_exc()
+            from models import CurrentPlaylist
+            self.current_playlist = CurrentPlaylist()
 
-    def save_play_queue(self):
-        """保存播放队列到文件"""
+    def save_current_playlist(self):
+        """保存当前播放列表到文件"""
         try:
-            data = self.play_queue.to_dict()
-            with open(self.play_queue_file, "w", encoding="utf-8") as f:
+            data = self.current_playlist.to_dict()
+            with open(self.current_playlist_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"[ERROR] 保存播放队列失败: {e}")
+            print(f"[ERROR] 保存播放列表失败: {e}")
 
     # ========== MPV IPC 初始化方法 ==========
 
@@ -733,7 +741,7 @@ class MusicPlayer:
           添加到队列的歌曲数量
         """
         if clear_existing:
-            self.play_queue.clear()
+            self.current_playlist.clear()
 
         # 确定扫描路径
         if folder_path:
@@ -763,11 +771,11 @@ class MusicPlayer:
         # 添加到播放队列
         for rel_path in tracks:
             song = LocalSong(rel_path, os.path.basename(rel_path))
-            self.play_queue.add(song)
+            self.current_playlist.add(song)
 
         # 如果队列不为空，设置当前索引为第一首
-        if not self.play_queue.is_empty():
-            self.play_queue.set_current_index(0)
+        if not self.current_playlist.is_empty():
+            self.current_playlist.set_current_index(0)
 
         print(
             f"[INFO] 已从 {folder_path or 'music_dir'} 添加 {len(tracks)} 首歌曲到队列"
@@ -963,11 +971,11 @@ class MusicPlayer:
                 # 设置当前播放队列（仅当update_queue为True时）
                 if update_queue:
                     # 清空现有队列并添加播放列表项
-                    self.play_queue.clear()
+                    self.current_playlist.clear()
                     for entry in playlist_entries:
                         song = StreamSong(entry["url"], entry["title"])
-                        self.play_queue.add(song)
-                    self.play_queue.set_current_index(0)
+                        self.current_playlist.add(song)
+                    self.current_playlist.set_current_index(0)
                     print(
                         f"[DEBUG] 已将播放列表添加到队列，共 {len(playlist_entries)} 项"
                     )
@@ -980,10 +988,10 @@ class MusicPlayer:
                 # 单个视频的队列（仅当update_queue为True时）
                 if update_queue:
                     # 允许重复添加相同的URL，不进行去重检查
-                    self.play_queue.clear()
+                    self.current_playlist.clear()
                     song = StreamSong(url, "加载中…")
-                    self.play_queue.add(song)
-                    self.play_queue.set_current_index(0)
+                    self.current_playlist.add(song)
+                    self.current_playlist.set_current_index(0)
                     print(f"[DEBUG] 创建新播放队列（单个视频）")
 
             # 尝试轮询获取 mpv 的 media-title，最多尝试 20 次（大约 10 秒）
@@ -1262,12 +1270,12 @@ class MusicPlayer:
         ensure_mpv_func = ensure_mpv_func or self.ensure_mpv
         add_to_history_func = add_to_history_func or self.add_to_playback_history
 
-        if self.play_queue.is_empty():
+        if self.current_playlist.is_empty():
             print("[INFO] handle_track_end: 播放队列为空，停止自动播放")
             return False
 
-        current_idx = self.play_queue.get_current_index()
-        queue_size = self.play_queue.size()
+        current_idx = self.current_playlist.get_current_index()
+        playlist_size = self.current_playlist.size()
 
         def _play_at(index: int) -> bool:
             if not (0 <= index < queue_size):
@@ -1275,7 +1283,7 @@ class MusicPlayer:
                     f"[WARN] handle_track_end: 无效的索引 {index}，队列大小 {queue_size}"
                 )
                 return False
-            return self.play_queue.play_at_index(
+            return self.current_playlist.play_at_index(
                 index=index,
                 save_to_history=True,
                 mpv_command_func=mpv_command_func,
@@ -1295,9 +1303,9 @@ class MusicPlayer:
             success = _play_at(target_idx)
         elif self.loop_mode == 2:
             # 全部循环：先尝试下一首，末尾则回到第一首
-            if self.play_queue.has_next():
+            if self.current_playlist.has_next():
                 action_desc = "全部循环 -> 下一首"
-                success = self.play_queue.play_next(
+                success = self.current_playlist.play_next(
                     save_to_history=True,
                     mpv_command_func=mpv_command_func,
                     mpv_pipe_exists_func=mpv_pipe_exists_func,
@@ -1310,9 +1318,9 @@ class MusicPlayer:
                 success = _play_at(0)
         else:
             # 顺序播放（loop_mode=0）：仅在有下一首时继续
-            if self.play_queue.has_next():
+            if self.current_playlist.has_next():
                 action_desc = "顺序播放 -> 下一首"
-                success = self.play_queue.play_next(
+                success = self.current_playlist.play_next(
                     save_to_history=True,
                     mpv_command_func=mpv_command_func,
                     mpv_pipe_exists_func=mpv_pipe_exists_func,
@@ -1332,9 +1340,9 @@ class MusicPlayer:
             # 成功启动后更新时间戳并持久化队列
             self._last_play_time = time.time()
             try:
-                self.save_play_queue()
+                self.save_current_playlist()
             except Exception as e:
-                print(f"[WARN] 保存播放队列失败: {e}")
+                print(f"[WARN] 保存播放列表失败: {e}")
         return success
 
     def to_dict(self) -> dict:
@@ -1351,6 +1359,6 @@ class MusicPlayer:
     def __repr__(self):
         return (
             f"MusicPlayer(music_dir='{self.music_dir}', "
-            f"queue_size={self.play_queue.size()}, "
+            f"queue_size={self.current_playlist.size()}, "
             f"history_size={len(self.playback_history)})"
         )

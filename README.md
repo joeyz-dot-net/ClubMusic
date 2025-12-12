@@ -175,7 +175,7 @@ MusicPlayer/
 ### 队列管理
 - `GET /play_queue` - 获取播放队列
 - `GET /combined_queue` - 获取合并队列（本地 + YouTube）
-- `POST /play_queue_add` - 添加歌曲到队列
+- `POST /play_song` - 添加歌曲到队列
 - `POST /play_queue_remove` - 从队列删除歌曲（支持当前歌曲）
 - `POST /play_queue_play` - 播放队列中的歌曲
 - `POST /play_queue_reorder` - 重新排序队列（支持当前歌曲排序）

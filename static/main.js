@@ -1,4 +1,4 @@
-(() => {
+﻿(() => {
 	let ctx = { tree: {}, musicDir: '' };
 	try { ctx = JSON.parse(document.getElementById('boot-data').textContent); } catch (e) { console.warn('Boot data parse error', e); }
 	const ROOT = document.getElementById('tree');
@@ -6,9 +6,9 @@
 	const MAX_VOLUME = 110;
 	const clampVolume = v => Math.max(0, Math.min(MAX_VOLUME, Number(v)));
 	
-	// 当前队列中的URL集合，用于检测重复
-	const queueUrlSet = new Set();
-	window._queueUrlSet = queueUrlSet;  // 立即暴露到 window 对象
+	// 当前播放列表中的URL集合，用于检测重复
+	const playlistUrlSet = new Set();
+	window._playlistUrlSet = playlistUrlSet;  // 立即暴露到 window 对象
 	
 	// Add last paused state cache
 	let lastPausedState = null;
@@ -19,6 +19,7 @@
 
 	// Apply server status to mini player (no extra fetch)
 	function applyStatusToMini(status) {
+		// Get mini player elements
 		const miniPlayerTitle = document.getElementById('miniPlayerTitle');
 		const miniPlayerArtist = document.getElementById('miniPlayerArtist');
 		const miniPlayerProgressFill = document.getElementById('miniPlayerProgressFill');
@@ -38,11 +39,16 @@
 			return;
 		}
 
-		const rel = status.playing.rel || status.playing.url || '';
-		let displayName = (status.playing.media_title && status.playing.media_title.length) ? status.playing.media_title : null;
-		if(!displayName) {
-			const nameField = status.playing.name || rel || '';
-			displayName = nameField.startsWith('http') ? '加载中…' : nameField;
+		let displayName = status.playing.current_title || status.playing.display_name || status.playing.media_title || '未播放';
+		// 如果都没有，从 name/rel 提取不含路径的文件名
+		if(!displayName || displayName === '未播放') {
+			const nameOrRel = status.playing.name || status.playing.rel || '';
+			if(nameOrRel && !nameOrRel.startsWith('http')) {
+				// 本地文件：提取文件名（去掉路径）
+				displayName = nameOrRel.split(/[\\/]/).pop() || '未播放';
+			} else if(nameOrRel.startsWith('http')) {
+				displayName = '加载中…';
+			}
 		}
 		miniPlayerTitle.textContent = displayName;
 		miniPlayerArtist.textContent = status.playing.type === 'youtube' ? 'YouTube' : '本地音乐';
@@ -88,11 +94,16 @@
 			return;
 		}
 
-		const rel = status.playing.rel || status.playing.url || '';
-		let displayName = (status.playing.media_title && status.playing.media_title.length) ? status.playing.media_title : null;
-		if(!displayName) {
-			const nameField = status.playing.name || rel || '';
-			displayName = nameField.startsWith('http') ? '加载中…' : nameField;
+		let displayName = status.playing.current_title || status.playing.display_name || status.playing.media_title || '未播放';
+		// 如果都没有，从 name/rel 提取不含路径的文件名
+		if(!displayName || displayName === '未播放') {
+			const nameOrRel = status.playing.name || status.playing.rel || '';
+			if(nameOrRel && !nameOrRel.startsWith('http')) {
+				// 本地文件：提取文件名（去掉路径）
+				displayName = nameOrRel.split(/[\\/]/).pop() || '未播放';
+			} else if(nameOrRel.startsWith('http')) {
+				displayName = '加载中…';
+			}
 		}
 		if(titleEl) titleEl.textContent = displayName;
 		const artist = status.playing.uploader || status.playing.channel || (status.playing.type === 'youtube' ? 'YouTube' : '本地音乐');
@@ -120,11 +131,25 @@
 	}
 
 	function buildNode(node) {
+		const isRoot = !node.rel;
+		if (isRoot) {
+			// 根节点不显示，只渲染其子节点
+			const rootUl = el('ul');
+			(node.dirs || []).forEach(d => rootUl.appendChild(buildNode(d)));
+			(node.files || []).forEach(f => {
+				const fi = el('li', 'file', f.name);
+				fi.dataset.rel = f.rel;
+				fi.onclick = () => play(f.rel, fi);
+				rootUl.appendChild(fi);
+			});
+			return rootUl;
+		}
+
 		const li = el('li', 'dir');
-		if (node.rel) li.dataset.rel = node.rel;
+		li.dataset.rel = node.rel;
 		const label = el('div', 'label');
 		const arrow = el('span', 'arrow', '▶');
-		const nameSpan = el('span', 'name', node.rel ? node.name : '根目录');
+		const nameSpan = el('span', 'name', node.name);
 		label.appendChild(arrow); label.appendChild(nameSpan);
 		label.onclick = () => li.classList.toggle('collapsed');
 		li.appendChild(label);
@@ -137,7 +162,7 @@
 			ul.appendChild(fi);
 		});
 		li.appendChild(ul);
-		if (node.rel) li.classList.add('collapsed');
+		li.classList.add('collapsed');
 		return li;
 	}
 
@@ -213,7 +238,7 @@
 				alert('添加队列失败: '+ j.error); 
 				return; 
 			}
-			console.debug('[PLAY] 本地文件已添加到队列末尾');
+			console.debug('[PLAY] 本地文件已添加到播放列表末尾');
 			// 刷新队列UI显示新添加的项
 			if(window.loadPlayList) {
 				console.debug('[PLAY] 刷新队列UI');
@@ -231,7 +256,15 @@
 			const bar = document.getElementById('nowPlaying');
 			// 兼容 rel 和 url 字段名
 			const rel = j.playing ? (j.playing.rel || j.playing.url) : null;
-			if(!j.playing || !rel){ bar.textContent='未播放'; return; }
+			
+			// Always update mini and full players regardless of playing state
+			applyStatusToMini(j);
+			applyStatusToFull(j);
+			
+			if(!j.playing || !rel){ 
+				bar.textContent='未播放'; 
+				return; 
+			}
 			// 优先使用服务器提供的 media_title（mpv 的 media-title）
 			// 若不存在，则使用 name（仅当 name 不是 URL 时）；若仍为 URL，则显示加载占位文本
 			let displayName = (j.playing.media_title && j.playing.media_title.length) ? j.playing.media_title : null;
@@ -258,16 +291,16 @@
 				if(duration > 0) {
 					label += ' ['+ fmt(currentTime) +' / '+ fmt(duration) + (isPaused?' | 暂停':'') +']';
 				} else {
-					// 没有时长信息，尝试从队列数据中获取
-					const currentQueueItem = document.querySelector('.play-list-item.current');
-					if(currentQueueItem && window._queueData && window._queueData.queue) {
-						const currentIndex = window._queueData.current_index;
-						if(currentIndex >= 0 && currentIndex < window._queueData.queue.length) {
-							const queueItem = window._queueData.queue[currentIndex];
-							const queueDuration = queueItem.duration || 0;
-							if(queueDuration > 0) {
-								duration = queueDuration;
-								label += ' ['+ fmt(currentTime) +' / '+ fmt(queueDuration) + (isPaused?' | 暂停':'') +']';
+					// 没有时长信息，尝试从播放列表数据中获取
+					const currentPlaylistItem = document.querySelector('.play-list-item.current');
+					if(currentPlaylistItem && window._playlistData && window._playlistData.playlist) {
+						const currentIndex = window._playlistData.current_index;
+						if(currentIndex >= 0 && currentIndex < window._playlistData.playlist.length) {
+							const playlistItem = window._playlistData.playlist[currentIndex];
+							const playlistDuration = playlistItem.duration || 0;
+							if(playlistDuration > 0) {
+								duration = playlistDuration;
+								label += ' ['+ fmt(currentTime) +' / '+ fmt(playlistDuration) + (isPaused?' | 暂停':'') +']';
 							} else {
 								label += ' ['+ fmt(currentTime) + (isPaused?' | 暂停':'') +']';
 							}
@@ -344,7 +377,7 @@
 				target.classList.add('playing');
 				expandTo(rel);
 			}
-			// Only reload queue if song changed
+			// Only reload playlist if song changed
 			if(rel !== lastPolledRel && window.loadPlayList){
 				if(window._lastPlayingUrl !== rel) {
 					window._lastPlayingUrl = rel;
@@ -353,8 +386,6 @@
 			}
 			lastPolledRel = rel;
 			lastStatusSnapshot = j;
-			applyStatusToMini(j);
-			applyStatusToFull(j);
 			
 			// Debounce full player sync to reduce DOM thrashing
 			if(fullPlayer && fullPlayer.style.display !== 'none') {
@@ -385,14 +416,14 @@
 		const youtubeTab = document.getElementById('youtubePlaylist');
 		if(youtubeTab && youtubeTab.style.display !== 'none') {
 			// 在 YouTube 页面，控制队列
-			fetch('/play_queue')
+			fetch('/playlist')
 				.then(r => r.json())
 				.then(res => {
-					if(res && res.status === 'OK' && res.queue && res.queue.length > 0) {
+					if(res && res.status === 'OK' && res.playlist && res.playlist.length > 0) {
 						const currentIndex = res.current_index || 0;
 						const prevIndex = currentIndex - 1;
 						if(prevIndex >= 0) {
-							fetch('/play_queue_play', {
+							fetch('/playlist_play', {
 								method: 'POST',
 								headers: {'Content-Type': 'application/x-www-form-urlencoded'},
 								body: `index=${prevIndex}`
@@ -401,7 +432,7 @@
 							.then(res => {
 								if(res && res.status === 'OK') {
 									console.debug('[UI] 播放上一首');
-									// 重新加载队列显示
+									// 重新加载播放列表显示
 									if(window.loadPlayList) window.loadPlayList();
 								}
 							});
@@ -428,14 +459,14 @@
 		const youtubeTab = document.getElementById('youtubePlaylist');
 		if(youtubeTab && youtubeTab.style.display !== 'none') {
 			// 在 YouTube 页面，控制队列
-			fetch('/play_queue')
+			fetch('/playlist')
 				.then(r => r.json())
 				.then(res => {
-					if(res && res.status === 'OK' && res.queue && res.queue.length > 0) {
+					if(res && res.status === 'OK' && res.playlist && res.playlist.length > 0) {
 						const currentIndex = res.current_index || 0;
 						const nextIndex = currentIndex + 1;
-						if(nextIndex < res.queue.length) {
-							fetch('/play_queue_play', {
+						if(nextIndex < res.playlist.length) {
+							fetch('/playlist_play', {
 								method: 'POST',
 								headers: {'Content-Type': 'application/x-www-form-urlencoded'},
 								body: `index=${nextIndex}`
@@ -444,7 +475,7 @@
 							.then(res => {
 								if(res && res.status === 'OK') {
 									console.debug('[UI] 播放下一首');
-									// 重新加载队列显示
+									// 重新加载播放列表显示
 									if(window.loadPlayList) window.loadPlayList();
 								}
 							});
@@ -638,13 +669,19 @@
 				btn.classList.add('active');
 				const tab = btn.dataset.tab;
 				if(tab === 'playlist') {
-					showPlaylistTab(); // 歌单按钮只切换到播放列表视图
-				} else if(tab === 'browse') {
-					if(window.openLocalSongsModal) window.openLocalSongsModal(); // 浏览按钮弹出本地歌曲
+					// 歌单按钮打开歌单管理界面
+					if(window.openPlaylistsModal) {
+						window.openPlaylistsModal();
+					}
+				} else if(tab === 'local') {
+					// 本地：仅打开本地歌曲模态框，不切换隐藏当前歌单视图
+					if(window.openLocalSongsModal) window.openLocalSongsModal();
 				} else if(tab === 'favorites') {
 					// 可扩展：收藏页
+				} else if(tab === 'ranking') {
+					if(window.openRankingModal) window.openRankingModal();
 				} else if(tab === 'search') {
-					// 可扩展：搜索页
+					if(window.openSearchModal) window.openSearchModal();
 				}
 			});
 		});
@@ -1052,7 +1089,7 @@
 			.then(j => {
 				console.debug('[HISTORY] /play API响应:', j);
 				if(j.status === 'OK') {
-					console.debug('[HISTORY] 本地文件已添加到队列:', url);
+					console.debug('[HISTORY] 本地文件已添加到播放列表:', url);
 					// 刷新队列显示
 					setTimeout(() => {
 						console.debug('[HISTORY] 开始刷新队列显示...');
@@ -1071,16 +1108,16 @@
 			const body = 'url=' + encodeURIComponent(url) + '&type=youtube' +
 						(title ? '&title=' + encodeURIComponent(title) : '');
 			console.debug('[HISTORY] 添加YouTube视频到队列:', url);
-			fetch('/play_queue_add', {
+			fetch('/play_song', {
 				method: 'POST',
 				headers: {'Content-Type': 'application/x-www-form-urlencoded'},
 				body: body
 			})
 			.then(r => r.json())
 			.then(j => {
-				console.debug('[HISTORY] /play_queue_add API响应:', j);
+				console.debug('[HISTORY] /play_song API响应:', j);
 				if(j.status === 'OK') {
-					console.debug('[HISTORY] YouTube视频已添加到队列:', url, '队列长度:', j.queue_length);
+					console.debug('[HISTORY] YouTube视频已添加到播放列表:', url, '播放列表长度:', j.playlist_length);
 					// 刷新队列显示
 					setTimeout(() => {
 						console.debug('[HISTORY] 开始刷新队列显示...');
@@ -1411,7 +1448,8 @@
 	const youtubeSearchSection = document.getElementById('youtubeSearchSection');
 	const playListSection = document.getElementById('playListSection');
 	const playListContainer = document.getElementById('playListContainer');
-	const clearQueueBtn = document.getElementById('clearQueueBtn');
+	const clearPlaylistBtn = document.getElementById('clearPlaylistBtn');
+	const currentPlaylistNameEl = document.getElementById('currentPlaylistName');
 	// localStorage keys and limits
 	const STORAGE_KEY = 'youtube_history';
 	const SEARCH_HISTORY_KEY = 'youtube_search_history';
@@ -1511,8 +1549,8 @@
 	}
 
 	// 通用的队列重新排序函数 (用于Desktop和Mobile)
-	function performQueueReorder(sourceIdx, destIdx){
-		fetch('/play_queue_reorder', {
+	function performPlaylistReorder(sourceIdx, destIdx){
+		fetch('/playlist_reorder', {
 			method: 'POST',
 			headers: {'Content-Type': 'application/x-www-form-urlencoded'},
 			body: `from_index=${sourceIdx}&to_index=${destIdx}`
@@ -1520,58 +1558,75 @@
 		.then(r => r.json())
 		.then(res => {
 			if(res && res.status === 'OK') {
-				console.debug('[Queue] 队列已重新排序');
+				console.debug('[Playlist] 播放列表已重新排序');
 				loadPlayList();
 			} else {
-				console.error('[Queue] 排序失败:', res && res.error);
+				console.error('[Playlist] 排序失败:', res && res.error);
 				alert('排序失败: ' + (res && res.error || '未知错误'));
 			}
 		})
 		.catch(e => {
-			console.error('[Queue] 请求失败:', e);
+			console.error('[Playlist] 请求失败:', e);
 			alert('请求失败: ' + e.message);
 		});
 	}
 
-	// Load and display current queue (supports both local and YouTube)
+	// Load and display current playlist (supports both local and YouTube)
 	function loadPlayList(){
 		if(!playListContainer || !playListSection) return;
 		
-		// Always show the queue section
+		// Always show the playlist section
 		playListSection.style.display = 'block';
 		
-		// 始终加载合并的队列（本地 + YouTube）
-		const apiEndpoint = '/combined_queue';
+		// 始终加载播放列表（本地 + YouTube）
+		const apiEndpoint = '/playlist';
 		
 		fetch(apiEndpoint)
 			.then(r => r.json())
 			.then(res => {
-				console.debug('[Queue] API 响应:', res);
-				// 检查 API 返回状态和队列数据有效性
-				if(res && res.status === 'OK' && Array.isArray(res.queue)){
-					// 更新队列URL集合，用于检测重复
-					window._queueUrlSet.clear();
-					res.queue.forEach(item => {
+				console.debug('[Playlist] API 响应:', res);
+				// 检查 API 返回状态和播放列表数据有效性
+				if(res && res.status === 'OK' && Array.isArray(res.playlist)){
+					// 更新播放列表标题显示当前播放列表名称
+					const playListTitle = document.getElementById('playListTitle');
+					if(playListTitle) {
+						// 获取当前歌单信息
+						fetch('/playlists')
+							.then(r => r.json())
+							.then(data => {
+								const playlists = data.playlists || [];
+								const currentId = data.current_playlist_id;
+								const current = playlists.find(p => p.id === currentId);
+								playListTitle.textContent = `${current ? current.name : '当前播放列表'} (${res.playlist.length} 首)`;
+							})
+							.catch(() => {
+								playListTitle.textContent = `当前播放列表 (${res.playlist.length} 首)`;
+							});
+					}
+					// 更新播放列表URL集合，用于检测重复
+					window._playlistUrlSet.clear();
+					res.playlist.forEach(item => {
 						if(item.url) {
-							window._queueUrlSet.add(item.url);
+							window._playlistUrlSet.add(item.url);
 						}
 					});
-					// 保存队列数据到全局变量供 main.js 使用（用于获取时长信息）
-					window._queueData = res;
+					// 保存播放列表数据到全局变量供 main.js 使用（用于获取时长信息）
+					window._playlistData = res;
 					playListContainer.innerHTML = '';
 					
-					if(res.queue.length > 0){
+					if(res.playlist.length > 0){
 						// 注意：current_index 可能为 0，不能用 || 回退
 						const currentIndex = (typeof res.current_index === 'number') ? res.current_index : -1;
-						console.debug('[Queue] 队列项数:', res.queue.length, '当前索引:', currentIndex, 'YouTube数量:', res.youtube_count);
-						res.queue.forEach((item, idx) => {
+						const youtubeCount = res.playlist.filter(item => item.type === 'youtube').length;
+						console.debug('[Playlist] 列表项数:', res.playlist.length, '当前索引:', currentIndex, 'YouTube数量:', youtubeCount);
+						res.playlist.forEach((item, idx) => {
 							const div = document.createElement('div');
-							const inQueue = item.in_queue === true;
+							const inPlaylist = true; // 从当前播放列表API返回的所有歌曲都在列表中
 							div.className = 'play-list-item collapsed';
 							div.dataset.index = idx;
 							div.dataset.type = item.type; // 标记类型
-							div.dataset.inQueue = inQueue ? '1' : '0';
-							div.draggable = inQueue; // 队列中的项（本地和YouTube都支持拖拽）
+							div.dataset.inPlaylist = inPlaylist ? '1' : '0';
+							div.draggable = inPlaylist; // 列表中的项（本地和YouTube都支持拖拽）
 							
 						// 在标题前添加类型标记
 						let typeIcon = item.type === 'youtube' ? '▶️' : '🎵';
@@ -1594,26 +1649,26 @@
 					}
 					
 					const coverHtml = thumbnailUrl ? 
-						`<div class="queue-item-cover"><img src="${thumbnailUrl}" alt="" onerror="this.parentElement.innerHTML='${typeIcon}';"></div>` :
-						`<div class="queue-item-cover">${typeIcon}</div>`;						// 艺术家信息
+						`<div class="playlist-item-cover"><img src="${thumbnailUrl}" alt="" onerror="this.parentElement.innerHTML='${typeIcon}';"></div>` :
+						`<div class="playlist-item-cover">${typeIcon}</div>`;						// 艺术家信息
 						const artist = item.uploader || item.channel || (item.type === 'youtube' ? 'YouTube' : '本地音乐');
 						
 						// 拖拽手柄（当前项和非当前项都支持）
-						const dragHandle = inQueue ? `<span class="drag-handle" title="拖拽排序">☰</span>` : '';
+						const dragHandle = inPlaylist ? `<span class="drag-handle" title="拖拽排序">☰</span>` : '';
 						
 						if(idx === currentIndex) {
 							// 当前项：也可以被拖拽和删除
 							div.classList.add('current', 'expanded');
 							div.innerHTML = `
-								<div class="queue-current-wrapper">
-									<div class="queue-current-left">
+								<div class="playlist-current-wrapper">
+									<div class="playlist-current-left">
 										${coverHtml}
-										<div class="queue-artist">${artist}</div>
+										<div class="playlist-artist">${artist}</div>
 									</div>
-									<div class="queue-item-info">
-										<div class="queue-title">${item.title}</div>
+									<div class="playlist-item-info">
+										<div class="playlist-title">${item.title}</div>
 									</div>
-									<div class="queue-current-badge">Track ${idx + 1} of ${res.queue.length}</div>
+									<div class="playlist-current-badge">Track ${idx + 1} of ${res.playlist.length}</div>
 								</div>
 								${dragHandle}
 								<div class="play-list-item-delete">删除</div>
@@ -1623,9 +1678,9 @@
 							div.innerHTML = `
 								<div class="play-list-item-wrapper">
 									${coverHtml}
-									<div class="queue-item-info">
-										<div class="queue-title">${item.title}</div>
-										<div class="queue-artist">${artist}</div>
+									<div class="playlist-item-info">
+										<div class="playlist-title">${item.title}</div>
+										<div class="playlist-artist">${artist}</div>
 									</div>
 								</div>
 								${dragHandle}
@@ -1641,8 +1696,8 @@
 								e.preventDefault();
 								e.stopPropagation();
 								e.stopImmediatePropagation();
-								console.debug('[Queue] 删除点击', { idx, title: item.title });
-								fetch('/play_queue_remove', {
+								console.debug('[Playlist] 删除点击', { idx, title: item.title });
+								fetch('/playlist_remove', {
 									method: 'POST',
 									headers: {'Content-Type': 'application/x-www-form-urlencoded'},
 									body: `index=${idx}`
@@ -1667,10 +1722,10 @@
 						let isSwiping = false;
 						let swipeThreshold = 80;
 						
-						// 对于当前项，使用 queue-current-wrapper 作为包装器，对于非当前项使用 play-list-item-wrapper
+						// 对于当前项，使用 playlist-current-wrapper 作为包装器，对于非当前项使用 play-list-item-wrapper
 						let swipeWrapper = null;
 						if(idx === currentIndex) {
-							swipeWrapper = div.querySelector('.queue-current-wrapper');
+							swipeWrapper = div.querySelector('.playlist-current-wrapper');
 						} else {
 							swipeWrapper = div.querySelector('.play-list-item-wrapper');
 						}
@@ -1730,97 +1785,48 @@
 								if(e.target.classList.contains('drag-handle')) {
 									return;
 								}
-								// 无论是本地还是YouTube，都使用 /play_queue_play 来正确更新 CURRENT_QUEUE_INDEX
-								console.debug('[Queue] 点击队列项:', item.type, item.title, '索引:', idx, 'inQueue:', inQueue);
+								// 无论是本地还是YouTube，都使用 /playlist_play 来正确更新播放索引
+								console.debug('[Playlist] 点击播放列表项:', item.type, item.title, '索引:', idx, 'inPlaylist:', inPlaylist);
 								if(item.type === 'local') {
-									if(inQueue) {
-										// 队列中的本地文件：idx 就是 PLAY_QUEUE 中的真实索引
-										console.debug('[Queue] 播放本地队列文件，队列索引:', idx);
-										fetch('/play_queue_play', {
-											method: 'POST',
-											headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-											body: `index=${idx}`
-										})
-										.then(r => r.json())
-										.then(res => {
-											if(res && res.status === 'OK') {
-												console.debug('[Queue] 播放本地队列文件成功');
-												setTimeout(() => loadPlayList(), 100);
-											} else {
-												console.error('[Queue] 播放失败:', res && res.error);
-											}
-										})
-										.catch(e => console.error('[Queue] 请求失败:', e));
-									} else {
-										// 历史记录中的本地文件：使用 /play 接口播放（不入队）
-										fetch('/play', {
-											method: 'POST',
-											headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-											body: `path=${encodeURIComponent(item.url)}&skip_history=1`
-										})
-										.then(r => r.json())
-										.then(res => {
-											if(res && res.status === 'OK') {
-												console.debug('[LocalHistory] 播放本地文件:', item.url);
-												setTimeout(() => loadPlayList(), 100);
-											} else {
-												console.error('[LocalHistory] 播放失败:', res && res.error);
-											}
-										})
-										.catch(e => console.error('[LocalHistory] 请求失败:', e));
-									}
+									// 使用 /play 播放本地文件（确保更新当前播放状态）
+									fetch('/play', {
+										method: 'POST',
+										headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+										body: `path=${encodeURIComponent(item.url)}&title=${encodeURIComponent(item.title || '')}&play_now=1`
+									})
+									.then(r => r.json())
+									.then(res => {
+										if(res && res.status === 'OK') {
+											console.debug('[Playlist] 播放本地文件:', item.url);
+											setTimeout(() => loadPlayList(), 100);
+										} else {
+											console.error('[Playlist] 播放失败:', res && res.error);
+										}
+									})
+									.catch(e => console.error('[Playlist] 请求失败:', e));
 								} else if(item.type === 'youtube') {
-									// YouTube 文件：优先在现有队列播放，不在队列则直接添加并播放
-									if(inQueue) {
-										fetch('/play_queue')
-											.then(r => r.json())
-											.then(ytRes => {
-												if(ytRes && ytRes.status === 'OK' && ytRes.queue) {
-													const ytIndex = ytRes.queue.findIndex(q => q.url === item.url);
-													if(ytIndex >= 0) {
-														fetch('/play_queue_play', {
-															method: 'POST',
-															headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-															body: `index=${ytIndex}`
-														})
-														.then(r => r.json())
-														.then(res => {
-															if(res && res.status === 'OK') {
-																console.debug('[PlayList] 播放队列项:', ytIndex);
-																setTimeout(() => loadPlayList(), 100);
-															} else {
-																console.error('[PlayList] 播放失败:', res && res.error);
-															}
-														})
-														.catch(e => console.error('[PlayList] 请求失败:', e));
-													}
-												}
-											})
-											.catch(e => console.error('[PlayList] 获取队列失败:', e));
-									} else {
-										// 不在当前队列：追加到队列尾部（不直接播放）
-										fetch('/play_queue_add', {
-											method: 'POST',
-											headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-											body: 'url=' + encodeURIComponent(item.url) + '&title=' + encodeURIComponent(item.title || '') + '&type=youtube'
-										})
-										.then(r => r.json())
-										.then(res => {
-											if(res && res.status === 'OK') {
-												console.debug('[PlayList] 已追加到队列尾部:', item.url);
-												setTimeout(() => loadPlayList(), 150);
-											} else {
-												console.error('[PlayList] 入队失败:', res && res.error);
-											}
-										})
-										.catch(e => console.error('[PlayList] 入队请求失败:', e));
-									}
+									// 直接使用 /play 播放（若不在列表会自动添加并播放）
+									fetch('/play', {
+										method: 'POST',
+										headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+										body: 'url=' + encodeURIComponent(item.url) + '&title=' + encodeURIComponent(item.title || '') + '&type=youtube&play_now=1'
+									})
+									.then(r => r.json())
+									.then(res => {
+										if(res && res.status === 'OK') {
+											console.debug('[Playlist] 播放 YouTube 文件:', item.url);
+											setTimeout(() => loadPlayList(), 150);
+										} else {
+											console.error('[Playlist] 播放失败:', res && res.error);
+										}
+									})
+									.catch(e => console.error('[Playlist] 请求失败:', e));
 								}
 							});
 						}
 						
 						// 队列中的项都支持拖拽和展开/折叠
-						if(inQueue) {
+						if(inPlaylist) {
 							// 获取拖拽手柄
 							const dragHandle = div.querySelector('.drag-handle');
 							
@@ -1941,7 +1947,7 @@
 									const destIdx = insertAfter ? targetIdx + 1 : targetIdx;
 									
 									console.debug('[Drag] 拖拽完成:', sourceIdx, '到', destIdx);
-									performQueueReorder(sourceIdx, destIdx);
+									performPlaylistReorder(sourceIdx, destIdx);
 								}
 							}, { passive: false });
 							
@@ -2024,7 +2030,7 @@
 										const destIdx = insertAfter ? targetIdx + 1 : targetIdx;
 										
 										console.debug('[Touch] 拖拽完成:', sourceIdx, '到', destIdx);
-										performQueueReorder(sourceIdx, destIdx);
+										performPlaylistReorder(sourceIdx, destIdx);
 									}
 								}
 								
@@ -2057,21 +2063,21 @@
 								// 延迟执行滚动，确保 DOM 已完全渲染
 								setTimeout(() => {
 									currentItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
-									console.debug('[Queue] 已滚动到当前项，索引:', currentIndex);
+									console.debug('[Playlist] 已滚动到当前项，索引:', currentIndex);
 								}, 50);
 							}
 						}
 					} else {
-						// 队列为空，显示提示信息
-						console.debug('[Queue] 队列为空，显示提示');
+						// 播放列表为空，显示提示信息
+						console.debug('[Playlist] 播放列表为空，显示提示');
 						playListContainer.innerHTML = `<div style="padding:16px; text-align:center; color:#888;">
-							<div style="margin-bottom:8px;">暂无队列</div>
-							<div style="font-size:12px; color:#666;">播放本地音乐或YouTube视频后会显示在这里</div>
+							<div style="margin-bottom:8px;">暂无歌曲</div>
+							<div style="font-size:12px; color:#666;">点击搜索添加歌曲</div>
 						</div>`;
 					}
 				} else {
 					// API 返回异常或数据格式错误
-					console.warn('[Queue] API返回数据异常:', res);
+					console.warn('[Playlist] API返回数据异常:', res);
 					playListContainer.innerHTML = `<div style="padding:16px; text-align:center; color:#888;">
 						<div style="margin-bottom:8px;">队列加载失败</div>
 						<div style="font-size:12px; color:#666;">请刷新页面重试</div>
@@ -2079,7 +2085,7 @@
 				}
 			})
 			.catch(e => {
-				console.error('[Queue] 加载队列失败:', e);
+				console.error('[Playlist] 加载播放列表失败:', e);
 				playListContainer.innerHTML = '<div style="padding:16px; text-align:center; color:#888;">加载失败</div>';
 			});
 	}
@@ -2096,7 +2102,7 @@
 	// 清空队列函数
 	function clearPlayList() {
 		if(confirm('确定要清空当前播放队列吗？')) {
-			fetch('/play_queue_clear', {
+			fetch('/playlist_clear', {
 				method: 'POST',
 				headers: {'Content-Type': 'application/x-www-form-urlencoded'}
 			})
@@ -2118,8 +2124,8 @@
 	}
 
 	// 清空队列按钮（保留以兼容旧版本，但不显示）
-	if(clearQueueBtn) {
-		clearQueueBtn.addEventListener('click', clearPlayList, { passive: true });
+	if(clearPlaylistBtn) {
+		clearPlaylistBtn.addEventListener('click', clearPlayList, { passive: true });
 	}
 
 	// 初始化加载历史记录和队列（当DOM就绪时）
@@ -2214,7 +2220,7 @@
 									})
 									.catch(e => console.error('播放请求错误:', e));
 								} else {
-									fetch('/play_youtube_queue', {
+									fetch('/play_youtube_playlist', {
 										method: 'POST',
 										headers: {'Content-Type': 'application/x-www-form-urlencoded'},
 										body: 'url=' + encodeURIComponent(url)
@@ -2331,7 +2337,7 @@
 		const youtubeSearchHistory = document.getElementById('youtubeSearchHistory');
 		const youtubeSearchHistoryList = document.getElementById('youtubeSearchHistoryList');
 		const historyMenuBtn = document.getElementById('historyMenuBtn');
-		const clearQueueMenuBtn = document.getElementById('clearQueueMenuBtn');
+		const clearPlaylistMenuBtn = document.getElementById('clearPlaylistMenuBtn');
 		const youtubeSearchModal = document.getElementById('youtubeSearchModal');
 		const youtubeSearchModalList = document.getElementById('youtubeSearchModalList');
 		const youtubeSearchModalClose = document.querySelector('.youtube-search-modal-close');
@@ -2397,8 +2403,8 @@
 			}, { passive: true });
 		}
 
-		if(clearQueueMenuBtn) {
-			clearQueueMenuBtn.addEventListener('click', () => {
+		if(clearPlaylistMenuBtn) {
+			clearPlaylistMenuBtn.addEventListener('click', () => {
 				youtubeMenu.style.display = 'none';
 				clearPlayList();
 			}, { passive: true });
@@ -2492,32 +2498,15 @@
 							}).join('');
 							youtubeSearchModal.classList.add('show');
 
-							// Add click handlers - add to queue without interrupting playback
+							// Add click handlers - Add to playlist without interrupting playback
 							youtubeSearchModalList.querySelectorAll('.youtube-search-item').forEach(item => {
 								item.addEventListener('click', (e) => {
 									const url = item.dataset.url;
 									const title = item.dataset.title;
 									if(url) {
-										fetch('/play', {
-											method: 'POST',
-											headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-											body: `url=${encodeURIComponent(url)}&play_now=0`
-										})
-										.then(r => r.json())
-										.then(res => {
-											if(res && res.status === 'OK') {
-												console.debug('[UI] 已添加到队列:', title);
-												item.classList.add('added-to-queue');
-												loadPlayList();
-											} else {
-												console.error('[UI] 添加失败:', res && res.error);
-												alert('添加到队列失败: ' + (res && res.error || '未知错误'));
-											}
-										})
-										.catch(e => {
-											console.error('[UI] 请求失败:', e);
-											alert('添加到队列失败: ' + e.message);
-										});
+										console.debug('[YouTube] 添加播放列表项到队列:', title, url);
+										addToPlaylist(url, title, 'youtube');
+										item.classList.add('added-to-playlist');
 									}
 								});
 							});
@@ -2602,35 +2591,15 @@
 					}).join('');
 					youtubeSearchModal.classList.add('show');
 
-					// Add click handlers - add to queue without interrupting playback
+					// Add click handlers - Add to playlist without interrupting playback
 					youtubeSearchModalList.querySelectorAll('.youtube-search-item').forEach(item => {
 						item.addEventListener('click', (e) => {
 							const url = item.dataset.url;
 							const title = item.dataset.title;
 							if(url) {
-								// 添加到队列而不中断当前播放
-								fetch('/play', {
-									method: 'POST',
-									headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-									body: `url=${encodeURIComponent(url)}&play_now=0`
-								})
-								.then(r => r.json())
-								.then(res => {
-									if(res && res.status === 'OK') {
-										console.debug('[UI] 已添加到队列:', title);
-										// 改变背景色表示已添加
-										item.classList.add('added-to-queue');
-										// 重新加载队列显示
-										loadPlayList();
-									} else {
-										console.error('[UI] 添加失败:', res && res.error);
-										alert('添加到队列失败: ' + (res && res.error || '未知错误'));
-									}
-								})
-								.catch(e => {
-									console.error('[UI] 请求失败:', e);
-									alert('添加到队列失败: ' + e.message);
-								});
+								console.debug('[YouTube] 添加搜索结果到队列:', title, url);
+								addToPlaylist(url, title, 'youtube');
+								item.classList.add('added-to-playlist');
 							}
 						});
 					});
@@ -2665,62 +2634,9 @@
 	const miniPlayerProgressFill = document.getElementById('miniPlayerProgressFill');
 	
 	// Update mini player status
-	function updateMiniPlayer() {
-		fetch('/status').then(r=>r.json()).then(j=>{
-			if(j.status!=='OK') return;
-			
-			const rel = j.playing ? (j.playing.rel || j.playing.url) : null;
-			if(!j.playing || !rel) {
-				miniPlayerTitle.textContent = '未播放';
-				miniPlayerArtist.textContent = '--';
-				miniPlayerProgressFill.style.width = '0%';
-				const coverImg = document.getElementById('miniPlayerCover');
-				if(coverImg) coverImg.style.display = 'none';
-				return;
-			}
-			
-			// Update cover image
-			const coverImg = document.getElementById('miniPlayerCover');
-			const thumbnail = j.playing.thumbnail_url || j.playing.thumbnail || '';
-			if(coverImg) {
-				if(thumbnail) {
-					coverImg.src = thumbnail;
-					coverImg.style.display = 'block';
-					coverImg.onerror = () => { coverImg.style.display = 'none'; };
-				} else {
-					coverImg.style.display = 'none';
-				}
-			}
-			
-			// Update title
-			let displayName = (j.playing.media_title && j.playing.media_title.length) ? j.playing.media_title : null;
-			if(!displayName) {
-				const nameField = j.playing.name || rel || '';
-				displayName = nameField.startsWith('http') ? '加载中…' : nameField;
-			}
-			miniPlayerTitle.textContent = displayName;
-			
-			// Update artist/source
-			if(j.playing.type === 'youtube') {
-				miniPlayerArtist.textContent = 'YouTube';
-			} else {
-				miniPlayerArtist.textContent = '本地音乐';
-			}
-			
-			// Update progress bar
-			let duration = (j.mpv && j.mpv.duration) || 0;
-			if(j.mpv && j.mpv.time!=null && duration > 0) {
-				const t = j.mpv.time || 0;
-				const pct = Math.min(100, Math.max(0, t/duration*100));
-				miniPlayerProgressFill.style.width = pct.toFixed(2) + '%';
-			}
-			
-			// Update play/pause button
-			if(j.mpv) {
-				miniPlayPauseBtn.textContent = j.mpv.paused ? '▶' : '⏸';
-			}
-		}).catch(e => console.error('[MiniPlayer] Update failed:', e));
-	}
+	
+	// Mini player updates are handled by the main pollStatus function
+	// which calls applyStatusToMini() every 2 seconds
 	
 	// Mini player play/pause button event
 	if(miniPlayPauseBtn) {
@@ -2730,7 +2646,8 @@
 				.then(r=>r.json())
 				.then(j=>{
 					if(j && j.status === 'OK') {
-						setTimeout(updateMiniPlayer, 100);
+						// Trigger immediate status update via pollStatus
+						setTimeout(pollStatus, 100);
 					}
 				})
 				.catch(err => console.error('[MiniPlayer] Pause failed:', err));
@@ -2741,31 +2658,16 @@
 	if(miniNextBtn) {
 		miniNextBtn.addEventListener('click', (e) => {
 			e.stopPropagation();
-			// Try queue_next first (for YouTube queue), fallback to /next (for local playlist)
-			fetch('/queue_next', {method:'POST'})
-				.then(r => r.json())
-				.then(j=>{
-					if(j && j.status === 'OK') {
-						setTimeout(updateMiniPlayer, 100);
-					}
-				})
-				.catch(err => {
-					console.warn('[MiniPlayer] queue_next failed, trying /next:', err);
-					// Fallback to /next
-					fetch('/next', {method:'POST'})
-						.then(r => r.json())
-						.then(j=>{
-							if(j && j.status === 'OK') {
-								setTimeout(updateMiniPlayer, 100);
-							}
-						})
-						.catch(err2 => console.error('[MiniPlayer] Both next endpoints failed:', err2));
-				});
+			// Use the same smart logic as full player by clicking the main next button
+			const nextBtn = document.getElementById('nextBtn');
+			if(nextBtn) {
+				nextBtn.click();
+			}
 		});
 	}
 	
-	// Mini player updates via main.js 5s status poll
-	updateMiniPlayer(); // Call once on init
+	// Mini player updates via main.js status poll (pollStatus calls applyStatusToMini)
+	// updateMiniPlayer is kept for backward compatibility but not called automatically
 
 	// ===== Search Modal =====
 	const searchModal = document.getElementById('searchModal');
@@ -2940,8 +2842,8 @@
 		} else if(isYouTubeUrl && !isPlaylist) {
 			// 是单个视频 URL，直接添加到队列
 			console.debug('[Search] 检测到单个视频 URL，添加到队列');
-			addToQueue(query, '加载中…', 'youtube');
-			searchModalBody.innerHTML = '<div class="search-suggestions"><div class="search-placeholder"><span class="search-placeholder-icon">✅</span><p>已添加到队列</p></div></div>';
+			addToPlaylist(query, '加载中…', 'youtube');
+			searchModalBody.innerHTML = '<div class="search-suggestions"><div class="search-placeholder"><span class="search-placeholder-icon">✅</span><p>已添加到播放列表</p></div></div>';
 			setTimeout(() => {
 				closeSearchModal();
 			}, 1000);
@@ -3013,7 +2915,7 @@
 			const url = item.dataset.url;
 			const title = entries[idx].title;
 			
-			// Click anywhere on item to add to queue
+			// Click anywhere on item to Add to playlist
 			item.addEventListener('click', (e) => {
 				// Prevent double-trigger when clicking button
 				if(e.target.classList.contains('search-result-action')) {
@@ -3025,14 +2927,14 @@
 				}
 				
 				// 防止重复添加同一个结果
-				if(item.classList.contains('added-to-queue')) {
-					console.debug('[UI] 该项已添加到队列');
+				if(item.classList.contains('added-to-playlist')) {
+					console.debug('[UI] 该项已添加到播放列表');
 					return;
 				}
 				
 				console.debug('[UI] 添加播放列表项到队列:', title, url);
-				addToQueue(url, title, 'youtube');
-				item.classList.add('added-to-queue');
+				addToPlaylist(url, title, 'youtube');
+				item.classList.add('added-to-playlist');
 			});
 			
 			// Also handle button click
@@ -3046,14 +2948,14 @@
 					}
 					
 					// 防止重复添加同一个结果
-					if(item.classList.contains('added-to-queue')) {
-						console.debug('[UI] 该项已添加到队列');
+					if(item.classList.contains('added-to-playlist')) {
+						console.debug('[UI] 该项已添加到播放列表');
 						return;
 					}
 					
 					console.debug('[UI] 添加播放列表项到队列 (按钮):', title, url);
-					addToQueue(url, title, 'youtube');
-					item.classList.add('added-to-queue');
+					addToPlaylist(url, title, 'youtube');
+					item.classList.add('added-to-playlist');
 				});
 			}
 		});
@@ -3141,7 +3043,7 @@
 			const url = item.dataset.url;
 			const title = results[idx].title;
 			
-			// Click anywhere on item to add to queue
+			// Click anywhere on item to Add to playlist
 			item.addEventListener('click', (e) => {
 				// Prevent double-trigger when clicking button
 				if(e.target.classList.contains('search-result-action')) {
@@ -3152,8 +3054,8 @@
 					return;
 				}
 				console.debug('[UI] 添加搜索结果到队列:', title, url);
-				addToQueue(url, title, 'youtube');
-				item.classList.add('added-to-queue');
+				addToPlaylist(url, title, 'youtube');
+				item.classList.add('added-to-playlist');
 			});
 			
 			// Also handle button click
@@ -3166,23 +3068,23 @@
 						return;
 					}
 					console.debug('[UI] 添加搜索结果到队列 (按钮):', title, url);
-					addToQueue(url, title, 'youtube');
-					item.classList.add('added-to-queue');
+					addToPlaylist(url, title, 'youtube');
+					item.classList.add('added-to-playlist');
 				});
 			}
 		});
 	}
 	
-	// Add to queue helper
-	function addToQueue(url, title, type) {
-		// 检查该歌曲是否已在队列中
-		if(window._queueUrlSet && window._queueUrlSet.has(url)) {
-			console.debug('[UI] 该歌曲已在队列中:', title);
+	// Add to playlist helper
+	function addToPlaylist(url, title, type) {
+		// 检查该歌曲是否已在播放列表中
+		if(window._playlistUrlSet && window._playlistUrlSet.has(url)) {
+			console.debug('[UI] 该歌曲已在播放列表中:', title);
 			alert('该歌曲已经在播放列表中，无法重复添加');
 			return;
 		}
 		
-		fetch('/youtube_queue_add', {
+		fetch('/playlist_add', {
 			method: 'POST',
 			headers: {'Content-Type': 'application/x-www-form-urlencoded'},
 			body: `url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}&type=${type}`
@@ -3190,118 +3092,54 @@
 		.then(r => r.json())
 		.then(res => {
 			if(res && res.status === 'OK') {
-				console.debug('[UI] 已添加到队列:', title);
-				// 添加到队列URL集合
-				if(window._queueUrlSet) {
-					window._queueUrlSet.add(url);
+				console.debug('[UI] 已添加到播放列表:', title);
+				// 添加到播放列表URL集合
+				if(window._playlistUrlSet) {
+					window._playlistUrlSet.add(url);
 				}
-				// Reload queue display
+				// Reload playlist display
 				if(window.loadPlayList) window.loadPlayList();
-			} else {
-				console.error('[UI] 添加失败:', res && res.error);
-				alert('添加到队列失败: ' + (res && res.error || '未知错误'));
+			} else if(res && res.error) {
+				console.warn('[UI] 添加失败:', res.error);
+				alert(res.error || '添加失败');
 			}
 		})
-		.catch(e => {
-			console.error('[UI] 请求失败:', e);
-			alert('添加到队列失败: ' + e.message);
-		});
-	}
-
-	// ===== Bottom Navigation Tab Switching =====
-	const bottomNav = document.getElementById('bottomNav');
-	const navItems = document.querySelectorAll('.nav-item');
-	const tabContents = document.querySelectorAll('.tab-content');
-	let playlistTabActive = false; // Track if playlist (local songs) modal is open
-	
-	if(bottomNav) {
-		navItems.forEach(item => {
-			item.addEventListener('click', () => {
-				const tabName = item.dataset.tab;
-				
-				// Update active state
-				navItems.forEach(nav => nav.classList.remove('active'));
-				item.classList.add('active');
-				
-				// Special handling for playlist button - open playlists modal
-				if(tabName === 'playlist') {
-					if(window.openPlaylistsModal) {
-						window.openPlaylistsModal();
-					}
-					return;
-				}
-				
-				// Special handling for ranking button - open ranking modal
-				if(tabName === 'ranking') {
-					if(window.openRankingModal) {
-						window.openRankingModal();
-					}
-					return;
-				}
-				
-				// Special handling: browse opens local songs modal
-				if(tabName === 'browse') {
-					const localSongsModal = document.getElementById('localSongsModal');
-					if(playlistTabActive && localSongsModal && localSongsModal.style.display === 'block') {
-						// Second click - close the modal
-						if(window.closeLocalSongsModal) {
-							window.closeLocalSongsModal();
-						}
-						playlistTabActive = false;
-						// Remove active state
-						navItems.forEach(nav => nav.classList.remove('active'));
-					} else {
-						// First click - open the modal
-						if(window.openLocalSongsModal) {
-							window.openLocalSongsModal();
-						}
-						playlistTabActive = true;
-					}
-					return;
-				}
-			
-				// Reset modal state for other tabs
-				playlistTabActive = false;
-				const localSongsModal = document.getElementById('localSongsModal');
-				if(localSongsModal && localSongsModal.style.display === 'block') {
-					if(window.closeLocalSongsModal) {
-						window.closeLocalSongsModal();
-					}
-				}
-				
-				// Hide all tabs, then show the selected one
-				tabContents.forEach(tab => {
-					tab.style.display = 'none';
-				});
-				
-				// Map navigation tab names to corresponding tab elements
-				let selectedTab = null;
-				if(tabName === 'favorites' || tabName === 'playlist') {
-					// favorites and playlist map to youtube playlist
-					selectedTab = document.getElementById('youtubePlaylist');
-				} else if(tabName === 'search') {
-					selectedTab = document.getElementById('youtubePlaylist');
-					openSearchModal();
-				}
-				
-				// Show selected tab
-				if(selectedTab) {
-					selectedTab.style.display = 'flex';
-				}
-			});
+		.catch(err => {
+			console.error('[UI] 添加到队列失败:', err);
+			alert('添加失败，请重试');
 		});
 	}
 
 	// 暴露 loadPlayList 到全局作用域，供其他脚本使用
 	window.loadPlayList = loadPlayList;
-	// queueUrlSet 已在声明时通过 window._queueUrlSet 暴露
-	window.addToQueue = addToQueue;
+	window.openSearchModal = openSearchModal;
+	window.closeSearchModal = closeSearchModal;
+	// playlistUrlSet 已在声明时通过 window._playlistUrlSet 暴露
+	// 初始化当前歌单名称显示
+	fetchCurrentPlaylistName();
 
 	// ============= 多歌单管理功能 =============
 	const playlistsModal = document.getElementById('playlistsModal');
 	const playlistsBackBtn = document.getElementById('playlistsBackBtn');
 	const playlistsAddBtn = document.getElementById('playlistsAddBtn');
 	const playlistsModalBody = document.getElementById('playlistsModalBody');
+
+	function setCurrentPlaylistName(name) {
+		if (!currentPlaylistNameEl) return;
+		currentPlaylistNameEl.textContent = `歌单：${name || '--'}`;
+	}
+
+	function fetchCurrentPlaylistName() {
+		fetch('/playlists')
+			.then(r => r.json())
+			.then(data => {
+				const playlists = data.playlists || [];
+				const currentId = data.current_playlist_id;
+				const current = playlists.find(p => p.id === currentId);
+				setCurrentPlaylistName(current ? current.name : '--');
+			})
+			.catch(() => setCurrentPlaylistName('--'));
+	}
 
 	// 打开歌单选择模态框
 	function openPlaylistsModal() {
@@ -3326,6 +3164,8 @@
 				const playlists = data.playlists || [];
 				const currentPlaylistId = data.current_playlist_id;
 				const defaultPlaylistId = data.default_playlist_id;
+				const current = playlists.find(p => p.id === currentPlaylistId);
+				setCurrentPlaylistName(current ? current.name : '--');
 				renderPlaylists(playlists, currentPlaylistId, defaultPlaylistId);
 			})
 			.catch(err => {
@@ -3340,8 +3180,8 @@
 			playlistsModalBody.innerHTML = `
 				<div class="playlists-empty">
 					<div class="playlists-empty-icon">🎵</div>
-					<div class="playlists-empty-text">暂无歌单</div>
-					<div class="playlists-empty-hint">点击右上角 + 创建新歌单</div>
+					<div class="playlists-empty-text">歌单为空</div>
+					<div class="playlists-empty-hint">点击搜索添加歌曲</div>
 				</div>
 			`;
 			return;
@@ -3356,12 +3196,12 @@
 				</div>
 				<div class="playlist-actions">
 					${pl.id === defaultPlaylistId ? '<span class="default-badge">默认</span>' : ''}
-					<button class="playlist-action-btn edit" data-id="${pl.id}" title="编辑" ${pl.id === defaultPlaylistId ? '' : ''}>
+					${pl.id !== defaultPlaylistId ? `
+					<button class="playlist-action-btn edit" data-id="${pl.id}" title="编辑">
 						<svg width="20" height="20" viewBox="0 0 24 24">
 							<path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="currentColor"/>
 						</svg>
 					</button>
-					${pl.id !== defaultPlaylistId ? `
 					<button class="playlist-action-btn delete" data-id="${pl.id}" title="删除">
 						<svg width="20" height="20" viewBox="0 0 24 24">
 							<path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" fill="currentColor"/>
@@ -3533,6 +3373,7 @@
 	const rankingModalBody = document.getElementById('rankingModalBody');
 	const rankingTabs = document.querySelectorAll('.ranking-tab');
 	const rankingModalClose = document.getElementById('rankingModalClose');
+	const clearHistoryBtn = document.getElementById('clearHistoryBtn');
 	let currentRankingPeriod = 'all';
 
 	// 打开排行榜Modal
@@ -3592,8 +3433,24 @@
 			const url = item.url;
 			if (!playCount[url]) {
 				playCount[url] = 0;
+				
+				// 优先获取歌曲标题，跳过"加载中…"的占位符
+				let title = item.name || item.title || item.display_name || '未知歌曲';
+				
+				// 如果标题是"加载中…"或为空，尝试从URL提取信息
+				if (title === '加载中…' || !title) {
+					if (item.type === 'youtube' && item.url) {
+						// YouTube URL，提取视频ID或URL的一部分作为备用名称
+						title = '未知歌曲';
+					} else if (item.type === 'local' && item.url) {
+						// 本地文件，提取文件名
+						const parts = item.url.split(/[\\/]/);
+						title = parts[parts.length - 1] || '未知歌曲';
+					}
+				}
+				
 				songInfo[url] = {
-					title: item.name || item.title || '未知歌曲',
+					title: title,
 					type: item.type || 'local',
 					url: url,
 					thumbnail_url: item.thumbnail_url || null
@@ -3652,7 +3509,6 @@
 					</div>
 					<div class="ranking-stats">
 						<div class="ranking-plays">${song.plays} 次播放</div>
-						<button class="ranking-play-btn" title="播放">▶</button>
 					</div>
 				</div>
 			`;
@@ -3660,33 +3516,66 @@
 
 		// 添加事件监听
 		document.querySelectorAll('.ranking-item').forEach(item => {
-			const playBtn = item.querySelector('.ranking-play-btn');
 			const url = item.dataset.url;
 			const title = item.dataset.title;
 			const type = item.dataset.type;
 
 			// 点击整行播放
-			item.addEventListener('click', (e) => {
-				if (!e.target.classList.contains('ranking-play-btn')) {
-					playSong(url, title, type);
-				}
+			item.addEventListener('click', () => {
+				playSong(url, title, type);
 			});
-
-			// 点击播放按钮
-			if (playBtn) {
-				playBtn.addEventListener('click', (e) => {
-					e.stopPropagation();
-					playSong(url, title, type);
-				});
-			}
 		});
 	}
 
-	// 播放歌曲 - 统一接口，支持本地和YouTube，不清空当前播放列表
+	// 播放歌曲 - 从排行榜直接播放，不添加到队列
 	function playSong(url, title, type) {
+		// 先检查歌曲是否已在当前播放列表中
+		fetch('/playlist')
+			.then(r => r.json())
+			.then(data => {
+				if (data && data.status === 'OK' && data.playlist) {
+					// 查找是否已存在相同URL的歌曲
+					const existingIndex = data.playlist.findIndex(item => 
+						item.url === url || item.rel === url
+					);
+					
+					if (existingIndex >= 0) {
+						// 如果已存在，直接切换到该歌曲播放
+						console.debug('[Ranking] 歌曲已在播放列表中，直接播放:', title);
+						fetch('/playlist_play', {
+							method: 'POST',
+							headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+							body: `index=${existingIndex}`
+						})
+						.then(r => r.json())
+						.then(res => {
+							if (res && res.status === 'OK') {
+								closeRankingModal();
+								setTimeout(() => pollStatus(), 100);
+							}
+						})
+						.catch(e => console.error('[Ranking] 播放歌曲失败:', e));
+					} else {
+						// 如果不存在，添加到队列后立刻播放
+						playNewSong(url, title, type);
+					}
+				} else {
+					// 获取列表失败，直接添加新歌曲
+					playNewSong(url, title, type);
+				}
+			})
+			.catch(e => {
+				console.error('[Ranking] 获取播放列表失败:', e);
+				// 降级到直接添加新歌曲
+				playNewSong(url, title, type);
+			});
+	}
+
+	function playNewSong(url, title, type) {
+		// 添加新歌曲并立刻播放
 		const params = type === 'youtube' 
-			? `url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}&play_now=1&add_to_queue=1&insert_front=1`
-			: `path=${encodeURIComponent(url)}&play_now=1&add_to_queue=1&insert_front=1`;
+			? `url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}&play_now=1&add_to_queue=1`
+			: `path=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}&play_now=1&add_to_queue=1`;
 		
 		fetch('/play', {
 			method: 'POST',
@@ -3698,23 +3587,14 @@
 			if (res && res.status === 'OK') {
 				console.debug('[Ranking] 播放歌曲:', title);
 				closeRankingModal();
-				// 歌曲开始播放后确保播放状态并刷新页面
+				// 刷新播放列表显示
 				setTimeout(() => {
-					// 调用确保播放接口（如果暂停则恢复播放）
-					fetch('/ensure_playing', {method:'POST'})
-						.then(r => r.json())
-						.then(j => {
-							console.debug('[Ranking] 确保播放状态:', j);
-						})
-						.catch(e => console.error('[Ranking] 确保播放失败:', e))
-						.finally(() => {
-							// 最后刷新页面
-							location.reload();
-						});
-				}, 800);
+					loadPlayList();
+					pollStatus();
+				}, 200);
 			}
 		})
-		.catch(e => console.error('[Ranking] 播放失败:', e));
+		.catch(e => console.error('[Ranking] 播放歌曲失败:', e));
 	}
 
 	// 排行榜标签切换
@@ -3730,6 +3610,40 @@
 	// 关闭按钮事件
 	if (rankingModalClose) {
 		rankingModalClose.addEventListener('click', closeRankingModal);
+	}
+
+	// 清除历史按钮事件
+	if (clearHistoryBtn) {
+		clearHistoryBtn.addEventListener('click', () => {
+			// 请求密码
+			const password = prompt('请输入密码以清除播放历史：');
+			if (!password) return;
+			
+			// 验证密码
+			if (password !== 'admin123') {
+				alert('密码错误！');
+				return;
+			}
+			
+			if (!confirm('确定要清除所有播放历史吗？此操作不可恢复！')) return;
+			
+			fetch('/playback_history', {
+				method: 'DELETE'
+			})
+			.then(r => r.json())
+			.then(data => {
+				if (data.status === 'OK') {
+					// 重新加载排行榜数据
+					loadRankingData(currentRankingPeriod);
+				} else {
+					alert('清除历史失败: ' + (data.error || '未知错误'));
+				}
+			})
+			.catch(err => {
+				console.error('清除历史失败:', err);
+				alert('清除历史失败');
+			});
+		});
 	}
 
 	// 点击背景关闭

@@ -115,19 +115,45 @@ class BasePlaylist(ABC):
         return f"{self.__class__.__name__}(size={len(self._items)}, current_index={self._current_index})"
 
 
-class PlayQueue(BasePlaylist):
-    """播放队列 - 当前播放的歌曲队列"""
 
+
+# 当前播放列表类
+class Playlist(BasePlaylist):
+    def __init__(self, max_size: int = None):
+        super().__init__(max_size=max_size)
+
+    def to_dict(self) -> dict:
+        return {
+            "items": [item.to_dict() if hasattr(item, 'to_dict') else item for item in self._items],
+            "current_index": self._current_index,
+            "max_size": self._max_size,
+        }
+
+    def from_dict(self, data: dict):
+        if isinstance(data, dict):
+            items = data.get("items", [])
+            self._items = [Song.from_dict(item) if isinstance(item, dict) else item for item in items]
+            self._current_index = data.get("current_index", -1)
+            self._max_size = data.get("max_size", None)
+            if self._current_index >= len(self._items):
+                self._current_index = -1
+
+
+
+
+# LocalPlaylist 已迁移到 models/local_playlist.py
+
+
+# 当前播放列表队列类，兼容旧 PlayQueue 功能
+class CurrentPlaylist(BasePlaylist):
+    """当前播放列表 - 兼容 PlayQueue 的所有功能"""
     def __init__(self):
-        """初始化播放队列"""
-        super().__init__(max_size=None)  # 播放队列无大小限制
+        super().__init__(max_size=None)
 
     def reorder(self, from_index: int, to_index: int):
-        """重新排序：将from_index的歌曲移动到to_index"""
         if 0 <= from_index < len(self._items) and 0 <= to_index < len(self._items):
             song = self._items.pop(from_index)
             self._items.insert(to_index, song)
-            # 调整当前索引
             if self._current_index == from_index:
                 self._current_index = to_index
             elif from_index < self._current_index <= to_index:
@@ -135,66 +161,40 @@ class PlayQueue(BasePlaylist):
             elif to_index <= self._current_index < from_index:
                 self._current_index += 1
 
-    def sort_queue(self, sort_by: str = "add_order", reverse: bool = False):
-        """对播放队列中的项目进行排序（改变队列顺序）
-
-        参数:
-          sort_by: 排序方式
-                  - 'add_order': 按添加顺序（默认）
-                  - 'current_first': 当前播放的歌曲优先（置顶）
-                  - 'type': 按歌曲类型排序（本地在前，串流在后）
-          reverse: 是否反向排序
-        """
+    def sort_playlist(self, sort_by: str = "add_order", reverse: bool = False):
         if self.is_empty():
             return
-
         try:
             if sort_by == "add_order":
-                # 按添加顺序排序（已是添加顺序，仅反向）
                 if reverse:
                     self._items.reverse()
-
             elif sort_by == "current_first":
-                # 当前播放的歌曲优先（置顶）
                 if 0 <= self._current_index < len(self._items):
                     current_song = self._items.pop(self._current_index)
                     self._items.insert(0, current_song)
                     self._current_index = 0
                     if reverse:
                         self._items.reverse()
-
             elif sort_by == "type":
-                # 按歌曲类型排序（本地在前，串流在后）
-                local_songs = [
-                    song for song in self._items if isinstance(song, LocalSong)
-                ]
-                stream_songs = [
-                    song for song in self._items if isinstance(song, StreamSong)
-                ]
-
+                local_songs = [song for song in self._items if isinstance(song, LocalSong)]
+                stream_songs = [song for song in self._items if isinstance(song, StreamSong)]
                 if reverse:
                     self._items = stream_songs + local_songs
                 else:
                     self._items = local_songs + stream_songs
-
-                # 更新当前索引
                 if 0 <= self._current_index < len(self._items):
                     current_song = self._items[self._current_index]
-                    # 重新查找当前歌曲的新位置
                     for idx, song in enumerate(self._items):
                         if song is current_song:
                             self._current_index = idx
                             break
-
-            print(f"[INFO] 播放队列已重排序（sort_by={sort_by}, reverse={reverse}）")
+            print(f"[INFO] 播放列表已重排序（sort_by={sort_by}, reverse={reverse}）")
         except Exception as e:
-            print(f"[ERROR] 播放队列排序失败: {e}")
+            print(f"[ERROR] 播放列表排序失败: {e}")
             import traceback
-
             traceback.print_exc()
 
-    def play(
-        self,
+    def play(self,
         index: int = None,
         save_to_history: bool = True,
         mpv_command_func=None,
@@ -203,37 +203,17 @@ class PlayQueue(BasePlaylist):
         add_to_history_func=None,
         music_dir: str = None,
     ) -> bool:
-        """播放队列中的歌曲
-
-        参数:
-          index: 要播放的歌曲索引（如果为None，播放当前索引的歌曲）
-          save_to_history: 是否保存到播放历史
-          mpv_command_func: mpv命令函数
-          mpv_pipe_exists_func: 检查mpv管道是否存在的函数
-          ensure_mpv_func: 确保mpv运行的函数
-          add_to_history_func: 添加到历史记录的函数
-          music_dir: 音乐库目录（用于解析本地文件相对路径）
-
-        返回:
-          bool: 播放是否成功
-        """
         if index is not None:
             if 0 <= index < len(self._items):
                 self._current_index = index
             else:
-                print(f"[ERROR] PlayQueue.play: 索引 {index} 超出范围")
+                print(f"[ERROR] CurrentPlaylist.play: 索引 {index} 超出范围")
                 return False
-
         song = self.get_current()
         if song is None:
-            print(f"[ERROR] PlayQueue.play: 没有当前歌曲")
+            print(f"[ERROR] CurrentPlaylist.play: 没有当前歌曲")
             return False
-
-        print(
-            f"[DEBUG] PlayQueue.play -> 索引={self._current_index}, 歌曲类型={type(song).__name__}"
-        )
-
-        # 根据歌曲类型调用相应的播放方法
+        print(f"[DEBUG] CurrentPlaylist.play -> 索引={self._current_index}, 歌曲类型={type(song).__name__}")
         if isinstance(song, LocalSong):
             print(f"[DEBUG] 调用本地歌曲播放方法")
             return song.play(
@@ -255,11 +235,10 @@ class PlayQueue(BasePlaylist):
                 music_dir=music_dir,
             )
         else:
-            print(f"[ERROR] PlayQueue.play: 未知的歌曲类型 {type(song)}")
+            print(f"[ERROR] CurrentPlaylist.play: 未知的歌曲类型 {type(song)}")
             return False
 
-    def play_at_index(
-        self,
+    def play_at_index(self,
         index: int,
         save_to_history: bool = True,
         mpv_command_func=None,
@@ -268,24 +247,9 @@ class PlayQueue(BasePlaylist):
         add_to_history_func=None,
         music_dir: str = None,
     ) -> bool:
-        """在指定索引播放歌曲（设置当前索引并播放）
-
-        参数:
-          index: 要播放的歌曲索引
-          save_to_history: 是否保存到播放历史
-          mpv_command_func: mpv命令函数
-          mpv_pipe_exists_func: 检查mpv管道是否存在的函数
-          ensure_mpv_func: 确保mpv运行的函数
-          add_to_history_func: 添加到历史记录的函数
-          music_dir: 音乐库目录（用于解析本地文件相对路径）
-
-        返回:
-          bool: 播放是否成功
-        """
         if index < 0 or index >= len(self._items):
-            print(f"[ERROR] PlayQueue.play_at_index: 索引 {index} 超出范围")
+            print(f"[ERROR] CurrentPlaylist.play_at_index: 索引 {index} 超出范围")
             return False
-
         return self.play(
             index=index,
             save_to_history=save_to_history,
@@ -296,8 +260,7 @@ class PlayQueue(BasePlaylist):
             music_dir=music_dir,
         )
 
-    def play_next(
-        self,
+    def play_next(self,
         save_to_history: bool = True,
         mpv_command_func=None,
         mpv_pipe_exists_func=None,
@@ -305,28 +268,13 @@ class PlayQueue(BasePlaylist):
         add_to_history_func=None,
         music_dir: str = None,
     ) -> bool:
-        """播放下一首歌曲
-
-        参数:
-          save_to_history: 是否保存到播放历史
-          mpv_command_func: mpv命令函数
-          mpv_pipe_exists_func: 检查mpv管道是否存在的函数
-          ensure_mpv_func: 确保mpv运行的函数
-          add_to_history_func: 添加到历史记录的函数
-          music_dir: 音乐库目录（用于解析本地文件相对路径）
-
-        返回:
-          bool: 播放是否成功
-        """
         if not self.has_next():
-            print("[INFO] 已到达播放队列末尾")
+            print("[INFO] 已到达播放列表末尾")
             return False
-
         next_song = self.next()
         if next_song is None:
             return False
-
-        print(f"[INFO] 已自动播放队列中的下一首: {next_song.title}")
+        print(f"[INFO] 已自动播放列表中的下一首: {next_song.title}")
         return self.play(
             save_to_history=save_to_history,
             mpv_command_func=mpv_command_func,
@@ -337,31 +285,26 @@ class PlayQueue(BasePlaylist):
         )
 
     def to_dict(self) -> dict:
-        """转换为字典（包含队列状态）"""
         return {
-            "songs": [song.to_dict() for song in self._items],
+            "items": [item.to_dict() if hasattr(item, 'to_dict') else item for item in self._items],
             "current_index": self._current_index,
         }
 
     def from_dict(self, data: dict):
-        """从字典加载（包含队列状态）"""
         if isinstance(data, dict):
-            songs_data = data.get("songs", [])
-            self._items = [Song.from_dict(song_data) for song_data in songs_data]
+            items = data.get("items", [])
+            self._items = [Song.from_dict(item) if isinstance(item, dict) else item for item in items]
             self._current_index = data.get("current_index", -1)
-            # 确保索引在有效范围内
             if self._current_index >= len(self._items):
                 self._current_index = -1
 
-    def clear_queue(self):
-        """清空播放队列（不停止播放当前歌曲）"""
+    def clear_playlist(self):
         self._items = []
-        # 保留当前正在播放的歌曲的元数据信息，但重置索引
         self._current_index = -1
 
 
-class PlayHistory(BasePlaylist):
-    """播放历史 - 历史播放记录"""
+class PlayHistory(Playlist):
+    """播放历史 - 继承自Playlist，每个Song对象有play_count属性"""
 
     def __init__(self, max_size: int = 50, file_path: str = None):
         """初始化播放历史
@@ -385,39 +328,45 @@ class PlayHistory(BasePlaylist):
         import time
 
         # 查找已存在的同一URL记录
-        existing_item = None
-        for item in self._items:
-            if item.get("url") == url_or_path:
-                existing_item = item
+        existing_song = None
+        existing_index = -1
+        for idx, song in enumerate(self._items):
+            if isinstance(song, Song) and song.url == url_or_path:
+                existing_song = song
+                existing_index = idx
                 break
 
-        if existing_item:
+        if existing_song:
             # 如果已存在，增加play_count并更新时间戳
-            existing_item["play_count"] = existing_item.get("play_count", 1) + 1
-            existing_item["ts"] = int(time.time())
-            existing_item["name"] = name  # 更新名称
-            if thumbnail_url:
-                existing_item["thumbnail_url"] = thumbnail_url
+            if not hasattr(existing_song, 'play_count'):
+                existing_song.play_count = 0
+            existing_song.play_count += 1
+            existing_song.timestamp = int(time.time())
+            existing_song.title = name  # 更新名称
+            if thumbnail_url and hasattr(existing_song, 'thumbnail_url'):
+                existing_song.thumbnail_url = thumbnail_url
             # 将该项移动到列表头部
-            self._items.remove(existing_item)
-            self._items.insert(0, existing_item)
-            print(f"[DEBUG] 已更新播放历史: {name} ({existing_item['type']})，播放次数: {existing_item['play_count']}")
+            self._items.pop(existing_index)
+            self._items.insert(0, existing_song)
+            print(f"[DEBUG] 已更新播放历史: {name} ({existing_song.type})，播放次数: {existing_song.play_count}")
         else:
-            # 如果不存在，创建新记录
-            history_item = {
-                "url": url_or_path,
-                "name": name,
-                "type": "local" if is_local else "youtube",
-                "ts": int(time.time()),
-                "play_count": 1,
-            }
-            if thumbnail_url:
-                history_item["thumbnail_url"] = thumbnail_url
-            self._items.insert(0, history_item)
+            # 如果不存在，创建新Song对象
+            if is_local:
+                song = LocalSong(url_or_path, title=name)
+            else:
+                song = StreamSong(url_or_path, title=name)
+                if thumbnail_url:
+                    song.thumbnail_url = thumbnail_url
+            
+            # 添加播放历史特有属性
+            song.play_count = 1
+            song.timestamp = int(time.time())
+            
+            self._items.insert(0, song)
             # 保持列表大小限制
             if self._max_size and len(self._items) > self._max_size:
                 self._items = self._items[: self._max_size]
-            print(f"[DEBUG] 已添加播放历史: {name} ({history_item['type']})")
+            print(f"[DEBUG] 已添加播放历史: {name} ({song.type})")
 
         # 保存到文件
         if self._file_path:
@@ -432,8 +381,17 @@ class PlayHistory(BasePlaylist):
         if not self._file_path:
             return
         try:
+            # 转换为字典格式保存
+            data = []
+            for song in self._items:
+                song_dict = song.to_dict() if hasattr(song, 'to_dict') else {}
+                # 保存播放历史特有属性
+                song_dict['play_count'] = getattr(song, 'play_count', 1)
+                song_dict['ts'] = getattr(song, 'timestamp', 0)
+                data.append(song_dict)
+            
             with open(self._file_path, "w", encoding="utf-8") as f:
-                json.dump(self._items, f, ensure_ascii=False, indent=2)
+                json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"[ERROR] 保存播放历史失败: {e}")
 
@@ -447,7 +405,15 @@ class PlayHistory(BasePlaylist):
             with open(self._file_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, list):
-                    self._items = data[: self._max_size]
+                    self._items = []
+                    for item in data[: self._max_size]:
+                        # 从字典创建Song对象
+                        song = Song.from_dict(item) if isinstance(item, dict) else None
+                        if song:
+                            # 恢复播放历史特有属性
+                            song.play_count = item.get('play_count', 1)
+                            song.timestamp = item.get('ts', 0)
+                            self._items.append(song)
                     print(f"[INFO] 已加载 {len(self._items)} 条播放历史")
                 else:
                     self._items = []
@@ -463,22 +429,27 @@ class PlayHistory(BasePlaylist):
           **kwargs: 要更新的属性（如 name, title 等）
         """
         if 0 <= index < len(self._items):
-            self._items[index].update(kwargs)
+            song = self._items[index]
+            for key, value in kwargs.items():
+                setattr(song, key, value)
             if self._file_path:
                 self.save()
 
-    def to_dict(self) -> dict:
-        """转换为字典"""
-        return {
-            "items": self._items.copy(),
-            "current_index": self._current_index,
-            "max_size": self._max_size,
-        }
+    def get_all(self) -> list:
+        """获取所有历史记录，返回字典格式以兼容现有API"""
+        result = []
+        for song in self._items:
+            item = song.to_dict() if hasattr(song, 'to_dict') else {}
+            item['play_count'] = getattr(song, 'play_count', 1)
+            item['ts'] = getattr(song, 'timestamp', 0)
+            result.append(item)
+        return result
 
-    def from_dict(self, data: dict):
-        """从字典加载"""
-        if isinstance(data, dict):
-            self._items = data.get("items", [])[: self._max_size]
-            self._current_index = data.get("current_index", -1)
-            if self._current_index >= len(self._items):
-                self._current_index = -1
+    def clear(self):
+        """清空所有播放历史"""
+        self._items = []
+        self._current_index = -1
+        if self._file_path:
+            self.save()
+        print("[INFO] 播放历史已清空")
+

@@ -22,6 +22,9 @@
 	<meta property="og:image:height" content="630" />
 	<meta property="og:image:alt" content="YouTube音乐点播 上麦可选高音质预览图" />
 	<link rel="image_src" href="/static/preview.png" />
+	<!-- Favicon -->
+	<link rel="icon" type="image/x-icon" href="/static/favicon.ico" />
+	<link rel="shortcut icon" href="/static/favicon.ico" />
 	<!-- Twitter / Summary card -->
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content="YouTube音乐点播 上麦可选高音质" />
@@ -68,7 +71,9 @@
 		</div>
 		
 		<div class="play-list-section" id="playListSection">
-		
+			<div class="play-list-header">
+				<h3 class="play-list-title" id="playListTitle">当前播放列表</h3>
+			</div>
 			<div id="playListContainer" class="play-list-container"></div>
 		</div>
 		<!-- YouTube搜索结果模态框 -->
@@ -197,9 +202,9 @@
 			<span class="nav-icon">📚</span>
 			<span class="nav-label">歌单</span>
 		</button>
-		<button class="nav-item" data-tab="browse">
+		<button class="nav-item" data-tab="local">
 			<span class="nav-icon">🎵</span>
-			<span class="nav-label">浏览</span>
+			<span class="nav-label">本地</span>
 		</button>
 		<button class="nav-item" data-tab="ranking">
 			<span class="nav-icon">🏆</span>
@@ -255,12 +260,12 @@
 
 	<!-- Local songs modal -->
 	<div id="localSongsModal" class="history-modal" style="display:none;">
-		<div class="history-modal-content" style="width: 90%; max-width: 600px; max-height: 80vh;">
+		<div class="history-modal-content">
 			<div class="history-modal-header">
 				<h3>本地歌曲</h3>
 				<button class="local-songs-modal-close" data-icon="✕">✕</button>
 			</div>
-			<div class="history-modal-list" id="localSongsModalBody" style="overflow:auto; max-height: calc(80vh - 64px);"></div>
+			<div class="history-modal-list" id="localSongsModalBody"></div>
 		</div>
 	</div>
 
@@ -323,6 +328,8 @@
 						<div class="current-card-meta">
 							<span id="nowPlayingTrackInfo">Track 1 of 1</span>
 						</div>
+						<!-- 当前歌单名称显示 -->
+						<div class="current-playlist-name" id="currentPlaylistName" style="font-weight:bold;font-size:1.1em;margin:8px 0 0 0;color:#2a7;">歌单：--</div>
 						<div class="current-card-next" id="nowPlayingNext">▶ NEXT</div>
 					</div>
 					<button class="current-card-menu">☰</button>
@@ -421,6 +428,12 @@
 			<div class="modal-header">
 				<button class="ranking-modal-close" id="rankingModalClose">✕</button>
 				<h2 class="modal-title">播放排行榜</h2>
+				<button class="clear-history-btn" id="clearHistoryBtn" title="清除播放历史">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+						<path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+					</svg>
+					清除历史
+				</button>
 			</div>
 			<div class="ranking-tabs">
 				<button class="ranking-tab active" data-period="all">全部</button>
