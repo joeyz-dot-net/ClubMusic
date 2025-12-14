@@ -1,0 +1,2083 @@
+/* ????? - ?????? */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow-x: hidden;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: #0a0a0a;
+    color: #ffffff;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #1a1a1a; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #444; }
+
+.tab-content, #tree { padding: 16px; height: 100vh; overflow-y: auto; }
+h1 { font-size: 24px; font-weight: 600; margin-bottom: 16px; }
+
+button {
+    background: #1a1a1a;
+    color: #fff;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+button:hover { background: #222; border-color: #444; }
+button:active { transform: scale(0.98); }
+
+.tabs-nav { display: flex; background: #0a0a0a; border-bottom: 1px solid #222; }
+.tab-btn {
+    flex: 1;
+    padding: 14px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #888;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.tab-btn:hover { color: #fff; background: #111; }
+.tab-btn.active { color: #fff; border-bottom-color: #fff; }
+
+.local-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+}
+.local-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.local-card:hover { background: #1a1a1a; border-color: #333; }
+.local-card-icon {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #1a1a1a;
+    border-radius: 8px;
+    font-size: 24px;
+}
+.local-card-body { flex: 1; min-width: 0; }
+.local-card-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.local-card-meta {
+    font-size: 12px;
+    color: #888;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.local-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+    background: #111;
+    border-radius: 8px;
+    font-size: 13px;
+}
+.breadcrumb-home, .breadcrumb-item {
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.breadcrumb-home:hover, .breadcrumb-item:hover { background: #1a1a1a; }
+.breadcrumb-sep { color: #555; }
+
+.playlist-empty { padding: 40px; text-align: center; color: #666; }
+.playlist-track-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px;
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative; /* 为右下角序列号提供定位 */
+}
+.playlist-track-item:hover { background: #1a1a1a; border-color: #333; }
+.playlist-track-item.current-playing { border-left: 3px solid #fff; }
+
+/* 拖拽样式 */
+.playlist-track-item.drag-over,
+.playlist-track-item.dragging,
+.playlist-track-item.drag-source,
+.playlist-track-item.drag-over-before,
+.playlist-track-item.drag-over-after {
+    /* drag styles removed; classes kept harmless for safety */
+}
+
+.track-cover {
+    width: 70px;
+    height: 70px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #1a1a1a;
+    flex-shrink: 0;
+}
+
+/* 当前播放歌曲的封面增大 */
+.playlist-track-item.current-playing .track-cover {
+    width: 300px;
+    height: 300px;
+    border-radius: 12px;
+}
+
+.track-cover img { width: 100%; height: 100%; object-fit: cover; }
+.track-cover-placeholder { display: none; }
+
+/* 序列号：当前播放右下角，对齐类型垂直方向 */
+.track-seq {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    font-size: 12px;
+    color: #999;
+    background: rgba(0,0,0,0.4);
+    padding: 4px 8px;
+    border-radius: 6px;
+    line-height: 1.2;
+}
+.playlist-track-item.current-playing .track-seq {
+    color: #fff;
+}
+
+/* 左侧：图片 + 类型 */
+.track-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.track-type { 
+    font-size: 11px; 
+    color: #888;
+    text-align: center;
+    max-width: 80px;
+}
+
+/* 中间：标题 + 歌单名称和序列号 */
+.track-info { 
+    flex: 1; 
+
+    /* 歌单管理卡片尺寸（小屏） */
+    .playlist-item { padding: 10px 12px; gap: 10px; }
+    .playlist-icon { width: 44px; height: 44px; font-size: 18px; }
+    .playlist-name { font-size: 14px; }
+    .playlist-count { font-size: 12px; }
+    .playlist-action-btn { width: 32px; height: 32px; border-radius: 10px; }
+    .default-badge { font-size: 11px; padding: 2px 6px; }
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.track-title {
+    font-size: 16px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 非当前播放歌曲的标题 - 单行显示，超出截断 */
+.playlist-track-item:not(.current-playing) .track-title {
+    max-width: 200px;
+}
+
+.track-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #666;
+}
+
+.track-playlist-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100px;
+}
+
+.track-progress { 
+    font-size: 11px; 
+    color: #666;
+    white-space: nowrap;
+}
+
+/* 当前播放歌曲的标题允许多行显示并截断 */
+.playlist-track-item.current-playing .track-title {
+    font-size: 22px;
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.6;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    max-height: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.track-menu-btn {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: #666;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.track-menu-btn:hover { background: #1a1a1a; color: #fff; }
+
+.bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 64px;
+    background: #0a0a0a;
+    border-top: 1px solid #222;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 0 8px;
+    z-index: 99;
+}
+.nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px;
+    background: transparent;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.nav-item.active { color: #fff; }
+.nav-icon { font-size: 24px; }
+.nav-label { font-size: 10px; font-weight: 500; }
+
+#playerBar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #0a0a0a;
+    border-top: 1px solid #222;
+    padding: 12px 16px;
+    z-index: 20;
+}
+#playerBar.footer-collapsed { opacity: 0; pointer-events: none; }
+#playerBar.footer-expanded { opacity: 1; pointer-events: auto; }
+.footer-content { display: flex; flex-direction: column; gap: 8px; }
+
+#playerProgress {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: #222;
+    cursor: pointer;
+}
+#playerProgressFill { height: 100%; background: #fff; width: 0%; transition: width 0.1s; }
+
+/* 歌单管理模态框 */
+.playlists-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #0a0a0a;
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+}
+
+.playlists-modal-content {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #0a0a0a;
+}
+
+.playlists-modal-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    background: #0a0a0a;
+    border-bottom: 1px solid #222;
+    flex-shrink: 0;
+}
+
+.playlists-modal-header h2 {
+    flex: 1;
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.playlists-back-btn,
+.playlists-add-btn {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: #fff;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.playlists-back-btn:hover,
+.playlists-add-btn:hover {
+    background: #1a1a1a;
+}
+
+.playlists-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    padding-bottom: 80px; /* 留出底部导航栏空间 */
+}
+
+/* 歌单列表样式统一 */
+.playlist-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    background: #101010;
+    border: 1px solid #1f1f1f;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    transition: all 0.2s ease;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+}
+
+.playlist-item:hover {
+    border-color: #333;
+    background: #161616;
+    transform: translateY(-2px);
+}
+
+.playlist-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    color: #fff;
+    flex-shrink: 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08), 0 8px 18px rgba(0,0,0,0.35);
+}
+
+.playlist-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.playlist-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.default-badge {
+    background: rgba(255,255,255,0.08);
+    color: #b5b5b5;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+.playlist-count {
+    font-size: 13px;
+    color: #888;
+}
+
+.playlist-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.playlist-action-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    border: 1px solid #222;
+    background: #0f0f0f;
+    color: #ccc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.playlist-action-btn:hover {
+    background: #1b1b1b;
+    color: #fff;
+    border-color: #2d2d2d;
+}
+
+.playlists-empty {
+    padding: 40px 24px;
+    text-align: center;
+    color: #aaa;
+    background: #0f0f0f;
+    border: 1px dashed #2a2a2a;
+    border-radius: 14px;
+}
+
+.playlists-empty-icon {
+    font-size: 42px;
+    margin-bottom: 10px;
+}
+
+.playlists-empty-text {
+    font-size: 16px;
+    font-weight: 600;
+    color: #ddd;
+}
+
+/* 通用模态框样式统一 */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #0a0a0a;
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-content {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #0a0a0a;
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px;
+    background: #0a0a0a;
+    border-bottom: 1px solid #222;
+    flex-shrink: 0;
+}
+
+.modal-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.modal-close, .ranking-modal-close, .history-modal-close, .local-songs-modal-close {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.modal-close:hover, .ranking-modal-close:hover, .history-modal-close:hover, .local-songs-modal-close:hover {
+    background: #1a1a1a;
+}
+
+.modal-body, .ranking-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    padding-bottom: 80px;
+}
+
+/* 排行榜标签页 */
+.ranking-tabs {
+    display: flex;
+    gap: 8px;
+    padding: 16px;
+    border-bottom: 1px solid #222;
+    flex-shrink: 0;
+}
+
+.ranking-tab {
+    flex: 1;
+    padding: 10px;
+    background: transparent;
+    border: 1px solid #333;
+    border-radius: 8px;
+    color: #888;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.ranking-tab:hover {
+    background: #1a1a1a;
+    border-color: #444;
+    color: #fff;
+}
+
+.ranking-tab.active {
+    background: #fff;
+    border-color: #fff;
+    color: #0a0a0a;
+    font-weight: 600;
+}
+
+/* 搜索模态框 */
+.search-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #0a0a0a;
+    z-index: 999;
+}
+
+.search-modal-overlay {
+    display: none;
+}
+
+.search-modal-content {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #0a0a0a;
+}
+
+.search-modal-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    background: #0a0a0a;
+    border-bottom: 1px solid #222;
+    flex-shrink: 0;
+}
+
+.search-modal-back {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.search-modal-back:hover {
+    background: #1a1a1a;
+}
+
+.search-modal-input {
+    flex: 1;
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 8px;
+    padding: 10px 16px;
+    color: #fff;
+    font-size: 15px;
+}
+
+.search-modal-input:focus {
+    outline: none;
+    border-color: #fff;
+    background: #1a1a1a;
+}
+
+.search-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    padding-bottom: 80px;
+}
+
+.search-tabs {
+    position: sticky;
+    top: 0;
+    background: #0a0a0a;
+    padding: 12px 16px;
+    border-bottom: 1px solid #222;
+    flex-shrink: 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    z-index: 10;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.search-tab {
+    flex: 1;
+    padding: 10px 12px;
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 10px;
+    color: #aaa;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 600;
+    min-width: 0;
+}
+
+.search-tab.active {
+    background: #fff;
+    color: #000;
+    border-color: #fff;
+}
+
+.search-tab-panels { width: 100%; }
+
+.search-results-panel {
+    padding: 12px 16px;
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.search-results-panel.active {
+    display: flex;
+}
+
+.search-empty {
+    padding: 32px 12px;
+    text-align: center;
+    color: #666;
+}
+
+/* 搜索结果项目使用播放列表样式 */
+.search-result-item.playlist-track-item {
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 0;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.search-result-item.playlist-track-item:hover {
+    background: #1a1a1a;
+    border-color: #333;
+}
+
+.search-modal-history {
+    padding: 16px;
+    border-bottom: 1px solid #222;
+}
+
+.search-modal-history-actions {
+    display: flex;
+    justify-content: center;
+    padding: 16px;
+    border-top: 1px solid #222;
+}
+
+.search-modal-history-clear {
+    padding: 10px 16px;
+    background: transparent;
+    border: 1px solid #333;
+    border-radius: 6px;
+    color: #999;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.search-modal-history-clear svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+}
+
+.search-modal-history-clear:hover {
+    background: rgba(255, 107, 107, 0.08);
+    border-color: #ff6b6b;
+    color: #ff6b6b;
+}
+
+.search-modal-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.search-history-header {
+    font-size: 13px;
+    font-weight: 600;
+    color: #666;
+    padding: 12px 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.search-history-count {
+    font-size: 12px;
+    color: #555;
+    font-weight: 400;
+}
+
+.search-history-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
+    border: 1px solid #222;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.search-history-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg, #ff6b6b 0%, #4ecdc4 100%);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.search-history-item:hover {
+    background: linear-gradient(135deg, #252525 0%, #1a1a1a 100%);
+    border-color: #333;
+    transform: translateX(4px);
+}
+
+.search-history-item:hover::before {
+    opacity: 1;
+}
+
+.search-history-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+    opacity: 0.6;
+}
+
+.search-history-text {
+    flex: 1;
+    font-size: 14px;
+    color: #ccc;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: color 0.2s ease;
+}
+
+.search-history-item:hover .search-history-text {
+    color: #fff;
+}
+
+.search-history-delete {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: rgba(255, 107, 107, 0.1);
+    border: 1px solid rgba(255, 107, 107, 0.2);
+    border-radius: 6px;
+    color: #ff6b6b;
+    font-size: 18px;
+    font-weight: 300;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    opacity: 0.7;
+}
+
+.search-history-delete:hover {
+    background: rgba(255, 107, 107, 0.2);
+    border-color: rgba(255, 107, 107, 0.4);
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.search-empty-state {
+    padding: 60px 20px;
+    text-align: center;
+    color: #555;
+}
+
+.search-empty-icon {
+    font-size: 56px;
+    display: block;
+    margin-bottom: 16px;
+    opacity: 0.6;
+}
+
+.search-empty-text {
+    font-size: 14px;
+    color: #666;
+    margin: 0;
+}
+
+.search-placeholder {
+    padding: 60px 20px;
+    text-align: center;
+    color: #666;
+}
+
+.search-placeholder-icon {
+    font-size: 48px;
+    display: block;
+    margin-bottom: 16px;
+}
+
+/* 历史记录模态框 */
+.history-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #0a0a0a;
+    z-index: 999;
+}
+
+.history-modal-content {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #0a0a0a;
+}
+
+.history-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px;
+    background: #0a0a0a;
+    border-bottom: 1px solid #222;
+    flex-shrink: 0;
+}
+
+.history-modal-header h3 {
+    flex: 1;
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.history-modal-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    padding-bottom: 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* YouTube搜索结果 */
+.youtube-search-results, .youtube-search-modal {
+    background: #0a0a0a;
+}
+
+.youtube-search-modal-content {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #0a0a0a;
+}
+
+.youtube-search-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px;
+    background: #0a0a0a;
+    border-bottom: 1px solid #222;
+}
+
+.youtube-search-modal-header h3 {
+    flex: 1;
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.youtube-search-modal-close {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.youtube-search-modal-close:hover {
+    background: #1a1a1a;
+}
+
+.youtube-search-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    padding-bottom: 80px;
+}
+
+.youtube-search-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.youtube-search-list, .youtube-search-modal-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* 播放列表区域 */
+.play-list-section {
+    padding: 0;
+}
+
+.play-list-header {
+    padding: 16px;
+    margin-bottom: 0;
+}
+
+.play-list-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.play-list-container {
+    padding: 16px;
+}
+
+/* Mini Player */
+.mini-player {
+    position: fixed;
+    bottom: 64px;
+    left: 0;
+    right: 0;
+    background: #0a0a0a;
+    border-top: 1px solid #222;
+    z-index: 50;
+}
+
+.mini-player-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+}
+
+.mini-player-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+}
+
+.mini-player-cover {
+    width: 48px;
+    height: 48px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #1a1a1a;
+    flex-shrink: 0;
+}
+
+.mini-player-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.mini-player-cover-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+}
+
+.mini-player-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.mini-player-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mini-player-artist {
+    font-size: 12px;
+    color: #888;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mini-player-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.mini-control-btn {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid #333;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.mini-control-btn:hover {
+    background: #1a1a1a;
+    border-color: #444;
+}
+
+.mini-player-progress {
+    height: 2px;
+    background: #222;
+}
+
+.mini-player-progress-fill {
+    height: 100%;
+    background: #fff;
+    width: 0%;
+    transition: width 0.1s;
+}
+
+/* Full Screen Player */
+.full-player {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #0a0a0a;
+    z-index: 999;
+}
+
+.full-player-content {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #0a0a0a;
+}
+
+.full-player-header {
+    display: flex;
+    align-items: center;
+    padding: 16px;
+    flex-shrink: 0;
+}
+
+.full-player-back {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: #fff;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.full-player-back:hover {
+    background: #1a1a1a;
+}
+
+.full-player-artwork {
+    padding: 40px 20px;
+    display: flex;
+    justify-content: center;
+}
+
+.full-player-artwork-container {
+    width: 280px;
+    height: 280px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #1a1a1a;
+    position: relative;
+}
+
+.full-player-artwork-container img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.full-player-artwork-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 80px;
+}
+
+.full-player-info {
+    padding: 0 20px 20px;
+    text-align: center;
+}
+
+.full-player-title {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.full-player-artist {
+    font-size: 16px;
+    color: #888;
+}
+
+.full-player-progress-section {
+    padding: 20px;
+}
+
+.full-player-progress-bar {
+    height: 4px;
+    background: #222;
+    border-radius: 2px;
+    position: relative;
+    cursor: pointer;
+    margin-bottom: 8px;
+}
+
+.full-player-progress-fill {
+    height: 100%;
+    background: #fff;
+    border-radius: 2px;
+    width: 0%;
+}
+
+.full-player-progress-thumb {
+    width: 12px;
+    height: 12px;
+    background: #fff;
+    border-radius: 50%;
+    position: absolute;
+    top: -4px;
+    left: 0%;
+    transform: translateX(-50%);
+}
+
+.full-player-time {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #888;
+}
+
+.full-player-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 20px;
+}
+
+.full-player-control-btn {
+    background: transparent;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+
+.full-player-control-btn:hover {
+    background: #1a1a1a;
+}
+
+.full-player-play-pause {
+    background: #fff;
+    color: #0a0a0a;
+    width: 64px;
+    height: 64px;
+}
+
+.full-player-play-pause:hover {
+    background: #f0f0f0;
+}
+
+.full-player-volume {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 20px 20px;
+}
+
+.full-player-volume-slider {
+    flex: 1;
+}
+
+.full-player-volume-slider input[type="range"] {
+    width: 100%;
+    height: 4px;
+    background: #222;
+    border-radius: 2px;
+    outline: none;
+    -webkit-appearance: none;
+}
+
+.full-player-volume-slider input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    background: #fff;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+/* Now Playing Modal */
+.now-playing-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #0a0a0a;
+    z-index: 999;
+}
+
+.now-playing-content {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #0a0a0a;
+}
+
+.now-playing-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    border-bottom: 1px solid #222;
+    flex-shrink: 0;
+}
+
+.now-playing-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.now-playing-close {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: #fff;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.now-playing-close:hover {
+    background: #1a1a1a;
+}
+
+.now-playing-menu-btn {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.now-playing-menu-btn:hover {
+    background: #1a1a1a;
+}
+
+.now-playing-body {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 80px;
+}
+
+/* Footer控制栏 */
+.footer-expand-btn {
+    background: transparent;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+}
+
+.footer-controls-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.footer-controls-left, .footer-controls-right {
+    display: flex;
+    gap: 8px;
+}
+
+.control-btn {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid #333;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.control-btn:hover {
+    background: #1a1a1a;
+    border-color: #444;
+}
+
+.play-pause-large {
+    width: 56px;
+    height: 56px;
+    font-size: 20px;
+    background: #fff;
+    color: #0a0a0a;
+    border-color: #fff;
+}
+
+.play-pause-large:hover {
+    background: #f0f0f0;
+}
+
+/* 音量弹出框 */
+.volume-popup {
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    width: 48px;
+    height: 160px;
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 24px;
+    padding: 12px;
+    z-index: 100;
+}
+
+.volume-slider-track {
+    width: 100%;
+    height: 100%;
+    background: #222;
+    border-radius: 12px;
+    position: relative;
+    cursor: pointer;
+}
+
+.volume-slider-fill {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 50%;
+    background: #fff;
+    border-radius: 12px;
+    transition: height 0.1s;
+}
+
+.volume-slider-thumb {
+    position: absolute;
+    left: 50%;
+    bottom: 50%;
+    transform: translate(-50%, 50%);
+    width: 16px;
+    height: 16px;
+    background: #fff;
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+@media (max-width: 768px) {
+    /* 基础布局 */
+    .tab-content, #tree { padding: 8px; }
+    h1 { font-size: 18px; }
+    
+    /* 本地文件卡片 */
+    .local-card-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+    .local-card {
+        flex-direction: column;
+        text-align: center;
+        padding: 8px;
+    }
+    .local-card-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 20px;
+    }
+    .local-card-title { font-size: 12px; }
+    .local-card-meta { font-size: 11px; }
+    
+    /* 播放列表 */
+    .playlist-track-item {
+        gap: 12px;
+        padding: 10px;
+        margin-bottom: 6px;
+    }
+    .track-cover { 
+        width: 50px; 
+        height: 50px;
+        min-width: 50px;
+    }
+    .playlist-track-item.current-playing .track-cover {
+        width: 90px;
+        height: 90px;
+    }
+    .track-title { 
+        font-size: 13px; 
+        max-width: 120px;
+    }
+    .playlist-track-item.current-playing .track-title {
+        font-size: 18px;
+        -webkit-line-clamp: 2;
+        max-height: 60px;
+    }
+    .track-type { font-size: 11px; }
+    .track-progress { font-size: 9px; }
+    .track-menu-btn {
+        width: 32px;
+        height: 32px;
+    }
+
+    /* 歌单管理卡片尺寸（平板） */
+    .playlist-item { padding: 12px 14px; gap: 12px; }
+    .playlist-icon { width: 46px; height: 46px; font-size: 20px; }
+    .playlist-name { font-size: 15px; }
+    .playlist-count { font-size: 12px; }
+    .playlist-action-btn { width: 34px; height: 34px; }
+    .default-badge { font-size: 11px; padding: 3px 7px; }
+
+    .track-seq {
+        right: 10px;
+        bottom: 10px;
+        font-size: 11px;
+        padding: 4px 6px;
+    }
+    
+    /* 底部导航栏 */
+    .bottom-nav { height: 56px; }
+    .nav-icon { font-size: 20px; }
+    .nav-label { font-size: 9px; }
+    
+    /* 按钮 */
+    button {
+        padding: 8px 12px;
+        font-size: 12px;
+        border-radius: 6px;
+    }
+    
+    /* 标签页 */
+    .tab-btn { 
+        padding: 10px; 
+        font-size: 12px;
+    }
+    
+    /* 模态框 */
+    .modal-header, .playlists-modal-header, .search-modal-header, .history-modal-header {
+        padding: 12px;
+    }
+    .modal-title, .playlists-modal-header h2, .search-modal-header h3, .history-modal-header h3 {
+        font-size: 18px;
+    }
+    .modal-close, .ranking-modal-close, .history-modal-close,
+    .playlists-back-btn, .playlists-add-btn,
+    .search-modal-back, .full-player-back, .now-playing-close {
+        width: 36px;
+        height: 36px;
+    }
+    
+    /* 全屏播放器 */
+    .full-player-artwork-container {
+        width: 200px;
+        height: 200px;
+    }
+    .full-player-artwork-placeholder { font-size: 60px; }
+    .full-player-title { font-size: 18px; }
+    .full-player-artist { font-size: 14px; }
+    .full-player-control-btn { font-size: 18px; }
+    .full-player-play-pause {
+        width: 56px;
+        height: 56px;
+    }
+    
+    /* 迷你播放器 */
+    .mini-player-cover {
+        width: 40px;
+        height: 40px;
+    }
+    .mini-player-title { font-size: 12px; }
+    .mini-player-artist { font-size: 11px; }
+    .mini-control-btn {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+    }
+    
+    /* 搜索框 */
+    .search-modal-input {
+        padding: 8px 12px;
+        font-size: 14px;
+    }
+    
+    /* 音量弹出框 */
+    .volume-popup {
+        width: 40px;
+        height: 120px;
+        right: 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    /* 超小屏幕优化 */
+    .tab-content, #tree { padding: 6px; }
+    
+    /* 播放列表 - 更小的卡片 */
+    .playlist-track-item {
+        gap: 10px;
+        padding: 8px;
+        margin-bottom: 4px;
+    }
+    .track-cover { 
+        width: 45px; 
+        height: 45px;
+    }
+    .playlist-track-item.current-playing .track-cover {
+        width: 110px;
+        height: 110px;
+    }
+    .track-title { 
+        font-size: 12px; 
+        max-width: 100px;
+    }
+    .playlist-track-item.current-playing .track-title {
+        font-size: 16px;
+        -webkit-line-clamp: 2;
+        max-height: 55px;
+    }
+    .track-type { font-size: 10px; }
+
+    .track-seq {
+        right: 8px;
+        bottom: 8px;
+        font-size: 10px;
+        padding: 3px 6px;
+    }
+    
+    /* 底部导航 */
+    .bottom-nav { height: 52px; padding: 0 4px; }
+    .nav-item { padding: 4px; gap: 2px; }
+    .nav-icon { font-size: 18px; }
+    .nav-label { font-size: 8px; }
+    
+    /* 播放栏控制 */
+    .footer-controls-left, .footer-controls-right { gap: 6px; }
+    .control-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 14px;
+    }
+    .play-pause-large {
+        width: 48px;
+        height: 48px;
+        font-size: 18px;
+    }
+    
+    /* 本地卡片 */
+    .local-card-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+    .local-card-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 18px;
+    }
+    
+    /* 面包屑 */
+    .local-breadcrumb { 
+        padding: 8px; 
+        font-size: 12px;
+        gap: 4px;
+    }
+    
+    /* 模态框 */
+    .modal-body, .playlists-modal-body, .search-modal-body, .history-modal-body, .ranking-modal-body {
+        padding: 12px;
+        padding-bottom: 70px;
+    }
+    
+    /* 排行榜标签 */
+    .ranking-tabs {
+        gap: 6px;
+        padding: 12px;
+    }
+    .ranking-tab {
+        padding: 8px;
+        font-size: 12px;
+    }
+}
+
+/* iPhone 专门优化 */
+@media (max-width: 430px) {
+    /* 播放列表 - iPhone 屏幕很窄 */
+    .playlist-track-item {
+        gap: 8px;
+        padding: 6px;
+        margin-bottom: 4px;
+    }
+    
+    .track-cover { 
+        width: 40px; 
+        height: 40px;
+        min-width: 40px;
+    }
+    
+    .playlist-track-item.current-playing .track-cover {
+        width: 100px;
+        height: 100px;
+    }
+    
+    /* 歌曲名称 - iPhone 需要更激进地截断 */
+    .track-title { 
+        font-size: 13px;
+        max-width: 80px;
+    }
+    
+    .playlist-track-item.current-playing .track-title {
+        font-size: 16px;
+        max-width: 100%;
+        -webkit-line-clamp: 2;
+        max-height: 50px;
+    }
+    
+    .track-type { font-size: 10px; }
+    .track-meta { gap: 4px; font-size: 11px; }
+    .track-playlist-name { max-width: 60px; }
+
+    .track-seq {
+        right: 8px;
+        bottom: 8px;
+        font-size: 10px;
+        padding: 3px 6px;
+    }
+
+    /* 歌单管理卡片尺寸（iPhone） */
+    .playlist-item { padding: 10px 12px; gap: 10px; }
+    .playlist-icon { width: 42px; height: 42px; font-size: 18px; }
+    .playlist-name { font-size: 14px; }
+    .playlist-count { font-size: 12px; }
+    .playlist-action-btn { width: 32px; height: 32px; }
+    
+    .track-menu-btn {
+        width: 28px;
+        height: 28px;
+        padding: 2px;
+    }
+    
+    /* 底部导航 - iPhone 安全区域 */
+    .bottom-nav { 
+        height: 50px;
+        padding-bottom: max(0px, env(safe-area-inset-bottom));
+    }
+    .nav-item { padding: 4px 2px; }
+    .nav-icon { font-size: 16px; }
+    .nav-label { font-size: 8px; }
+    
+    /* 播放栏 */
+    .player-bar { 
+        gap: 8px;
+        padding: 4px 6px;
+    }
+    .player-cover { 
+        width: 36px; 
+        height: 36px; 
+    }
+    .player-title { font-size: 12px; }
+    
+    /* 按钮 - iPhone 触摸目标最少44x44px */
+    button {
+        padding: 10px 12px;
+        font-size: 12px;
+        min-height: 44px;
+    }
+    
+    .control-btn {
+        min-width: 44px;
+        min-height: 44px;
+        font-size: 16px;
+    }
+    
+    /* 搜索框 */
+    .search-modal-input {
+        padding: 12px;
+        font-size: 16px;
+        height: 44px;
+    }
+    
+    /* 全屏播放器 */
+    .full-player-artwork-container {
+        width: 180px;
+        height: 180px;
+    }
+    .full-player-title { font-size: 16px; }
+    .full-player-artist { font-size: 12px; }
+    .full-player-play-pause {
+        width: 50px;
+        height: 50px;
+    }
+}
+
+/* iPhone 12+ 优化 (390px-430px) */
+@media (min-width: 390px) and (max-width: 430px) {
+    /* 播放列表布局 */
+    .playlist-track-item { gap: 10px; padding: 8px; }
+    .track-cover { width: 50px; height: 50px; min-width: 50px; }
+    .playlist-track-item.current-playing .track-cover {
+        width: 120px;
+        height: 120px;
+    }
+
+    .track-title { font-size: 14px; max-width: 120px; }
+    .playlist-track-item.current-playing .track-title {
+        font-size: 18px;
+        -webkit-line-clamp: 2;
+        max-height: 60px;
+    }
+    .track-type { font-size: 11px; }
+    .track-meta { gap: 6px; font-size: 12px; }
+    .track-playlist-name { max-width: 80px; }
+
+    .track-seq {
+        right: 10px;
+        bottom: 10px;
+        font-size: 11px;
+        padding: 4px 6px;
+    }
+
+    /* 歌单管理卡片尺寸（iPhone12+） */
+    .playlist-item { padding: 12px 14px; gap: 12px; }
+    .playlist-icon { width: 46px; height: 46px; font-size: 20px; }
+    .playlist-name { font-size: 15px; }
+    .playlist-count { font-size: 12px; }
+    .playlist-action-btn { width: 34px; height: 34px; }
+
+    /* 底部导航与安全区域 */
+    .bottom-nav { height: 54px; padding-bottom: max(0px, env(safe-area-inset-bottom)); }
+    .nav-item { padding: 4px; gap: 3px; }
+    .nav-icon { font-size: 18px; }
+    .nav-label { font-size: 9px; }
+
+    /* 播放栏 */
+    .player-bar { gap: 10px; padding: 6px; }
+    .player-cover { width: 40px; height: 40px; }
+    .player-title { font-size: 13px; }
+
+    /* 按钮保持 44px 可点击面积 */
+    button { min-height: 44px; }
+    .control-btn { min-width: 44px; min-height: 44px; }
+
+    /* 全屏播放器稍大 */
+    .full-player-artwork-container { width: 200px; height: 200px; }
+    .full-player-title { font-size: 17px; }
+    .full-player-artist { font-size: 13px; }
+    .full-player-play-pause { width: 54px; height: 54px; }
+}
+
+.local-empty { padding: 40px; text-align: center; color: #666; }
+/* 排行榜项目样式 */
+.ranking-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px;
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.ranking-item:hover {
+    background: #1a1a1a;
+    border-color: #333;
+}
+
+.ranking-rank {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+    background: #1a1a1a;
+    flex-shrink: 0;
+}
+
+.ranking-number {
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+}
+
+/* Top 3 排名特殊样式 */
+.ranking-item:nth-child(1) .ranking-rank {
+    background: linear-gradient(135deg, #ffd700, #ffed4e);
+}
+
+.ranking-item:nth-child(1) .ranking-number {
+    color: #333;
+}
+
+.ranking-item:nth-child(2) .ranking-rank {
+    background: linear-gradient(135deg, #c0c0c0, #e8e8e8);
+}
+
+.ranking-item:nth-child(2) .ranking-number {
+    color: #333;
+}
+
+.ranking-item:nth-child(3) .ranking-rank {
+    background: linear-gradient(135deg, #cd7f32, #daa520);
+}
+
+.ranking-item:nth-child(3) .ranking-number {
+    color: #fff;
+}
+
+.ranking-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ranking-title {
+    font-size: 14px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #fff;
+}
+
+.ranking-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    color: #888;
+}
+
+.ranking-count {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ranking-count::before {
+    content: '▶';
+    font-size: 10px;
+    color: #666;
+}
+
+.ranking-date {
+    color: #777;
+}
+
+.ranking-play {
+    flex-shrink: 0;
+}
+
+.ranking-play-btn {
+    padding: 8px 12px;
+    background: transparent;
+    border: 1px solid #333;
+    border-radius: 6px;
+    color: #888;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ranking-play-btn:hover {
+    background: #1a1a1a;
+    border-color: #444;
+    color: #fff;
+}
+
+.ranking-empty {
+    padding: 60px 20px;
+    text-align: center;
+    color: #666;
+}
+
+.ranking-empty-icon {
+    font-size: 48px;
+    display: block;
+    margin-bottom: 16px;
+    opacity: 0.6;
+}
+
+.ranking-empty-text {
+    font-size: 14px;
+    color: #888;
+}

@@ -224,19 +224,32 @@ class StreamSong(Song):
         return "加载中…"
 
     def _extract_video_id(self, url: str) -> str:
-        """从YouTube URL提取视频ID"""
-        if "youtube.com/watch" in url:
-            try:
-                parsed = urlparse(url)
-                video_id = parse_qs(parsed.query).get("v", [None])[0]
-                return video_id or ""
-            except Exception:
-                return ""
-        elif "youtu.be/" in url:
-            try:
-                return url.split("youtu.be/")[1].split("?")[0]
-            except Exception:
-                return ""
+        """从YouTube URL提取视频ID，兼容 watch/shorts/embed/youtu.be 链接"""
+        try:
+            parsed = urlparse(url)
+            host = (parsed.netloc or "").lower()
+            path = parsed.path or ""
+
+            # 标准 watch 链接
+            if "youtube.com" in host and "watch" in path:
+                return parse_qs(parsed.query).get("v", [""
+                ])[0] or ""
+
+            # shorts 链接: https://www.youtube.com/shorts/<id>
+            if "youtube.com" in host and path.startswith("/shorts/"):
+                return path.split("/shorts/")[1].split("/")[0].split("?")[0]
+
+            # embed 链接: https://www.youtube.com/embed/<id>
+            if "youtube.com" in host and path.startswith("/embed/"):
+                return path.split("/embed/")[1].split("/")[0].split("?")[0]
+
+            # youtu.be 短链: https://youtu.be/<id>
+            if "youtu.be" in host:
+                return path.lstrip("/").split("?")[0]
+
+        except Exception:
+            return ""
+
         return ""
 
     def is_youtube(self) -> bool:
@@ -347,13 +360,18 @@ class StreamSong(Song):
                 if result and "entries" in result:
                     for item in result["entries"][:max_results]:
                         if item:
+                            video_id = item.get("id", "")
+                            # 生成缩略图 URL
+                            thumbnail_url = f"https://img.youtube.com/vi/{video_id}/default.jpg" if video_id else ""
                             results.append(
                                 {
-                                    "url": f"https://www.youtube.com/watch?v={item['id']}",
+                                    "url": f"https://www.youtube.com/watch?v={video_id}",
                                     "title": item.get("title", "Unknown"),
                                     "duration": item.get("duration", 0),
                                     "uploader": item.get("uploader", "Unknown"),
-                                    "id": item.get("id", ""),
+                                    "id": video_id,
+                                    "type": "youtube",
+                                    "thumbnail_url": thumbnail_url,
                                 }
                             )
                 print(f"[DEBUG] 搜索完成，找到 {len(results)} 个结果")

@@ -1,5 +1,8 @@
-Flask
+fastapi
+uvicorn[standard]
+python-multipart
 psutil
 requests
 Pillow
 yt-dlp
+pyinstaller

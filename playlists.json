@@ -1,8 +1,7 @@
 {
   "order": [
-    "1765409027829",
     "default",
-    "1765487071325"
+    "1765712869575"
   ],
   "playlists": [
     {
@@ -10,168 +9,104 @@
       "name": "默认歌单",
       "songs": [
         {
-          "url": "https://www.youtube.com/watch?v=Qj2aSallqxI",
-          "title": "从《只想一生跟你走》开始听张学友Jacky Cheung 30分钟精选歌单 |《华语金曲串烧》中国音乐电视 Music TV",
-          "name": "从《只想一生跟你走》开始听张学友Jacky Cheung 30分钟精选歌单 |《华语金曲串烧》中国音乐电视 Music TV",
-          "type": "youtube",
-          "duration": 0,
-          "ts": 1765514531,
-          "thumbnail_url": "https://img.youtube.com/vi/Qj2aSallqxI/default.jpg",
-          "stream_type": "youtube",
-          "video_id": "Qj2aSallqxI"
+          "url": "G.E.M 邓紫棋/启示录/11. G.E.M.邓紫棋 - 离心力.flac",
+          "title": "11. G.E.M.邓紫棋 - 离心力.flac",
+          "type": "local"
         },
         {
-          "url": "Eason 陈奕迅/K 歌之王-陈奕迅._国语.flac",
-          "title": "K 歌之王-陈奕迅._国语",
-          "name": "K 歌之王-陈奕迅._国语",
-          "type": "local",
-          "duration": 0,
-          "ts": 1765514531,
-          "thumbnail_url": null,
-          "file_name": "K 歌之王-陈奕迅._国语.flac",
-          "file_extension": ".flac",
-          "file_size": 0
-        },
-        {
-          "url": "Elva Hsiao 萧亚轩/1087 2006/02. 萧亚轩, 倪子冈 - 然后.flac",
-          "title": "02. 萧亚轩, 倪子冈 - 然后",
-          "name": "02. 萧亚轩, 倪子冈 - 然后",
-          "type": "local",
-          "duration": 0,
-          "ts": 1765514531,
-          "thumbnail_url": null,
-          "file_name": "02. 萧亚轩, 倪子冈 - 然后.flac",
-          "file_extension": ".flac",
-          "file_size": 0
-        },
-        {
-          "url": "Elva Hsiao 萧亚轩/1087 2006/01. 萧亚轩 - 表白.flac",
-          "title": "01. 萧亚轩 - 表白",
-          "name": "01. 萧亚轩 - 表白",
-          "type": "local",
-          "duration": 0,
-          "ts": 1765514531,
-          "thumbnail_url": null,
-          "file_name": "01. 萧亚轩 - 表白.flac",
-          "file_extension": ".flac",
-          "file_size": 0
-        },
-        {
-          "url": "https://www.youtube.com/watch?v=Qj2aSallqxI",
-          "title": "从《只想一生跟你走》开始听张学友Jacky Cheung 30分钟精选歌单 |《华语金曲串烧》中国音乐电视 Music TV",
-          "name": "从《只想一生跟你走》开始听张学友Jacky Cheung 30分钟精选歌单 |《华语金曲串烧》中国音乐电视 Music TV",
-          "type": "youtube",
-          "duration": 0,
-          "ts": 1765514531,
-          "thumbnail_url": "https://img.youtube.com/vi/Qj2aSallqxI/default.jpg",
-          "stream_type": "youtube",
-          "video_id": "Qj2aSallqxI"
+          "url": "Jacky Cheung 张学友/张学友 - 一千个伤心的理由.flac",
+          "title": "张学友 - 一千个伤心的理由",
+          "type": "local"
         },
         {
           "url": "https://www.youtube.com/watch?v=viis5-_JjXQ",
           "title": "【張學友 - Jacky Cheung 粤语歌曲】張學友20精選歌曲《還是覺得妳最好, 分手總要在雨天, 情已逝, 暗戀你, 我醒著做夢, 真情流露, 一千个伤心的理由, 藍雨, ...》",
-          "name": "【張學友 - Jacky Cheung 粤语歌曲】張學友20精選歌曲《還是覺得妳最好, 分手總要在雨天, 情已逝, 暗戀你, 我醒著做夢, 真情流露, 一千个伤心的理由, 藍雨, ...》",
           "type": "youtube",
-          "duration": 0,
-          "ts": 1765514531,
-          "thumbnail_url": "https://img.youtube.com/vi/viis5-_JjXQ/default.jpg",
-          "stream_type": "youtube",
-          "video_id": "viis5-_JjXQ"
+          "thumbnail_url": "https://img.youtube.com/vi/viis5-_JjXQ/default.jpg"
         },
         {
-          "url": "Eason 陈奕迅/K 歌之王-陈奕迅._国语.flac",
-          "title": "K 歌之王-陈奕迅._国语",
-          "name": "K 歌之王-陈奕迅._国语",
-          "type": "local",
-          "duration": 0,
-          "ts": 1765514531,
-          "thumbnail_url": null,
-          "file_name": "K 歌之王-陈奕迅._国语.flac",
-          "file_extension": ".flac",
-          "file_size": 0
+          "url": "Jacky Cheung 张学友/张学友 - 偷心.flac",
+          "title": "张学友 - 偷心",
+          "type": "local"
         },
         {
-          "url": "https://www.youtube.com/watch?v=V51lvMylpNA",
-          "title": "Jophia版-張學友 活出生命live演唱會2004全集 高清",
-          "name": "Jophia版-張學友 活出生命live演唱會2004全集 高清",
+          "url": "Jacky Cheung 张学友/张学友 - 只想一生跟你走.flac",
+          "title": "张学友 - 只想一生跟你走",
+          "type": "local"
+        },
+        {
+          "url": "Stefanie Sun 孫燕姿/2000台北演唱会/03. 孙燕姿 - 很好(Live).flac",
+          "title": "03. 孙燕姿 - 很好(Live)",
+          "type": "local"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=PisAtilDIis",
+          "title": "【歌手2025·纯享】 #单依纯《君》“经典传承”！创新串烧改编 传递跨越时空的怀念 |《歌手2025》| SINGER 2025｜MangoTV",
           "type": "youtube",
-          "duration": 0,
-          "ts": 1765514531,
-          "thumbnail_url": "https://img.youtube.com/vi/V51lvMylpNA/default.jpg",
-          "stream_type": "youtube",
-          "video_id": "V51lvMylpNA"
+          "thumbnail_url": "https://img.youtube.com/vi/PisAtilDIis/default.jpg"
         },
         {
-          "url": "https://www.youtube.com/watch?v=xThHm69dnFA",
-          "title": "【張學友 - Jacky Cheung 2024】張學友傳唱金曲 20 《還是覺得妳最好, 情已逝, 吻別, 暗戀你, 分手總要在雨天, 用餘生去愛, 怎麼捨得你, 李香蘭, ...》",
-          "name": "【張學友 - Jacky Cheung 2024】張學友傳唱金曲 20 《還是覺得妳最好, 情已逝, 吻別, 暗戀你, 分手總要在雨天, 用餘生去愛, 怎麼捨得你, 李香蘭, ...》",
+          "url": "https://www.youtube.com/watch?v=pwmHLAIsJHM",
+          "title": "单依纯 - 永不失联的爱  现场版 中国好声音2020  單依純 - 永不失聯的愛 中國好聲音2020",
           "type": "youtube",
-          "duration": 0,
-          "ts": 1765514531,
-          "thumbnail_url": "https://img.youtube.com/vi/xThHm69dnFA/default.jpg",
-          "stream_type": "youtube",
-          "video_id": "xThHm69dnFA"
+          "thumbnail_url": "https://img.youtube.com/vi/pwmHLAIsJHM/default.jpg"
         },
         {
-          "url": "https://www.youtube.com/watch?v=viis5-_JjXQ",
-          "title": "加载中…",
-          "name": "加载中…",
+          "url": "https://www.youtube.com/watch?v=EtwgTAVeEQc",
+          "title": "“R&B小天后”单依纯十大封神名场面大盘点！唱一首爆一首！天花板级别！#单依纯 #中国好声音 #天赐的声音",
           "type": "youtube",
-          "duration": 0,
-          "ts": 1765514531,
-          "thumbnail_url": "https://img.youtube.com/vi/viis5-_JjXQ/default.jpg",
-          "stream_type": "youtube",
-          "video_id": "viis5-_JjXQ"
+          "thumbnail_url": "https://img.youtube.com/vi/EtwgTAVeEQc/default.jpg"
         },
         {
-          "url": "Black Myth - Wukong FLAC/01. I See.flac",
-          "title": "01. I See",
-          "name": "01. I See",
-          "type": "local",
-          "duration": 0,
-          "ts": 1765514531,
-          "thumbnail_url": null,
-          "file_name": "01. I See.flac",
-          "file_extension": ".flac",
-          "file_size": 0
+          "url": "https://www.youtube.com/watch?v=lGckkwfhJFQ",
+          "title": "单依纯爆裂舞台全回顾 天才R&B歌手！最完美演绎《别问很可怕》💕",
+          "type": "youtube",
+          "thumbnail_url": "https://img.youtube.com/vi/lGckkwfhJFQ/default.jpg"
         },
         {
-          "url": "Bruno Mars - Greatest Songs (2018)/01 - It Will Rain.mp3",
-          "title": "01 - It Will Rain",
-          "name": "01 - It Will Rain",
-          "type": "local",
-          "duration": 0,
-          "ts": 1765514531,
-          "thumbnail_url": null,
-          "file_name": "01 - It Will Rain.mp3",
-          "file_extension": ".mp3",
-          "file_size": 0
+          "url": "https://www.youtube.com/watch?v=iy8-IviW3Qo",
+          "title": "【歌手2025·纯享】 #单依纯 《珠玉》“神女吟唱”！奇幻 迷离又绵延不绝｜《歌手2025》| SINGER 2025｜MangoTV",
+          "type": "youtube",
+          "thumbnail_url": "https://img.youtube.com/vi/iy8-IviW3Qo/default.jpg"
         }
       ],
-      "song_count": 12,
-      "created_at": 1765409027.829439,
-      "updated_at": 1765502819.5780795
+      "song_count": 11,
+      "created_at": 1765711983.6007059,
+      "updated_at": 1765724217.84485
     },
     {
-      "id": "1765487071325",
-      "name": "gedan 1",
+      "id": "1765712869575",
+      "name": "2nd",
       "songs": [
         {
-          "url": "Eason 陈奕迅/K 歌之王-陈奕迅._国语.flac",
-          "title": "K 歌之王-陈奕迅._国语",
-          "name": "K 歌之王-陈奕迅._国语",
-          "type": "local",
-          "duration": 0,
-          "ts": 1765511171,
-          "thumbnail_url": null,
-          "file_name": "K 歌之王-陈奕迅._国语.flac",
-          "file_extension": ".flac",
-          "file_size": 0
+          "url": "单依纯/单依纯 - 不值得 (Live).flac",
+          "title": "单依纯 - 不值得 (Live)",
+          "type": "local"
+        },
+        {
+          "url": "单依纯/单依纯 - 开始懂了 (live).flac",
+          "title": "单依纯 - 开始懂了 (live)",
+          "type": "local"
+        },
+        {
+          "url": "单依纯/单依纯 还有什么更好的.flac",
+          "title": "单依纯 还有什么更好的",
+          "type": "local"
+        },
+        {
+          "url": "单依纯/单依纯 - 爱的回归线 (Live版).flac",
+          "title": "单依纯 - 爱的回归线 (Live版)",
+          "type": "local"
+        },
+        {
+          "url": "G.E.M 邓紫棋/T.I.M.E/01. G.E.M.邓紫棋 - 情人.flac",
+          "title": "01. G.E.M.邓紫棋 - 情人.flac",
+          "type": "local"
         }
       ],
-      "song_count": 1,
-      "created_at": 1765487071.3259008,
-      "updated_at": 1765487071.3259008
+      "song_count": 5,
+      "created_at": 1765712869.5751708,
+      "updated_at": 1765723502.383277
     }
   ]
 }

@@ -30,9 +30,9 @@ class MusicPlayer:
     DEFAULT_CONFIG = {
         "MUSIC_DIR": "Z:",
         "ALLOWED_EXTENSIONS": ".mp3,.wav,.flac",
-        "FLASK_HOST": "0.0.0.0",
-        "FLASK_PORT": "9000",
-        "DEBUG": "true",
+        "SERVER_HOST": "0.0.0.0",
+        "SERVER_PORT": "80",
+        "DEBUG": "false",
         "MPV_CMD": r"c:\mpv\mpv.exe --input-ipc-server=\\.\pipe\mpv-pipe --idle=yes --force-window=no",
     }
 
@@ -117,8 +117,8 @@ class MusicPlayer:
         self,
         music_dir="Z:",
         allowed_extensions=".mp3,.wav,.flac",
-        flask_host="0.0.0.0",
-        flask_port=9000,
+        server_host="0.0.0.0",
+        server_port=80,
         debug=False,
         mpv_cmd=None,
         data_dir=".",
@@ -129,8 +129,8 @@ class MusicPlayer:
         参数:
           music_dir: 音乐库目录路径
           allowed_extensions: 允许的文件扩展名（逗号分隔）
-          flask_host: Flask 服务器主机
-          flask_port: Flask 服务器端口
+          server_host: FastAPI 服务器主机
+          server_port: FastAPI 服务器端口
           debug: 是否启用调试模式
           mpv_cmd: mpv 命令行
           data_dir: 数据文件存储目录
@@ -138,12 +138,16 @@ class MusicPlayer:
         # 配置属性
         self.music_dir = self._normalize_music_dir(music_dir)
         self.allowed_extensions = self._parse_extensions(allowed_extensions)
-        self.flask_host = flask_host
-        self.flask_port = int(flask_port)
+        self.server_host = server_host
+        self.server_port = int(server_port)
         self.debug = debug
         # 使用类方法避免实例绑定问题
         self.mpv_cmd = mpv_cmd or MusicPlayer._get_default_mpv_cmd()
         self.data_dir = data_dir
+        
+        # 向后兼容性：提供 flask_host 和 flask_port 别名（已弃用）
+        self.flask_host = server_host
+        self.flask_port = int(server_port)
 
         # 确保数据目录存在
         if not os.path.exists(self.data_dir):
@@ -194,6 +198,13 @@ class MusicPlayer:
         #print('[DEBUG] 调用 load_current_playlist 前，current_playlist 类型:', type(self.current_playlist))
         self.load_current_playlist()
         #print('[DEBUG] 调用 load_current_playlist 后，current_playlist 类型:', type(self.current_playlist))
+
+        # 构建本地文件树
+        try:
+            self.local_file_tree = self.build_tree()
+        except Exception as e:
+            print(f"[WARN] 构建文件树失败: {e}")
+            self.local_file_tree = {"name": "根目录", "rel": "", "dirs": [], "files": []}
 
         # 初始化 MPV IPC（只加载一次）
         self._init_mpv_ipc()
@@ -251,8 +262,8 @@ class MusicPlayer:
         allowed_ext = cfg.get(
             "ALLOWED_EXTENSIONS", cls.DEFAULT_CONFIG["ALLOWED_EXTENSIONS"]
         )
-        flask_host = cfg.get("FLASK_HOST", cls.DEFAULT_CONFIG["FLASK_HOST"])
-        flask_port_str = cfg.get("FLASK_PORT", cls.DEFAULT_CONFIG["FLASK_PORT"])
+        server_host = cfg.get("SERVER_HOST", cls.DEFAULT_CONFIG["SERVER_HOST"])
+        server_port_str = cfg.get("SERVER_PORT", cls.DEFAULT_CONFIG["SERVER_PORT"])
         debug_str = cfg.get("DEBUG", cls.DEFAULT_CONFIG["DEBUG"])
         debug_flag = debug_str.lower() in ("true", "1", "yes")
         mpv_cmd = cfg.get("MPV_CMD")
@@ -260,8 +271,8 @@ class MusicPlayer:
         print(f"\n[INFO] 配置参数摘要:")
         print(f"[INFO]   MUSIC_DIR: {music_dir}")
         print(f"[INFO]   ALLOWED_EXTENSIONS: {allowed_ext}")
-        print(f"[INFO]   FLASK_HOST: {flask_host}")
-        print(f"[INFO]   FLASK_PORT: {flask_port_str}")
+        print(f"[INFO]   SERVER_HOST: {server_host}")
+        print(f"[INFO]   SERVER_PORT: {server_port_str}")
         print(f"[INFO]   DEBUG: {debug_flag} (原始值: {debug_str})")
         print(f"[INFO]   MPV_CMD: {'已配置' if mpv_cmd else '使用默认'}")
         print(f"[INFO] ===== 配置加载完成 =====\n")
@@ -269,8 +280,8 @@ class MusicPlayer:
         return cls(
             music_dir=music_dir,
             allowed_extensions=allowed_ext,
-            flask_host=flask_host,
-            flask_port=int(flask_port_str),
+            server_host=server_host,
+            server_port=int(server_port_str),
             debug=debug_flag,
             mpv_cmd=mpv_cmd,
             data_dir=data_dir,
@@ -572,7 +583,24 @@ class MusicPlayer:
                 print(f"[INFO] 未找到 yt-dlp，将使用系统 PATH")
             
             print(f"[DEBUG] 完整启动命令: {mpv_launch_cmd}")
-            subprocess.Popen(mpv_launch_cmd, shell=True)
+            
+            # 在 Windows 上使用 CREATE_NEW_PROCESS_GROUP 标志来避免进程被挂起
+            import ctypes
+            CREATE_NEW_PROCESS_GROUP = 0x00000200
+            CREATE_NO_WINDOW = 0x08000000
+            
+            try:
+                # 方法 1: 尝试使用 creationflags（Windows 特定）
+                subprocess.Popen(
+                    mpv_launch_cmd,
+                    shell=False,
+                    creationflags=CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+            except Exception as e2:
+                print(f"[WARN] 第一种启动方式失败: {e2}，尝试 shell=True")
+                subprocess.Popen(mpv_launch_cmd, shell=True)
         except Exception as e:
             print("[ERROR] 启动 mpv 进程失败:", e)
             return False
@@ -819,6 +847,48 @@ class MusicPlayer:
                     tracks.append(rel)
         tracks.sort(key=str.lower)
         return tracks
+
+    def search_local(self, query: str, max_results: int = 20) -> list:
+        """搜索本地音乐库
+        
+        参数:
+          query: 搜索关键词
+          max_results: 最大返回结果数（默认20）
+        
+        返回:
+          匹配的歌曲列表 [{"url": "相对路径", "title": "文件名", "type": "local"}, ...]
+        """
+        if not query or not query.strip():
+            return []
+        
+        query_lower = query.strip().lower()
+        results = []
+        abs_root = os.path.abspath(self.music_dir)
+        
+        try:
+            # 遍历整个音乐目录
+            for dp, _, files in os.walk(abs_root):
+                for filename in files:
+                    ext = os.path.splitext(filename)[1].lower()
+                    if ext in self.allowed_extensions:
+                        # 检查文件名是否包含搜索关键词
+                        if query_lower in filename.lower():
+                            rel_path = os.path.relpath(os.path.join(dp, filename), abs_root).replace("\\", "/")
+                            # 移除扩展名作为标题
+                            title = os.path.splitext(filename)[0]
+                            results.append({
+                                "url": rel_path,
+                                "title": title,
+                                "type": "local"
+                            })
+                            
+                            # 达到最大结果数时停止
+                            if len(results) >= max_results:
+                                return results
+        except Exception as e:
+            print(f"[ERROR] 本地搜索失败: {e}")
+        
+        return results
 
     def build_local_queue(
         self, folder_path: str = None, clear_existing: bool = True

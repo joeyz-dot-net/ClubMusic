@@ -2,6 +2,30 @@
 
 一个功能完整的网页音乐播放器，支持本地文件和 YouTube 音乐串流播放，具有多歌单管理、播放历史追踪、排行榜统计等高级功能。
 
+## 📁 项目文件结构
+
+详见完整文档：[doc/FILE_STRUCTURE.md](doc/FILE_STRUCTURE.md)
+
+**快速导航：**
+- 🔵 **后端核心**：[app.py](app.py) (890+ 行) 和 [models/](models/) 文件夹
+- 🟢 **前端核心**：[templates/index.html](templates/index.html)、[static/js/main-modular.js](static/js/main-modular.js) 和 [static/js/modules/](static/js/modules/) 文件夹
+- 📚 **详细文档**：[doc/](doc/) 文件夹内有 14+ 个详细说明文档
+- ⚙️ **配置文件**：[settings.ini](settings.ini)
+
+**关键文件说明：**
+
+| 文件 | 行数 | 作用 |
+|------|------|------|
+| `app.py` | 891 | FastAPI 应用主文件，包含所有 API 路由 |
+| `main.py` | 56 | 应用启动入口脚本 |
+| `models/player.py` | 1500+ | 播放器核心逻辑，控制 MPV 后端 |
+| `templates/index.html` | 451 | 主页面结构 |
+| `static/js/main-modular.js` | 314 | 前端主入口，协调所有模块 |
+| `static/js/modules/` | 7 个文件 | 功能模块（api、player、playlist、volume、search、ui、utils） |
+| `static/css/style.css` | - | 样式表 |
+
+---
+
 ## ✨ 核心功能
 
 ### 🎼 音乐播放与管理
@@ -33,7 +57,6 @@
   - 本月：过去 30 天的排行
 - **快速播放**：点击排行榜歌曲直接播放
 - **全屏显示**：排行榜以全屏模态框显示（覆盖底部导航栏）
-- **密码保护**：清除播放历史需要输入密码（默认：admin123）
 - **无限制显示**：显示所有有播放记录的歌曲（最多100首）
 
 ### 🔍 搜索功能
@@ -96,6 +119,14 @@
    ```
 
 4. **启动应用**
+   
+   **方式一：FastAPI（推荐）**
+   ```bash
+   # Windows PowerShell
+   python run_fastapi.py
+   ```
+   
+   **方式二：原始 Flask（已弃用）**
    ```bash
    # Windows
    python app.py
@@ -107,7 +138,7 @@
    ```
 
 5. **访问播放器**
-   打开浏览器访问：`http://localhost` 或 `http://127.0.0.1`
+   打开浏览器访问：`http://localhost:9000` （端口在 `settings.ini` 中配置）
 
 ## 📁 项目结构
 
@@ -177,11 +208,8 @@ MusicPlayer/
 2. **切换时间段**：选择 "全部"、"本周" 或 "本月"
 3. **查看排名**：歌曲按播放次数降序显示（显示所有记录，不限10首）
 4. **快速播放**：点击排行榜中的歌曲直接播放
-5. **清除历史**：点击 "清除历史" 按钮
-   - 需要输入密码（默认：**admin123**）
-   - 确认后清除所有播放记录
-6. **关闭排行榜**：点击左上角关闭按钮或背景区域
-7. **全屏显示**：排行榜覆盖整个屏幕（包括底部导航栏）
+5. **关闭排行榜**：点击左上角关闭按钮或背景区域
+6. **全屏显示**：排行榜覆盖整个屏幕（包括底部导航栏）
 
 ### 底部导航
 - **📚 歌单**：查看和管理播放队列
@@ -207,8 +235,7 @@ MusicPlayer/
 
 ### 播放历史
 - `GET /playback_history` - 获取播放历史（包含 play_count）
-- `DELETE /playback_history` - 清除播放历史（需前端密码验证）
-- `POST /play_queue_add_to_history` - 添加到历史记录
+- `POST /song_add_to_history` - 添加到历史记录
 
 ### 歌单管理
 - `GET /playlists` - 获取所有歌单
@@ -241,10 +268,6 @@ MusicPlayer/
 - 播放历史自动递增 play_count
 - 排行榜数据实时更新
 
-### 安全性
-- **密码保护**：清除播放历史需要输入密码（默认：admin123）
-- 密码验证在前端进行，可根据需要修改 `static/main.js` 中的密码
-
 ## 🌐 浏览器兼容性
 
 - Chrome 90+
@@ -259,9 +282,6 @@ MusicPlayer/
 - YouTube URL 进行规范化处理防止重复
 - 文件路径进行安全检查，防止目录遍历
 - 队列 URL 集合追踪防止重复添加
-- **密码保护**：清除播放历史需要输入密码（默认：admin123）
-  - 修改密码：编辑 `static/main.js` 中的密码验证逻辑
-  - 搜索 `password !== 'admin123'` 并修改密码字符串
 
 ## 🐛 已知限制
 

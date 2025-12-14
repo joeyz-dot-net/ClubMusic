@@ -16,27 +16,27 @@
 	<meta property="og:site_name" content="YouTube音乐点播 上麦可选高音质" />
 	<meta property="og:url" content="{{ request.url }}" />
 	<meta property="og:description" content="音乐点播系统，支持YouTube串流" />
-	<meta property="og:image" content="/static/preview.png" />
-	<meta property="og:image:secure_url" content="/static/preview.png" />
+	<meta property="og:image" content="/static/images/preview.png" />
+	<meta property="og:image:secure_url" content="/static/images/preview.png" />
 	<meta property="og:image:width" content="1200" />
 	<meta property="og:image:height" content="630" />
 	<meta property="og:image:alt" content="YouTube音乐点播 上麦可选高音质预览图" />
-	<link rel="image_src" href="/static/preview.png" />
+	<link rel="image_src" href="/static/images/preview.png" />
 	<!-- Favicon -->
-	<link rel="icon" type="image/x-icon" href="/static/favicon.ico" />
-	<link rel="shortcut icon" href="/static/favicon.ico" />
+	<link rel="icon" type="image/x-icon" href="/static/images/favicon.ico" />
+	<link rel="shortcut icon" href="/static/images/favicon.ico" />
 	<!-- Twitter / Summary card -->
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content="YouTube音乐点播 上麦可选高音质" />
 	<meta name="twitter:description" content="音乐点播系统，支持YouTube串流" />
-	<meta name="twitter:image" content="/static/preview.png" />
+	<meta name="twitter:image" content="/static/images/preview.png" />
 	<meta property="og:image:width" content="1200" />
 	<meta property="og:image:height" content="630" />
 	<meta property="og:locale" content="en_US" />
 	
 	<!-- Clubhouse Frames -->
 	<meta property="fc:frame" content="vNext" />
-	<meta property="fc:frame:image" content="/static/preview.png" />
+	<meta property="fc:frame:image" content="/static/images/preview.png" />
 	<meta property="fc:frame:image:aspect_ratio" content="1.91:1" />
 	<meta property="fc:frame:button:1" content="进入点播" />
 	<meta property="fc:frame:button:1:action" content="post_redirect" />
@@ -53,7 +53,7 @@
 	<!-- Compatibility -->
 	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
 	<meta name="renderer" content="webkit" />
-	<link rel="stylesheet" href="/static/style.css" />
+	<link rel="stylesheet" href="/static/css/style.css?v=2" />
 	<style>
 		.footer {
 			height: calc(100% - (2/5 * 100%));
@@ -62,8 +62,8 @@
 </head>
 <body>
 	<script id="boot-data" type="application/json">{{ {'tree': tree, 'musicDir': music_dir}|tojson }}</script>
-	<main id="tree" class="tab-content local-tab local-theme" style="display:none;" aria-label="文件列表"></main>
-	<div id="youtubePlaylist" class="tab-content playlist-tab youtube-theme" aria-label="播放列表">
+	<main id="tree" class="tab-content local-tab local-theme" aria-label="文件列表"></main>
+	<div id="playlist" class="tab-content playlist-tab youtube-theme" aria-label="播放列表">
 		
 		<div id="youtubeSearchResults" class="youtube-search-results" style="display:none;">
 			<h4 class="youtube-search-title">搜索结果</h4>
@@ -198,9 +198,9 @@
 	
 	<!-- Bottom Navigation -->
 	<nav id="bottomNav" class="bottom-nav">
-		<button class="nav-item active" data-tab="playlist">
-			<span class="nav-icon">📚</span>
-			<span class="nav-label">歌单</span>
+		<button class="nav-item active" data-tab="playlists">
+			<span class="nav-icon">📋</span>
+			<span class="nav-label">队列</span>
 		</button>
 		<button class="nav-item" data-tab="local">
 			<span class="nav-icon">🎵</span>
@@ -213,6 +213,10 @@
 		<button class="nav-item" data-tab="search">
 			<span class="nav-icon">🔍</span>
 			<span class="nav-label">搜索</span>
+		</button>
+		<button class="nav-item" id="debugBtn" title="调试面板">
+			<span class="nav-icon">🐛</span>
+			<span class="nav-label">调试</span>
 		</button>
 	</nav>
 	
@@ -278,10 +282,13 @@
 				<input type="text" id="searchModalInput" class="search-modal-input" placeholder="搜索歌曲、艺术家..." autocomplete="off" />
 			</div>
 			<div id="searchModalHistory" class="search-modal-history" style="display:none;">
-				<div class="search-modal-history-actions">
-					<button id="searchModalHistoryClear" class="search-modal-history-clear" type="button">清空历史</button>
-				</div>
 				<div id="searchModalHistoryList" class="search-modal-history-list"></div>
+				<div class="search-modal-history-actions">
+					<button id="searchModalHistoryClear" class="search-modal-history-clear" type="button">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6v12c0 1.1.9 2 2 2h4c1.1 0 2-.9 2-2V6m-5-3h6"></path></svg>
+						清空历史
+					</button>
+				</div>
 			</div>
 			<div class="search-modal-body" id="searchModalBody">
 				<div class="search-suggestions">
@@ -428,12 +435,6 @@
 			<div class="modal-header">
 				<button class="ranking-modal-close" id="rankingModalClose">✕</button>
 				<h2 class="modal-title">播放排行榜</h2>
-				<button class="clear-history-btn" id="clearHistoryBtn" title="清除播放历史">
-					<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-						<path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-					</svg>
-					清除历史
-				</button>
 			</div>
 			<div class="ranking-tabs">
 				<button class="ranking-tab active" data-period="all">全部</button>
@@ -445,7 +446,39 @@
 			</div>
 		</div>
 	</div>
-	
-	<script src="/static/main.js"></script>
+
+	<!-- Debug Modal -->
+	<div id="debugModal" class="modal" style="display:none;">
+		<div class="modal-content" style="max-height: 80vh; overflow-y: auto;">
+			<div class="modal-header">
+				<h3>🐛 调试面板</h3>
+				<button class="modal-close" id="debugModalClose">✕</button>
+			</div>
+			<div class="modal-body" style="padding: 20px; font-family: monospace; font-size: 12px;">
+				<div id="debugContent">
+					<div style="margin-bottom: 20px;">
+						<h4>播放器状态</h4>
+						<div id="debugPlayer" style="background: #1a1a1a; padding: 10px; border-radius: 4px; overflow-x: auto;"></div>
+					</div>
+					<div style="margin-bottom: 20px;">
+						<h4>歌单信息</h4>
+						<div id="debugPlaylist" style="background: #1a1a1a; padding: 10px; border-radius: 4px; overflow-x: auto;"></div>
+					</div>
+					<div style="margin-bottom: 20px;">
+						<h4>本地存储</h4>
+						<div id="debugStorage" style="background: #1a1a1a; padding: 10px; border-radius: 4px; overflow-x: auto;"></div>
+					</div>
+					<div style="margin-bottom: 20px;">
+						<h4>控制台日志</h4>
+						<div id="debugLogs" style="background: #1a1a1a; padding: 10px; border-radius: 4px; max-height: 300px; overflow-y: auto;"></div>
+					</div>
+					<button id="debugRefresh" style="padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer;">刷新</button>
+					<button id="debugClearLogs" style="padding: 8px 16px; background: #ff6b6b; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">清空日志</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<script type="module" src="/static/js/main.js?v=3"></script>
 </body>
 </html>

@@ -10,6 +10,10 @@ import os
 from datetime import datetime
 from typing import List, Dict, Optional
 
+from models.song import StreamSong
+
+DEFAULT_PLAYLIST_ID = "default"
+
 
 class Playlist:
     """单个播放列表"""
@@ -37,6 +41,37 @@ class Playlist:
         self.created_at = created_at or time.time()
         self.updated_at = updated_at or time.time()
 
+        # 确保串流歌曲具备缩略图（兼容旧数据）
+        self._hydrate_stream_thumbnails()
+
+    def _hydrate_stream_thumbnails(self):
+        """补全串流歌曲的缩略图，避免旧数据缺失 thumbnail_url"""
+        changed = False
+        for song_item in self.songs:
+            if not isinstance(song_item, dict):
+                continue
+            s_type = song_item.get("type")
+            if s_type in ("youtube", "stream") and not song_item.get("thumbnail_url"):
+                url = song_item.get("url", "")
+                title = song_item.get("title")
+                duration = song_item.get("duration", 0)
+                try:
+                    stream_song = StreamSong(
+                        stream_url=url,
+                        title=title,
+                        stream_type=s_type,
+                        duration=duration,
+                    )
+                    thumb = stream_song.get_thumbnail_url()
+                    if thumb:
+                        song_item["thumbnail_url"] = thumb
+                        changed = True
+                except Exception:
+                    continue
+        if changed:
+            self.updated_at = time.time()
+        return changed
+
     def add_song(self, song_path_or_dict) -> bool:
         """添加歌曲到歌单
 
@@ -49,6 +84,24 @@ class Playlist:
         # 支持dict和str两种格式
         if isinstance(song_path_or_dict, dict):
             song_item = song_path_or_dict
+            # 补充串流歌曲缩略图
+            if (
+                isinstance(song_item, dict)
+                and song_item.get("type") in ("youtube", "stream")
+                and not song_item.get("thumbnail_url")
+            ):
+                try:
+                    stream_song = StreamSong(
+                        stream_url=song_item.get("url", ""),
+                        title=song_item.get("title"),
+                        stream_type=song_item.get("type"),
+                        duration=song_item.get("duration", 0),
+                    )
+                    thumb = stream_song.get_thumbnail_url()
+                    if thumb:
+                        song_item["thumbnail_url"] = thumb
+                except Exception:
+                    pass
             # 用URL作为唯一键进行去重检查
             url = song_item.get("url")
             if not any(isinstance(s, dict) and s.get("url") == url for s in self.songs):
@@ -62,6 +115,28 @@ class Playlist:
                 self.updated_at = time.time()
                 return True
         return False
+
+    def remove(self, index: int) -> bool:
+        """按索引删除歌曲（兼容旧接口）"""
+        if 0 <= index < len(self.songs):
+            self.songs.pop(index)
+            self.updated_at = time.time()
+            return True
+        return False
+
+    def reorder(self, from_index: int, to_index: int) -> bool:
+        """调整歌曲顺序（兼容旧接口）"""
+        if (
+            from_index is None
+            or to_index is None
+            or not (0 <= from_index < len(self.songs))
+            or not (0 <= to_index < len(self.songs))
+        ):
+            return False
+        song = self.songs.pop(from_index)
+        self.songs.insert(to_index, song)
+        self.updated_at = time.time()
+        return True
 
     def remove_song(self, song_path: str) -> bool:
         """从歌单移除歌曲
@@ -126,6 +201,14 @@ class Playlist:
         self.songs = []
         self.updated_at = time.time()
 
+    def get_all(self) -> List:
+        """获取歌单中的所有歌曲 (兼容 CurrentPlaylist API)"""
+        return self.songs
+
+    def add(self, song) -> bool:
+        """添加歌曲 (兼容 CurrentPlaylist API)"""
+        return self.add_song(song)
+
     def get_song_count(self) -> int:
         """获取歌单中的歌曲数量"""
         return len(self.songs)
@@ -188,11 +271,18 @@ class Playlists:
                         self._order = []
                         playlists_data = data if isinstance(data, list) else []
 
+                    hydration_changed = False
                     for pl_data in playlists_data:
                         pl = Playlist.from_dict(pl_data)
+                        # 再次补全缩略图（兼容旧数据），如有变更稍后保存
+                        if pl._hydrate_stream_thumbnails():
+                            hydration_changed = True
                         self._playlists[pl.id] = pl
                         if pl.id not in self._order:
                             self._order.append(pl.id)
+
+                    if hydration_changed:
+                        self.save()
 
                     print(f"[DEBUG] 已加载 {len(self._playlists)} 个歌单")
             except Exception as e:
@@ -203,6 +293,14 @@ class Playlists:
             print(f"[DEBUG] 歌单文件不存在，创建新的歌单集合")
             self._playlists = {}
             self._order = []
+
+        # 确保存在默认歌单
+        if DEFAULT_PLAYLIST_ID not in self._playlists:
+            default_pl = Playlist(playlist_id=DEFAULT_PLAYLIST_ID, name="默认歌单")
+            self._playlists[DEFAULT_PLAYLIST_ID] = default_pl
+            if DEFAULT_PLAYLIST_ID not in self._order:
+                self._order.insert(0, DEFAULT_PLAYLIST_ID)
+            self.save()
 
     def save(self):
         """保存歌单数据到文件"""

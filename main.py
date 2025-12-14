@@ -1,0 +1,55 @@
+# -*- coding: utf-8 -*-
+"""
+FastAPI 音乐播放器启动器（不依赖Flask）
+"""
+
+import sys
+import os
+
+# 确保 stdout 使用 UTF-8 编码（Windows 兼容性）
+if sys.stdout.encoding != "utf-8":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+
+import uvicorn
+import configparser
+
+
+def main():
+    """启动 FastAPI 服务器"""
+    
+    # 读取配置文件
+    config_file = "settings.ini"
+    config = configparser.ConfigParser()
+    
+    host = "0.0.0.0"
+    port = 80
+    
+    if os.path.exists(config_file):
+        try:
+            config.read(config_file, encoding="utf-8")
+            if config.has_section("app"):
+                host = config.get("app", "server_host", fallback="0.0.0.0")
+                port = config.getint("app", "server_port", fallback=80)
+        except Exception as e:
+            print(f"[警告] 无法读取配置文件: {e}")
+    
+    print(f"\n启动 FastAPI 服务器...")
+    print(f"地址: http://{host}:{port}")
+    print(f"按 Ctrl+C 停止服务器\n")
+    
+    # 导入 FastAPI 应用
+    from app import app
+    
+    # 启动 Uvicorn 服务器
+    uvicorn.run(
+        app,  # 直接传递 app 对象而不是字符串（兼容 PyInstaller）
+        host=host,
+        port=port,
+        reload=False,
+        log_level="info"
+    )
+
+
+if __name__ == "__main__":
+    main()

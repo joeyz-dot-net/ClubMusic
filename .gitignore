@@ -26,5 +26,6 @@ dist/
 app.spec
 .gitignore
 
-#playlist
+#playlist.json
 *.json
+
