@@ -89,7 +89,7 @@
 
 ### 系统要求
 - Python 3.7+
-- Flask
+- FastAPI
 - yt-dlp（用于 YouTube 下载）
 - mpv（音频播放引擎）
 
@@ -120,19 +120,12 @@
 
 4. **启动应用**
    
-   **方式一：FastAPI（推荐）**
+  
    ```bash
    # Windows PowerShell
    python run_fastapi.py
    ```
-   
-   **方式二：原始 Flask（已弃用）**
-   ```bash
-   # Windows
-   python app.py
-   # 或使用启动脚本
-   start.bat
-   
+  
    # 或 PowerShell
    python .\app.py
    ```
@@ -144,7 +137,7 @@
 
 ```
 MusicPlayer/
-├── app.py                 # Flask 主应用（2200+ 行）
+├── app.py                 # FastAPI 主应用（2200+ 行）
 ├── index.html            # 前端 HTML
 ├── static/
 │   ├── main.js           # 前端交互逻辑（3700+ 行）
@@ -317,7 +310,7 @@ port=80
 - **总代码行数**：11,000+ 行
 
 ### 主要模块
-- `app.py` - Flask 应用主文件，包含 50+ API 端点
+- `app.py` -  应用主文件，包含 50+ API 端点
 - `models/player.py` - mpv 播放器包装类
 - `models/rank.py` - 播放历史和排行榜统计（HitRank 类）
 - `models/playlists.py` - 多歌单管理
@@ -376,7 +369,7 @@ fetch('/search_song', {
 见 `requirements.txt` 获取完整依赖列表
 
 关键依赖：
-- **Flask** - Web 框架
+- **FastAOI** - Web 框架
 - **yt-dlp** - YouTube 下载器
 - **python-mpv** - mpv 播放器绑定
 - **python-dotenv** - 环境变量管理

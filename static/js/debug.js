@@ -1,4 +1,6 @@
 // 调试面板模块
+import { themeManager } from './themeManager.js';
+
 export class Debug {
     constructor() {
         this.debugLogHistory = [];
@@ -11,13 +13,17 @@ export class Debug {
             debugPlayer: document.getElementById('debugPlayer'),
             debugPlaylist: document.getElementById('debugPlaylist'),
             debugStorage: document.getElementById('debugStorage'),
-            debugLogs: document.getElementById('debugLogs')
+            debugLogs: document.getElementById('debugLogs'),
+            themeDarkBtn: document.getElementById('themeDarkBtn'),
+            themeLightBtn: document.getElementById('themeLightBtn')
         };
+        this.themeManager = themeManager;
     }
 
     // 初始化调试面板
     init(player, playlistManager) {
         this.player = player;
+        this.updateThemeButtons();
         this.playlistManager = playlistManager;
         this.setupConsoleCapture();
         this.setupEventListeners();
@@ -83,6 +89,18 @@ export class Debug {
             });
         }
 
+        // 主题切换按钮
+        if (this.elements.themeDarkBtn) {
+            this.elements.themeDarkBtn.addEventListener('click', () => {
+                this.setTheme('dark');
+            });
+        }
+        if (this.elements.themeLightBtn) {
+            this.elements.themeLightBtn.addEventListener('click', () => {
+                this.setTheme('light');
+            });
+        }
+
         // 刷新调试信息
         if (this.elements.debugRefresh) {
             this.elements.debugRefresh.addEventListener('click', () => {
@@ -125,7 +143,12 @@ export class Debug {
     updatePlayerInfo() {
         const playerStatus = this.player.getStatus();
         if (this.elements.debugPlayer) {
-            this.elements.debugPlayer.innerHTML = `<pre>${JSON.stringify(playerStatus, null, 2)}</pre>`;
+            const timestamp = new Date().toLocaleTimeString();
+            const logsHtml = Object.entries(playerStatus || {}).map(([key, value]) => {
+                const valueStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
+                return `<div style="color: #51cf66;">[${timestamp}] ${key}: ${valueStr}</div>`;
+            }).join('');
+            this.elements.debugPlayer.innerHTML = logsHtml || '<div style="color: #888;">暂无数据</div>';
         }
     }
 
@@ -141,7 +164,12 @@ export class Debug {
             }))
         };
         if (this.elements.debugPlaylist) {
-            this.elements.debugPlaylist.innerHTML = `<pre>${JSON.stringify(playlistInfo, null, 2)}</pre>`;
+            const timestamp = new Date().toLocaleTimeString();
+            const logsHtml = Object.entries(playlistInfo || {}).map(([key, value]) => {
+                const valueStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
+                return `<div style="color: #51cf66;">[${timestamp}] ${key}: ${valueStr}</div>`;
+            }).join('');
+            this.elements.debugPlaylist.innerHTML = logsHtml || '<div style="color: #888;">暂无数据</div>';
         }
     }
 
@@ -158,7 +186,12 @@ export class Debug {
             }, {})
         };
         if (this.elements.debugStorage) {
-            this.elements.debugStorage.innerHTML = `<pre>${JSON.stringify(storageInfo, null, 2)}</pre>`;
+            const timestamp = new Date().toLocaleTimeString();
+            const logsHtml = Object.entries(storageInfo || {}).map(([key, value]) => {
+                const valueStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
+                return `<div style="color: #51cf66;">[${timestamp}] ${key}: ${valueStr}</div>`;
+            }).join('');
+            this.elements.debugStorage.innerHTML = logsHtml || '<div style="color: #888;">暂无数据</div>';
         }
     }
 
@@ -191,6 +224,31 @@ export class Debug {
     clearLogs() {
         this.debugLogHistory = [];
         this.updateLogs();
+    }
+
+    // 设置主题
+    setTheme(theme) {
+        this.themeManager.switchTheme(theme);
+        this.updateThemeButtons();
+        console.log(`[主题切换] 已切换到${theme === 'dark' ? '暗色' : '亮色'}主题`);
+    }
+
+    // 更新主题按钮状态
+    updateThemeButtons() {
+        const currentTheme = this.themeManager.getCurrentTheme();
+        if (this.elements.themeDarkBtn && this.elements.themeLightBtn) {
+            if (currentTheme === 'dark') {
+                this.elements.themeDarkBtn.style.borderColor = '#667eea';
+                this.elements.themeDarkBtn.style.fontWeight = 'bold';
+                this.elements.themeLightBtn.style.borderColor = '#999';
+                this.elements.themeLightBtn.style.fontWeight = 'normal';
+            } else {
+                this.elements.themeDarkBtn.style.borderColor = '#999';
+                this.elements.themeDarkBtn.style.fontWeight = 'normal';
+                this.elements.themeLightBtn.style.borderColor = '#667eea';
+                this.elements.themeLightBtn.style.fontWeight = 'bold';
+            }
+        }
     }
 }
 

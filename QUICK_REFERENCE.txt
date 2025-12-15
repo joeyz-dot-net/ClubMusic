@@ -1,0 +1,94 @@
+# ⚡ CSS 删除快速参考卡
+
+## 一句话总结
+✅ **可以安全删除 `style.css` 和 `style.css.backup`**
+
+---
+
+## 快速检查
+```
+在删除前，确保:
+☐ 浏览器中应用样式正常
+☐ 所有主题正常工作
+☐ 响应式设计适应各屏幕
+☐ 控制台无错误
+```
+
+---
+
+## 三种删除方式
+
+### 方式 1️⃣  (推荐) - 交互式脚本
+```powershell
+.\delete_css.ps1
+```
+
+### 方式 2️⃣  - Windows Batch
+```cmd
+delete_css.bat
+```
+
+### 方式 3️⃣  - 直接命令
+```powershell
+Remove-Item "static/css/style.css" -Force
+Remove-Item "static/css/style.css.backup" -Force
+```
+
+---
+
+## 删除后验证
+
+```powershell
+# 检查 CSS 文件
+Get-ChildItem "static/css" -Filter "*.css" | Select-Object Name, Length
+
+# 应该显示 4 个文件:
+# - base.css
+# - theme-dark.css
+# - theme-light.css
+# - responsive.css
+```
+
+---
+
+## 问题排查
+
+| 问题 | 解决 |
+|------|------|
+| 无样式 | 清除浏览器缓存, Ctrl+Shift+R |
+| 某主题错误 | 检查主题文件是否完整 |
+| 响应式失效 | 检查 responsive.css 是否加载 |
+
+---
+
+## 回滚 (如需要)
+
+```bash
+git checkout static/css/style.css
+git checkout static/css/style.css.backup
+```
+
+---
+
+## 保留的文件
+```
+✓ base.css
+✓ theme-dark.css
+✓ theme-light.css
+✓ responsive.css
+```
+
+---
+
+## 详细文档位置
+
+| 文档 | 用途 |
+|------|------|
+| CSS_SEPARATION.md | 分离原理 |
+| QUICK_CSS_DELETE.md | 详细步骤 |
+| FINAL_CSS_REPORT.md | 完整报告 |
+| CSS_FILES_MANIFEST.md | 文件清单 |
+
+---
+
+**准备好了吗？运行删除脚本或参考快速删除指南吧！** 🚀

@@ -1,0 +1,395 @@
+/* Responsive Design - 响应式设计 */
+
+@media (max-width: 768px) {
+    /* 基础布局 */
+    .tab-content, #tree { padding: 8px; }
+    h1 { font-size: 18px; }
+    
+    /* 本地文件卡片 */
+    .local-card-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+    .local-card {
+        flex-direction: column;
+        text-align: center;
+        padding: 8px;
+    }
+    .local-card-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 20px;
+    }
+    .local-card-title { font-size: 12px; }
+    .local-card-meta { font-size: 11px; }
+    
+    /* 播放列表 */
+    .playlist-track-item {
+        gap: 12px;
+        padding: 10px;
+        margin-bottom: 6px;
+    }
+    .track-cover { 
+        width: 50px; 
+        height: 50px;
+        min-width: 50px;
+    }
+    .playlist-track-item.current-playing .track-cover {
+        width: 90px;
+        height: 90px;
+    }
+    .track-title { 
+        font-size: 13px; 
+        max-width: 120px;
+    }
+    .playlist-track-item.current-playing .track-title {
+        font-size: 18px;
+        -webkit-line-clamp: 2;
+        max-height: 60px;
+    }
+    .track-type { font-size: 11px; }
+    .track-progress { font-size: 9px; }
+    .track-menu-btn {
+        width: 32px;
+        height: 32px;
+    }
+
+    /* 歌单管理卡片尺寸（平板） */
+    .playlist-item { padding: 12px 14px; gap: 12px; }
+    .playlist-icon { width: 46px; height: 46px; font-size: 20px; }
+    .playlist-name { font-size: 15px; }
+    .playlist-count { font-size: 12px; }
+    .playlist-action-btn { width: 34px; height: 34px; }
+    .default-badge { font-size: 11px; padding: 3px 7px; }
+
+    .track-seq {
+        right: 10px;
+        bottom: 10px;
+        font-size: 11px;
+        padding: 4px 6px;
+    }
+    
+    /* 底部导航栏 */
+    .bottom-nav { height: 56px; }
+    .nav-icon { font-size: 20px; }
+    .nav-label { font-size: 9px; }
+    
+    /* 按钮 */
+    button {
+        padding: 8px 12px;
+        font-size: 12px;
+        border-radius: 6px;
+    }
+    
+    /* 标签页 */
+    .tab-btn { 
+        padding: 10px; 
+        font-size: 12px;
+    }
+    
+    /* 模态框 */
+    .modal-header, .playlists-modal-header, .search-modal-header, .history-modal-header {
+        padding: 12px;
+    }
+    .modal-title, .playlists-modal-header h2, .search-modal-header h3, .history-modal-header h3 {
+        font-size: 18px;
+    }
+    .modal-close, .ranking-modal-close, .history-modal-close,
+    .playlists-back-btn, .playlists-add-btn,
+    .search-modal-back, .full-player-back, .now-playing-close {
+        width: 36px;
+        height: 36px;
+    }
+    
+    /* 全屏播放器 */
+    .full-player-artwork-container {
+        width: 280px;
+        height: 280px;
+    }
+    .full-player-artwork-placeholder { font-size: 80px; }
+    .full-player-title { font-size: 18px; }
+    .full-player-artist { font-size: 14px; }
+    .full-player-control-btn { font-size: 18px; }
+    .full-player-play-pause {
+        width: 56px;
+        height: 56px;
+    }
+    
+    /* 迷你播放器 */
+    .mini-player-cover {
+        width: 40px;
+        height: 40px;
+    }
+    .mini-player-title { font-size: 12px; }
+    .mini-player-artist { font-size: 11px; }
+    .mini-player-subtitle { font-size: 10px; }
+    .mini-control-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 16px;
+        gap: 10px;
+    }
+    
+    /* 搜索框 */
+    .search-modal-input {
+        padding: 8px 12px;
+        font-size: 14px;
+    }
+    
+    /* 音量弹出框 */
+    .volume-popup {
+        width: 40px;
+        height: 120px;
+        right: 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    /* 超小屏幕优化 */
+    .tab-content, #tree { padding: 6px; }
+    
+    /* 播放列表 - 更小的卡片 */
+    .playlist-track-item {
+        gap: 10px;
+        padding: 8px;
+        margin-bottom: 4px;
+    }
+    .track-cover { 
+        width: 45px; 
+        height: 45px;
+    }
+    .playlist-track-item.current-playing .track-cover {
+        width: 110px;
+        height: 110px;
+    }
+    .track-title { 
+        font-size: 12px; 
+        max-width: 100px;
+    }
+    .playlist-track-item.current-playing .track-title {
+        font-size: 16px;
+        -webkit-line-clamp: 2;
+        max-height: 55px;
+    }
+    .track-type { font-size: 10px; }
+
+    .track-seq {
+        right: 8px;
+        bottom: 8px;
+        font-size: 10px;
+        padding: 3px 6px;
+    }
+    
+    /* 底部导航 */
+    .bottom-nav { height: 52px; padding: 0 4px; }
+    .nav-item { padding: 4px; gap: 2px; }
+    .nav-icon { font-size: 18px; }
+    .nav-label { font-size: 8px; }
+    
+    /* 播放栏控制 */
+    .footer-controls-left, .footer-controls-right { gap: 6px; }
+    .control-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 14px;
+    }
+    .play-pause-large {
+        width: 48px;
+        height: 48px;
+        font-size: 18px;
+    }
+    
+    /* 本地卡片 */
+    .local-card-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+    .local-card-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 18px;
+    }
+    
+    /* 面包屑 */
+    .local-breadcrumb { 
+        padding: 8px; 
+        font-size: 12px;
+        gap: 4px;
+    }
+    
+    /* 模态框 */
+    .modal-body, .playlists-modal-body, .search-modal-body, .history-modal-body, .ranking-modal-body {
+        padding: 12px;
+        padding-bottom: 70px;
+    }
+    
+    /* 排行榜标签 */
+    .ranking-tabs {
+        gap: 6px;
+        padding: 12px;
+    }
+    .ranking-tab {
+        padding: 8px;
+        font-size: 12px;
+    }
+}
+
+/* iPhone 专门优化 */
+@media (max-width: 430px) {
+    /* 播放列表 - iPhone 屏幕很窄 */
+    .playlist-track-item {
+        gap: 8px;
+        padding: 6px;
+        margin-bottom: 4px;
+    }
+    
+    .track-cover { 
+        width: 40px; 
+        height: 40px;
+        min-width: 40px;
+    }
+    
+    .playlist-track-item.current-playing .track-cover {
+        width: 100px;
+        height: 100px;
+    }
+    
+    /* 歌曲名称 - iPhone 需要更激进地截断 */
+    .track-title { 
+        font-size: 13px;
+        max-width: 80px;
+    }
+    
+    .playlist-track-item.current-playing .track-title {
+        font-size: 16px;
+        max-width: 100%;
+        -webkit-line-clamp: 2;
+        max-height: 50px;
+    }
+    
+    .track-type { font-size: 10px; }
+    .track-meta { gap: 4px; font-size: 11px; }
+    .track-playlist-name { max-width: 60px; }
+
+    .track-seq {
+        right: 8px;
+        bottom: 8px;
+        font-size: 10px;
+        padding: 3px 6px;
+    }
+
+    /* 歌单管理卡片尺寸（iPhone） */
+    .playlist-item { padding: 10px 12px; gap: 10px; }
+    .playlist-icon { width: 42px; height: 42px; font-size: 18px; }
+    .playlist-name { font-size: 14px; }
+    .playlist-count { font-size: 12px; }
+    .playlist-action-btn { width: 32px; height: 32px; }
+    
+    .track-menu-btn {
+        width: 28px;
+        height: 28px;
+        padding: 2px;
+    }
+    
+    /* 底部导航 - iPhone 安全区域 */
+    .bottom-nav { 
+        height: 50px;
+        padding-bottom: max(0px, env(safe-area-inset-bottom));
+    }
+    .nav-item { padding: 4px 2px; }
+    .nav-icon { font-size: 16px; }
+    .nav-label { font-size: 8px; }
+    
+    /* 播放栏 */
+    .player-bar { 
+        gap: 8px;
+        padding: 4px 6px;
+    }
+    .player-cover { 
+        width: 36px; 
+        height: 36px; 
+    }
+    .player-title { font-size: 12px; }
+    
+    /* 按钮 - iPhone 触摸目标最少44x44px */
+    button {
+        padding: 10px 12px;
+        font-size: 12px;
+        min-height: 44px;
+    }
+    
+    .control-btn {
+        min-width: 44px;
+        min-height: 44px;
+        font-size: 16px;
+    }
+    
+    /* 搜索框 */
+    .search-modal-input {
+        padding: 12px;
+        font-size: 16px;
+        height: 44px;
+    }
+    
+    /* 全屏播放器 */
+    .full-player-artwork-container {
+        width: 240px;
+        height: 240px;
+    }
+    .full-player-title { font-size: 16px; }
+    .full-player-artist { font-size: 12px; }
+    .full-player-play-pause {
+        width: 50px;
+        height: 50px;
+    }
+}
+
+/* iPhone 12+ 优化 (390px-430px) */
+@media (min-width: 390px) and (max-width: 430px) {
+    /* 播放列表布局 */
+    .playlist-track-item { gap: 10px; padding: 8px; }
+    .track-cover { width: 50px; height: 50px; min-width: 50px; }
+    .playlist-track-item.current-playing .track-cover {
+        width: 120px;
+        height: 120px;
+    }
+
+    .track-title { font-size: 14px; max-width: 120px; }
+    .playlist-track-item.current-playing .track-title {
+        font-size: 18px;
+        -webkit-line-clamp: 2;
+        max-height: 60px;
+    }
+    .track-type { font-size: 11px; }
+    .track-meta { gap: 6px; font-size: 12px; }
+    .track-playlist-name { max-width: 80px; }
+
+    .track-seq {
+        right: 10px;
+        bottom: 10px;
+        font-size: 11px;
+        padding: 4px 6px;
+    }
+
+    /* 歌单管理卡片尺寸（iPhone12+） */
+    .playlist-item { padding: 12px 14px; gap: 12px; }
+    .playlist-icon { width: 46px; height: 46px; font-size: 20px; }
+    .playlist-name { font-size: 15px; }
+    .playlist-count { font-size: 12px; }
+    .playlist-action-btn { width: 34px; height: 34px; }
+
+    /* 底部导航与安全区域 */
+    .bottom-nav { height: 60px; padding-bottom: max(0px, env(safe-area-inset-bottom)); }
+    .nav-item { padding: 4px; gap: 3px; }
+    .nav-icon { font-size: 18px; }
+    .nav-label { font-size: 9px; }
+
+    /* 播放栏 */
+    .player-bar { gap: 10px; padding: 6px; }
+    .player-cover { width: 40px; height: 40px; }
+    .player-title { font-size: 13px; }
+
+    /* 按钮保持 44px 可点击面积 */
+    button { min-height: 44px; }
+    .control-btn { min-width: 44px; min-height: 44px; }
+
+    /* 全屏播放器稍大 */
+    .full-player-artwork-container { width: 300px; height: 300px; }
+    .full-player-title { font-size: 17px; }
+    .full-player-artist { font-size: 13px; }
+    .full-player-play-pause { width: 54px; height: 54px; }
+}

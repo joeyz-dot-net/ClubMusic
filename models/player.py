@@ -751,6 +751,15 @@ class MusicPlayer:
         """
         return self.mpv_command(["cycle", "pause"])
 
+    def toggle_loop_mode(self) -> int:
+        """循环播放模式切换: 0=不循环 -> 1=单曲循环 -> 2=全部循环 -> 0
+
+        返回:
+          int: 当前循环模式 (0, 1, 或 2)
+        """
+        self.loop_mode = (self.loop_mode + 1) % 3
+        return self.loop_mode
+
     def get_pause_state(self) -> bool:
         """获取暂停状态
 

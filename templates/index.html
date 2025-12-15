@@ -53,7 +53,10 @@
 	<!-- Compatibility -->
 	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
 	<meta name="renderer" content="webkit" />
-	<link rel="stylesheet" href="/static/css/style.css?v=2" />
+	<!-- CSS Stylesheets -->
+	<link rel="stylesheet" href="/static/css/base.css?v=1" />
+	<!-- 主题 CSS 将由 themeManager 动态加载 -->
+	<link rel="stylesheet" href="/static/css/responsive.css?v=1" />
 	<style>
 		.footer {
 			height: calc(100% - (2/5 * 100%));
@@ -62,8 +65,8 @@
 </head>
 <body>
 	<script id="boot-data" type="application/json">{{ {'tree': tree, 'musicDir': music_dir}|tojson }}</script>
-	<main id="tree" class="tab-content local-tab local-theme" aria-label="文件列表"></main>
-	<div id="playlist" class="tab-content playlist-tab youtube-theme" aria-label="播放列表">
+	<main id="tree" class="tab-content local-tab bright-theme" aria-label="文件列表"></main>
+	<div id="playlist" class="tab-content playlist-tab" aria-label="播放列表">
 		
 		<div id="youtubeSearchResults" class="youtube-search-results" style="display:none;">
 			<h4 class="youtube-search-title">搜索结果</h4>
@@ -93,19 +96,19 @@
 	<!-- Full Screen Player Modal -->
 	<div id="fullPlayer" class="full-player" style="display:none;">
 		<div class="full-player-content">
-			<!-- Header -->
+			<!-- Header with back arrow -->
 			<div class="full-player-header">
 				<button class="full-player-back" id="fullPlayerBack">
-					<svg width="28" height="16" viewBox="0 0 28 16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-						<path d="M2 2l12 12L26 2"/>
+					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M19 9l-7 7-7-7"/>
 					</svg>
 				</button>
 			</div>
-
+			
 			<!-- Album Art -->
 			<div class="full-player-artwork">
 				<div class="full-player-artwork-container">
-					<img id="fullPlayerCover" src="" alt="" onerror="this.style.display='none';" />
+					<img id="fullPlayerCover" src="" alt="专辑封面" onerror="this.style.display='none';" loading="eager" decoding="async" />
 					<div class="full-player-artwork-placeholder" id="fullPlayerPlaceholder">🎵</div>
 				</div>
 			</div>
@@ -114,6 +117,7 @@
 			<div class="full-player-info">
 				<div class="full-player-title" id="fullPlayerTitle">未播放</div>
 				<div class="full-player-artist" id="fullPlayerArtist">--</div>
+				<div class="full-player-playlist" id="fullPlayerPlaylist">默认歌单</div>
 			</div>
 
 			<!-- Progress Bar -->
@@ -163,7 +167,7 @@
 					<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
 				</svg>
 				<div class="full-player-volume-slider">
-						<input type="range" id="fullPlayerVolumeSlider" min="0" max="110" value="50" />
+						<input type="range" id="fullPlayerVolumeSlider" min="0" max="130" value="50" />
 				</div>
 				<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
 					<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
@@ -183,7 +187,9 @@
 				</div>
 				<div class="mini-player-text">
 					<div class="mini-player-title" id="miniPlayerTitle">未播放</div>
-					<div class="mini-player-artist" id="miniPlayerArtist">--</div>
+					<div class="mini-player-subtitle">
+						<span class="mini-player-artist" id="miniPlayerArtist">--</span>
+					</div>
 				</div>
 			</div>
 			<div class="mini-player-controls">
@@ -456,6 +462,13 @@
 			</div>
 			<div class="modal-body" style="padding: 20px; font-family: monospace; font-size: 12px;">
 				<div id="debugContent">
+					<div style="margin-bottom: 20px;">
+						<h4>主题设置</h4>
+						<div style="display: flex; gap: 10px;">
+							<button id="themeDarkBtn" style="padding: 8px 16px; background: #333; color: white; border: 2px solid #667eea; border-radius: 4px; cursor: pointer; font-weight: bold;">🌙 暗色</button>
+							<button id="themeLightBtn" style="padding: 8px 16px; background: #e0e0e0; color: #333; border: 2px solid #999; border-radius: 4px; cursor: pointer;">☀️ 亮色</button>
+						</div>
+					</div>
 					<div style="margin-bottom: 20px;">
 						<h4>播放器状态</h4>
 						<div id="debugPlayer" style="background: #1a1a1a; padding: 10px; border-radius: 4px; overflow-x: auto;"></div>

@@ -8,6 +8,7 @@ import { playlistsManagement } from './playlists-management.js';
 import { volumeControl } from './volume.js';
 import { searchManager } from './search.js';
 import { rankingManager } from './ranking.js';
+import { themeManager } from './themeManager.js';
 import { debug } from './debug.js';
 import { Toast, loading, formatTime } from './ui.js';
 import { isMobile } from './utils.js';
@@ -21,6 +22,7 @@ class MusicPlayerApp {
     constructor() {
         this.initialized = false;
         this.currentPlaylistId = 'default';  // 跟踪当前选择的歌单ID
+        this._autoNextTriggered = false;  // 自动播放下一首的标记
     }
 
     async init() {
@@ -55,7 +57,10 @@ class MusicPlayerApp {
                 this.renderPlaylist();
             });
 
-            // 6.5 歌单标题点击打开歌单管理
+            // 6.5 应用初始主题
+            this.applyPlaylistTheme();
+
+            // 6.7 歌单标题点击打开歌单管理
             if (this.elements.playListTitle) {
                 this.elements.playListTitle.style.cursor = 'pointer';
                 this.elements.playListTitle.addEventListener('click', () => {
@@ -93,9 +98,12 @@ class MusicPlayerApp {
             loopBtn: document.getElementById('loopBtn'),
             
             // 迷你播放器
+            miniPlayer: document.getElementById('miniPlayer'),
             miniPlayPauseBtn: document.getElementById('miniPlayPauseBtn'),
             miniNextBtn: document.getElementById('miniNextBtn'),
             miniPlayerTitle: document.getElementById('miniPlayerTitle'),
+            miniPlayerArtist: document.getElementById('miniPlayerArtist'),
+            miniPlayerPlaylist: document.getElementById('miniPlayerPlaylist'),
             miniPlayerCover: document.getElementById('miniPlayerCover'),
             
             // 全屏播放器
@@ -105,11 +113,17 @@ class MusicPlayerApp {
             fullPlayerPrev: document.getElementById('fullPlayerPrev'),
             fullPlayerNext: document.getElementById('fullPlayerNext'),
             fullPlayerTitle: document.getElementById('fullPlayerTitle'),
+            fullPlayerArtist: document.getElementById('fullPlayerArtist'),
+            fullPlayerPlaylist: document.getElementById('fullPlayerPlaylist'),
             fullPlayerCover: document.getElementById('fullPlayerCover'),
             fullPlayerProgressBar: document.getElementById('fullPlayerProgressBar'),
             fullPlayerProgressFill: document.getElementById('fullPlayerProgressFill'),
+            fullPlayerProgressThumb: document.getElementById('fullPlayerProgressThumb'),
             fullPlayerCurrentTime: document.getElementById('fullPlayerCurrentTime'),
             fullPlayerDuration: document.getElementById('fullPlayerDuration'),
+            fullPlayerShuffle: document.getElementById('fullPlayerShuffle'),
+            fullPlayerRepeat: document.getElementById('fullPlayerRepeat'),
+            fullPlayerVolumeSlider: document.getElementById('fullPlayerVolumeSlider'),
             
             // 音量控制
             volumePopupBtn: document.getElementById('volumePopupBtn'),
@@ -173,6 +187,54 @@ class MusicPlayerApp {
         player.on('pause', () => {
             console.log('播放已暂停');
         });
+
+        // 监听循环模式变化
+        player.on('loopChange', (loopMode) => {
+            this.updateLoopButtonUI(loopMode);
+        });
+    }
+
+    // 更新循环按钮的视觉状态
+    updateLoopButtonUI(loopMode) {
+        const buttons = [
+            this.elements.loopBtn,
+            this.elements.nowPlayingRepeatBtn,
+            this.elements.fullPlayerRepeat
+        ];
+
+        // 循环模式: 0=不循环, 1=单曲循环, 2=全部循环
+        const loopModeText = ['不循环', '单曲循环', '全部循环'];
+        const loopModeEmoji = ['↻', '🔂', '🔁'];
+        
+        buttons.forEach(btn => {
+            if (btn) {
+                // 更新文本内容和样式
+                const emoji = loopModeEmoji[loopMode] || '↻';
+                
+                // 处理文本按钮（底部loopBtn）
+                if (btn.id === 'loopBtn') {
+                    btn.textContent = emoji;
+                } else {
+                    // 处理SVG按钮，需要添加active类来改变颜色
+                    const title = loopModeText[loopMode];
+                    btn.setAttribute('data-mode', loopMode);
+                }
+                
+                // 添加/移除active类以显示视觉反馈
+                if (loopMode === 0) {
+                    btn.classList.remove('loop-active');
+                    btn.style.opacity = '0.6';
+                } else {
+                    btn.classList.add('loop-active');
+                    btn.style.opacity = '1';
+                }
+                
+                // 更新title属性
+                btn.title = `循环模式: ${loopModeText[loopMode]}`;
+            }
+        });
+        
+        console.log('[循环模式] 已更新至:', loopModeText[loopMode]);
     }
 
     // 初始化音量控制
@@ -217,10 +279,37 @@ class MusicPlayerApp {
             });
         }
 
+        // 点击迷你播放器打开全屏播放器
+        if (this.elements.miniPlayer && this.elements.fullPlayer) {
+            this.elements.miniPlayer.addEventListener('click', (e) => {
+                // 检查是否点击了按钮，如果是则不展开全屏播放器
+                if (e.target.closest('.mini-player-controls')) {
+                    return;
+                }
+                // 隐藏迷你播放器，显示全屏播放器
+                this.elements.miniPlayer.style.display = 'none';
+                this.elements.fullPlayer.style.display = 'flex';
+            });
+        }
+
         // 迷你播放器控制
         if (this.elements.miniPlayPauseBtn) {
-            this.elements.miniPlayPauseBtn.addEventListener('click', () => {
+            this.elements.miniPlayPauseBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // 阻止事件冒泡，避免触发打开全屏播放器
                 player.togglePlayPause();
+            });
+        }
+
+        // 全屏播放器返回按钮
+        if (this.elements.fullPlayerBack) {
+            this.elements.fullPlayerBack.addEventListener('click', () => {
+                // 隐藏全屏播放器，显示迷你播放器
+                if (this.elements.fullPlayer) {
+                    this.elements.fullPlayer.style.display = 'none';
+                }
+                if (this.elements.miniPlayer) {
+                    this.elements.miniPlayer.style.display = 'block';
+                }
             });
         }
 
@@ -231,40 +320,48 @@ class MusicPlayerApp {
             });
         }
 
-        if (this.elements.fullPlayerBack) {
-            this.elements.fullPlayerBack.addEventListener('click', () => {
-                if (this.elements.fullPlayer) {
-                    this.elements.fullPlayer.style.display = 'none';
-                }
-            });
-        }
-
         // 下一首
         if (this.elements.nextBtn) {
             this.elements.nextBtn.addEventListener('click', () => {
-                player.next();
+                player.next().catch(err => {
+                    console.error('[下一首] 错误:', err);
+                    Toast.error('下一首播放失败');
+                });
             });
         }
         if (this.elements.fullPlayerNext) {
             this.elements.fullPlayerNext.addEventListener('click', () => {
-                player.next();
+                player.next().catch(err => {
+                    console.error('[下一首] 错误:', err);
+                    Toast.error('下一首播放失败');
+                });
             });
         }
         if (this.elements.miniNextBtn) {
-            this.elements.miniNextBtn.addEventListener('click', () => {
-                player.next();
+            this.elements.miniNextBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // 阻止事件冒泡，避免触发打开全屏播放器
+                player.next().catch(err => {
+                    console.error('[下一首] 错误:', err);
+                    Toast.error('下一首播放失败');
+                });
             });
         }
 
         // 上一首
         if (this.elements.prevBtn) {
             this.elements.prevBtn.addEventListener('click', () => {
-                player.prev();
+                player.prev().catch(err => {
+                    console.error('[上一首] 错误:', err);
+                    Toast.error('上一首播放失败');
+                });
             });
         }
         if (this.elements.fullPlayerPrev) {
             this.elements.fullPlayerPrev.addEventListener('click', () => {
-                player.prev();
+                player.prev().catch(err => {
+                    console.error('[上一首] 错误:', err);
+                    Toast.error('上一首播放失败');
+                });
             });
         }
 
@@ -277,6 +374,21 @@ class MusicPlayerApp {
         if (this.elements.nowPlayingRepeatBtn) {
             this.elements.nowPlayingRepeatBtn.addEventListener('click', () => {
                 player.cycleLoop();
+            });
+        }
+        if (this.elements.fullPlayerRepeat) {
+            this.elements.fullPlayerRepeat.addEventListener('click', () => {
+                player.cycleLoop();
+            });
+        }
+        
+        // 随机播放按钮（暂时禁用或隐藏）
+        if (this.elements.fullPlayerShuffle) {
+            this.elements.fullPlayerShuffle.style.opacity = '0.3';
+            this.elements.fullPlayerShuffle.style.cursor = 'not-allowed';
+            this.elements.fullPlayerShuffle.addEventListener('click', (e) => {
+                e.preventDefault();
+                console.log('随机播放功能尚未实现');
             });
         }
 
@@ -294,9 +406,67 @@ class MusicPlayerApp {
             });
         }
         if (this.elements.fullPlayerProgressBar) {
+            // 点击跳转
             this.elements.fullPlayerProgressBar.addEventListener('click', (e) => {
                 this.handleFullPlayerProgressClick(e);
             });
+            
+            // 添加拖拽功能
+            let isDragging = false;
+            
+            const startDrag = (e) => {
+                isDragging = true;
+                this.elements.fullPlayerProgressBar.classList.add('dragging');
+                handleDrag(e);
+            };
+            
+            const handleDrag = (e) => {
+                if (!isDragging) return;
+                
+                e.preventDefault();
+                const rect = this.elements.fullPlayerProgressBar.getBoundingClientRect();
+                const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+                const percent = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
+                
+                // 实时更新进度条显示
+                if (this.elements.fullPlayerProgressFill) {
+                    this.elements.fullPlayerProgressFill.style.width = percent + '%';
+                }
+                if (this.elements.fullPlayerProgressThumb) {
+                    this.elements.fullPlayerProgressThumb.style.left = percent + '%';
+                }
+                
+                // 更新时间显示
+                const status = player.getStatus();
+                if (status?.mpv?.duration && this.elements.fullPlayerCurrentTime) {
+                    const currentTime = (percent / 100) * status.mpv.duration;
+                    this.elements.fullPlayerCurrentTime.textContent = formatTime(currentTime);
+                }
+                
+                // 实时seek到拖拽位置（拖拽中实时播放）
+                player.seek(percent).catch(err => {
+                    console.warn('实时seek失败:', err);
+                });
+            };
+            
+            const endDrag = (e) => {
+                if (!isDragging) return;
+                isDragging = false;
+                this.elements.fullPlayerProgressBar.classList.remove('dragging');
+                
+                // 拖拽结束，位置已经在handleDrag中更新了，这里只需清理状态
+                // 不需要再次seek
+            };
+            
+            // 鼠标事件
+            this.elements.fullPlayerProgressBar.addEventListener('mousedown', startDrag);
+            document.addEventListener('mousemove', handleDrag);
+            document.addEventListener('mouseup', endDrag);
+            
+            // 触摸事件（移动端）
+            this.elements.fullPlayerProgressBar.addEventListener('touchstart', startDrag, { passive: false });
+            document.addEventListener('touchmove', handleDrag, { passive: false });
+            document.addEventListener('touchend', endDrag);
         }
 
         // 音量控制
@@ -316,6 +486,18 @@ class MusicPlayerApp {
                 this.handleVolumeChange(e);
             });
         }
+        
+        // 完整播放器的音量控制
+        if (this.elements.fullPlayerVolumeSlider) {
+            this.elements.fullPlayerVolumeSlider.addEventListener('input', (e) => {
+                const volume = parseInt(e.target.value);
+                player.setVolume(volume);
+            });
+            this.elements.fullPlayerVolumeSlider.addEventListener('change', (e) => {
+                const volume = parseInt(e.target.value);
+                player.setVolume(volume);
+            });
+        }
 
         // 初始化调试面板模块
         debug.init(player, playlistManager);
@@ -329,16 +511,33 @@ class MusicPlayerApp {
         if (!status) return;
 
         // 更新标题和信息
-        const title = status.current_title || status.title || '未播放';
+        const title = status.current_title || status.title || status.current_meta?.title || '未播放';
+        const artist = status.current_meta?.artist || status.artist || '--';
+        const playlistName = status.current_playlist_name || '默认';
         
-        // 更新迷你播放器标题
+        // 更新迷你播放器标题和信息
         if (this.elements.miniPlayerTitle) {
             this.elements.miniPlayerTitle.textContent = title;
         }
+        if (this.elements.miniPlayerArtist) {
+            this.elements.miniPlayerArtist.textContent = artist;
+        }
+        if (this.elements.miniPlayerPlaylist) {
+            this.elements.miniPlayerPlaylist.textContent = playlistName;
+        }
         
-        // 更新全屏播放器标题
+        // 更新全屏播放器标题和艺术家
         if (this.elements.fullPlayerTitle) {
             this.elements.fullPlayerTitle.textContent = title;
+            console.log('[完整播放器] 更新标题:', title);
+        }
+        if (this.elements.fullPlayerArtist) {
+            this.elements.fullPlayerArtist.textContent = artist;
+            console.log('[完整播放器] 更新艺术家:', artist);
+        }
+        if (this.elements.fullPlayerPlaylist) {
+            this.elements.fullPlayerPlaylist.textContent = playlistName;
+            console.log('[完整播放器] 更新歌单:', playlistName);
         }
 
         // 更新进度信息（支持两种字段名）
@@ -346,6 +545,61 @@ class MusicPlayerApp {
         if (mpvData) {
             const currentTime = mpvData.time_pos || mpvData.time || 0;
             const duration = mpvData.duration || 0;
+
+            // 检测播放结束，自动播放下一首
+            if (duration > 1 && currentTime >= 0) {  // duration > 1 确保有效
+                // 判断是否正在播放：paused === false 或 paused 不为true
+                const isPlaying = (mpvData.paused === false) || 
+                                 (mpvData.paused === null) ||
+                                 (mpvData.paused === undefined);
+                
+                const timeRemaining = duration - currentTime;
+                const autoPlayThreshold = 2.5;  // 当剩余时间少于2.5秒时触发
+                
+                // 详细的日志用于调试（只在接近结尾时打印）
+                if (timeRemaining < 4 && timeRemaining > 0) {
+                    if (!window._lastAutoPlayLog || Date.now() - window._lastAutoPlayLog > 2000) {
+                        console.log('[自动播放检测]', {
+                            isPlaying,
+                            timeRemaining: timeRemaining.toFixed(2),
+                            duration: duration.toFixed(2),
+                            currentTime: currentTime.toFixed(2),
+                            paused: mpvData.paused,
+                            threshold: autoPlayThreshold,
+                            willTrigger: isPlaying && timeRemaining < autoPlayThreshold,
+                            flagSet: this._autoNextTriggered
+                        });
+                        window._lastAutoPlayLog = Date.now();
+                    }
+                }
+                
+                // 当剩余时间小于阈值且正在播放时，触发下一首
+                if (isPlaying && timeRemaining < autoPlayThreshold && timeRemaining >= -0.5) {
+                    // 使用标记避免重复触发
+                    if (!this._autoNextTriggered) {
+                        this._autoNextTriggered = true;
+                        console.log('[自动播放] 触发！剩余时间:', timeRemaining.toFixed(2), '秒，即将播放下一首');
+                        
+                        // 立即播放下一首
+                        player.next().then(() => {
+                            console.log('[自动播放] ✓ 成功切换到下一首');
+                            // 延迟1秒后重置标记，防止抖动
+                            setTimeout(() => {
+                                this._autoNextTriggered = false;
+                            }, 1000);
+                        }).catch(err => {
+                            console.error('[自动播放] ✗ 失败:', err.message || err);
+                            // 失败时立即重置，允许重试
+                            setTimeout(() => {
+                                this._autoNextTriggered = false;
+                            }, 500);
+                        });
+                    }
+                } else if (timeRemaining >= 3 || !isPlaying) {
+                    // 当还有较长时间或暂停时，重置标记
+                    this._autoNextTriggered = false;
+                }
+            }
 
             // 更新全屏播放器时间
             if (this.elements.fullPlayerCurrentTime) {
@@ -368,6 +622,10 @@ class MusicPlayerApp {
                 const percent = (currentTime / duration) * 100;
                 if (this.elements.fullPlayerProgressBar) {
                     this.elements.fullPlayerProgressFill.style.width = percent + '%';
+                }
+                // 更新进度条拖拽手柄位置
+                if (this.elements.fullPlayerProgressThumb) {
+                    this.elements.fullPlayerProgressThumb.style.left = percent + '%';
                 }
             }
 
@@ -394,22 +652,123 @@ class MusicPlayerApp {
             this.elements.miniPlayPauseBtn.textContent = isPlaying ? '⏸' : '▶';
         }
         if (this.elements.fullPlayerPlayPause) {
-            this.elements.fullPlayerPlayPause.innerHTML = isPlaying ? 
-                '<path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>' : 
-                '<path d="M8 5v14l11-7z"/>';
+            // 更新SVG path的d属性以显示正确的图标
+            const svg = this.elements.fullPlayerPlayPause.querySelector('svg');
+            const path = this.elements.fullPlayerPlayPause.querySelector('svg path');
+            if (path && svg) {
+                // 暂停: 两个竖条 | |  播放: 三角形 ▶
+                path.setAttribute('d', isPlaying ? 
+                    'M6 4h4v16H6V4zm8 0h4v16h-4V4z' :  // 暂停按钮
+                    'M8 5v14l11-7z'  // 播放按钮
+                );
+            }
         }
 
-        // 更新封面
-        if (status.thumbnail_url) {
+        // 更新封面 - 支持高质量缩略图和备用方案
+        const thumbnailUrl = status.thumbnail_url || status.current_meta?.thumbnail_url || '';
+        
+        if (thumbnailUrl) {
+            // 为YouTube视频生成多个质量级别的URL备选方案
+            const getYouTubeFallbackUrls = (url) => {
+                if (url.includes('img.youtube.com')) {
+                    const baseUrl = url.split('/').slice(0, -1).join('/');
+                    // 优先级: maxresdefault > sddefault > mqdefault > default
+                    return [
+                        url, // 原始URL (通常是maxresdefault)
+                        baseUrl + '/sddefault.jpg',  // 备用1: 640x480
+                        baseUrl + '/mqdefault.jpg',  // 备用2: 320x180
+                        baseUrl + '/default.jpg'     // 备用3: 120x90
+                    ];
+                }
+                return [url];
+            };
+            
+            const urls = getYouTubeFallbackUrls(thumbnailUrl);
+            
             if (this.elements.miniPlayerCover) {
-                this.elements.miniPlayerCover.src = status.thumbnail_url;
+                this.elements.miniPlayerCover.src = thumbnailUrl;
                 this.elements.miniPlayerCover.style.display = 'block';
+                // 添加备用URL逻辑
+                this.elements.miniPlayerCover.onerror = function() {
+                    const currentIndex = urls.indexOf(this.src);
+                    if (currentIndex < urls.length - 1) {
+                        this.src = urls[currentIndex + 1];
+                    } else {
+                        this.style.display = 'none';
+                    }
+                };
+                console.log('[迷你播放器] 更新封面:', thumbnailUrl);
             }
             if (this.elements.fullPlayerCover) {
-                this.elements.fullPlayerCover.src = status.thumbnail_url;
+                this.elements.fullPlayerCover.src = thumbnailUrl;
                 this.elements.fullPlayerCover.style.display = 'block';
+                // 添加备用URL逻辑
+                this.elements.fullPlayerCover.onerror = function() {
+                    const currentIndex = urls.indexOf(this.src);
+                    if (currentIndex < urls.length - 1) {
+                        this.src = urls[currentIndex + 1];
+                        console.log('[完整播放器] 缩略图加载失败，尝试备用:', urls[currentIndex + 1]);
+                    } else {
+                        this.style.display = 'none';
+                        console.log('[完整播放器] 所有缩略图备用均失败');
+                    }
+                };
+                console.log('[完整播放器] 更新封面:', thumbnailUrl);
+            }
+        } else {
+            // 如果没有封面，隐藏img并显示占位符
+            if (this.elements.miniPlayerCover) {
+                this.elements.miniPlayerCover.style.display = 'none';
+            }
+            if (this.elements.fullPlayerCover) {
+                this.elements.fullPlayerCover.style.display = 'none';
             }
         }
+
+        // 更新循环按钮状态（从status中获取最新的循环模式）
+        if (status && status.loop_mode !== undefined) {
+            this.updateLoopButtonUI(status.loop_mode);
+        }
+    }
+
+    // 检测歌单类型并应用相应主题
+    applyPlaylistTheme() {
+        const playlist = playlistManager.getCurrent();
+        const playlistEl = document.getElementById('playlist');
+        const playlistsModal = document.getElementById('playlistsModal');
+        
+        if (!playlistEl) return;
+        
+        // 移除旧的主题类
+        playlistEl.classList.remove('bright-theme', 'dark-theme');
+        if (playlistsModal) {
+            playlistsModal.classList.remove('bright-theme', 'dark-theme');
+        }
+        
+        // 如果歌单为空，使用默认主题（深色主题）
+        if (!playlist || playlist.length === 0) {
+            playlistEl.classList.add('dark-theme');
+            if (playlistsModal) {
+                playlistsModal.classList.add('dark-theme');
+            }
+            console.log('🎵 歌单为空，应用深色主题');
+            return;
+        }
+        
+        // 检查歌单中是否有YouTube歌曲 或 网络歌曲
+        const hasYoutube = playlist.some(song => {
+            const isYoutube = song.type === 'youtube' || song.type === 'stream';
+            const isUrl = song.url && (song.url.startsWith('http') || song.url.startsWith('youtu'));
+            return isYoutube || isUrl;
+        });
+        
+        // 如果全是本地歌曲，使用亮色主题；否则使用深色主题
+        const theme = !hasYoutube ? 'bright-theme' : 'dark-theme';
+        playlistEl.classList.add(theme);
+        if (playlistsModal) {
+            playlistsModal.classList.add(theme);
+        }
+        console.log(`🎵 歌单主题已应用: ${theme}, 包含YouTube: ${hasYoutube}, 歌曲数: ${playlist.length}`);
     }
 
     // 渲染播放列表
@@ -421,6 +780,9 @@ class MusicPlayerApp {
             onPlay: (song) => this.playSong(song),
             currentMeta: status?.current_meta || null
         });
+        
+        // 应用相应的主题
+        this.applyPlaylistTheme();
     }
 
     // 播放歌曲
@@ -472,12 +834,8 @@ class MusicPlayerApp {
         const rect = this.elements.playerProgress.getBoundingClientRect();
         const percent = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
         
-        // 获取当前歌曲时长并seek
-        const status = player.getStatus();
-        if (status?.mpv?.duration) {
-            const seekTime = (percent / 100) * status.mpv.duration;
-            player.seek(seekTime);
-        }
+        // 将百分比发送到后端 /seek
+        player.seek(percent);
     }
 
     // 处理全屏播放器进度条点击
@@ -487,11 +845,8 @@ class MusicPlayerApp {
         const rect = this.elements.fullPlayerProgressBar.getBoundingClientRect();
         const percent = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
         
-        const status = player.getStatus();
-        if (status?.mpv?.duration) {
-            const seekTime = (percent / 100) * status.mpv.duration;
-            player.seek(seekTime);
-        }
+        // 将百分比发送到后端 /seek
+        player.seek(percent);
     }
 
     // 处理搜索
@@ -514,7 +869,9 @@ class MusicPlayerApp {
         
         const tabContents = {
             'playlists': this.elements.playlist,
-            'local': this.elements.tree
+            'local': this.elements.tree,
+            'ranking': null,  // 排行榜使用模态框，不需要tab-content
+            'search': null    // 搜索使用模态框，不需要tab-content
         };
 
         // 跟踪当前显示的标签页
@@ -526,6 +883,16 @@ class MusicPlayerApp {
             
             item.addEventListener('click', (e) => {
                 console.log('🖱️ 点击导航项:', tabName);
+                
+                // 关闭全屏播放器（如果打开）
+                if (this.elements.fullPlayer && this.elements.fullPlayer.style.display !== 'none') {
+                    this.elements.fullPlayer.style.display = 'none';
+                    // 显示迷你播放器
+                    if (this.elements.miniPlayer) {
+                        this.elements.miniPlayer.style.display = 'block';
+                    }
+                    console.log('🔽 关闭全屏播放器，显示迷你播放器');
+                }
                 
                 // 队列按钮：显示默认歌单
                 if (tabName === 'playlists') {
@@ -622,7 +989,6 @@ class MusicPlayerApp {
 
         // 显示选中的标签内容
         const selectedTab = tabContents[tabName];
-        console.log('📂 选中的标签对象:', selectedTab ? '存在' : '不存在');
         
         if (selectedTab) {
             // 本地文件树特殊处理
@@ -632,28 +998,39 @@ class MusicPlayerApp {
                 selectedTab.style.display = 'flex';
             }
             console.log(`✅ 显示: ${tabName}`);
-            
-            // 根据不同标签页刷新内容
-            switch(tabName) {
-                case 'playlists':
-                    console.log('🎵 刷新歌单显示');
-                    this.renderPlaylist();
-                    break;
-                case 'local':
-                    console.log('📂 刷新本地文件树');
-                    localFiles.loadTree();
-                    break;
-                case 'ranking':
-                    console.log('🏆 刷新排行榜');
-                    // 如果有排行榜刷新方法，在这里调用
-                    break;
-                case 'search':
-                    console.log('🔍 显示搜索页面');
-                    // 搜索页面不需要特殊刷新，用户输入时会自动搜索
-                    break;
-            }
+        } else if (tabName === 'ranking' || tabName === 'search') {
+            console.log(`ℹ️  '${tabName}' 使用模态框显示`);
         } else {
             console.warn(`❌ 标签内容不存在: ${tabName}`);
+            return;
+        }
+        
+        // 根据不同标签页显示模态框或刷新内容
+        switch(tabName) {
+            case 'playlists':
+                console.log('🎵 刷新歌单显示');
+                this.renderPlaylist();
+                break;
+            case 'local':
+                console.log('📂 刷新本地文件树');
+                localFiles.loadTree();
+                break;
+            case 'ranking':
+                console.log('🏆 显示排行榜');
+                const rankingModal = document.getElementById('rankingModal');
+                if (rankingModal) {
+                    rankingModal.style.display = 'block';
+                    console.log('📊 排行榜模态框已显示');
+                }
+                break;
+            case 'search':
+                console.log('🔍 显示搜索页面');
+                const searchModal = document.getElementById('searchModal');
+                if (searchModal) {
+                    searchModal.style.display = 'block';
+                    console.log('🔎 搜索模态框已显示');
+                }
+                break;
         }
     }
 
@@ -705,6 +1082,7 @@ const app = new MusicPlayerApp();
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => app.init());
 } else {
+    await themeManager.init();
     app.init();
 }
 
@@ -715,7 +1093,8 @@ window.modules = {
     player,
     playlistManager,
     volumeControl,
-    searchManager
+    searchManager,
+    themeManager
 };
 
 console.log('💡 模块化音乐播放器已加载');

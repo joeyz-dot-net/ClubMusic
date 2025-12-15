@@ -214,18 +214,21 @@ async def next_track():
         songs = playlist.songs if playlist else []
 
         if not songs:
+            print("[ERROR] /next: 当前歌单为空")
             return JSONResponse(
                 {"status": "ERROR", "error": "当前歌单为空"},
                 status_code=400
             )
 
-        # 确定下一首的索引
-        next_idx = PLAYER.current_index + 1 if PLAYER.current_index >= 0 else 0
+        # 确定下一首的索引（支持循环播放）
+        current_idx = PLAYER.current_index if PLAYER.current_index >= 0 else -1
+        next_idx = current_idx + 1 if current_idx >= 0 else 0
+        
+        # 循环播放：如果到达队列底部，返回到第一首
         if next_idx >= len(songs):
-            return JSONResponse(
-                {"status": "ERROR", "error": "已是最后一首"},
-                status_code=400
-            )
+            next_idx = 0
+        
+        print(f"[自动播放] 从索引 {current_idx} 跳到 {next_idx}，总歌曲数：{len(songs)}")
 
         # 获取下一首歌曲
         song_data = songs[next_idx]
@@ -241,6 +244,7 @@ async def next_track():
             song_type = "local"
 
         if not url:
+            print(f"[ERROR] /next: 歌曲数据不完整: {song_data}")
             return JSONResponse(
                 {"status": "ERROR", "error": "歌曲信息不完整"},
                 status_code=400
@@ -249,10 +253,12 @@ async def next_track():
         # 构造Song对象并播放
         if song_type == "youtube" or url.startswith("http"):
             song = StreamSong(stream_url=url, title=title or url)
+            print(f"[自动播放] 播放YouTube: {title}")
         else:
             song = LocalSong(file_path=url, title=title)
+            print(f"[自动播放] 播放本地文件: {title}")
 
-        PLAYER.play(
+        success = PLAYER.play(
             song,
             mpv_command_func=PLAYER.mpv_command,
             mpv_pipe_exists_func=PLAYER.mpv_pipe_exists,
@@ -260,7 +266,16 @@ async def next_track():
             add_to_history_func=PLAYBACK_HISTORY.add_to_history,
             save_to_history=True
         )
+        
+        if not success:
+            print(f"[ERROR] /next: 播放失败")
+            return JSONResponse(
+                {"status": "ERROR", "error": "播放失败"},
+                status_code=500
+            )
+        
         PLAYER.current_index = next_idx
+        print(f"[自动播放] ✓ 已切换到下一首: {title}")
 
         return {
             "status": "OK",
@@ -269,6 +284,7 @@ async def next_track():
         }
     except Exception as e:
         import traceback
+        print(f"[ERROR] /next 异常: {str(e)}")
         traceback.print_exc()
         return JSONResponse(
             {"status": "ERROR", "error": str(e)},
@@ -283,18 +299,21 @@ async def prev_track():
         songs = playlist.songs if playlist else []
 
         if not songs:
+            print("[ERROR] /prev: 当前歌单为空")
             return JSONResponse(
                 {"status": "ERROR", "error": "当前歌单为空"},
                 status_code=400
             )
 
-        # 确定上一首的索引
-        prev_idx = PLAYER.current_index - 1 if PLAYER.current_index > 0 else -1
-        if prev_idx < 0:
-            return JSONResponse(
-                {"status": "ERROR", "error": "已是第一首"},
-                status_code=400
-            )
+        # 确定上一首的索引（支持循环播放）
+        current_idx = PLAYER.current_index if PLAYER.current_index >= 0 else 0
+        prev_idx = current_idx - 1 if current_idx > 0 else len(songs) - 1
+        
+        # 循环播放：如果在第一首，则回到最后一首
+        if prev_idx < 0 or current_idx == 0:
+            prev_idx = len(songs) - 1
+        
+        print(f"[上一首] 从索引 {current_idx} 跳到 {prev_idx}，总歌曲数：{len(songs)}")
 
         # 获取上一首歌曲
         song_data = songs[prev_idx]
@@ -310,6 +329,7 @@ async def prev_track():
             song_type = "local"
 
         if not url:
+            print(f"[ERROR] /prev: 歌曲数据不完整: {song_data}")
             return JSONResponse(
                 {"status": "ERROR", "error": "歌曲信息不完整"},
                 status_code=400
@@ -318,10 +338,12 @@ async def prev_track():
         # 构造Song对象并播放
         if song_type == "youtube" or url.startswith("http"):
             song = StreamSong(stream_url=url, title=title or url)
+            print(f"[上一首] 播放YouTube: {title}")
         else:
             song = LocalSong(file_path=url, title=title)
+            print(f"[上一首] 播放本地文件: {title}")
 
-        PLAYER.play(
+        success = PLAYER.play(
             song,
             mpv_command_func=PLAYER.mpv_command,
             mpv_pipe_exists_func=PLAYER.mpv_pipe_exists,
@@ -329,7 +351,16 @@ async def prev_track():
             add_to_history_func=PLAYBACK_HISTORY.add_to_history,
             save_to_history=True
         )
+        
+        if not success:
+            print(f"[ERROR] /prev: 播放失败")
+            return JSONResponse(
+                {"status": "ERROR", "error": "播放失败"},
+                status_code=500
+            )
+        
         PLAYER.current_index = prev_idx
+        print(f"[上一首] ✓ 已切换到上一首: {title}")
 
         return {
             "status": "OK",
@@ -338,6 +369,7 @@ async def prev_track():
         }
     except Exception as e:
         import traceback
+        print(f"[ERROR] /prev 异常: {str(e)}")
         traceback.print_exc()
         return JSONResponse(
             {"status": "ERROR", "error": str(e)},
@@ -353,6 +385,7 @@ async def get_status():
         "current_meta": PLAYER.current_meta,
         "current_playlist_id": CURRENT_PLAYLIST_ID,
         "current_playlist_name": playlist.name if playlist else "--",
+        "loop_mode": PLAYER.loop_mode,
         "mpv_state": {
             "paused": mpv_get("pause"),
             "time_pos": mpv_get("time-pos"),

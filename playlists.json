@@ -102,11 +102,17 @@
           "url": "G.E.M 邓紫棋/T.I.M.E/01. G.E.M.邓紫棋 - 情人.flac",
           "title": "01. G.E.M.邓紫棋 - 情人.flac",
           "type": "local"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=PisAtilDIis",
+          "title": "【歌手2025·纯享】 #单依纯《君》“经典传承”！创新串烧改编 传递跨越时空的怀念 |《歌手2025》| SINGER 2025｜MangoTV",
+          "type": "youtube",
+          "thumbnail_url": "https://img.youtube.com/vi/PisAtilDIis/maxresdefault.jpg"
         }
       ],
-      "song_count": 5,
+      "song_count": 6,
       "created_at": 1765712869.5751708,
-      "updated_at": 1765723502.383277
+      "updated_at": 1765757334.2844644
     }
   ]
 }

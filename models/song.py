@@ -55,6 +55,7 @@ class Song:
             "duration": self.duration,
             "ts": self.timestamp,
             "thumbnail_url": self.thumbnail_url,
+            "artist": self.title,  # 默认使用title作为artist
         }
 
     @classmethod
@@ -205,19 +206,18 @@ class StreamSong(Song):
           duration: 歌曲时长（秒）
           thumbnail_url: 缩略图URL（可选）
         """
-        # 如果没有提供不thumbnail_url，会自动计算
+        self.stream_url = stream_url
+        self.stream_type = stream_type
+        self.video_id = self._extract_video_id(stream_url)
+        
+        # 如果没有提供thumbnail_url，会自动计算高质量缩略图
         if not thumbnail_url:
-            # 需要先提取video_id
-            video_id = self._extract_video_id(stream_url)
-            if stream_type == "youtube" and video_id:
-                thumbnail_url = f"https://img.youtube.com/vi/{video_id}/default.jpg"
+            if stream_type == "youtube" and self.video_id:
+                thumbnail_url = self._get_hq_thumbnail_url(self.video_id)
         
         super().__init__(
             url=stream_url, title=title, song_type=stream_type, duration=duration, thumbnail_url=thumbnail_url
         )
-        self.stream_url = stream_url
-        self.stream_type = stream_type
-        self.video_id = self._extract_video_id(stream_url)
 
     def _extract_title_from_url(self, url: str) -> str:
         """从URL提取标题（串流媒体需要从API获取）"""
@@ -252,14 +252,36 @@ class StreamSong(Song):
 
         return ""
 
+    def _get_hq_thumbnail_url(self, video_id: str) -> str:
+        """
+        获取高质量YouTube缩略图URL
+        优先级: maxresdefault > sddefault > mqdefault > default
+        前端会自动处理失败的URL
+        """
+        if not video_id:
+            return ""
+        # 使用最高分辨率（1280x720）
+        # 如果不可用，浏览器会尝试下一个，最终回退到default
+        return f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
+
     def is_youtube(self) -> bool:
         """是否为YouTube视频"""
         return self.stream_type == "youtube" or "youtube" in self.stream_url.lower()
 
-    def get_thumbnail_url(self) -> str:
-        """获取缩略图URL（仅YouTube）"""
+    def get_thumbnail_url(self, quality: str = "maxres") -> str:
+        """
+        获取缩略图URL（仅YouTube）
+        质量选项: maxres (1280x720), sd (640x480), mq (320x180), default (120x90)
+        """
         if self.is_youtube() and self.video_id:
-            return f"https://img.youtube.com/vi/{self.video_id}/default.jpg"
+            quality_map = {
+                "maxres": "maxresdefault.jpg",
+                "sd": "sddefault.jpg",
+                "mq": "mqdefault.jpg",
+                "default": "default.jpg",
+            }
+            quality_name = quality_map.get(quality, "maxresdefault.jpg")
+            return f"https://img.youtube.com/vi/{self.video_id}/{quality_name}"
         return ""
 
     def get_watch_url(self) -> str:

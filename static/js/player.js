@@ -67,6 +67,21 @@ export class Player {
         return result;
     }
 
+    // 进度控制
+    async seek(percent) {
+        const result = await api.seek(percent);
+        this.emit('seek', percent);
+        return result;
+    }
+
+    // 循环模式
+    async cycleLoop() {
+        const result = await api.loop();
+        const loopMode = result.loop_mode !== undefined ? result.loop_mode : result;
+        this.emit('loopChange', loopMode);
+        return result;
+    }
+
     // 状态轮询
     startPolling(interval = 5000) {
         if (this.pollInterval) return;

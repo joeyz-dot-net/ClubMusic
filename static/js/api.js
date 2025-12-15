@@ -60,8 +60,18 @@ export class MusicAPI {
 
     async setVolume(value) {
         const formData = new FormData();
-        formData.append('value', value);
+        formData.append('volume', value);
         return this.postForm('/volume', formData);
+    }
+
+    async seek(percent) {
+        const formData = new FormData();
+        formData.append('percent', percent);
+        return this.postForm('/seek', formData);
+    }
+
+    async loop() {
+        return this.post('/loop', {});
     }
 
     async getVolume() {

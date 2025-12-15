@@ -8,6 +8,6 @@ echo 正在启动开发服务器...
 echo 访问: http://localhost:80
 echo.
 
-python app.py
+python main.py
 
 pause
