@@ -463,10 +463,38 @@
 			<div class="modal-body" style="padding: 20px; font-family: monospace; font-size: 12px;">
 				<div id="debugContent">
 					<div style="margin-bottom: 20px;">
+						<h4>音频推流格式</h4>
+						<div style="display: flex; gap: 10px; flex-wrap: wrap;">
+							<button id="formatMP3Btn" style="padding: 8px 16px; background: #555; color: white; border: 2px solid #999; border-radius: 4px; cursor: pointer;">🎵 MP3</button>
+							<button id="formatAACBtn" style="padding: 8px 16px; background: #555; color: white; border: 2px solid #999; border-radius: 4px; cursor: pointer;">🎵 AAC</button>
+							<button id="formatFLACBtn" style="padding: 8px 16px; background: #555; color: white; border: 2px solid #999; border-radius: 4px; cursor: pointer;">🎵 FLAC</button>
+							<button id="formatWAVBtn" style="padding: 8px 16px; background: #555; color: white; border: 2px solid #999; border-radius: 4px; cursor: pointer;">🎵 WAV</button>
+							<button id="formatM4ABtn" style="padding: 8px 16px; background: #555; color: white; border: 2px solid #999; border-radius: 4px; cursor: pointer;">🎵 M4A</button>
+						</div>
+						<p style="margin-top: 10px; color: #aaa;">当前格式: <span id="currentFormatDisplay">aac</span></p>
+					</div>
+					<div style="margin-bottom: 20px;">
 						<h4>主题设置</h4>
 						<div style="display: flex; gap: 10px;">
 							<button id="themeDarkBtn" style="padding: 8px 16px; background: #333; color: white; border: 2px solid #667eea; border-radius: 4px; cursor: pointer; font-weight: bold;">🌙 暗色</button>
 							<button id="themeLightBtn" style="padding: 8px 16px; background: #e0e0e0; color: #333; border: 2px solid #999; border-radius: 4px; cursor: pointer;">☀️ 亮色</button>
+						</div>
+					</div>
+					<div style="margin-bottom: 20px;">
+						<h4>推流控制</h4>
+						<div style="display: flex; gap: 10px; flex-wrap: wrap;">
+							<button id="startStreamBtn" style="padding: 10px 16px; background: #4CAF50; color: white; border: 2px solid #45a049; border-radius: 4px; cursor: pointer; font-weight: bold;">▶️ 开启推流</button>
+							<button id="stopStreamBtn" style="padding: 10px 16px; background: #f44336; color: white; border: 2px solid #da190b; border-radius: 4px; cursor: pointer; font-weight: bold;">⏹️ 停止推流</button>
+						</div>
+						<p style="margin-top: 10px; color: #aaa;">推流状态: <span id="streamStatusDisplay" style="color: #f44336;">●</span> <span id="streamStatusText">未激活</span></p>
+						<div style="margin-top: 10px; padding: 10px; background: #1a1a1a; border-radius: 4px;">
+							<div style="color: #51cf66; font-size: 12px; line-height: 1.6;">
+								<div>📊 <span id="streamSpeed">速度: -- KB/s</span></div>
+								<div>📈 <span id="streamTotal">总数据: -- MB</span></div>
+								<div>⏱️ <span id="streamDuration">用时: -- s</span></div>
+								<div>👥 <span id="streamClients">活跃客户端: --</span></div>
+								<div>🎵 <span id="streamFormat">格式: --</span></div>
+							</div>
 						</div>
 					</div>
 					<div style="margin-bottom: 20px;">
@@ -482,6 +510,16 @@
 						<div id="debugStorage" style="background: #1a1a1a; padding: 10px; border-radius: 4px; overflow-x: auto;"></div>
 					</div>
 					<div style="margin-bottom: 20px;">
+						<h4>日志设置</h4>
+						<div style="display: flex; gap: 10px; align-items: center;">
+							<label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: #aaa;">
+								<input type="checkbox" id="logToggle" style="cursor: pointer; width: 18px; height: 18px;" checked>
+								<span>显示控制台日志</span>
+							</label>
+							<button id="debugClearLogs" style="padding: 8px 16px; background: #ff6b6b; color: white; border: none; border-radius: 4px; cursor: pointer;">清空日志</button>
+						</div>
+					</div>
+					<div style="margin-bottom: 20px;">
 						<h4>控制台日志</h4>
 						<div id="debugLogs" style="background: #1a1a1a; padding: 10px; border-radius: 4px; max-height: 300px; overflow-y: auto;"></div>
 					</div>
@@ -492,6 +530,11 @@
 		</div>
 	</div>
 
-	<script type="module" src="/static/js/main.js?v=3"></script>
+
+
+	<script type="module" src="/static/js/main.js?v=18"></script>
+	
+	<!-- 浏览器推流音频播放器（隐藏） -->
+	<audio id="browserStreamAudio" style="display: none;" crossorigin="anonymous" controls="false" autoplay="false"></audio>
 </body>
 </html>

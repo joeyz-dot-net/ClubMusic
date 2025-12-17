@@ -38,11 +38,12 @@ export class MusicAPI {
         return this.get('/status');
     }
 
-    async play(url, title, type = 'local') {
+    async play(url, title, type = 'local', streamFormat = 'aac') {
         const formData = new FormData();
         formData.append('url', url);
         formData.append('title', title);
         formData.append('type', type);
+        formData.append('stream_format', streamFormat);
         return this.postForm('/play', formData);
     }
 

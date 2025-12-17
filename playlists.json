@@ -68,11 +68,16 @@
           "title": "【歌手2025·纯享】 #单依纯 《珠玉》“神女吟唱”！奇幻 迷离又绵延不绝｜《歌手2025》| SINGER 2025｜MangoTV",
           "type": "youtube",
           "thumbnail_url": "https://img.youtube.com/vi/iy8-IviW3Qo/default.jpg"
+        },
+        {
+          "url": "ETC/5 20AM - soldier.flac",
+          "title": "5 20AM - soldier.flac",
+          "type": "local"
         }
       ],
-      "song_count": 11,
+      "song_count": 12,
       "created_at": 1765711983.6007059,
-      "updated_at": 1765724217.84485
+      "updated_at": 1765932234.5697966
     },
     {
       "id": "1765712869575",
@@ -99,20 +104,15 @@
           "type": "local"
         },
         {
-          "url": "G.E.M 邓紫棋/T.I.M.E/01. G.E.M.邓紫棋 - 情人.flac",
-          "title": "01. G.E.M.邓紫棋 - 情人.flac",
-          "type": "local"
-        },
-        {
           "url": "https://www.youtube.com/watch?v=PisAtilDIis",
           "title": "【歌手2025·纯享】 #单依纯《君》“经典传承”！创新串烧改编 传递跨越时空的怀念 |《歌手2025》| SINGER 2025｜MangoTV",
           "type": "youtube",
           "thumbnail_url": "https://img.youtube.com/vi/PisAtilDIis/maxresdefault.jpg"
         }
       ],
-      "song_count": 6,
+      "song_count": 5,
       "created_at": 1765712869.5751708,
-      "updated_at": 1765757334.2844644
+      "updated_at": 1765934491.898742
     }
   ]
 }

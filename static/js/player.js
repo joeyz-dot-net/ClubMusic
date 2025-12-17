@@ -22,10 +22,132 @@ export class Player {
     }
 
     // 播放控制
-    async play(url, title, type = 'local') {
-        const result = await api.play(url, title, type);
+    async play(url, title, type = 'local', streamFormat = 'aac') {
+        const result = await api.play(url, title, type, streamFormat);
+        
+        // 不再自动启动浏览器推流，用户需要手动点击"开启推流"按钮
+        // 后端会启动 FFmpeg，但浏览器推流需要用户主动激活
+        
         this.emit('play', { url, title, type });
         return result;
+    }
+    
+    // 启动浏览器推流（带详细的连接提示）
+    startBrowserStream(streamFormat = 'aac') {
+        const audioElement = document.getElementById('browserStreamAudio');
+        
+        if (!audioElement) {
+            console.warn("[Stream] 浏览器推流元素不存在");
+            return;
+        }
+        
+        try {
+            const timestamp = Date.now();
+            const url = `/stream/play?format=${streamFormat}&t=${timestamp}`;
+            
+            console.log(`[推流] 设置音频源: ${url}`);
+            
+            // === 关键：彻底清理旧连接 ===
+            // 1. 暂停播放并重置
+            if (!audioElement.paused) {
+                audioElement.pause();
+            }
+            audioElement.currentTime = 0;
+            
+            // 2. 清除旧的 src 并设置空源
+            if (audioElement.src) {
+                audioElement.src = '';
+                audioElement.load(); // 触发清理
+            }
+            
+            // 3. 移除所有旧的事件监听器（防止事件重复触发）
+            const newAudioElement = audioElement.cloneNode(false);
+            audioElement.parentNode.replaceChild(newAudioElement, audioElement);
+            const freshAudioElement = document.getElementById('browserStreamAudio');
+            
+            if (!freshAudioElement) {
+                console.warn("[Stream] 音频元素无法重新获取");
+                return;
+            }
+            
+            // === 配置新连接 ===
+            freshAudioElement.crossOrigin = 'anonymous';
+            freshAudioElement.preload = 'auto';
+            freshAudioElement.volume = 1.0;
+            
+            // 设置新源
+            freshAudioElement.src = url;
+            
+            // 连接开始
+            freshAudioElement.onloadstart = () => {
+                console.log(`[推流] ✓ 开始连接 (格式: ${streamFormat})`);
+                this.emit('stream:connecting', { format: streamFormat });
+            };
+            
+            // 正在加载元数据
+            freshAudioElement.onloadedmetadata = () => {
+                console.log(`[推流] ✓ 元数据已加载`);
+            };
+            
+            // 正在缓冲
+            freshAudioElement.onprogress = () => {
+                console.log(`[推流] 正在缓冲数据...`);
+                this.emit('stream:buffering');
+            };
+            
+            // 缓冲足够可以播放
+            freshAudioElement.oncanplay = () => {
+                console.log(`[推流] ✓ 缓冲足够，开始播放`);
+                this.emit('stream:ready', { format: streamFormat });
+            };
+            
+            // 播放中
+            freshAudioElement.onplay = () => {
+                console.log(`[推流] 🎵 音乐已开始播放`);
+                this.emit('stream:playing');
+            };
+            
+            // 正在播放中
+            freshAudioElement.onplaying = () => {
+                console.log(`[推流] 🎵 正在播放中...`);
+            };
+            
+            // 播放错误
+            freshAudioElement.onerror = (e) => {
+                const errorType = freshAudioElement.error?.code;
+                const errorMsg = {
+                    1: 'MEDIA_ERR_ABORTED',
+                    2: 'MEDIA_ERR_NETWORK',
+                    3: 'MEDIA_ERR_DECODE',
+                    4: 'MEDIA_ERR_SRC_NOT_SUPPORTED'
+                }[errorType] || '未知错误';
+                console.error(`[推流] ❌ 播放错误 (${errorMsg}):`, e);
+                this.emit('stream:error', { error: e, errorMsg });
+            };
+            
+            // 播放暂停
+            freshAudioElement.onpause = () => {
+                console.log(`[推流] ⏸ 已暂停`);
+                this.emit('stream:paused');
+            };
+            
+            // 触发加载
+            freshAudioElement.load();
+            
+            // 延迟播放以确保连接建立
+            setTimeout(() => {
+                freshAudioElement.play().then(() => {
+                    console.log(`[推流] ✓ 推流已启动`);
+                }).catch(err => {
+                    console.error(`[推流] ❌ 播放失败:`, err.message);
+                    this.emit('stream:error', { error: err });
+                });
+            }, 100);
+            
+        } catch (err) {
+            console.error("[Stream] ❌ 启动失败:", err);
+            this.emit('stream:error', { error: err });
+        }
     }
 
     async pause() {

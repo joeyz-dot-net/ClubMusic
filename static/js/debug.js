@@ -4,6 +4,7 @@ import { themeManager } from './themeManager.js';
 export class Debug {
     constructor() {
         this.debugLogHistory = [];
+        this.logEnabled = localStorage.getItem('debugLogEnabled') !== 'false'; // 默认启用
         this.elements = {
             debugBtn: document.getElementById('debugBtn'),
             debugModal: document.getElementById('debugModal'),
@@ -15,9 +16,20 @@ export class Debug {
             debugStorage: document.getElementById('debugStorage'),
             debugLogs: document.getElementById('debugLogs'),
             themeDarkBtn: document.getElementById('themeDarkBtn'),
-            themeLightBtn: document.getElementById('themeLightBtn')
+            themeLightBtn: document.getElementById('themeLightBtn'),
+            startStreamBtn: document.getElementById('startStreamBtn'),
+            stopStreamBtn: document.getElementById('stopStreamBtn'),
+            streamStatusDisplay: document.getElementById('streamStatusDisplay'),
+            streamStatusText: document.getElementById('streamStatusText'),
+            logToggle: document.getElementById('logToggle'),
+            streamSpeed: document.getElementById('streamSpeed'),
+            streamTotal: document.getElementById('streamTotal'),
+            streamDuration: document.getElementById('streamDuration'),
+            streamClients: document.getElementById('streamClients'),
+            streamFormat: document.getElementById('streamFormat')
         };
         this.themeManager = themeManager;
+        this.isStreaming = false;
     }
 
     // 初始化调试面板
@@ -27,6 +39,30 @@ export class Debug {
         this.playlistManager = playlistManager;
         this.setupConsoleCapture();
         this.setupEventListeners();
+        
+        // 启动推流统计轮询（每1秒更新一次）
+        this.startStreamStatsPolling();
+    }
+    
+    // 启动推流统计轮询
+    startStreamStatsPolling() {
+        // 清除旧的轮询
+        if (this.streamStatsInterval) {
+            clearInterval(this.streamStatsInterval);
+        }
+        
+        // 每1秒更新一次推流统计
+        this.streamStatsInterval = setInterval(() => {
+            this.updateStreamStats();
+        }, 1000);
+    }
+    
+    // 停止推流统计轮询
+    stopStreamStatsPolling() {
+        if (this.streamStatsInterval) {
+            clearInterval(this.streamStatsInterval);
+            this.streamStatsInterval = null;
+        }
     }
 
     // 捕获console日志
@@ -36,6 +72,11 @@ export class Debug {
         const originalWarn = console.warn;
 
         const addLog = (type, args) => {
+            // 检查日志开关是否启用
+            if (!this.logEnabled) {
+                return;
+            }
+
             const timestamp = new Date().toLocaleTimeString();
             const message = Array.from(args).map(arg =>
                 typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
@@ -89,6 +130,29 @@ export class Debug {
             });
         }
 
+        // 音频格式选择按钮
+        const formats = ['mp3', 'aac', 'flac', 'wav', 'm4a'];
+        formats.forEach(format => {
+            const btn = document.getElementById(`format${format.toUpperCase()}Btn`);
+            if (btn) {
+                btn.addEventListener('click', () => {
+                    this.setAudioFormat(format);
+                });
+            }
+        });
+
+        // 推流控制按钮
+        if (this.elements.startStreamBtn) {
+            this.elements.startStreamBtn.addEventListener('click', () => {
+                this.startBrowserStream();
+            });
+        }
+        if (this.elements.stopStreamBtn) {
+            this.elements.stopStreamBtn.addEventListener('click', () => {
+                this.stopBrowserStream();
+            });
+        }
+
         // 主题切换按钮
         if (this.elements.themeDarkBtn) {
             this.elements.themeDarkBtn.addEventListener('click', () => {
@@ -114,6 +178,18 @@ export class Debug {
                 this.clearLogs();
             });
         }
+
+        // 日志开关
+        if (this.elements.logToggle) {
+            // 初始化复选框状态
+            this.elements.logToggle.checked = this.logEnabled;
+            
+            this.elements.logToggle.addEventListener('change', (e) => {
+                this.logEnabled = e.target.checked;
+                localStorage.setItem('debugLogEnabled', this.logEnabled);
+                console.log(`[日志] 控制台日志已${this.logEnabled ? '启用' : '禁用'}`);
+            });
+        }
     }
 
     // 显示调试面板
@@ -136,6 +212,7 @@ export class Debug {
         this.updatePlayerInfo();
         this.updatePlaylistInfo();
         this.updateStorageInfo();
+        this.updateStreamStats();
         this.updateLogs();
     }
 
@@ -207,6 +284,46 @@ export class Debug {
         }
     }
 
+    // 更新推流统计信息
+    async updateStreamStats() {
+        try {
+            const response = await fetch('/stream/status');
+            const result = await response.json();
+            
+            if (result.status === 'OK' && result.data) {
+                const data = result.data;
+                
+                // 更新速度
+                if (this.elements.streamSpeed) {
+                    this.elements.streamSpeed.textContent = `速度: ${data.avg_speed || 0} KB/s`;
+                }
+                
+                // 更新总数据
+                if (this.elements.streamTotal) {
+                    this.elements.streamTotal.textContent = `总数据: ${data.total_mb || 0} MB`;
+                }
+                
+                // 更新用时
+                if (this.elements.streamDuration) {
+                    const duration = Math.floor(data.duration || 0);
+                    this.elements.streamDuration.textContent = `用时: ${duration} s`;
+                }
+                
+                // 更新活跃客户端
+                if (this.elements.streamClients) {
+                    this.elements.streamClients.textContent = `活跃客户端: ${data.active_clients || 0}`;
+                }
+                
+                // 更新格式
+                if (this.elements.streamFormat) {
+                    this.elements.streamFormat.textContent = `格式: ${data.format || '--'}`;
+                }
+            }
+        } catch (err) {
+            console.error('[调试] 获取推流统计失败:', err);
+        }
+    }
+
     // 获取日志颜色
     getLogColor(type) {
         switch (type) {
@@ -227,10 +344,14 @@ export class Debug {
     }
 
     // 设置主题
-    setTheme(theme) {
-        this.themeManager.switchTheme(theme);
-        this.updateThemeButtons();
-        console.log(`[主题切换] 已切换到${theme === 'dark' ? '暗色' : '亮色'}主题`);
+    async setTheme(theme) {
+        try {
+            await this.themeManager.switchTheme(theme);
+            this.updateThemeButtons();
+            console.log(`[主题切换] 已切换到${theme === 'dark' ? '暗色' : '亮色'}主题`);
+        } catch (err) {
+            console.error(`[主题切换] 切换失败:`, err);
+        }
     }
 
     // 更新主题按钮状态
@@ -247,6 +368,115 @@ export class Debug {
                 this.elements.themeDarkBtn.style.fontWeight = 'normal';
                 this.elements.themeLightBtn.style.borderColor = '#667eea';
                 this.elements.themeLightBtn.style.fontWeight = 'bold';
+            }
+        }
+    }
+
+    // 设置音频推流格式
+    setAudioFormat(format) {
+        localStorage.setItem('streamFormat', format);
+        const display = document.getElementById('currentFormatDisplay');
+        if (display) {
+            display.textContent = format.toUpperCase();
+        }
+        
+        // 更新按钮样式
+        const formats = ['mp3', 'aac', 'flac', 'wav', 'm4a'];
+        formats.forEach(fmt => {
+            const btn = document.getElementById(`format${fmt.toUpperCase()}Btn`);
+            if (btn) {
+                if (fmt === format) {
+                    btn.style.borderColor = '#667eea';
+                    btn.style.background = '#667eea';
+                    btn.style.fontWeight = 'bold';
+                } else {
+                    btn.style.borderColor = '#999';
+                    btn.style.background = '#555';
+                    btn.style.fontWeight = 'normal';
+                }
+            }
+        });
+        
+        console.log(`[音频格式] 已切换到: ${format.toUpperCase()}`);
+    }
+
+    // 初始化音频格式按钮样式
+    initAudioFormatButtons() {
+        const currentFormat = localStorage.getItem('streamFormat') || 'aac';
+        const display = document.getElementById('currentFormatDisplay');
+        if (display) {
+            display.textContent = currentFormat.toUpperCase();
+        }
+        this.setAudioFormat(currentFormat);
+    }
+
+    // 开启浏览器推流
+    startBrowserStream() {
+        if (this.isStreaming) {
+            console.log('[推流] 推流已在运行中');
+            return;
+        }
+        
+        const streamFormat = localStorage.getItem('streamFormat') || 'aac';
+        console.log(`[推流] 手动开启推流 (格式: ${streamFormat})`);
+        
+        // 调用 player 的推流方法
+        if (this.player && typeof this.player.startBrowserStream === 'function') {
+            this.isStreaming = true;
+            
+            // 绑定推流事件以更新状态
+            this.player.on('stream:connecting', () => {
+                console.log('[推流] 正在连接...');
+            });
+            
+            this.player.on('stream:ready', () => {
+                console.log('[推流] 推流已就绪');
+                this.updateStreamStatus(true);
+            });
+            
+            this.player.on('stream:playing', () => {
+                console.log('[推流] 推流播放中');
+                this.updateStreamStatus(true);
+            });
+            
+            this.player.on('stream:error', (data) => {
+                console.error('[推流] 推流错误:', data.errorMsg);
+                this.updateStreamStatus(false);
+                this.isStreaming = false;
+            });
+            
+            // 启动推流
+            this.player.startBrowserStream(streamFormat);
+            this.updateStreamStatus(true);
+        }
+    }
+
+    // 停止浏览器推流
+    stopBrowserStream() {
+        const audioElement = document.getElementById('browserStreamAudio');
+        if (audioElement && !audioElement.paused) {
+            audioElement.pause();
+            audioElement.currentTime = 0;
+            audioElement.src = '';
+            console.log('[推流] 已停止推流');
+            this.isStreaming = false;
+            this.updateStreamStatus(false);
+        }
+    }
+
+    // 更新推流状态指示器
+    updateStreamStatus(isActive) {
+        if (this.elements.streamStatusDisplay && this.elements.streamStatusText) {
+            if (isActive) {
+                this.elements.streamStatusDisplay.textContent = '●';
+                this.elements.streamStatusDisplay.style.color = '#4CAF50';
+                this.elements.streamStatusText.textContent = '激活中';
+                this.elements.streamStatusText.style.color = '#4CAF50';
+            } else {
+                this.elements.streamStatusDisplay.textContent = '●';
+                this.elements.streamStatusDisplay.style.color = '#f44336';
+                this.elements.streamStatusText.textContent = '未激活';
+                this.elements.streamStatusText.style.color = '#f44336';
             }
         }
     }

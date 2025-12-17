@@ -41,13 +41,19 @@ def main():
     # 导入 FastAPI 应用
     from app import app
     
-    # 启动 Uvicorn 服务器
+    # 启动 Uvicorn 服务器（支持多并发连接）
+    # 使用单一 worker 配合 asyncio 事件循环处理并发
     uvicorn.run(
-        app,  # 直接传递 app 对象而不是字符串（兼容 PyInstaller）
+        app,
         host=host,
         port=port,
         reload=False,
-        log_level="info"
+        log_level="info",
+        use_colors=False,  # 禁用 ANSI 彩色输出，避免乱码
+        # Windows 上不支持多进程 workers，使用 asyncio 单进程处理并发
+        limit_concurrency=1024,  # 最大并发连接数
+        limit_max_requests=10000,  # 优雅重启机制
+        timeout_keep_alive=30  # 保持连接活跃的超时时间
     )
 
 

@@ -35,4 +35,5 @@ doc/
 # Executable files (except mpv.exe which is required)
 *.exe
 !mpv.exe
-yt-dlp.exe  # Not included in repository - download from https://github.com/yt-dlp/yt-dlp
+yt-dlp.exe
+ffmpeg.exe

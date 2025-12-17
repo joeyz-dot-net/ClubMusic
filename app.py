@@ -50,6 +50,7 @@ from models.stream import (
     ACTIVE_CLIENTS,
     FFMPEG_PROCESS,
     FFMPEG_FORMAT,
+    STREAM_STATS,
 )
 
 print("\n✓ 所有模块初始化完成！\n")
@@ -173,12 +174,13 @@ async def get_file_tree():
 
 @app.post("/play")
 async def play(request: Request):
-    """播放指定歌曲"""
+    """播放指定歌曲 - 服务器MPV播放 + 浏览器推流"""
     try:
         form = await request.form()
         url = form.get("url", "").strip()
         title = form.get("title", "").strip()
         song_type = form.get("type", "local").strip()
+        stream_format = form.get("stream_format", "mp3").strip() or "mp3"
         
         if not url:
             return JSONResponse(
@@ -202,10 +204,21 @@ async def play(request: Request):
             save_to_history=True
         )
         
+        # 新增：启动推流到浏览器
+        try:
+            from models.stream import start_ffmpeg_stream
+            start_ffmpeg_stream(audio_format=stream_format)
+            stream_started = True
+        except Exception as e:
+            logger.error(f"[Play] 启动推流失败: {e}")
+            stream_started = False
+        
         return {
             "status": "OK",
             "message": "播放成功",
-            "current": PLAYER.current_meta
+            "current": PLAYER.current_meta,
+            "stream_started": stream_started,
+            "stream_format": stream_format
         }
     except Exception as e:
         import traceback
@@ -1146,6 +1159,71 @@ def mpv_get(property_name):
 # Stream 推流路由
 # ============================================
 
+
+
+@app.get("/stream/play")
+async def stream_play(request: Request, format: str = "mp3", t: str = None):
+    """
+    推流端点 - 从网页播放时推流给浏览器
+    支持mp3, aac, aac-raw, pcm, flac格式
+    """
+    client_id = str(uuid.uuid4())
+    format_map = {
+        "aac": "aac",
+        "aac-raw": "aac-raw",
+        "mp3": "mp3",
+        "pcm": "pcm",
+        "flac": "flac"
+    }
+    audio_format = format_map.get(format, "mp3")
+    
+    # 确保FFmpeg在运行（使用指定格式）
+    start_ffmpeg_stream(audio_format=audio_format)
+    await asyncio.sleep(0.3)
+    
+    client_queue = register_client(client_id)
+    print(f"[STREAM] ✓ 客户端已注册: {client_id}")
+    
+    async def stream_generator():
+        try:
+            empty_reads = 0
+            max_empty = 200  # 20秒无数据后断开
+            loop = asyncio.get_event_loop()
+            
+            while empty_reads < max_empty:
+                try:
+                    # 使用阻塞超时的get()，而不是get(False)，让线程在队列中等待
+                    def blocking_get():
+                        return client_queue.get(block=True, timeout=0.5)
+                    
+                    chunk = await asyncio.wait_for(
+                        loop.run_in_executor(None, blocking_get),
+                        timeout=1.0
+                    )
+                    if chunk:
+                        yield chunk
+                        empty_reads = 0
+                    else:
+                        empty_reads += 1
+                except asyncio.TimeoutError:
+                    empty_reads += 1
+                    # 不发送空字节，让浏览器等待数据
+                except queue.Empty:
+                    empty_reads += 1
+                    # 不发送空字节，让浏览器等待数据
+        finally:
+            unregister_client(client_id)
+    
+    return StreamingResponse(
+        stream_generator(),
+        media_type=stream_get_mime_type(audio_format),
+        headers={
+            "Content-Disposition": f"inline; filename=stream.{audio_format}",
+            "Cache-Control": "no-cache"
+        }
+    )
+
+
 @app.get("/stream/aac")
 async def stream_aac(request: Request, fmt: str = "aac"):
     """AAC格式推流端点"""
@@ -1170,18 +1248,21 @@ async def stream_aac(request: Request, fmt: str = "aac"):
     async def stream_generator():
         try:
             consecutive_empty = 0
+            loop = asyncio.get_event_loop()
+            
             while consecutive_empty < 100:
                 try:
-                    chunk = client_queue.get(timeout=0.2)
+                    # 在线程池中执行阻塞的队列操作
+                    chunk = await asyncio.wait_for(
+                        loop.run_in_executor(None, client_queue.get, False),
+                        timeout=0.15
+                    )
                     if chunk:
                         print(f"[STREAM] 发送数据块: {len(chunk)} 字节 到客户端 {client_id}")
                         yield chunk
                         consecutive_empty = 0
-                    else:
-                        consecutive_empty += 1
-                except queue.Empty:
+                except (asyncio.TimeoutError, queue.Empty):
                     consecutive_empty += 1
-                    await asyncio.sleep(0.05)
         except Exception as e:
             print(f"[STREAM] Generator异常: {e}")
         finally:

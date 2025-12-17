@@ -502,6 +502,11 @@ class MusicPlayerApp {
         // 初始化调试面板模块
         debug.init(player, playlistManager);
         
+        // 安全地初始化音频格式按钮
+        if (debug && typeof debug.initAudioFormatButtons === 'function') {
+            debug.initAudioFormatButtons();
+        }
+        
         // 标签页切换
         this.setupTabNavigation();
     }
@@ -784,17 +789,56 @@ class MusicPlayerApp {
         // 应用相应的主题
         this.applyPlaylistTheme();
     }
+    // 停止推流（用于切换歌曲时的清理）
+    stopBrowserStream() {
+        const audioElement = document.getElementById('browserStreamAudio');
+        if (audioElement && !audioElement.paused) {
+            audioElement.pause();
+            audioElement.currentTime = 0;
+            audioElement.src = '';
+            console.log('[推流] 已停止推流');
+        }
+    }
 
     // 播放歌曲
     async playSong(song) {
         try {
-            loading.show('正在播放...');
-            await player.play(song.url, song.title, song.type);
-        } catch (error) {
-            Toast.error('播放失败: ' + error.message);
-        } finally {
+            // 首先停止旧的推流
+            this.stopBrowserStream();
+            
+            // 清理前一次播放的超时
+            if (this.playTimeouts && this.playTimeouts.length > 0) {
+                this.playTimeouts.forEach(id => clearTimeout(id));
+                this.playTimeouts = [];
+            }
+            
+            loading.show('📀 准备播放歌曲...');
+            
+            // 从 localStorage 读取用户选择的格式，默认为 aac
+            const streamFormat = localStorage.getItem('streamFormat') || 'aac';
+            
+            // 播放歌曲
+            await player.play(song.url, song.title, song.type, streamFormat);
+            
+            // 立即隐藏加载提示（不再等待推流）
             loading.hide();
+            Toast.success(`🎵 正在播放: ${song.title}`);
+            
+        } catch (error) {
+            loading.hide();
+            Toast.error('播放失败: ' + error.message);
         }
+    }
+
+    // 设置音频格式
+    setStreamFormat(format) {
+        localStorage.setItem('streamFormat', format);
+        console.log(`[设置] 音频推流格式已更改为: ${format}`);
+    }
+
+    // 获取当前音频格式
+    getStreamFormat() {
+        return localStorage.getItem('streamFormat') || 'aac';
     }
 
     // 播放/暂停
@@ -1077,6 +1121,27 @@ class MusicPlayerApp {
 
 // 创建全局应用实例
 const app = new MusicPlayerApp();
+
+// 页面卸载时的清理逻辑（处理页面刷新/关闭时的stream断开）
+window.addEventListener('beforeunload', () => {
+    // 停止推流
+    const audioElement = document.getElementById('browserStreamAudio');
+    if (audioElement) {
+        try {
+            audioElement.pause();
+            audioElement.src = '';
+            audioElement.load();
+            console.log('[清理] 页面卸载时停止了推流');
+        } catch (e) {
+            // 忽略错误
+        }
+    }
+    
+    // 停止状态轮询
+    if (player && typeof player.stopPolling === 'function') {
+        player.stopPolling();
+    }
+});
 
 // DOM 加载完成后初始化
 if (document.readyState === 'loading') {

@@ -183,18 +183,26 @@ def start_stream_reader_thread():
                     last_log_time = now
                     total_bytes = 0
                 
-                # 广播到所有客户端
+                # 广播到所有客户端（最小化锁的持有时间）
+                dead_clients = []
                 with CLIENTS_LOCK:
-                    dead_clients = []
-                    for client_id, client_queue in list(ACTIVE_CLIENTS.items()):
-                        try:
-                            client_queue.put_nowait(chunk)
-                        except queue.Full:
-                            print(f"[STREAM] ⚠️ 客户端队列满: {client_id}")
-                            dead_clients.append(client_id)
-                    
-                    for client_id in dead_clients:
-                        del ACTIVE_CLIENTS[client_id]
+                    clients_snapshot = list(ACTIVE_CLIENTS.items())
+                
+                for client_id, client_queue in clients_snapshot:
+                    try:
+                        client_queue.put(chunk, timeout=0.5)  # 非阻塞，但有超时
+                    except queue.Full:
+                        print(f"[STREAM] ⚠️ 客户端队列满: {client_id}")
+                        dead_clients.append(client_id)
+                    except Exception as e:
+                        dead_clients.append(client_id)
+                
+                # 移除死亡的客户端
+                if dead_clients:
+                    with CLIENTS_LOCK:
+                        for client_id in dead_clients:
+                            if client_id in ACTIVE_CLIENTS:
+                                del ACTIVE_CLIENTS[client_id]
                 
                 try:
                     STREAM_BUFFER.put_nowait(chunk)
