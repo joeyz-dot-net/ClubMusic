@@ -7,7 +7,12 @@ import os
 import sys
 import json
 import time
+import logging
+import hashlib
+import random
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI, Request, File, UploadFile, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -53,6 +58,8 @@ from models.stream import (
     STREAM_STATS,
 )
 
+from models.settings import initialize_settings
+
 print("\n✓ 所有模块初始化完成！\n")
 
 # ============================================
@@ -74,6 +81,7 @@ def _get_resource_path(relative_path):
 PLAYER = MusicPlayer.initialize(data_dir=".")
 PLAYLISTS_MANAGER = Playlists(data_file="playlists.json")
 RANK_MANAGER = HitRank(max_size=100)
+SETTINGS = initialize_settings()
 
 DEFAULT_PLAYLIST_ID = "default"
 CURRENT_PLAYLIST_ID = DEFAULT_PLAYLIST_ID
@@ -94,6 +102,93 @@ def _init_default_playlist():
 # 确保默认歌单存在
 _init_default_playlist()
 
+# ==================== 浏览器检测函数 ====================
+def detect_browser(user_agent: str) -> str:
+    """
+    从 User-Agent 字符串检测浏览器类型
+    
+    Args:
+        user_agent: HTTP User-Agent 字符串
+    
+    Returns:
+        str: 浏览器类型 (safari, edge, chrome, firefox, opera, unknown)
+    """
+    ua = user_agent.lower()
+    
+    # 检测顺序很重要：需要考虑包含关系
+    # Opera 检测（必须在 Chrome 之前，因为 Opera 基于 Chromium）
+    if 'opr' in ua or 'opera' in ua:
+        return 'opera'
+    # Edge 在 UA 中显示为 "Edg"（注意不是 Edge）
+    elif 'edg' in ua:
+        return 'edge'
+    # Chrome 检测（必须排除 Edge，因为 Edge Chromium 也包含 chromium）
+    elif 'chrome' in ua and 'edg' not in ua:
+        return 'chrome'
+    # Firefox 检测
+    elif 'firefox' in ua:
+        return 'firefox'
+    # Safari 的 UA 包含 "Safari" 但不包含 "Chrome" 或 "Edg"
+    elif 'safari' in ua and 'chrome' not in ua and 'edg' not in ua:
+        return 'safari'
+    else:
+        return 'unknown'
+
+
+# ==================== Safari 浏览器自适应优化 ====================
+def detect_browser_and_apply_config(request: Request) -> dict:
+    """根据User-Agent检测浏览器并应用对应的流媒体配置"""
+    user_agent = request.headers.get("user-agent", "").lower()
+    
+    config = {
+        "browser": "Unknown",
+        "keepalive_interval": 0.5,      # 心跳间隔（秒）
+        "chunk_size": 256 * 1024,        # 块大小（字节）
+        "queue_timeout": 1.0,            # 队列超时（秒）
+        "force_flush": False,            # 强制刷新
+        "max_consecutive_empty": 150,    # 最大连续空数据次数
+    }
+    
+    if "safari" in user_agent and "chrome" not in user_agent:
+        config.update({
+            "browser": "Safari",
+            "keepalive_interval": 0.3,   # Safari：更频繁的心跳（每300ms）
+            "chunk_size": 128 * 1024,     # 🔧 优化2：改为128KB（更低延迟）
+            "queue_timeout": 0.5,        # Safari：更短的超时检测
+            "force_flush": True,         # Safari：强制立即发送
+            "max_consecutive_empty": 300,  # 🔧 优化3：增加到300（更宽容）
+        })
+    elif "edge" in user_agent or "edg" in user_agent:
+        config.update({
+            "browser": "Edge",
+            "keepalive_interval": 0.5,
+            "chunk_size": 256 * 1024,
+            "queue_timeout": 1.0,
+            "force_flush": False,
+            "max_consecutive_empty": 150,
+        })
+    elif "firefox" in user_agent:
+        config.update({
+            "browser": "Firefox",
+            "keepalive_interval": 0.4,
+            "chunk_size": 128 * 1024,
+            "queue_timeout": 0.8,
+            "force_flush": False,
+            "max_consecutive_empty": 150,
+        })
+    elif "chrome" in user_agent:
+        config.update({
+            "browser": "Chrome",
+            "keepalive_interval": 0.5,
+            "chunk_size": 256 * 1024,
+            "queue_timeout": 1.0,
+            "force_flush": False,
+            "max_consecutive_empty": 150,
+        })
+    
+    return config
+
+
 # ============================================
 # 创建 FastAPI 应用
 # ============================================
@@ -112,6 +207,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def startup_event():
+    """应用启动时的初始化事件"""
+    logger.info("[APP] 应用启动完成")
 
 # ============================================
 # 挂载静态文件
@@ -1156,6 +1257,185 @@ def mpv_get(property_name):
     return PLAYER.mpv_get(property_name)
 
 # ============================================
+# API 路由：用户设置
+# ============================================
+
+@app.get("/settings")
+async def get_user_settings():
+    """获取当前用户设置"""
+    try:
+        return {
+            "status": "OK",
+            "data": SETTINGS.get_all()
+        }
+    except Exception as e:
+        return JSONResponse(
+            {"status": "ERROR", "error": str(e)},
+            status_code=500
+        )
+
+@app.post("/settings")
+async def update_user_settings(request: Request):
+    """更新用户设置（批量）"""
+    try:
+        data = await request.json()
+        
+        # 验证设置项
+        valid_keys = set(SETTINGS.DEFAULT_SETTINGS.keys())
+        update_dict = {}
+        
+        for key, value in data.items():
+            if key in valid_keys:
+                update_dict[key] = value
+            else:
+                logger.warning(f"[设置] 忽略未知设置项: {key}")
+        
+        if update_dict:
+            success = SETTINGS.update(update_dict)
+            if success:
+                return {
+                    "status": "OK",
+                    "message": "设置已更新",
+                    "data": SETTINGS.get_all()
+                }
+            else:
+                return JSONResponse(
+                    {"status": "ERROR", "error": "设置更新失败"},
+                    status_code=500
+                )
+        else:
+            return {
+                "status": "OK",
+                "message": "没有有效的设置项"
+            }
+    except Exception as e:
+        logger.error(f"[设置] 更新失败: {e}")
+        return JSONResponse(
+            {"status": "ERROR", "error": str(e)},
+            status_code=500
+        )
+
+@app.post("/settings/{key}")
+async def update_single_setting(key: str, request: Request):
+    """更新单个设置"""
+    try:
+        data = await request.json()
+        value = data.get("value")
+        
+        # 验证设置项
+        if key not in SETTINGS.DEFAULT_SETTINGS:
+            return JSONResponse(
+                {"status": "ERROR", "error": f"未知的设置项: {key}"},
+                status_code=400
+            )
+        
+        success = SETTINGS.set(key, value)
+        if success:
+            return {
+                "status": "OK",
+                "message": f"已更新 {key}",
+                "data": {key: value}
+            }
+        else:
+            return JSONResponse(
+                {"status": "ERROR", "error": "更新失败"},
+                status_code=500
+            )
+    except Exception as e:
+        return JSONResponse(
+            {"status": "ERROR", "error": str(e)},
+            status_code=500
+        )
+
+@app.post("/settings/reset")
+async def reset_settings():
+    """重置设置为默认值"""
+    try:
+        logger.info("[API] 重置设置请求")
+        success = SETTINGS.reset()
+        logger.info(f"[API] 重置结果: {success}")
+        
+        if not success:
+            logger.error("[API] 重置失败")
+            return JSONResponse(
+                {"status": "ERROR", "error": "重置失败"},
+                status_code=500
+            )
+        
+        # 获取重置后的设置
+        result_data = SETTINGS.get_all()
+        logger.info(f"[API] 重置后获取的设置数据: {result_data}")
+        logger.info(f"[API] 设置数据类型: {type(result_data)}")
+        
+        # 确保数据可以序列化
+        import json as json_module
+        try:
+            json_str = json_module.dumps(result_data)
+            logger.info(f"[API] JSON 序列化成功: {json_str}")
+        except Exception as json_err:
+            logger.error(f"[API] JSON 序列化失败: {json_err}")
+            return JSONResponse(
+                {"status": "ERROR", "error": f"数据序列化失败: {str(json_err)}"},
+                status_code=500
+            )
+        
+        response_data = {
+            "status": "OK",
+            "message": "已重置为默认设置",
+            "data": result_data
+        }
+        logger.info(f"[API] 准备返回响应")
+        return JSONResponse(response_data, status_code=200)
+        
+    except Exception as e:
+        logger.exception(f"[API] 重置设置异常: {e}")
+        return JSONResponse(
+            {"status": "ERROR", "error": str(e)},
+            status_code=500
+        )
+
+@app.get("/settings/schema")
+async def get_settings_schema():
+    """获取设置项的描述和可选值"""
+    return {
+        "status": "OK",
+        "schema": {
+            "theme": {
+                "type": "select",
+                "label": "主题样式",
+                "options": [
+                    {"value": "light", "label": "浅色"},
+                    {"value": "dark", "label": "深色"},
+                    {"value": "auto", "label": "自动"}
+                ],
+                "default": "dark"
+            },
+            "auto_stream": {
+                "type": "boolean",
+                "label": "自动启动推流",
+                "description": "播放音乐时自动启动浏览器推流",
+                "default": True
+            },
+            "stream_volume": {
+                "type": "range",
+                "label": "推流音量",
+                "min": 0,
+                "max": 100,
+                "default": 50
+            },
+            "language": {
+                "type": "select",
+                "label": "语言",
+                "options": [
+                    {"value": "zh", "label": "中文"},
+                    {"value": "en", "label": "English"}
+                ],
+                "default": "zh"
+            }
+        }
+    }
+
+# ============================================
 # Stream 推流路由
 # ============================================
 
@@ -1164,10 +1444,45 @@ def mpv_get(property_name):
 @app.get("/stream/play")
 async def stream_play(request: Request, format: str = "mp3", t: str = None):
     """
-    推流端点 - 从网页播放时推流给浏览器
+    推流端点 - 浏览器自适应优化版本
     支持mp3, aac, aac-raw, pcm, flac格式
+    
+    优化特性：
+    - 根据浏览器类型自动调整心跳间隔、块大小等参数
+    - Safari：更频繁的心跳（300ms）
+    - Chrome/Firefox/Edge：标准配置
     """
-    client_id = str(uuid.uuid4())
+    # 🔧 检测浏览器类型
+    user_agent = request.headers.get("user-agent", "")
+    browser_type = detect_browser(user_agent)
+    
+    # 🔧 获取浏览器特定配置
+    browser_config = detect_browser_and_apply_config(request)
+    browser_name = browser_config["browser"]
+    keepalive_interval = browser_config["keepalive_interval"]
+    queue_timeout = browser_config["queue_timeout"]
+    force_flush = browser_config["force_flush"]
+    max_consecutive_empty = browser_config["max_consecutive_empty"]
+    
+    # 🔧 检查调试模式
+    debug_mode = PLAYER.debug if hasattr(PLAYER, 'debug') else False
+    
+    # 获取或创建客户端ID
+    cookies = request.cookies
+    client_id = cookies.get("stream_client_id")
+    
+    if not client_id:
+        # 新客户端，生成一个新的client_id
+        unique_seed = f"{time.time()}{random.random()}"
+        client_id = hashlib.md5(unique_seed.encode()).hexdigest()[:16]
+    
+    # 导入stream模块以使用DEFAULT_STREAM_FORMAT常量
+    import models.stream as stream_module
+    
+    # 如果format参数为空或为"mp3"但配置不同，使用配置的默认值
+    if not format or format == "mp3":
+        format = stream_module.DEFAULT_STREAM_FORMAT
+    
     format_map = {
         "aac": "aac",
         "aac-raw": "aac-raw",
@@ -1175,118 +1490,138 @@ async def stream_play(request: Request, format: str = "mp3", t: str = None):
         "pcm": "pcm",
         "flac": "flac"
     }
-    audio_format = format_map.get(format, "mp3")
+    audio_format = format_map.get(format, stream_module.DEFAULT_STREAM_FORMAT)
     
-    # 确保FFmpeg在运行（使用指定格式）
+    # 确保FFmpeg在运行（如果有活跃客户端，不会中断它们）
     start_ffmpeg_stream(audio_format=audio_format)
-    await asyncio.sleep(0.3)
     
-    client_queue = register_client(client_id)
-    print(f"[STREAM] ✓ 客户端已注册: {client_id}")
+    # 只在首次或重启后等待，不要每个客户端都等待
+    if stream_module.CLIENT_POOL.get_active_count() == 0:
+        # 新启动时等待FFmpeg初始化
+        await asyncio.sleep(0.5)
+    
+    # 🔧 使用浏览器特定的队列大小注册客户端
+    client_queue = register_client(client_id, browser_name=browser_type)
+    active_count = stream_module.CLIENT_POOL.get_active_count()
+    print(f"[STREAM] ✓ 客户端已连接: {client_id[:8]} ({browser_type}, 格式: {audio_format}, 活跃数: {active_count})")
     
     async def stream_generator():
+        """浏览器自适应的流生成器"""
         try:
-            empty_reads = 0
-            max_empty = 200  # 20秒无数据后断开
             loop = asyncio.get_event_loop()
+            timeout_count = 0
+            last_seq_id = -1  # 上次发送的序列号，用于客户端丢包检测
+            logger.debug(f"[DEBUG-STREAM-START] {client_id[:8]} ({browser_name}) 开始推流 (格式: {audio_format})")
             
-            while empty_reads < max_empty:
+            while timeout_count < max_consecutive_empty:
                 try:
-                    # 使用阻塞超时的get()，而不是get(False)，让线程在队列中等待
+                    # 使用浏览器特定的队列超时
                     def blocking_get():
-                        return client_queue.get(block=True, timeout=0.5)
+                        return client_queue.get(block=True, timeout=queue_timeout)
                     
-                    chunk = await asyncio.wait_for(
+                    item = await asyncio.wait_for(
                         loop.run_in_executor(None, blocking_get),
-                        timeout=1.0
+                        timeout=queue_timeout + 5.0
                     )
-                    if chunk:
+                    if item:
+                        # 🔥 解包序列号和数据块
+                        if isinstance(item, tuple) and len(item) == 2:
+                            seq_id, chunk = item
+                            
+                            # 🔥 忽略心跳包检测丢包（seq < 0 表示心跳）
+                            if seq_id >= 0:
+                                # 🔥 防止重复：检查是否已经处理过这个序列号（冗余发送去重）
+                                if seq_id <= last_seq_id:
+                                    # 这是一个重复的块，跳过 yield 但不计入超时
+                                    timeout_count = 0
+                                    continue
+                                
+                                # 检测丢包：如果序列号不连续，打印警告（前端可基于此主动重发）
+                                if seq_id > last_seq_id + 1 and last_seq_id >= 0:
+                                    gap = seq_id - last_seq_id - 1
+                                    print(f"⚠️ 客户端 {client_id[:8]} 检测到丢包: 缺失 {gap} 块 (seq {last_seq_id+1}-{seq_id-1})")
+                                
+                                last_seq_id = seq_id
+                            # 无论是数据块还是心跳，都已经解包到 chunk 变量
+                        else:
+                            # 非元组格式（兼容旧数据）
+                            chunk = item
+                        
+                        # 🔥 跳过空的心跳包（seq_id < 0 的空字节）- 避免爆音
+                        if not chunk or (isinstance(item, tuple) and item[0] < 0 and not item[1]):
+                            timeout_count = 0
+                            continue
+                        
+                        # 🔥 只 yield chunk 数据（字节），不 yield 元组
                         yield chunk
-                        empty_reads = 0
+                        timeout_count = 0
+                        
+                        # 🔧 Safari强制刷新：立即推送数据，不等待缓冲填满
+                        if force_flush:
+                            await asyncio.sleep(0.01)
                     else:
-                        empty_reads += 1
-                except asyncio.TimeoutError:
-                    empty_reads += 1
-                    # 不发送空字节，让浏览器等待数据
-                except queue.Empty:
-                    empty_reads += 1
-                    # 不发送空字节，让浏览器等待数据
-        finally:
-            unregister_client(client_id)
-    
-    return StreamingResponse(
-        stream_generator(),
-        media_type=stream_get_mime_type(audio_format),
-        headers={
-            "Content-Disposition": f"inline; filename=stream.{audio_format}",
-            "Cache-Control": "no-cache"
-        }
-    )
-
-
-@app.get("/stream/aac")
-async def stream_aac(request: Request, fmt: str = "aac"):
-    """AAC格式推流端点"""
-    client_id = str(uuid.uuid4())
-    format_map = {"aac": "aac", "aac-raw": "aac-raw", "mp3": "mp3"}
-    audio_format = format_map.get(fmt, "aac")
-    
-    print(f"[STREAM] 新客户端连接: {client_id}, 格式: {audio_format}")
-    
-    if not start_ffmpeg_stream(audio_format=audio_format):
-        print(f"[STREAM] FFmpeg启动失败")
-        return JSONResponse(
-            {"status": "ERROR", "message": "无法启动FFmpeg"},
-            status_code=500
-        )
-    
-    await asyncio.sleep(1.0)
-    
-    client_queue = register_client(client_id)
-    print(f"[STREAM] 已为客户端注册队列: {client_id}")
-    
-    async def stream_generator():
-        try:
-            consecutive_empty = 0
-            loop = asyncio.get_event_loop()
-            
-            while consecutive_empty < 100:
-                try:
-                    # 在线程池中执行阻塞的队列操作
-                    chunk = await asyncio.wait_for(
-                        loop.run_in_executor(None, client_queue.get, False),
-                        timeout=0.15
-                    )
-                    if chunk:
-                        print(f"[STREAM] 发送数据块: {len(chunk)} 字节 到客户端 {client_id}")
-                        yield chunk
-                        consecutive_empty = 0
+                        timeout_count += 1
+                        
                 except (asyncio.TimeoutError, queue.Empty):
-                    consecutive_empty += 1
-        except Exception as e:
-            print(f"[STREAM] Generator异常: {e}")
+                    timeout_count += 1
+                    # 🔥 移除心跳包 yield：心跳通过序列号心跳包维护，不需要 yield 有效数据
+                    # 这样可以避免解码器尝试解码心跳数据导致的爆音
+                            
         finally:
-            print(f"[STREAM] 客户端断开: {client_id}")
+            logger.info(f"[DEBUG-STREAM-END] {client_id[:8]} ({browser_name}) 推流结束")
             unregister_client(client_id)
     
-    return StreamingResponse(
+    # 🔧 Safari优化HTTP头：禁用代理缓冲，启用分块编码
+    response = StreamingResponse(
         stream_generator(),
         media_type=stream_get_mime_type(audio_format),
         headers={
             "Cache-Control": "no-cache, no-store, must-revalidate",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
+            "X-Accel-Buffering": "no",  # 禁用代理层缓冲（Nginx优化）
+            "Transfer-Encoding": "chunked",  # 显式启用分块编码
+            "Content-Type": f"audio/{audio_format if audio_format != 'aac-raw' else 'aac'}",
+            "X-Content-Type-Options": "nosniff",
+            "Pragma": "no-cache",
         }
     )
+    
+    # 设置stream_client_id cookie，有效期30天
+    response.set_cookie(
+        "stream_client_id",
+        client_id,
+        max_age=30*24*3600,  # 30天
+        httponly=True,  # 只允许HTTP访问，JavaScript无法读取
+        samesite="lax"  # CSRF保护
+    )
+    
+    return response
+
+
+@app.get("/stream/debug/browser")
+async def stream_debug_browser(request: Request):
+    """调试端点：显示当前浏览器的自适应配置"""
+    config = detect_browser_and_apply_config(request)
+    return JSONResponse({
+        "status": "OK",
+        "browser": config["browser"],
+        "user_agent": request.headers.get("user-agent", "Unknown"),
+        "keepalive_interval_ms": int(config["keepalive_interval"] * 1000),
+        "queue_timeout_ms": int(config["queue_timeout"] * 1000),
+        "force_flush": config["force_flush"],
+        "max_consecutive_empty": config["max_consecutive_empty"],
+        "recommendation": f"✓ 已为 {config['browser']} 浏览器优化" if config["browser"] != "Unknown" else "⚠️ 未识别浏览器，使用默认配置"
+    })
 
 
 @app.post("/stream/control")
 async def stream_control(request: Request):
     """流控制接口"""
+    import models.stream as stream_module
     try:
         form = await request.form()
         action = form.get("action", "").strip()
-        format_type = form.get("format", "aac").strip()
+        format_type = form.get("format", stream_module.DEFAULT_STREAM_FORMAT).strip()
         
         if action == "start":
             if start_ffmpeg_stream(audio_format=format_type):
@@ -1311,36 +1646,80 @@ async def stream_control(request: Request):
         )
 
 
+@app.get("/stream/resend/{seq_id}")
+async def stream_resend(seq_id: int):
+    """
+    🔥 重发端点：客户端检测到丢包时，可以请求重发特定序列号的数据块
+    用途：Safari/Edge等浏览器在检测到序列号间隔不连续时，可调用此端点补齐丢失数据
+    """
+    import models.stream as stream_module
+    
+    try:
+        seq_id = int(seq_id)
+        chunk = stream_module.get_from_retransmit_buffer(seq_id)
+        
+        if chunk is None:
+            return JSONResponse({
+                "status": "ERROR",
+                "message": f"序列号 {seq_id} 不在缓冲池中（已过期或未生成）",
+                "data": None
+            }, status_code=404)
+        
+        return Response(
+            content=chunk,
+            media_type="audio/mpeg",
+            headers={
+                "X-Sequence-ID": str(seq_id),
+                "Cache-Control": "no-cache",
+                "X-Resend": "true"
+            }
+        )
+    except ValueError:
+        return JSONResponse({
+            "status": "ERROR",
+            "message": f"无效的序列号格式: {seq_id}"
+        }, status_code=400)
+    except Exception as e:
+        return JSONResponse({
+            "status": "ERROR",
+            "message": f"重发失败: {str(e)}"
+        }, status_code=500)
+
+
 @app.get("/stream/status")
 async def stream_status():
-    """推流状态"""
+    """推流状态 - 详细的性能和客户端统计"""
     import models.stream as stream_module
-    running = stream_module.FFMPEG_PROCESS is not None and stream_module.FFMPEG_PROCESS.poll() is None
-    active_clients = len(stream_module.ACTIVE_CLIENTS)
     
-    # 计算统计数据
-    total_bytes = stream_module.STREAM_STATS.get("total_bytes", 0)
-    start_time = stream_module.STREAM_STATS.get("start_time")
-    duration = 0
-    avg_speed = 0
+    stats = stream_module.get_stream_stats()
     
-    if start_time:
-        duration = time.time() - start_time
-        if duration > 0:
-            avg_speed = (total_bytes / 1024) / duration
-    
+    # 整合前端需要的数据
     return JSONResponse({
         "status": "OK",
         "data": {
-            "running": running,
-            "format": stream_module.FFMPEG_FORMAT,
-            "active_clients": active_clients,
-            "is_active": active_clients > 0,
-            "status_text": "✓ 已激活" if active_clients > 0 else "⚠️ 等待客户端连接",
-            "total_bytes": total_bytes,
-            "total_mb": round(total_bytes / 1024 / 1024, 2),
-            "duration": duration,
-            "avg_speed": round(avg_speed, 2)
+            "running": stats.get("running", False),
+            "format": stats.get("format", "--"),
+            "duration": stats.get("duration", 0),
+            "total_bytes": stats.get("total_bytes", 0),
+            "total_mb": stats.get("total_mb", 0),
+            "avg_speed": stats.get("avg_speed_kbps", 0),  # 转换字段名
+            "active_clients": stats["pool"].get("active_clients", 0),  # 从 pool 中获取
+            "is_active": stats["pool"].get("active_clients", 0) > 0,
+            "status_text": f"✓ 活跃 ({stats['pool'].get('active_clients', 0)}客户端)" 
+                          if stats["pool"].get("active_clients", 0) > 0 
+                          else "⚠️ 等待客户端连接",
+        }
+    })
+
+
+@app.get("/config/stream")
+async def config_stream():
+    """获取推流配置（前端使用）"""
+    import models.stream as stream_module
+    return JSONResponse({
+        "status": "OK",
+        "data": {
+            "default_format": stream_module.DEFAULT_STREAM_FORMAT
         }
     })
 
@@ -1349,6 +1728,13 @@ async def stream_status():
 async def test_aac_stream():
     """AAC推流测试页面"""
     with open("templates/test_aac_stream.html", "r", encoding="utf-8") as f:
+        return HTMLResponse(f.read())
+
+
+@app.get("/test/browsers")
+async def test_browsers():
+    """浏览器兼容性测试页面"""
+    with open("templates/compatibility-test.html", "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
 
 # ============================================

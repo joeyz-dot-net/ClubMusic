@@ -22,7 +22,7 @@ export class Player {
     }
 
     // 播放控制
-    async play(url, title, type = 'local', streamFormat = 'aac') {
+    async play(url, title, type = 'local', streamFormat = 'mp3') {
         const result = await api.play(url, title, type, streamFormat);
         
         // 不再自动启动浏览器推流，用户需要手动点击"开启推流"按钮
@@ -33,7 +33,7 @@ export class Player {
     }
     
     // 启动浏览器推流（带详细的连接提示）
-    startBrowserStream(streamFormat = 'aac') {
+    startBrowserStream(streamFormat = 'mp3') {
         const audioElement = document.getElementById('browserStreamAudio');
         
         if (!audioElement) {

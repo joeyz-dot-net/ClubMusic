@@ -22,10 +22,10 @@ class BasePlaylist(ABC):
         self._max_size = max_size
 
     def add(self, item):
-        """添加项目到列表末尾"""
-        self._items.append(item)
+        """添加项目到列表最上位置"""
+        self._items.insert(0, item)
         if self._max_size and len(self._items) > self._max_size:
-            self._items = self._items[-self._max_size :]
+            self._items = self._items[:self._max_size]
 
     def insert(self, index: int, item):
         """在指定位置插入项目"""

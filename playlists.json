@@ -9,24 +9,8 @@
       "name": "默认歌单",
       "songs": [
         {
-          "url": "G.E.M 邓紫棋/启示录/11. G.E.M.邓紫棋 - 离心力.flac",
-          "title": "11. G.E.M.邓紫棋 - 离心力.flac",
-          "type": "local"
-        },
-        {
-          "url": "Jacky Cheung 张学友/张学友 - 一千个伤心的理由.flac",
-          "title": "张学友 - 一千个伤心的理由",
-          "type": "local"
-        },
-        {
-          "url": "https://www.youtube.com/watch?v=viis5-_JjXQ",
-          "title": "【張學友 - Jacky Cheung 粤语歌曲】張學友20精選歌曲《還是覺得妳最好, 分手總要在雨天, 情已逝, 暗戀你, 我醒著做夢, 真情流露, 一千个伤心的理由, 藍雨, ...》",
-          "type": "youtube",
-          "thumbnail_url": "https://img.youtube.com/vi/viis5-_JjXQ/default.jpg"
-        },
-        {
-          "url": "Jacky Cheung 张学友/张学友 - 偷心.flac",
-          "title": "张学友 - 偷心",
+          "url": "ETC/三拜红尘凉 (Live) - 张碧晨、孟佳.flac",
+          "title": "三拜红尘凉 (Live) - 张碧晨、孟佳.flac",
           "type": "local"
         },
         {
@@ -35,49 +19,21 @@
           "type": "local"
         },
         {
-          "url": "Stefanie Sun 孫燕姿/2000台北演唱会/03. 孙燕姿 - 很好(Live).flac",
-          "title": "03. 孙燕姿 - 很好(Live)",
-          "type": "local"
-        },
-        {
-          "url": "https://www.youtube.com/watch?v=PisAtilDIis",
-          "title": "【歌手2025·纯享】 #单依纯《君》“经典传承”！创新串烧改编 传递跨越时空的怀念 |《歌手2025》| SINGER 2025｜MangoTV",
-          "type": "youtube",
-          "thumbnail_url": "https://img.youtube.com/vi/PisAtilDIis/default.jpg"
-        },
-        {
           "url": "https://www.youtube.com/watch?v=pwmHLAIsJHM",
           "title": "单依纯 - 永不失联的爱  现场版 中国好声音2020  單依純 - 永不失聯的愛 中國好聲音2020",
           "type": "youtube",
           "thumbnail_url": "https://img.youtube.com/vi/pwmHLAIsJHM/default.jpg"
         },
         {
-          "url": "https://www.youtube.com/watch?v=EtwgTAVeEQc",
-          "title": "“R&B小天后”单依纯十大封神名场面大盘点！唱一首爆一首！天花板级别！#单依纯 #中国好声音 #天赐的声音",
+          "url": "https://www.youtube.com/watch?v=crEh38PNAfw",
+          "title": "Top Hits 2026 | Spotify Winter 2025/2026 ❄️ Most Popular Spotify Songs 🎵 Chill Mix Playlist",
           "type": "youtube",
-          "thumbnail_url": "https://img.youtube.com/vi/EtwgTAVeEQc/default.jpg"
-        },
-        {
-          "url": "https://www.youtube.com/watch?v=lGckkwfhJFQ",
-          "title": "单依纯爆裂舞台全回顾 天才R&B歌手！最完美演绎《别问很可怕》💕",
-          "type": "youtube",
-          "thumbnail_url": "https://img.youtube.com/vi/lGckkwfhJFQ/default.jpg"
-        },
-        {
-          "url": "https://www.youtube.com/watch?v=iy8-IviW3Qo",
-          "title": "【歌手2025·纯享】 #单依纯 《珠玉》“神女吟唱”！奇幻 迷离又绵延不绝｜《歌手2025》| SINGER 2025｜MangoTV",
-          "type": "youtube",
-          "thumbnail_url": "https://img.youtube.com/vi/iy8-IviW3Qo/default.jpg"
-        },
-        {
-          "url": "ETC/5 20AM - soldier.flac",
-          "title": "5 20AM - soldier.flac",
-          "type": "local"
+          "thumbnail_url": "https://img.youtube.com/vi/crEh38PNAfw/maxresdefault.jpg"
         }
       ],
-      "song_count": 12,
+      "song_count": 4,
       "created_at": 1765711983.6007059,
-      "updated_at": 1765932234.5697966
+      "updated_at": 1766055713.5424817
     },
     {
       "id": "1765712869575",

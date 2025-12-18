@@ -13,6 +13,7 @@ import { debug } from './debug.js';
 import { Toast, loading, formatTime } from './ui.js';
 import { isMobile } from './utils.js';
 import { localFiles } from './local.js';
+import { settingsManager } from './modules/settingsManager.js';
 
 // ==========================================
 // 应用初始化
@@ -31,6 +32,19 @@ class MusicPlayerApp {
         console.log('🎵 初始化音乐播放器...');
         
         try {
+            // 0. 从后端获取推流配置
+            try {
+                const configResp = await fetch('/config/stream');
+                const configData = await configResp.json();
+                if (configData.status === 'OK' && configData.data?.default_format) {
+                    const defaultFormat = configData.data.default_format;
+                    localStorage.setItem('streamFormat', defaultFormat);
+                    console.log(`[配置] 推流默认格式: ${defaultFormat}`);
+                }
+            } catch (err) {
+                console.warn('[配置] 获取推流配置失败:', err);
+            }
+            
             // 1. 初始化 UI 元素
             this.initUIElements();
             
@@ -79,6 +93,10 @@ class MusicPlayerApp {
             // 7.5 初始化排行榜
             await rankingManager.init();
             
+            // 7.6 初始化设置管理器
+            await settingsManager.init();
+            this.bindSettingsButton();
+            
             // 8. 启动状态轮询（每200ms更新一次）
             player.startPolling(2000);
             
@@ -125,12 +143,7 @@ class MusicPlayerApp {
             fullPlayerRepeat: document.getElementById('fullPlayerRepeat'),
             fullPlayerVolumeSlider: document.getElementById('fullPlayerVolumeSlider'),
             
-            // 音量控制
-            volumePopupBtn: document.getElementById('volumePopupBtn'),
-            volumePopup: document.getElementById('volumePopup'),
-            volumeSliderTrack: document.getElementById('volumeSliderTrack'),
-            volumeSliderFill: document.getElementById('volumeSliderFill'),
-            volumeSliderThumb: document.getElementById('volumeSliderThumb'),
+            // 音量控制已移至 fullPlayerVolumeSlider
             
             // 播放进度
             playerProgress: document.getElementById('playerProgress'),
@@ -239,9 +252,27 @@ class MusicPlayerApp {
 
     // 初始化音量控制
     initVolumeControl() {
-        // 音量控制已在modules中初始化，这里可以添加额外的UI绑定
-        if (this.elements.volumeSliderTrack) {
-            volumeControl.init(this.elements.volumeSliderTrack);
+        // 初始化音量控制
+        const fullPlayerSlider = this.elements.fullPlayerVolumeSlider;
+        
+        if (fullPlayerSlider) {
+            // 初始化 volumeControl，使用静默模式（默认仅在调试时输出日志）
+            volumeControl.init(fullPlayerSlider, null, { silent: true });
+            
+            if (localStorage.getItem('DEBUG_MODE')) {
+                console.log('✅ 音量控制已初始化');
+            }
+        }
+    }
+
+    // 绑定设置按钮
+    bindSettingsButton() {
+        /**绑定导航栏设置按钮*/
+        const settingsBtn = document.getElementById('settingsNavBtn');
+        if (settingsBtn) {
+            settingsBtn.addEventListener('click', () => {
+                settingsManager.openPanel();
+            });
         }
     }
 
@@ -469,33 +500,17 @@ class MusicPlayerApp {
             document.addEventListener('touchend', endDrag);
         }
 
-        // 音量控制
-        if (this.elements.volumePopupBtn && this.elements.volumePopup) {
-            this.elements.volumePopupBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.elements.volumePopup.style.display = 
-                    this.elements.volumePopup.style.display === 'none' ? 'block' : 'none';
-            });
-            // 点击页面其他地方关闭音量弹窗
-            document.addEventListener('click', () => {
-                this.elements.volumePopup.style.display = 'none';
-            });
-        }
-        if (this.elements.volumeSliderTrack) {
-            this.elements.volumeSliderTrack.addEventListener('click', (e) => {
-                this.handleVolumeChange(e);
-            });
-        }
-        
         // 完整播放器的音量控制
         if (this.elements.fullPlayerVolumeSlider) {
             this.elements.fullPlayerVolumeSlider.addEventListener('input', (e) => {
                 const volume = parseInt(e.target.value);
-                player.setVolume(volume);
+                // 通过 volumeControl 来设置音量，保持同步
+                volumeControl.updateDisplay(volume);
             });
             this.elements.fullPlayerVolumeSlider.addEventListener('change', (e) => {
                 const volume = parseInt(e.target.value);
-                player.setVolume(volume);
+                // 通过 volumeControl 来设置音量到服务器
+                volumeControl.setVolume(volume);
             });
         }
 
@@ -814,8 +829,8 @@ class MusicPlayerApp {
             
             loading.show('📀 准备播放歌曲...');
             
-            // 从 localStorage 读取用户选择的格式，默认为 aac
-            const streamFormat = localStorage.getItem('streamFormat') || 'aac';
+            // 从 localStorage 读取用户选择的格式，默认为 mp3
+            const streamFormat = localStorage.getItem('streamFormat') || 'mp3';
             
             // 播放歌曲
             await player.play(song.url, song.title, song.type, streamFormat);
@@ -838,7 +853,7 @@ class MusicPlayerApp {
 
     // 获取当前音频格式
     getStreamFormat() {
-        return localStorage.getItem('streamFormat') || 'aac';
+        return localStorage.getItem('streamFormat') || 'mp3';
     }
 
     // 播放/暂停
@@ -854,21 +869,6 @@ class MusicPlayerApp {
     // 上一首
     playPrev() {
         player.prev();
-    }
-
-    // 处理音量改变
-    handleVolumeChange(e) {
-        if (!this.elements.volumeSliderTrack) return;
-        
-        const rect = this.elements.volumeSliderTrack.getBoundingClientRect();
-        const percent = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
-        
-        volumeControl.setVolume(percent);
-        
-        // 更新显示
-        if (this.elements.volumeSliderFill) {
-            this.elements.volumeSliderFill.style.width = percent + '%';
-        }
     }
 
     // 处理进度条点击

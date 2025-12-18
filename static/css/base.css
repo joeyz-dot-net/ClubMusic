@@ -111,6 +111,19 @@ button:active { transform: scale(0.98); }
     transition: all 0.2s;
 }
 
+/* 统计值（跨页面一致样式） */
+.stat-value {
+    color: var(--text-primary);
+    font-family: monospace;
+    font-weight: 600;
+}
+.card-value {
+    color: var(--text-primary);
+    font-weight: 700;
+    font-size: 18px;
+}
+
+
 /* 播放列表 */
 .playlist-empty { padding: 40px; text-align: center; }
 .playlist-track-item {

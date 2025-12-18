@@ -315,7 +315,7 @@
                 <select id="formatSelect">
                     <option value="aac">AAC (ADTS 容器) - Apple/iTunes标准</option>
                     <option value="aac-raw">AAC (Raw 格式) - 原始AAC流</option>
-                    <option value="mp3">MP3 (192kbps) - 广泛兼容</option>
+                    <option value="mp3" selected>MP3 (192kbps) - 广泛兼容</option>
                 </select>
             </div>
             
@@ -473,19 +473,11 @@
                         document.getElementById('avgSpeedStat').textContent = serverAvgSpeed.toFixed(2) + ' KB/s';
                         document.getElementById('dataValue').textContent = serverTotalMB;
                         
-                        // 计算缓冲进度（基于音频元素的缓冲状态）
-                        const audio = document.getElementById('audioPlayer');
-                        if (audio && audio.buffered && audio.buffered.length > 0 && audio.duration > 0) {
-                            const bufferedEnd = audio.buffered.end(audio.buffered.length - 1);
-                            const percentBuffered = (bufferedEnd / audio.duration) * 100;
-                            document.getElementById('bufferPercent').textContent = Math.round(Math.min(percentBuffered, 100)) + '%';
-                            document.getElementById('progressFill').style.width = Math.min(percentBuffered, 100) + '%';
-                        } else {
-                            // 如果无法从audio元素获取，显示当前数据比例
-                            const estimatedPercent = Math.min((serverTotalMB / 10) * 100, 100); // 假设10MB为100%
-                            document.getElementById('bufferPercent').textContent = Math.round(estimatedPercent) + '%';
-                            document.getElementById('progressFill').style.width = Math.min(estimatedPercent, 100) + '%';
-                        }
+                        // 计算缓冲进度（基于接收的实际字节数）
+                        // 流媒体duration通常为Infinity，改为显示接收数据量
+                        const bufferPercent = Math.min(serverTotalMB / 10 * 100, 100); // 假设10MB为满
+                        document.getElementById('bufferPercent').textContent = Math.round(bufferPercent) + '%';
+                        document.getElementById('progressFill').style.width = bufferPercent + '%';
                     } else {
                         document.getElementById('durationStat').textContent = '0s';
                     }

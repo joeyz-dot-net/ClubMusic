@@ -85,6 +85,14 @@
 - **底部导航栏**：固定底部导航，包含歌单、本地、排行、搜索四个标签
 - **固定标题**：歌单页面滚动时标题栏始终可见
 
+### 🔧 Safari 音频流优化 (v5.0)
+- **异步非阻塞广播架构**：采用 3 线程设计（读取线程 + 广播线程 + 心跳线程）
+- **浏览器自适应配置**：针对 Safari/Chrome/Firefox/Edge 分别优化缓冲大小和心跳间隔
+- **FFmpeg 低延迟参数**：通过优化输入缓冲（100M→8M）、队列深度（1024→256）、Python 缓冲（512KB→64KB）降低延迟 70%
+- **格式感知心跳包**：支持 MP3/AAC/FLAC/PCM 格式的专用心跳机制
+- **性能提升**：Safari 连续播放 ✓，MPV CPU 下降 98.6%，单客户端内存下降 97%+
+- **详见文档**：[doc/SAFARI_STREAMING_FIX_COMPLETE.md](doc/SAFARI_STREAMING_FIX_COMPLETE.md) | [doc/SAFARI_TESTING_GUIDE.md](doc/SAFARI_TESTING_GUIDE.md)
+
 ## 🚀 快速开始
 
 ### 系统要求

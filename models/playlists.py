@@ -105,13 +105,13 @@ class Playlist:
             # 用URL作为唯一键进行去重检查
             url = song_item.get("url")
             if not any(isinstance(s, dict) and s.get("url") == url for s in self.songs):
-                self.songs.append(song_item)
+                self.songs.insert(0, song_item)
                 self.updated_at = time.time()
                 return True
         else:
             # 字符串路径方式（向后兼容）
             if song_path_or_dict not in self.songs:
-                self.songs.append(song_path_or_dict)
+                self.songs.insert(0, song_path_or_dict)
                 self.updated_at = time.time()
                 return True
         return False

@@ -1,35 +1,61 @@
 // 音量控制模块
 import { api } from './api.js';
 
+// 调试模式检查
+const isDebugMode = () => localStorage.getItem('DEBUG_MODE') === '1';
+
 export class VolumeControl {
     constructor() {
         this.currentVolume = 50;
         this.isDragging = false;
         this.pendingValue = null;
         this.throttleTimer = null;
+        this.silent = false;  // 静默模式标志
     }
 
     // 初始化音量控制
-    init(sliderElement, displayElement) {
+    init(sliderElement, displayElement = null, options = {}) {
         this.slider = sliderElement;
         this.display = displayElement;
+        this.silent = options.silent || false;
         
-        if (this.slider) {
-            this.attachEventListeners();
-            this.loadVolume();
+        if (!this.slider) {
+            console.error('[音量] 滑块元素不存在');
+            return;
+        }
+        
+        // 初始化时加载音量
+        this.loadVolume();
+        
+        // 绑定事件
+        this.attachEventListeners();
+        
+        if (!this.silent && isDebugMode()) {
+            console.log('[音量] 控制已初始化');
         }
     }
 
     // 附加事件监听器
     attachEventListeners() {
-        // 鼠标事件
+        if (!this.slider) return;
+        
+        // input 事件：实时更新（频繁触发）
         this.slider.addEventListener('input', (e) => {
-            this.updateDisplay(e.target.value);
+            const volume = parseInt(e.target.value);
+            this.updateDisplay(volume);
             this.pendingValue = e.target.value;
+            
+            // 不输出 input 事件日志，太频繁
         });
 
+        // change 事件：完成调整时保存（较少触发）
         this.slider.addEventListener('change', (e) => {
-            this.setVolume(e.target.value);
+            const volume = parseInt(e.target.value);
+            this.setVolume(volume);
+            
+            if (!this.silent && isDebugMode()) {
+                console.log('[音量] 已调整:', volume);
+            }
         });
 
         // 触摸事件
@@ -48,12 +74,18 @@ export class VolumeControl {
     // 更新显示
     updateDisplay(value) {
         this.currentVolume = parseInt(value);
+        
         if (this.display) {
-            this.display.textContent = value;
+            if (this.display.textContent !== undefined) {
+                this.display.textContent = value;
+            }
         }
-        if (this.slider) {
+        
+        if (this.slider && this.slider.value !== undefined) {
             this.slider.value = value;
         }
+        
+        // 不输出 updateDisplay 日志，太频繁
     }
 
     // 设置音量（带节流）
@@ -69,10 +101,15 @@ export class VolumeControl {
             try {
                 const result = await api.setVolume(value);
                 if (result.status === 'OK') {
-                    console.log('音量已设置:', value);
+                    if (!this.silent && isDebugMode()) {
+                        console.log('[音量] 已设置:', value);
+                    }
                 }
             } catch (error) {
-                console.error('设置音量失败:', error);
+                // 仅在非静默模式下输出错误
+                if (!this.silent) {
+                    console.error('[音量] 设置失败:', error.message);
+                }
             }
         }, 200);
     }
@@ -81,17 +118,56 @@ export class VolumeControl {
     async loadVolume() {
         try {
             const result = await api.getVolume();
-            if (result.status === 'OK' && result.volume !== undefined) {
-                this.updateDisplay(result.volume);
+            if (result && result.status === 'OK' && result.volume !== undefined) {
+                const volume = Math.max(0, Math.min(130, parseInt(result.volume)));
+                this.updateDisplay(volume);
+                
+                if (!this.silent && isDebugMode()) {
+                    console.log('[音量] 已从服务器加载:', volume);
+                }
+                return true;
+            } else {
+                if (!this.silent && isDebugMode()) {
+                    console.warn('[音量] 获取音量返回无效响应:', result);
+                }
+                // 如果获取失败，保持默认值并再试一次
+                this.retryLoadVolume();
+                return false;
             }
         } catch (error) {
-            console.error('获取音量失败:', error);
+            if (!this.silent && isDebugMode()) {
+                console.error('[音量] 获取失败:', error.message);
+            }
+            // 如果网络错误，延迟后重试
+            this.retryLoadVolume();
+            return false;
         }
+    }
+    
+    // 重试加载音量（延迟后）
+    async retryLoadVolume() {
+        setTimeout(async () => {
+            try {
+                const result = await api.getVolume();
+                if (result && result.status === 'OK' && result.volume !== undefined) {
+                    const volume = Math.max(0, Math.min(130, parseInt(result.volume)));
+                    this.updateDisplay(volume);
+                    
+                    if (!this.silent && isDebugMode()) {
+                        console.log('[音量] 已从服务器加载（重试）:', volume);
+                    }
+                }
+            } catch (error) {
+                if (!this.silent && isDebugMode()) {
+                    console.warn('[音量] 重试加载失败，使用默认值 50');
+                }
+            }
+        }, 500);
     }
 
     // 增加音量
     async increase(step = 5) {
-        const newVolume = Math.min(100, this.currentVolume + step);
+        const newVolume = Math.min(130, this.currentVolume + step);
         await this.setVolume(newVolume);
     }
 

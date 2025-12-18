@@ -38,7 +38,7 @@ export class MusicAPI {
         return this.get('/status');
     }
 
-    async play(url, title, type = 'local', streamFormat = 'aac') {
+    async play(url, title, type = 'local', streamFormat = 'mp3') {
         const formData = new FormData();
         formData.append('url', url);
         formData.append('title', title);
@@ -61,7 +61,7 @@ export class MusicAPI {
 
     async setVolume(value) {
         const formData = new FormData();
-        formData.append('volume', value);
+        formData.append('value', value);
         return this.postForm('/volume', formData);
     }
 

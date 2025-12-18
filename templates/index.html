@@ -55,8 +55,11 @@
 	<meta name="renderer" content="webkit" />
 	<!-- CSS Stylesheets -->
 	<link rel="stylesheet" href="/static/css/base.css?v=1" />
+	<!-- 调试面板模块 CSS -->
 	<!-- 主题 CSS 将由 themeManager 动态加载 -->
 	<link rel="stylesheet" href="/static/css/responsive.css?v=1" />
+	<!-- 设置面板 CSS -->
+	<link rel="stylesheet" href="/static/css/settings.css?v=1" />
 	<style>
 		.footer {
 			height: calc(100% - (2/5 * 100%));
@@ -116,7 +119,7 @@
 			<!-- Song Info -->
 			<div class="full-player-info">
 				<div class="full-player-title" id="fullPlayerTitle">未播放</div>
-				<div class="full-player-artist" id="fullPlayerArtist">--</div>
+				
 				<div class="full-player-playlist" id="fullPlayerPlaylist">默认歌单</div>
 			</div>
 
@@ -187,9 +190,6 @@
 				</div>
 				<div class="mini-player-text">
 					<div class="mini-player-title" id="miniPlayerTitle">未播放</div>
-					<div class="mini-player-subtitle">
-						<span class="mini-player-artist" id="miniPlayerArtist">--</span>
-					</div>
 				</div>
 			</div>
 			<div class="mini-player-controls">
@@ -219,6 +219,10 @@
 		<button class="nav-item" data-tab="search">
 			<span class="nav-icon">🔍</span>
 			<span class="nav-label">搜索</span>
+		</button>
+		<button class="nav-item" id="settingsNavBtn" title="设置">
+			<span class="nav-icon">⚙️</span>
+			<span class="nav-label">设置</span>
 		</button>
 		<button class="nav-item" id="debugBtn" title="调试面板">
 			<span class="nav-icon">🐛</span>
@@ -455,31 +459,14 @@
 
 	<!-- Debug Modal -->
 	<div id="debugModal" class="modal" style="display:none;">
-		<div class="modal-content" style="max-height: 80vh; overflow-y: auto;">
+		<div class="modal-content" style="overflow-y: auto;">
 			<div class="modal-header">
 				<h3>🐛 调试面板</h3>
 				<button class="modal-close" id="debugModalClose">✕</button>
 			</div>
 			<div class="modal-body" style="padding: 20px; font-family: monospace; font-size: 12px;">
 				<div id="debugContent">
-					<div style="margin-bottom: 20px;">
-						<h4>音频推流格式</h4>
-						<div style="display: flex; gap: 10px; flex-wrap: wrap;">
-							<button id="formatMP3Btn" style="padding: 8px 16px; background: #555; color: white; border: 2px solid #999; border-radius: 4px; cursor: pointer;">🎵 MP3</button>
-							<button id="formatAACBtn" style="padding: 8px 16px; background: #555; color: white; border: 2px solid #999; border-radius: 4px; cursor: pointer;">🎵 AAC</button>
-							<button id="formatFLACBtn" style="padding: 8px 16px; background: #555; color: white; border: 2px solid #999; border-radius: 4px; cursor: pointer;">🎵 FLAC</button>
-							<button id="formatWAVBtn" style="padding: 8px 16px; background: #555; color: white; border: 2px solid #999; border-radius: 4px; cursor: pointer;">🎵 WAV</button>
-							<button id="formatM4ABtn" style="padding: 8px 16px; background: #555; color: white; border: 2px solid #999; border-radius: 4px; cursor: pointer;">🎵 M4A</button>
-						</div>
-						<p style="margin-top: 10px; color: #aaa;">当前格式: <span id="currentFormatDisplay">aac</span></p>
-					</div>
-					<div style="margin-bottom: 20px;">
-						<h4>主题设置</h4>
-						<div style="display: flex; gap: 10px;">
-							<button id="themeDarkBtn" style="padding: 8px 16px; background: #333; color: white; border: 2px solid #667eea; border-radius: 4px; cursor: pointer; font-weight: bold;">🌙 暗色</button>
-							<button id="themeLightBtn" style="padding: 8px 16px; background: #e0e0e0; color: #333; border: 2px solid #999; border-radius: 4px; cursor: pointer;">☀️ 亮色</button>
-						</div>
-					</div>
+				
 					<div style="margin-bottom: 20px;">
 						<h4>推流控制</h4>
 						<div style="display: flex; gap: 10px; flex-wrap: wrap;">
@@ -494,6 +481,8 @@
 								<div>⏱️ <span id="streamDuration">用时: -- s</span></div>
 								<div>👥 <span id="streamClients">活跃客户端: --</span></div>
 								<div>🎵 <span id="streamFormat">格式: --</span></div>
+							
+							
 							</div>
 						</div>
 					</div>
@@ -524,7 +513,14 @@
 						<div id="debugLogs" style="background: #1a1a1a; padding: 10px; border-radius: 4px; max-height: 300px; overflow-y: auto;"></div>
 					</div>
 					<button id="debugRefresh" style="padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer;">刷新</button>
-					<button id="debugClearLogs" style="padding: 8px 16px; background: #ff6b6b; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">清空日志</button>
+				
+					<div style="margin-bottom: 20px;">
+						<h4>主题设置</h4>
+						<div style="display: flex; gap: 10px;">
+							<button id="themeDarkBtn" style="padding: 8px 16px; background: #333; color: white; border: 2px solid #667eea; border-radius: 4px; cursor: pointer; font-weight: bold;">🌙 暗色</button>
+							<button id="themeLightBtn" style="padding: 8px 16px; background: #e0e0e0; color: #333; border: 2px solid #999; border-radius: 4px; cursor: pointer;">☀️ 亮色</button>
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -536,5 +532,88 @@
 	
 	<!-- 浏览器推流音频播放器（隐藏） -->
 	<audio id="browserStreamAudio" style="display: none;" crossorigin="anonymous" controls="false" autoplay="false"></audio>
+
+	<!-- 调试面板模块 HTML 模板（由 debug-panel.module.js 动态创建） -->
+	<template id="debugPanelTemplate">
+		<!-- 模板内容由 JS 模块动态生成 -->
+	</template>
+
+	<!-- 设置面板 -->
+	<div id="settingsPanel" class="settings-panel" style="display: none;">
+		<!-- 设置面板背景遮罩 -->
+		<div id="settingsMask" class="settings-mask"></div>
+		
+		<!-- 设置面板容器 -->
+		<div class="settings-container">
+			<!-- 顶部标题栏 -->
+			<div class="settings-header">
+				<h2 class="settings-title">⚙️ 设置</h2>
+				<button id="settingsCloseBtn" class="settings-close-btn" title="关闭">✕</button>
+			</div>
+			
+			<!-- 设置内容 -->
+			<div class="settings-content">
+				<!-- 主题设置 -->
+				<div class="settings-section">
+					<h3 class="section-title">🎨 外观设置</h3>
+					
+					<div class="settings-item">
+						<label class="settings-label">主题样式</label>
+						<select id="themeSetting" class="settings-select">
+							<option value="dark">深色主题</option>
+							<option value="light">浅色主题</option>
+							<option value="auto">自动</option>
+						</select>
+					</div>
+					
+					<div class="settings-item">
+						<label class="settings-label">语言</label>
+						<select id="languageSetting" class="settings-select">
+							<option value="zh">中文 (Chinese)</option>
+							<option value="en">English</option>
+						</select>
+					</div>
+				</div>
+				
+				<!-- 推流设置 -->
+				<div class="settings-section">
+					<h3 class="section-title">🎵 推流设置</h3>
+					
+					<div class="settings-item">
+						<label class="settings-label">自动启动推流</label>
+						<div class="settings-toggle">
+							<input type="checkbox" id="autoStreamSetting" class="toggle-checkbox">
+							<label for="autoStreamSetting" class="toggle-label">
+								<span class="toggle-switch"></span>
+								<span class="toggle-text">
+									<span class="toggle-on">启用</span>
+									<span class="toggle-off">禁用</span>
+								</span>
+							</label>
+						</div>
+					</div>
+					
+					<div class="settings-item">
+						<label class="settings-label">推流音量</label>
+						<div class="settings-volume">
+							<input type="range" id="streamVolumeSetting" class="volume-slider" min="0" max="100" value="50">
+							<span id="streamVolumeValue" class="volume-value">50%</span>
+						</div>
+					</div>
+				</div>
+			</div>
+			
+			<!-- 底部操作栏 -->
+			<div class="settings-footer">
+				<button id="resetSettingsBtn" class="settings-btn settings-btn-reset">
+					🔄 重置为默认
+				</button>
+				<button id="saveSettingsBtn" class="settings-btn settings-btn-save">
+					✓ 保存设置
+				</button>
+			</div>
+		</div>
+	</div>
+
 </body>
 </html>

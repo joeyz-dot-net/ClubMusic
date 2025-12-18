@@ -130,17 +130,6 @@ export class Debug {
             });
         }
 
-        // 音频格式选择按钮
-        const formats = ['mp3', 'aac', 'flac', 'wav', 'm4a'];
-        formats.forEach(format => {
-            const btn = document.getElementById(`format${format.toUpperCase()}Btn`);
-            if (btn) {
-                btn.addEventListener('click', () => {
-                    this.setAudioFormat(format);
-                });
-            }
-        });
-
         // 推流控制按钮
         if (this.elements.startStreamBtn) {
             this.elements.startStreamBtn.addEventListener('click', () => {
@@ -290,37 +279,56 @@ export class Debug {
             const response = await fetch('/stream/status');
             const result = await response.json();
             
-            if (result.status === 'OK' && result.data) {
-                const data = result.data;
-                
-                // 更新速度
-                if (this.elements.streamSpeed) {
-                    this.elements.streamSpeed.textContent = `速度: ${data.avg_speed || 0} KB/s`;
-                }
-                
-                // 更新总数据
-                if (this.elements.streamTotal) {
-                    this.elements.streamTotal.textContent = `总数据: ${data.total_mb || 0} MB`;
-                }
-                
-                // 更新用时
-                if (this.elements.streamDuration) {
-                    const duration = Math.floor(data.duration || 0);
-                    this.elements.streamDuration.textContent = `用时: ${duration} s`;
-                }
-                
-                // 更新活跃客户端
-                if (this.elements.streamClients) {
-                    this.elements.streamClients.textContent = `活跃客户端: ${data.active_clients || 0}`;
-                }
-                
-                // 更新格式
-                if (this.elements.streamFormat) {
-                    this.elements.streamFormat.textContent = `格式: ${data.format || '--'}`;
-                }
+            // 处理响应数据
+            const data = result.data || result || {};
+            
+            // 更新速度
+            if (this.elements.streamSpeed) {
+                const speed = data.avg_speed !== undefined ? data.avg_speed : data.avg_speed_kbps || 0;
+                this.elements.streamSpeed.textContent = `速度: ${speed} KB/s`;
+            }
+            
+            // 更新总数据
+            if (this.elements.streamTotal) {
+                const total = data.total_mb || 0;
+                this.elements.streamTotal.textContent = `总数据: ${total} MB`;
+            }
+            
+            // 更新用时
+            if (this.elements.streamDuration) {
+                const duration = Math.floor(data.duration || 0);
+                this.elements.streamDuration.textContent = `用时: ${duration} s`;
+            }
+            
+            // 更新活跃客户端
+            if (this.elements.streamClients) {
+                const clients = data.active_clients || 0;
+                this.elements.streamClients.textContent = `活跃客户端: ${clients}`;
+            }
+            
+            // 更新格式
+            if (this.elements.streamFormat) {
+                const format = data.format || '--';
+                this.elements.streamFormat.textContent = `格式: ${format}`;
             }
         } catch (err) {
             console.error('[调试] 获取推流统计失败:', err);
+            // 显示离线状态
+            if (this.elements.streamSpeed) {
+                this.elements.streamSpeed.textContent = `速度: -- KB/s`;
+            }
+            if (this.elements.streamTotal) {
+                this.elements.streamTotal.textContent = `总数据: -- MB`;
+            }
+            if (this.elements.streamDuration) {
+                this.elements.streamDuration.textContent = `用时: -- s`;
+            }
+            if (this.elements.streamClients) {
+                this.elements.streamClients.textContent = `活跃客户端: --`;
+            }
+            if (this.elements.streamFormat) {
+                this.elements.streamFormat.textContent = `格式: --`;
+            }
         }
     }
 
@@ -372,44 +380,6 @@ export class Debug {
         }
     }
 
-    // 设置音频推流格式
-    setAudioFormat(format) {
-        localStorage.setItem('streamFormat', format);
-        const display = document.getElementById('currentFormatDisplay');
-        if (display) {
-            display.textContent = format.toUpperCase();
-        }
-        
-        // 更新按钮样式
-        const formats = ['mp3', 'aac', 'flac', 'wav', 'm4a'];
-        formats.forEach(fmt => {
-            const btn = document.getElementById(`format${fmt.toUpperCase()}Btn`);
-            if (btn) {
-                if (fmt === format) {
-                    btn.style.borderColor = '#667eea';
-                    btn.style.background = '#667eea';
-                    btn.style.fontWeight = 'bold';
-                } else {
-                    btn.style.borderColor = '#999';
-                    btn.style.background = '#555';
-                    btn.style.fontWeight = 'normal';
-                }
-            }
-        });
-        
-        console.log(`[音频格式] 已切换到: ${format.toUpperCase()}`);
-    }
-
-    // 初始化音频格式按钮样式
-    initAudioFormatButtons() {
-        const currentFormat = localStorage.getItem('streamFormat') || 'aac';
-        const display = document.getElementById('currentFormatDisplay');
-        if (display) {
-            display.textContent = currentFormat.toUpperCase();
-        }
-        this.setAudioFormat(currentFormat);
-    }
-
     // 开启浏览器推流
     startBrowserStream() {
         if (this.isStreaming) {
@@ -417,7 +387,7 @@ export class Debug {
             return;
         }
         
-        const streamFormat = localStorage.getItem('streamFormat') || 'aac';
+        const streamFormat = 'mp3';  // 默认格式 mp3
         console.log(`[推流] 手动开启推流 (格式: ${streamFormat})`);
         
         // 调用 player 的推流方法
