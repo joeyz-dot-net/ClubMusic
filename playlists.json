@@ -10,6 +10,22 @@
       "name": "默认歌单",
       "songs": [
         {
+          "url": "https://www.youtube.com/watch?v=kzZ7Jc8C4wA",
+          "title": "孫燕姿 Sun Yanzi TOP25 Video 必聽經典25首 [情歌療癒系MV] 串燒 無間斷 完整聆聽 KTV必唱 經典K歌 回憶殺 我懷念的 無敵孫式情歌 我不難過 開始懂了 遇見 天黑黑",
+          "type": "youtube",
+          "thumbnail_url": "https://img.youtube.com/vi/kzZ7Jc8C4wA/maxresdefault.jpg"
+        },
+        {
+          "url": "Stefanie Sun 孫燕姿/2000台北演唱会/01. 孙燕姿 - 天黑黑 (CD Version).flac",
+          "title": "01. 孙燕姿 - 天黑黑 (CD Version)",
+          "type": "local"
+        },
+        {
+          "url": "Jacky Cheung 张学友/张学友 - 只想一生跟你走.flac",
+          "title": "张学友 - 只想一生跟你走",
+          "type": "local"
+        },
+        {
           "url": "ETC/5 20AM.m4a",
           "title": "5 20AM.m4a",
           "type": "local"
@@ -17,11 +33,6 @@
         {
           "url": "ETC/三拜红尘凉 (Live) - 张碧晨、孟佳.flac",
           "title": "三拜红尘凉 (Live) - 张碧晨、孟佳.flac",
-          "type": "local"
-        },
-        {
-          "url": "Jacky Cheung 张学友/张学友 - 只想一生跟你走.flac",
-          "title": "张学友 - 只想一生跟你走",
           "type": "local"
         },
         {
@@ -37,9 +48,9 @@
           "thumbnail_url": "https://img.youtube.com/vi/crEh38PNAfw/maxresdefault.jpg"
         }
       ],
-      "song_count": 5,
+      "song_count": 7,
       "created_at": 1765711983.6007059,
-      "updated_at": 1766101975.6775475
+      "updated_at": 1766108884.80712
     },
     {
       "id": "1765712869575",

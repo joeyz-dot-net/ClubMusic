@@ -625,44 +625,31 @@ export const settingsManager = {
         try {
             console.log(`[推流音频] 准备播放推流 (格式: ${streamFormat}, 音量: ${Math.round(volume * 100)}%)`);
             
-            // 创建进度条
-            let progressBar = document.getElementById('streamProgressBar');
-            if (!progressBar) {
-                progressBar = document.createElement('div');
-                progressBar.id = 'streamProgressBar';
-                progressBar.style.cssText = `
-                    background: rgba(0,0,0,0.8);
-                    border-radius: 20px;
-                    padding: 8px 12px;
-                    z-index: 9999;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-                    color: white;
-                    font-size: 11px;
-                    display: none;
-                    flex-shrink: 0;
-                `;
-                
-                // 将进度条插入到 streamProgressBarContainer 中
-                const container = document.getElementById('streamProgressBarContainer');
-                if (container) {
-                    container.appendChild(progressBar);
-                    console.log('[推流进度条] 已插入到 streamProgressBarContainer');
-                } else {
-                    console.warn('[推流进度条] 未找到 streamProgressBarContainer');
-                }
+            // 获取状态文本显示元素
+            const statusEl = document.getElementById('miniPlayerStatus');
+            if (!statusEl) {
+                console.warn('[推流] 未找到miniPlayerStatus元素');
             }
             
-            const showProgress = (status, percent = 0) => {
-                progressBar.innerHTML = `
-                    <div style="margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-                        <span style="white-space: nowrap; flex-shrink: 0;">${status}</span>
-                        <div style="flex: 1; min-width: 80px; height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; overflow: hidden;">
-                            <div style="height: 100%; background: linear-gradient(90deg, #4CAF50, #45a049); width: ${percent}%; transition: width 0.3s; border-radius: 2px;"></div>
-                        </div>
-                        <span style="white-space: nowrap; flex-shrink: 0; min-width: 30px; text-align: right;">${percent}%</span>
-                    </div>
-                `;
-                progressBar.style.display = 'block';
+            // 显示状态文本的辅助函数
+            let statusTimeout = null;
+            const showStatus = (text, autoHide = false) => {
+                if (statusEl) {
+                    statusEl.textContent = text;
+                    statusEl.classList.add('show');
+                    
+                    // 清理之前的定时器
+                    if (statusTimeout) {
+                        clearTimeout(statusTimeout);
+                    }
+                    
+                    // 自动隐藏
+                    if (autoHide) {
+                        statusTimeout = setTimeout(() => {
+                            statusEl.classList.remove('show');
+                        }, 3000);
+                    }
+                }
             };
             
             // 停止之前的推流（如有）
@@ -681,68 +668,51 @@ export const settingsManager = {
             
             console.log('[推流音频] 设置流地址:', streamUrl);
             
-            // 显示初始进度
-            showProgress('📡 正在连接...', 5);
+            // 显示初始状态
+            showStatus('🔄 正在连接...');
             
             audioElement.crossOrigin = 'anonymous';
             audioElement.volume = Math.max(0, Math.min(1, volume));
             audioElement.src = streamUrl;
             audioElement.load();  // 明确加载媒体
             
-            // 设置事件监听 - 各阶段更新进度条
+            // 设置事件监听
             audioElement.onloadstart = () => {
                 console.log('[推流音频] 开始加载流数据');
-                showProgress('📡 开始连接...', 10);
+                showStatus('🔄 开始连接...');
             };
             
             audioElement.onprogress = () => {
-                // 计算真实的缓冲百分比
-                const buffered = audioElement.buffered;
-                let bufferedPercent = 0;
-                
-                if (buffered && buffered.length > 0) {
-                    const duration = audioElement.duration;
-                    if (duration && duration > 0 && isFinite(duration)) {
-                        const bufferedEnd = buffered.end(buffered.length - 1);
-                        bufferedPercent = Math.round((bufferedEnd / duration) * 100);
-                        // 显示真实的百分比，但限制在合理范围（不超过100%）
-                        bufferedPercent = Math.min(bufferedPercent, 100);
-                    }
-                }
-                
-                console.log('[推流音频] 正在缓冲数据，进度:', bufferedPercent + '%');
-                showProgress(`📥 正在缓冲数据... ${bufferedPercent}%`, bufferedPercent);
+                console.log('[推流音频] 正在缓冲数据');
+                // 只在连接阶段显示，播放时不显示进度
             };
             
             audioElement.onloadedmetadata = () => {
                 console.log('[推流音频] ✓ 元数据已加载');
-                showProgress('📦 元数据已加载...', 50);
+                showStatus('📦 准备就绪...');
             };
             
             audioElement.oncanplay = () => {
                 console.log('[推流音频] ✓ 可以开始播放');
-                showProgress('✓ 准备就绪...', 75);
+                showStatus('✓ 准备就绪...');
             };
             
             audioElement.onplay = () => {
                 console.log('[推流音频] ✓ 开始播放');
-                showProgress('▶ 开始播放...', 90);
+                showStatus('▶ 正在播放...', true);
             };
             
             audioElement.onplaying = () => {
                 console.log('[推流音频] ✓ 正在播放');
-                showProgress('🎵 播放中...', 100);
-                
-                // 歌曲正常播放时立即隐藏进度条
-                progressBar.style.display = 'none';
+                // 有声音播放后自动隐藏
+                if (statusEl) {
+                    statusEl.classList.remove('show');
+                }
             };
             
             audioElement.onerror = (error) => {
                 console.error('[推流音频] ✗ 播放出错:', error, audioElement.error);
-                showProgress('❌ 连接失败', 0);
-                setTimeout(() => {
-                    progressBar.style.display = 'none';
-                }, 2000);
+                showStatus('❌ 连接失败', true);
             };
             
             audioElement.onpause = () => {
@@ -764,10 +734,7 @@ export const settingsManager = {
                     })
                     .catch(error => {
                         console.error('[推流音频] ✗ 播放失败:', error.name, error.message);
-                        showProgress('❌ 播放失败', 0);
-                        setTimeout(() => {
-                            progressBar.style.display = 'none';
-                        }, 2000);
+                        showStatus('❌ 播放失败', true);
                         
                         // 自动播放被浏览器阻止，显示提示
                         if (error.name === 'NotAllowedError') {
@@ -784,9 +751,6 @@ export const settingsManager = {
     /**
      * 停止推流
      */
-    /**
-     * 停止推流
-     */
     stopStream() {
         const audioElement = document.getElementById('browserStreamAudio');
         
@@ -798,11 +762,11 @@ export const settingsManager = {
         try {
             console.log('[推流音频] 正在停止推流...');
             
-            // 隐藏进度条
-            const progressBar = document.getElementById('streamProgressBar');
-            if (progressBar) {
-                console.log('[推流音频] 隐藏进度条');
-                progressBar.style.display = 'none';
+            // 隐藏状态文本
+            const statusEl = document.getElementById('miniPlayerStatus');
+            if (statusEl) {
+                statusEl.classList.remove('show');
+                statusEl.textContent = '';
             }
             
             // 暂停播放

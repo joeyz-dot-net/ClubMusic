@@ -5,13 +5,13 @@
     "name": "三拜红尘凉 (Live) - 张碧晨、孟佳.flac",
     "type": "local",
     "duration": 0,
-    "ts": 1766107286,
+    "ts": 1766109630,
     "thumbnail_url": null,
     "artist": "三拜红尘凉 (Live) - 张碧晨、孟佳.flac",
     "file_name": "三拜红尘凉 (Live) - 张碧晨、孟佳.flac",
     "file_extension": ".flac",
     "file_size": 0,
-    "play_count": 66
+    "play_count": 69
   },
   {
     "url": "ETC/5 20AM.m4a",
@@ -19,13 +19,13 @@
     "name": "5 20AM.m4a",
     "type": "local",
     "duration": 0,
-    "ts": 1766107284,
+    "ts": 1766109613,
     "thumbnail_url": null,
     "artist": "5 20AM.m4a",
     "file_name": "5 20AM.m4a",
     "file_extension": ".m4a",
     "file_size": 0,
-    "play_count": 19
+    "play_count": 26
   },
   {
     "url": "Jacky Cheung 张学友/张学友 - 只想一生跟你走.flac",
@@ -33,13 +33,40 @@
     "name": "张学友 - 只想一生跟你走",
     "type": "local",
     "duration": 0,
-    "ts": 1766107231,
+    "ts": 1766109469,
     "thumbnail_url": null,
     "artist": "张学友 - 只想一生跟你走",
     "file_name": "张学友 - 只想一生跟你走.flac",
     "file_extension": ".flac",
     "file_size": 0,
-    "play_count": 81
+    "play_count": 85
+  },
+  {
+    "url": "Stefanie Sun 孫燕姿/2000台北演唱会/01. 孙燕姿 - 天黑黑 (CD Version).flac",
+    "title": "01. 孙燕姿 - 天黑黑 (CD Version)",
+    "name": "01. 孙燕姿 - 天黑黑 (CD Version)",
+    "type": "local",
+    "duration": 0,
+    "ts": 1766109432,
+    "thumbnail_url": null,
+    "artist": "01. 孙燕姿 - 天黑黑 (CD Version)",
+    "file_name": "01. 孙燕姿 - 天黑黑 (CD Version).flac",
+    "file_extension": ".flac",
+    "file_size": 0,
+    "play_count": 3
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=kzZ7Jc8C4wA",
+    "title": "孫燕姿 Sun Yanzi TOP25 Video 必聽經典25首 [情歌療癒系MV] 串燒 無間斷 完整聆聽 KTV必唱 經典K歌 回憶殺 我懷念的 無敵孫式情歌 我不難過 開始懂了 遇見 天黑黑",
+    "name": "孫燕姿 Sun Yanzi TOP25 Video 必聽經典25首 [情歌療癒系MV] 串燒 無間斷 完整聆聽 KTV必唱 經典K歌 回憶殺 我懷念的 無敵孫式情歌 我不難過 開始懂了 遇見 天黑黑",
+    "type": "youtube",
+    "duration": 0,
+    "ts": 1766109056,
+    "thumbnail_url": "https://img.youtube.com/vi/kzZ7Jc8C4wA/maxresdefault.jpg",
+    "artist": "孫燕姿 Sun Yanzi TOP25 Video 必聽經典25首 [情歌療癒系MV] 串燒 無間斷 完整聆聽 KTV必唱 經典K歌 回憶殺 我懷念的 無敵孫式情歌 我不難過 開始懂了 遇見 天黑黑",
+    "stream_type": "youtube",
+    "video_id": "kzZ7Jc8C4wA",
+    "play_count": 2
   },
   {
     "url": "https://www.youtube.com/watch?v=pwmHLAIsJHM",
@@ -47,12 +74,12 @@
     "name": "单依纯 - 永不失联的爱  现场版 中国好声音2020  單依純 - 永不失聯的愛 中國好聲音2020",
     "type": "youtube",
     "duration": 0,
-    "ts": 1766093279,
+    "ts": 1766108813,
     "thumbnail_url": "https://img.youtube.com/vi/pwmHLAIsJHM/maxresdefault.jpg",
     "artist": "单依纯 - 永不失联的爱  现场版 中国好声音2020  單依純 - 永不失聯的愛 中國好聲音2020",
     "stream_type": "youtube",
     "video_id": "pwmHLAIsJHM",
-    "play_count": 16
+    "play_count": 22
   },
   {
     "url": "https://www.youtube.com/watch?v=crEh38PNAfw",
@@ -60,12 +87,12 @@
     "name": "Top Hits 2026 | Spotify Winter 2025/2026 ❄️ Most Popular Spotify Songs 🎵 Chill Mix Playlist",
     "type": "youtube",
     "duration": 0,
-    "ts": 1766050911,
+    "ts": 1766108784,
     "thumbnail_url": "https://img.youtube.com/vi/crEh38PNAfw/maxresdefault.jpg",
     "artist": "Top Hits 2026 | Spotify Winter 2025/2026 ❄️ Most Popular Spotify Songs 🎵 Chill Mix Playlist",
     "stream_type": "youtube",
     "video_id": "crEh38PNAfw",
-    "play_count": 6
+    "play_count": 8
   },
   {
     "url": "https://www.youtube.com/watch?v=viis5-_JjXQ",
