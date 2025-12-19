@@ -46,6 +46,13 @@ export class PlaylistManager {
         return result;
     }
 
+    // 更新歌单
+    async update(id, data) {
+        const result = await api.updatePlaylist(id, data);
+        await this.loadAll(); // 重新加载
+        return result;
+    }
+
     // 切换歌单
     async switch(id) {
         const result = await api.switchPlaylist(id);

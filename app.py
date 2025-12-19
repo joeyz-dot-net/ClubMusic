@@ -890,6 +890,41 @@ async def delete_playlist(playlist_id: str):
             status_code=500
         )
 
+@app.put("/playlists/{playlist_id}")
+async def update_playlist(playlist_id: str, data: dict):
+    """更新歌单信息（如名称）"""
+    try:
+        # 防止修改默认歌单
+        if playlist_id == "default":
+            return JSONResponse(
+                {"status": "ERROR", "error": "默认歌单不可修改"},
+                status_code=400
+            )
+        
+        new_name = data.get('name', '').strip()
+        if not new_name:
+            return JSONResponse(
+                {"status": "ERROR", "error": "歌单名称不能为空"},
+                status_code=400
+            )
+        
+        if PLAYLISTS_MANAGER.rename_playlist(playlist_id, new_name):
+            return {
+                "status": "OK",
+                "message": "修改成功",
+                "data": {"name": new_name}
+            }
+        else:
+            return JSONResponse(
+                {"status": "ERROR", "error": "歌单不存在"},
+                status_code=404
+            )
+    except Exception as e:
+        return JSONResponse(
+            {"status": "ERROR", "error": str(e)},
+            status_code=500
+        )
+
 @app.post("/playlists/{playlist_id}/switch")
 async def switch_playlist(playlist_id: str):
     """切换到指定歌单"""

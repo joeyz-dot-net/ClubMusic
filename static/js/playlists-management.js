@@ -127,6 +127,12 @@ export class PlaylistsManagement {
                 </div>
                 <div class="playlist-actions">
                     ${playlist.id !== 'default' ? `
+                        <button class="playlist-action-btn edit" title="编辑歌单">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z"/>
+                                <path d="M20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                            </svg>
+                        </button>
                         <button class="playlist-action-btn delete" title="删除歌单">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
@@ -150,6 +156,27 @@ export class PlaylistsManagement {
                     Toast.error('切换失败: ' + error.message);
                 }
             });
+
+            // 编辑歌单名称
+            if (playlist.id !== 'default') {
+                const editBtn = item.querySelector('.playlist-action-btn.edit');
+                if (editBtn) {
+                    editBtn.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        
+                        const newName = prompt(`编辑歌单名称：`, playlist.name);
+                        if (newName !== null && newName.trim() && newName.trim() !== playlist.name) {
+                            try {
+                                await playlistManager.update(playlist.id, { name: newName.trim() });
+                                Toast.success('歌单已重命名');
+                                this.render(onPlaylistSwitch);
+                            } catch (error) {
+                                Toast.error('重命名失败: ' + error.message);
+                            }
+                        }
+                    });
+                }
+            }
 
             // 删除歌单
             if (playlist.id !== 'default') {

@@ -33,6 +33,15 @@ export class MusicAPI {
         return response.json();
     }
 
+    async put(endpoint, data) {
+        const response = await fetch(`${this.baseURL}${endpoint}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        return response.json();
+    }
+
     // 播放器相关 API
     async getStatus() {
         return this.get('/status');
@@ -94,6 +103,10 @@ export class MusicAPI {
 
     async deletePlaylist(id) {
         return this.delete(`/playlists/${id}`);
+    }
+
+    async updatePlaylist(id, data) {
+        return this.put(`/playlists/${id}`, data);
     }
 
     async switchPlaylist(id) {
