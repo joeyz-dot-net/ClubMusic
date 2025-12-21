@@ -100,11 +100,13 @@ export const localFiles = {
     fullTree: null,
     currentPath: [],
     searchQuery: '',
+    onSongAdded: null,  // ✅ 新增：添加歌曲成功后的回调
 
-    async init({ treeEl, getCurrentPlaylistId }) {
+    async init({ treeEl, getCurrentPlaylistId, onSongAdded }) {
         this.treeEl = treeEl;
         this.contentEl = treeEl.querySelector('#localContent');
         this.searchInput = treeEl.querySelector('#localSearchInput');
+        this.onSongAdded = onSongAdded;  // ✅ 保存回调
         
         if (typeof getCurrentPlaylistId === 'function') {
             this.getPlaylistId = getCurrentPlaylistId;
@@ -245,6 +247,12 @@ export const localFiles = {
 
             if (response.ok) {
                 Toast.success(`已添加: ${fileName}`);
+                // ✅ 添加成功后调用回调
+                if (this.onSongAdded && typeof this.onSongAdded === 'function') {
+                    setTimeout(() => {
+                        this.onSongAdded();
+                    }, 500);
+                }
             } else {
                 const error = await response.json();
                 Toast.error(`添加失败: ${error.error || '未知错误'}`);

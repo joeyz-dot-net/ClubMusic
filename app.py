@@ -745,11 +745,12 @@ async def create_playlist(request: Request):
 
 @app.post("/playlist_add")
 async def add_to_playlist(request: Request):
-    """添加歌曲到歌单（添加到下一曲位置）"""
+    """添加歌曲到歌单（支持指定插入位置）"""
     try:
         data = await request.json()
         playlist_id = data.get("playlist_id", CURRENT_PLAYLIST_ID)
         song_data = data.get("song")
+        insert_index = data.get("insert_index")  # ✅ 新增：支持指定插入位置
         
         if not song_data:
             return JSONResponse(
@@ -764,14 +765,14 @@ async def add_to_playlist(request: Request):
                 status_code=404
             )
         
-        # 获取当前播放歌曲的索引（从歌单数据中获取）
-        current_index = playlist.current_playing_index if hasattr(playlist, 'current_playing_index') else -1
-        
-        # 如果有当前播放的歌曲，则插入到下一个位置；否则插入到第一首之后
-        if current_index >= 0 and current_index < len(playlist.songs):
-            insert_index = current_index + 1
-        else:
-            insert_index = 1 if playlist.songs else 0  # 第一首之后，或如果空列表则位置0
+        # ✅ 如果未指定 insert_index，计算默认位置
+        if insert_index is None:
+            current_index = playlist.current_playing_index if hasattr(playlist, 'current_playing_index') else -1
+            # 如果有当前播放的歌曲，则插入到下一个位置；否则插入到第一首之后
+            if current_index >= 0 and current_index < len(playlist.songs):
+                insert_index = current_index + 1
+            else:
+                insert_index = 1 if playlist.songs else 0  # 第一首之后，或如果空列表则位置0
         
         # 创建 Song 对象
         song_type = song_data.get("type", "local")
@@ -798,6 +799,8 @@ async def add_to_playlist(request: Request):
         
         # 转换为字典格式后插入
         song_dict = song_obj.to_dict()
+        # ✅ 确保 insert_index 不超出范围
+        insert_index = max(0, min(insert_index, len(playlist.songs)))
         playlist.songs.insert(insert_index, song_dict)
         playlist.updated_at = time.time()
         PLAYLISTS_MANAGER.save()

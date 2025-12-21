@@ -146,6 +146,8 @@ export class PlaylistsManagement {
             item.querySelector('.playlist-info').addEventListener('click', async () => {
                 try {
                     await playlistManager.switch(playlist.id);
+                    // ✅ 同时设置当前选择的歌单
+                    playlistManager.setSelectedPlaylist(playlist.id);
                     Toast.success(`已切换到：${playlist.name}`);
                     this.hide();
                     // 通知外部需要刷新播放列表

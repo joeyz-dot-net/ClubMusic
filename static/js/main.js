@@ -35,6 +35,8 @@ class MusicPlayerApp {
         this.lastPlaybackStatus = null;  // 播放状态
         this.lastUILoopMode = null;  // UI更新中的循环模式跟踪，防止重复日志
         this.lastThumbnailUrl = null;  // 缩略图URL追踪
+        
+        // ✅ playlistManager 会在 constructor 中自动从 localStorage 恢复选择歌单
     }
 
     async init() {
@@ -96,7 +98,23 @@ class MusicPlayerApp {
             // 4.5 初始化本地歌曲
             await localFiles.init({
                 treeEl: this.elements.tree,
-                getCurrentPlaylistId: () => this.currentPlaylistId
+                getCurrentPlaylistId: () => this.currentPlaylistId,
+                // ✅ 添加成功后的回调：返回到选择的歌单（仅刷新显示，不改变选择）
+                onSongAdded: async () => {
+                    console.log('[本地文件] 歌曲已添加，返回到选择的歌单');
+                    await this.renderPlaylist();
+                    
+                    // 显示歌单区域
+                    const navItems = document.querySelectorAll('.nav-item');
+                    const playlistsNavItem = Array.from(navItems).find(item => item.getAttribute('data-tab') === 'playlists');
+                    if (playlistsNavItem && !playlistsNavItem.classList.contains('active')) {
+                        playlistsNavItem.classList.add('active');
+                    }
+                    const playlistEl = document.getElementById('playlist');
+                    if (playlistEl) {
+                        playlistEl.style.display = 'flex';
+                    }
+                }
             });
             
             // 5. 绑定事件监听器
@@ -740,6 +758,13 @@ class MusicPlayerApp {
             await playlistManager.loadCurrent();
             await playlistManager.loadAll();
             
+            // ✅ 从 playlistManager 恢复当前选择歌单的 ID（从 localStorage 中已恢复）
+            const savedId = playlistManager.getSelectedPlaylistId();
+            this.currentPlaylistId = savedId;
+            console.log('[初始化] playlistManager.selectedPlaylistId:', savedId);
+            console.log('[初始化] this.currentPlaylistId:', this.currentPlaylistId);
+            console.log('[初始化] 恢复选择歌单:', this.currentPlaylistId);
+            
             // 确保playlist可见
             if (this.elements.playlist) {
                 this.elements.playlist.style.display = 'flex';
@@ -1287,6 +1312,27 @@ class MusicPlayerApp {
         // 应用相应的主题
         this.applyPlaylistTheme();
     }
+
+    // ✅ 新增：切换选择歌单
+    async switchSelectedPlaylist(playlistId) {
+        try {
+            console.log('[应用] 切换选择歌单:', playlistId);
+            
+            // 更新 playlistManager 的当前选择歌单
+            playlistManager.setSelectedPlaylist(playlistId);
+            this.currentPlaylistId = playlistId;
+            
+            // 刷新播放列表 UI
+            this.renderPlaylist();
+            
+            console.log('[应用] ✓ 已切换到歌单:', playlistId);
+            
+        } catch (error) {
+            console.error('[应用] 切换失败:', error);
+            Toast.error('切换歌单失败: ' + error.message);
+        }
+    }
+
     // 停止推流（用于切换歌曲时的清理）
     stopBrowserStream() {
         // 如果正在恢复流，不要停止它
@@ -1527,7 +1573,8 @@ class MusicPlayerApp {
                 }
                 
                 // 如果点击相同的标签，则切换到上一个栏目；否则显示该标签
-                if (currentTab === tabName && item.classList.contains('active')) {
+                // ✅ 队列按钮除外（始终显示队列，不返回上一个页面）
+                if (currentTab === tabName && item.classList.contains('active') && tabName !== 'playlists') {
                     console.log('🔄 再次点击，恢复到上一个栏目:', previousTab);
                     
                     // 如果有上一个栏目，则切换到上一个栏目
@@ -1577,9 +1624,12 @@ class MusicPlayerApp {
                         showContent(this.elements.playlist, tabName);
                         playlistManager.switch('default').then(() => {
                             this.currentPlaylistId = 'default';
+                            // ✅ 确保设置选择歌单为默认歌单（并保存到 localStorage）
+                            playlistManager.setSelectedPlaylist('default');
                             this.renderPlaylist();
                         }).catch(err => {
                             console.error('切换到默认歌单失败:', err);
+                            playlistManager.setSelectedPlaylist('default');
                             this.renderPlaylist();
                         });
                     }

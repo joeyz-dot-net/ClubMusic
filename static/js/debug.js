@@ -107,12 +107,12 @@ export class Debug {
 
     // 设置事件监听器
     setupEventListeners() {
-        // 调试按钮点击
-        if (this.elements.debugBtn) {
-            this.elements.debugBtn.addEventListener('click', () => {
+        // 调试按钮点击 - 使用事件委托，因为按钮现在在设置面板内
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'debugBtn' || e.target.closest('#debugBtn')) {
                 this.show();
-            });
-        }
+            }
+        });
 
         // 关闭调试面板
         if (this.elements.debugModalClose) {

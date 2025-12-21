@@ -140,6 +140,11 @@ export class MusicAPI {
         return this.postForm(`/playlists/${playlistId}/add_next`, formData);
     }
 
+    // ✅ 新增：添加歌曲到歌单（支持指定插入位置）
+    async addToPlaylist(data) {
+        return this.post('/playlist_add', data);
+    }
+
     // 搜索 API
     async searchSong(query) {
         return this.post('/search_song', { query });

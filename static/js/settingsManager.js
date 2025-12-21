@@ -176,6 +176,14 @@ export const settingsManager = {
             if (streamVolumeValue) {
                 streamVolumeValue.textContent = `${volume}%`;
             }
+            
+            // ✅ 初始化音频元素的音量
+            const audioElement = document.getElementById('browserStreamAudio');
+            if (audioElement) {
+                const volumeDecimal = parseInt(volume) / 100;
+                audioElement.volume = volumeDecimal;
+                console.log(`[音量] 初始化音频音量: ${volume}% (${volumeDecimal.toFixed(2)})`);
+            }
         }
     },
     
@@ -188,10 +196,20 @@ export const settingsManager = {
         const streamVolumeValue = document.getElementById('streamVolumeValue');
         if (streamVolumeSlider) {
             streamVolumeSlider.addEventListener('input', (e) => {
+                const volumePercent = e.target.value;
+                
                 // 保存到 localStorage
-                this.setSetting('stream_volume', e.target.value);
+                this.setSetting('stream_volume', volumePercent);
                 if (streamVolumeValue) {
-                    streamVolumeValue.textContent = `${e.target.value}%`;
+                    streamVolumeValue.textContent = `${volumePercent}%`;
+                }
+                
+                // ✅ 直接改变音频元素的音量（0-1 范围）
+                const audioElement = document.getElementById('browserStreamAudio');
+                if (audioElement) {
+                    const volumeDecimal = parseInt(volumePercent) / 100;
+                    audioElement.volume = volumeDecimal;
+                    console.log(`[音量] 设置音频音量: ${volumePercent}% (${volumeDecimal.toFixed(2)})`);
                 }
             });
         }

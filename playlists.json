@@ -1,13 +1,74 @@
 {
   "order": [
     "default",
-    "1766203516218"
+    "1766203516218",
+    "1766291870923"
   ],
   "playlists": [
     {
       "id": "default",
       "name": "默认歌单",
       "songs": [
+        {
+          "url": "https://www.youtube.com/watch?v=qVQvFWiBJkU",
+          "title": "Top Hits 2026 ~ Trending Music 2026 🎶 Spotify Hits 2026 ~ Top Songs 2026 🎧",
+          "name": "Top Hits 2026 ~ Trending Music 2026 🎶 Spotify Hits 2026 ~ Top Songs 2026 🎧",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1766294776,
+          "thumbnail_url": "https://img.youtube.com/vi/qVQvFWiBJkU/maxresdefault.jpg",
+          "artist": "Top Hits 2026 ~ Trending Music 2026 🎶 Spotify Hits 2026 ~ Top Songs 2026 🎧"
+        },
+        {
+          "url": "ETC/5 20AM - soldier.flac",
+          "title": "5 20AM - soldier.flac",
+          "name": "5 20AM - soldier.flac",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766292359,
+          "thumbnail_url": null,
+          "artist": "5 20AM - soldier.flac"
+        },
+        {
+          "url": "Jolin Tsai - Jolin Tsai Play World Tour (Live) (2018)/01 - Medusa (Play World Tour Live).flac",
+          "title": "01 - Medusa (Play World Tour Live).flac",
+          "name": "01 - Medusa (Play World Tour Live).flac",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766292346,
+          "thumbnail_url": null,
+          "artist": "01 - Medusa (Play World Tour Live).flac"
+        },
+        {
+          "url": "Fayer 飞儿/Lydia.flac",
+          "title": "Lydia.flac",
+          "name": "Lydia.flac",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766292342,
+          "thumbnail_url": null,
+          "artist": "Lydia.flac"
+        },
+        {
+          "url": "ETC/5 20AM.m4a",
+          "title": "5 20AM.m4a",
+          "name": "5 20AM.m4a",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766291611,
+          "thumbnail_url": null,
+          "artist": "5 20AM.m4a"
+        },
+        {
+          "url": "KDA/K DA, Madison Beer, i-dle, Jaira Burns - POP STARS.flac",
+          "title": "K DA, Madison Beer, i-dle, Jaira Burns - POP STARS.flac",
+          "name": "K DA, Madison Beer, i-dle, Jaira Burns - POP STARS.flac",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766291638,
+          "thumbnail_url": null,
+          "artist": "K DA, Madison Beer, i-dle, Jaira Burns - POP STARS.flac"
+        },
         {
           "url": "https://www.youtube.com/watch?v=ojA7sPQ0sqU",
           "title": "Spotify Pop Hits 2026 ❄️ Chill Pop Playlist 🌙 Winter 2025/2026 ~ Best New Pop Songs",
@@ -17,20 +78,141 @@
           "ts": 1766279960,
           "thumbnail_url": "https://img.youtube.com/vi/ojA7sPQ0sqU/maxresdefault.jpg",
           "artist": "Spotify Pop Hits 2026 ❄️ Chill Pop Playlist 🌙 Winter 2025/2026 ~ Best New Pop Songs"
+        },
+        {
+          "url": "G.E.M 邓紫棋/I AM GLORIA/01. G.E.M.邓紫棋 - 我的秘密 (G.E.M.重生版).flac",
+          "title": "01. G.E.M.邓紫棋 - 我的秘密 (G.E.M.重生版).flac",
+          "name": "01. G.E.M.邓紫棋 - 我的秘密 (G.E.M.重生版).flac",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766284736,
+          "thumbnail_url": null,
+          "artist": "01. G.E.M.邓紫棋 - 我的秘密 (G.E.M.重生版).flac"
         }
       ],
-      "song_count": 1,
+      "song_count": 8,
       "created_at": 1766198864.462621,
-      "updated_at": 1766279960.6529827,
+      "updated_at": 1766294793.0818686,
       "current_playing_index": -1
     },
     {
       "id": "1766203516218",
-      "name": "2dn 歌单",
-      "songs": [],
-      "song_count": 0,
+      "name": "2dn 歌单6",
+      "songs": [
+        {
+          "url": "ETC/5 20AM - soldier.flac",
+          "title": "5 20AM - soldier.flac",
+          "name": "5 20AM - soldier.flac",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766290393,
+          "thumbnail_url": null,
+          "artist": "5 20AM - soldier.flac"
+        },
+        {
+          "url": "Nana/Darkman - Nana Darkman、Booya Family、Nana.flac",
+          "title": "Darkman - Nana Darkman、Booya Family、Nana.flac",
+          "name": "Darkman - Nana Darkman、Booya Family、Nana.flac",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766291749,
+          "thumbnail_url": null,
+          "artist": "Darkman - Nana Darkman、Booya Family、Nana.flac"
+        },
+        {
+          "url": "Jay Chou 周杰伦/伟大的作品.flac",
+          "title": "伟大的作品.flac",
+          "name": "伟大的作品.flac",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766291717,
+          "thumbnail_url": null,
+          "artist": "伟大的作品.flac"
+        },
+        {
+          "url": "Jay Chou 周杰伦/七里香.flac",
+          "title": "七里香.flac",
+          "name": "七里香.flac",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766291667,
+          "thumbnail_url": null,
+          "artist": "七里香.flac"
+        },
+        {
+          "url": "ETC/5 20AM.m4a",
+          "title": "5 20AM.m4a",
+          "name": "5 20AM.m4a",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766290394,
+          "thumbnail_url": null,
+          "artist": "5 20AM.m4a"
+        }
+      ],
+      "song_count": 5,
       "created_at": 1766203516.2184994,
-      "updated_at": 1766203767.0376766,
+      "updated_at": 1766291863.692689,
+      "current_playing_index": -1
+    },
+    {
+      "id": "1766291870923",
+      "name": "3st歌单",
+      "songs": [
+        {
+          "url": "https://www.youtube.com/watch?v=hKkThdjHpYE",
+          "title": "JACKY ZHANG – first round (19th Chopin Competition, Warsaw)",
+          "name": "JACKY ZHANG – first round (19th Chopin Competition, Warsaw)",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1766291882,
+          "thumbnail_url": "https://img.youtube.com/vi/hKkThdjHpYE/default.jpg",
+          "artist": "JACKY ZHANG – first round (19th Chopin Competition, Warsaw)"
+        },
+        {
+          "url": "Jolin Tsai - Jolin Tsai Play World Tour (Live) (2018)/01 - Medusa (Play World Tour Live).flac",
+          "title": "01 - Medusa (Play World Tour Live).flac",
+          "name": "01 - Medusa (Play World Tour Live).flac",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766292326,
+          "thumbnail_url": null,
+          "artist": "01 - Medusa (Play World Tour Live).flac"
+        },
+        {
+          "url": "Fayer 飞儿/Lydia.flac",
+          "title": "Lydia.flac",
+          "name": "Lydia.flac",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766292239,
+          "thumbnail_url": null,
+          "artist": "Lydia.flac"
+        },
+        {
+          "url": "KDA/K DA, Madison Beer, i-dle, Jaira Burns - POP STARS.flac",
+          "title": "K DA, Madison Beer, i-dle, Jaira Burns - POP STARS.flac",
+          "name": "K DA, Madison Beer, i-dle, Jaira Burns - POP STARS.flac",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766292113,
+          "thumbnail_url": null,
+          "artist": "K DA, Madison Beer, i-dle, Jaira Burns - POP STARS.flac"
+        },
+        {
+          "url": "KDA/K DA, Madison Beer, i-dle, Lexie Liu, Jaira Burns, Seraphine, 英雄联盟 - MORE.flac",
+          "title": "K DA, Madison Beer, i-dle, Lexie Liu, Jaira Burns, Seraphine, 英雄联盟 - MORE.flac",
+          "name": "K DA, Madison Beer, i-dle, Lexie Liu, Jaira Burns, Seraphine, 英雄联盟 - MORE.flac",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766292091,
+          "thumbnail_url": null,
+          "artist": "K DA, Madison Beer, i-dle, Lexie Liu, Jaira Burns, Seraphine, 英雄联盟 - MORE.flac"
+        }
+      ],
+      "song_count": 5,
+      "created_at": 1766291870.923414,
+      "updated_at": 1766292326.3030133,
       "current_playing_index": -1
     }
   ]

@@ -48,14 +48,24 @@ export class SearchManager {
                     searchNavItem.classList.remove('active');
                 }
                 
-                // 延迟后恢复之前的栏目
+                // 延迟后返回到当前选择的歌单（只刷新显示，不改变选择）
                 setTimeout(() => {
-                    // 触发playlist:refresh事件，然后模仿之前栏目的展示逻辑
-                    // 实际上让浏览器自动处理会更复杂，直接调用刷新歌单显示
+                    // ✅ 仅刷新播放列表显示，保持当前选择的歌单
                     if (this.refreshPlaylist) {
                         this.refreshPlaylist();
                     } else {
                         document.dispatchEvent(new CustomEvent('playlist:refresh'));
+                    }
+                    
+                    // ✅ 显示歌单区域（不点击队列按钮，这样能保持当前选择的歌单）
+                    const playlistsNavItem = Array.from(navItems).find(item => item.getAttribute('data-tab') === 'playlists');
+                    if (playlistsNavItem && !playlistsNavItem.classList.contains('active')) {
+                        playlistsNavItem.classList.add('active');
+                    }
+                    // 显示歌单容器
+                    const playlistEl = document.getElementById('playlist');
+                    if (playlistEl) {
+                        playlistEl.style.display = 'flex';
                     }
                 }, 300);
             };
