@@ -6,7 +6,7 @@ const isDebugMode = () => localStorage.getItem('DEBUG_MODE') === '1';
 
 export class VolumeControl {
     constructor() {
-        this.currentVolume = 50;
+        this.currentVolume = 50;  // 默认值，启动时会从服务器加载
         this.isDragging = false;
         this.pendingValue = null;
         this.throttleTimer = null;
@@ -25,14 +25,42 @@ export class VolumeControl {
             return;
         }
         
-        // 初始化时加载音量
-        this.loadVolume();
-        
-        // 绑定事件
-        this.attachEventListeners();
-        
-        if (!this.silent && isDebugMode()) {
-            console.log('[音量] 控制已初始化');
+        // 从服务器加载默认音量
+        this.loadDefaultsFromServer().then(() => {
+            // 初始化时加载音量
+            this.loadVolume();
+            
+            // 绑定事件
+            this.attachEventListeners();
+            
+            if (!this.silent && isDebugMode()) {
+                console.log('[音量] 控制已初始化');
+            }
+        });
+    }
+
+    // 从服务器加载默认音量配置
+    async loadDefaultsFromServer() {
+        try {
+            const response = await fetch('/volume/defaults');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            if (data.status === 'OK' && data.local_volume && data.stream_volume) {
+                this.defaultLocalVolume = parseInt(data.local_volume) || 50;
+                this.defaultStreamVolume = parseInt(data.stream_volume) || 50;
+                this.currentVolume = this.defaultLocalVolume;
+                console.log(`[音量] 从服务器加载默认值: 本地=${this.defaultLocalVolume}%, 推流=${this.defaultStreamVolume}%`);
+            } else {
+                throw new Error('Invalid response format');
+            }
+        } catch (error) {
+            console.warn('[音量] 无法从服务器加载默认值，使用硬编码默认值:', error);
+            // 使用硬编码默认值
+            this.defaultLocalVolume = 50;
+            this.defaultStreamVolume = 50;
+            this.currentVolume = 50;
         }
     }
 

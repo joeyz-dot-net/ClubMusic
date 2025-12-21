@@ -13,12 +13,16 @@ import threading
 import queue
 import time
 import os
+import platform
+import logging
 from pathlib import Path
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 from concurrent.futures import ThreadPoolExecutor
 import struct
+
+logger = logging.getLogger(__name__)
 
 # ==================== 推流格式配置 ====================
 # 从 settings.ini 读取默认推流格式
@@ -390,6 +394,52 @@ STREAM_STATS = {
 }
 
 
+def cleanup_ffmpeg_processes():
+    """强制清理所有孤立的FFmpeg进程"""
+    try:
+        if platform.system() == 'Windows':
+            os.system('taskkill /F /IM ffmpeg.exe /T 2>nul')
+            logger.info("Cleaned up orphaned FFmpeg processes")
+    except Exception as e:
+        logger.error(f"Failed to cleanup FFmpeg: {e}")
+
+
+def stop_stream_safely(ffmpeg_process, timeout=3):
+    """安全停止FFmpeg进程，避免僵尸进程和死锁"""
+    if not ffmpeg_process:
+        return
+    
+    try:
+        # 第一步：尝试优雅关闭
+        if ffmpeg_process.poll() is None:  # 检查进程是否仍在运行
+            ffmpeg_process.terminate()
+            try:
+                ffmpeg_process.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                logger.warning("FFmpeg did not terminate gracefully, force killing")
+                ffmpeg_process.kill()
+                ffmpeg_process.wait(timeout=2)
+    except Exception as e:
+        logger.error(f"Error stopping FFmpeg: {e}")
+    finally:
+        # 关闭I/O管道，避免资源泄漏
+        try:
+            if ffmpeg_process.stdout:
+                ffmpeg_process.stdout.close()
+        except:
+            pass
+        try:
+            if ffmpeg_process.stderr:
+                ffmpeg_process.stderr.close()
+        except:
+            pass
+        try:
+            if ffmpeg_process.stdin:
+                ffmpeg_process.stdin.close()
+        except:
+            pass
+
+
 def start_ffmpeg_stream(device_name="CABLE Output (VB-Audio Virtual Cable)", audio_format=None):
     """
     启动FFmpeg推流进程 - 低延迟优化版本
@@ -463,17 +513,19 @@ def start_ffmpeg_stream(device_name="CABLE Output (VB-Audio Virtual Cable)", aud
         print(f"启动FFmpeg: {cmd[:100]}...")
         
         # 🔧 Safari优化版本：增加Python缓冲到512K（防止缓冲区枯竭）
+        # 重要：使用 CREATE_NEW_PROCESS_GROUP 将FFmpeg放在独立进程组，避免继承主线程状态
+        creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP if platform.system() == 'Windows' else 0
         FFMPEG_PROCESS = subprocess.Popen(
             cmd,
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            creationflags=subprocess.CREATE_NO_WINDOW,
+            creationflags=creation_flags,
             bufsize=524288  # 512KB 缓冲（相比256KB增大，防止Safari暂停）
         )
         
         FFMPEG_FORMAT = audio_format
-        print(f"✓ FFmpeg 已启动 (终极防断音模式)")
+        print(f"✓ FFmpeg 已启动 (进程ID: {FFMPEG_PROCESS.pid}, 终极防断音模式)")
         print(f"  - 格式: {audio_format}")
         print(f"  - rtbufsize: 32M")
         print(f"  - thread_queue_size: 1024")
@@ -501,17 +553,10 @@ def start_ffmpeg_stream(device_name="CABLE Output (VB-Audio Virtual Cable)", aud
 
 
 def stop_ffmpeg_stream():
-    """停止FFmpeg进程"""
+    """停止FFmpeg进程，使用安全关闭逻辑"""
     global FFMPEG_PROCESS
     if FFMPEG_PROCESS:
-        try:
-            FFMPEG_PROCESS.terminate()
-            FFMPEG_PROCESS.wait(timeout=2)
-        except:
-            try:
-                FFMPEG_PROCESS.kill()
-            except:
-                pass
+        stop_stream_safely(FFMPEG_PROCESS, timeout=3)
         FFMPEG_PROCESS = None
         print("✓ FFmpeg 已停止")
 

@@ -304,6 +304,8 @@ export class Debug {
             if (this.elements.streamClients) {
                 const clients = data.active_clients || 0;
                 this.elements.streamClients.textContent = `活跃客户端: ${clients}`;
+                // 根据实际连接数更新推流状态指示器
+                this.updateStreamStatus(clients > 0);
             }
             
             // 更新格式

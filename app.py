@@ -52,6 +52,7 @@ from models.stream import (
     register_client,
     unregister_client,
     get_mime_type as stream_get_mime_type,
+    cleanup_ffmpeg_processes,
     ACTIVE_CLIENTS,
     FFMPEG_PROCESS,
     FFMPEG_FORMAT,
@@ -101,6 +102,11 @@ def _init_default_playlist():
 
 # 确保默认歌单存在
 _init_default_playlist()
+
+# ==================== 启动时清理孤立FFmpeg进程 ====================
+print("[INFO] 检查并清理孤立的FFmpeg进程...")
+cleanup_ffmpeg_processes()
+print("[INFO] ✓ 孤立进程清理完成\n")
 
 # ==================== 浏览器检测函数 ====================
 def detect_browser(user_agent: str) -> str:
@@ -213,6 +219,18 @@ app.add_middleware(
 async def startup_event():
     """应用启动时的初始化事件"""
     logger.info("[APP] 应用启动完成")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """应用关闭时的清理事件"""
+    logger.info("[APP] 应用正在关闭...")
+    try:
+        stop_ffmpeg_stream()
+        cleanup_ffmpeg_processes()
+        logger.info("[APP] FFmpeg 进程已清理")
+    except Exception as e:
+        logger.error(f"[APP] 关闭时清理FFmpeg失败: {e}")
+    logger.info("[APP] 应用已关闭")
 
 # ============================================
 # 挂载静态文件
@@ -1037,11 +1055,18 @@ async def set_volume(request: Request):
             try:
                 current_volume = PLAYER.mpv_get("volume")
                 if current_volume is None:
-                    # MPV 未运行或未设置音量，返回默认值
-                    return {
-                        "status": "OK",
-                        "volume": 50
-                    }
+                    # MPV 未运行或未设置音量，返回本地默认值
+                    local_volume = PLAYER.config.get("LOCAL_VOLUME", "50")
+                    try:
+                        return {
+                            "status": "OK",
+                            "volume": int(local_volume)
+                        }
+                    except (ValueError, TypeError):
+                        return {
+                            "status": "OK",
+                            "volume": 50
+                        }
                 # 确保返回整数
                 volume_value = int(float(current_volume))
                 return {
@@ -1063,6 +1088,35 @@ async def set_volume(request: Request):
             {"status": "ERROR", "error": str(e)},
             status_code=500
         )
+
+@app.get("/volume/defaults")
+async def get_volume_defaults():
+    """获取默认音量配置（从settings.ini）"""
+    try:
+        # 安全地获取配置，处理 config 属性不存在的情况
+        config = getattr(PLAYER, 'config', {})
+        local_vol = config.get("LOCAL_VOLUME", "50") if config else "50"
+        stream_vol = config.get("STREAM_VOLUME", "50") if config else "50"
+        
+        try:
+            local_volume = int(local_vol)
+            stream_volume = int(stream_vol)
+        except (ValueError, TypeError):
+            local_volume = 50
+            stream_volume = 50
+        
+        return {
+            "status": "OK",
+            "local_volume": local_volume,
+            "stream_volume": stream_volume
+        }
+    except Exception as e:
+        logger.error(f"Failed to get volume defaults: {e}")
+        return {
+            "status": "OK",
+            "local_volume": 50,
+            "stream_volume": 50
+        }
 
 @app.delete("/playlists/{playlist_id}")
 async def delete_playlist(playlist_id: str):
@@ -1864,13 +1918,30 @@ async def stream_control(request: Request):
                 )
         elif action == "stop":
             stop_ffmpeg_stream()
+            # 延迟清理，避免进程冲突
+            await asyncio.sleep(0.5)
+            cleanup_ffmpeg_processes()
             return JSONResponse({"status": "OK", "message": "推流已停止"})
+        elif action == "restart":
+            # 安全重启：先停止，清理，再启动
+            stop_ffmpeg_stream()
+            await asyncio.sleep(0.5)
+            cleanup_ffmpeg_processes()
+            await asyncio.sleep(0.5)
+            if start_ffmpeg_stream(audio_format=format_type):
+                return JSONResponse({"status": "OK", "message": f"推流已重启 ({format_type})"})
+            else:
+                return JSONResponse(
+                    {"status": "ERROR", "message": f"无法重启推流 ({format_type})"},
+                    status_code=500
+                )
         else:
             return JSONResponse(
-                {"status": "ERROR", "message": "未知操作"},
+                {"status": "ERROR", "message": "未知操作: start|stop|restart"},
                 status_code=400
             )
     except Exception as e:
+        logger.error(f"Stream control error: {e}")
         return JSONResponse(
             {"status": "ERROR", "message": str(e)},
             status_code=500

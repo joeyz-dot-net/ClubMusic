@@ -124,6 +124,32 @@ export const settingsManager = {
         console.log(`[设置] ${key} = ${value}`);
         return true;
     },
+
+    /**
+     * 应用推流音量到音频元素（仅改变浏览器音量，不调用后端）
+     * @param {number} volume - 音量值 (0-100)
+     */
+    applyStreamVolume(volume) {
+        const audioElement = document.getElementById('browserStreamAudio');
+        if (!audioElement) {
+            console.warn('[推流音量] 警告: 未找到 browserStreamAudio 元素');
+            return false;
+        }
+        
+        const volumeValue = Math.max(0, Math.min(100, parseInt(volume) || 50));
+        const volumeDecimal = volumeValue / 100;
+        audioElement.volume = volumeDecimal;
+        console.log(`[推流音量] 已应用: ${volumeValue}% (HTML5 audio.volume = ${volumeDecimal.toFixed(2)})`);
+        return true;
+    },
+
+    /**
+     * 获取当前推流音量
+     */
+    getStreamVolume() {
+        const volume = this.getSettings('stream_volume');
+        return parseInt(volume) || 50;
+    },
     
     /**
      * 加载设置 schema
@@ -182,7 +208,9 @@ export const settingsManager = {
             if (audioElement) {
                 const volumeDecimal = parseInt(volume) / 100;
                 audioElement.volume = volumeDecimal;
-                console.log(`[音量] 初始化音频音量: ${volume}% (${volumeDecimal.toFixed(2)})`);
+                console.log(`[推流音量] 初始化: ${volume}% (HTML5 audio.volume = ${volumeDecimal.toFixed(2)})`);
+            } else {
+                console.warn('[推流音量] 警告: 初始化时未找到 browserStreamAudio 元素');
             }
         }
     },
@@ -209,7 +237,9 @@ export const settingsManager = {
                 if (audioElement) {
                     const volumeDecimal = parseInt(volumePercent) / 100;
                     audioElement.volume = volumeDecimal;
-                    console.log(`[音量] 设置音频音量: ${volumePercent}% (${volumeDecimal.toFixed(2)})`);
+                    console.log(`[推流音量] 设置: ${volumePercent}% (HTML5 audio.volume = ${volumeDecimal.toFixed(2)})`);
+                } else {
+                    console.warn('[推流音量] 警告: 未找到 browserStreamAudio 元素');
                 }
             });
         }

@@ -1,5 +1,6 @@
 // 播放器控制模块
 import { api } from './api.js';
+import { settingsManager } from './settingsManager.js';
 
 export class Player {
     constructor() {
@@ -121,7 +122,13 @@ export class Player {
             // === 配置新连接 ===
             freshAudioElement.crossOrigin = 'anonymous';
             freshAudioElement.preload = 'none';  // 改为 none，等待我们主动触发加载
-            freshAudioElement.volume = 1.0;
+            
+            // ✅ 从设置中读取推流音量，仅改变浏览器音频音量
+            const streamVolume = settingsManager.getStreamVolume();
+            const volumeDecimal = streamVolume / 100;
+            freshAudioElement.volume = volumeDecimal;
+            console.log(`[推流] 音量: ${streamVolume}% (HTML5 audio.volume = ${volumeDecimal.toFixed(2)})`);
+            
             freshAudioElement.autoplay = false;  // 禁用自动播放，由我们控制
             
             // 标记用于追踪播放状态

@@ -36,6 +36,8 @@ class MusicPlayer:
         "MPV_CMD": r"c:\mpv\mpv.exe --input-ipc-server=\\.\pipe\mpv-pipe --idle=yes --force-window=no",
         "LOCAL_SEARCH_MAX_RESULTS": "20",
         "YOUTUBE_SEARCH_MAX_RESULTS": "20",
+        "LOCAL_VOLUME": "50",
+        "STREAM_VOLUME": "50",
     }
 
     @staticmethod
@@ -290,7 +292,7 @@ class MusicPlayer:
         print(f"[INFO]   YOUTUBE_SEARCH_MAX_RESULTS: {youtube_search_max}")
         print(f"[INFO] ===== 配置加载完成 =====\n")
         
-        return cls(
+        player = cls(
             music_dir=music_dir,
             allowed_extensions=allowed_ext,
             server_host=server_host,
@@ -301,6 +303,11 @@ class MusicPlayer:
             local_search_max_results=local_search_max,
             youtube_search_max_results=youtube_search_max,
         )
+        
+        # 保存完整配置供后续使用（路径、FFmpeg参数等）
+        player.config = cfg
+        
+        return player
 
     @classmethod
     def from_json_file(cls, json_path: str, data_dir: str = "."):
