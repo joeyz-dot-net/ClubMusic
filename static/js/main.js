@@ -81,6 +81,9 @@ class MusicPlayerApp {
                 console.warn('[配置] 获取推流配置失败:', err);
             }
             
+            // 0.3 初始化流管理器到全局作用域
+            window.streamManager = streamManager;
+            
             // 1. 初始化 UI 元素
             this.initUIElements();
             
@@ -257,6 +260,11 @@ class MusicPlayerApp {
         const audioElement = document.getElementById('browserStreamAudio');
         if (!audioElement) return;
 
+        // 初始化流管理器的事件监听
+        if (window.streamManager) {
+            window.streamManager.setupAudioEventListeners();
+        }
+
         // 保存原始的 src setter
         const descriptor = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'src');
         const originalSetter = descriptor?.set;
@@ -274,6 +282,11 @@ class MusicPlayerApp {
                         // 调用原始 setter
                         if (originalSetter) {
                             originalSetter.call(this, value);
+                        }
+                        if (value && value.includes('/stream/play')) {
+                            if (window.streamManager) {
+                                window.streamManager.isStreaming = true;
+                            }
                         }
                         console.log('[音频保护] ✓ 允许设置 src:', value || '(清空)');
                     } else {
@@ -832,18 +845,79 @@ class MusicPlayerApp {
             });
         }
 
-        // 全屏播放器返回按钮
-        if (this.elements.fullPlayerBack) {
-            this.elements.fullPlayerBack.addEventListener('click', () => {
-                // 移除 show 类触发淡出动画
-                if (this.elements.fullPlayer) {
-                    this.elements.fullPlayer.classList.remove('show');
-                    // 等待动画完成后再隐藏
+        // 全屏播放器返回按钮 + 向下拖拽返回
+        if (this.elements.fullPlayer) {
+            // 返回上一导航栏的方法
+            const goBackToNav = () => {
+                this.elements.fullPlayer.classList.remove('show');
+                setTimeout(() => {
+                    this.elements.fullPlayer.style.display = 'none';
+                    if (this.elements.miniPlayer) {
+                        this.elements.miniPlayer.style.display = 'flex';
+                    }
+                }, 300);
+            };
+
+            // 点击返回按钮
+            if (this.elements.fullPlayerBack) {
+                this.elements.fullPlayerBack.addEventListener('click', goBackToNav);
+            }
+
+            // 拖拽返回逻辑
+            let dragStart = { x: 0, y: 0 };
+            let isDragging = false;
+            let startOpacity = 1;
+            
+            this.elements.fullPlayer.addEventListener('touchstart', (e) => {
+                dragStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                isDragging = true;
+                startOpacity = 1;
+            }, { passive: true });
+
+            this.elements.fullPlayer.addEventListener('touchmove', (e) => {
+                if (!isDragging) return;
+                
+                const currentY = e.touches[0].clientY;
+                const deltaY = currentY - dragStart.y;
+                
+                // 只在向下拖拽时响应
+                if (deltaY > 0) {
+                    const dragThreshold = 80; // 拖拽阈值
+                    const opacity = Math.max(0.3, 1 - (deltaY / 300));
+                    
+                    this.elements.fullPlayer.style.transform = `translateY(${deltaY}px)`;
+                    this.elements.fullPlayer.style.opacity = opacity;
+                }
+            }, { passive: true });
+
+            this.elements.fullPlayer.addEventListener('touchend', (e) => {
+                if (!isDragging) return;
+                isDragging = false;
+                
+                const endY = e.changedTouches[0].clientY;
+                const deltaY = endY - dragStart.y;
+                const dragThreshold = 80; // 拖拽阈值
+                
+                if (deltaY > dragThreshold) {
+                    // 拖拽距离足够，执行返回
+                    this.elements.fullPlayer.style.transition = 'all 0.3s ease-out';
+                    this.elements.fullPlayer.style.transform = 'translateY(100%)';
+                    this.elements.fullPlayer.style.opacity = '0';
+                    
                     setTimeout(() => {
-                        this.elements.fullPlayer.style.display = 'none';
-                        if (this.elements.miniPlayer) {
-                            this.elements.miniPlayer.style.display = 'flex';
-                        }
+                        this.elements.fullPlayer.style.transition = '';
+                        this.elements.fullPlayer.style.transform = '';
+                        this.elements.fullPlayer.style.opacity = '';
+                        goBackToNav();
+                    }, 300);
+                } else {
+                    // 拖拽距离不足，回弹
+                    this.elements.fullPlayer.style.transition = 'all 0.3s ease-out';
+                    this.elements.fullPlayer.style.transform = 'translateY(0)';
+                    this.elements.fullPlayer.style.opacity = '1';
+                    
+                    setTimeout(() => {
+                        this.elements.fullPlayer.style.transition = '';
                     }, 300);
                 }
             });
@@ -2097,11 +2171,11 @@ class MusicPlayerApp {
         if (!streamNavBtn) return;
         
         if (isActive) {
-            // 推流激活
-            streamNavBtn.classList.add('active');
+            // 推流激活 - 绿色
+            streamNavBtn.classList.remove('stream-disconnected');
+            streamNavBtn.classList.add('stream-active');
             if (streamNavIcon) {
-                streamNavIcon.textContent = '📡'; // 可以改为发光的图标
-                streamNavIcon.style.color = '#51cf66';
+                streamNavIcon.textContent = '📡';
             }
             if (streamNavIndicator) {
                 streamNavIndicator.style.display = 'block';
@@ -2110,14 +2184,15 @@ class MusicPlayerApp {
                 streamNavIndicator.style.animation = 'pulse 1.5s infinite';
             }
         } else {
-            // 推流未激活
-            streamNavBtn.classList.remove('active');
+            // 推流断开 - 红色
+            streamNavBtn.classList.remove('stream-active');
+            streamNavBtn.classList.add('stream-disconnected');
             if (streamNavIcon) {
                 streamNavIcon.textContent = '📡';
-                streamNavIcon.style.color = '';
             }
             if (streamNavIndicator) {
-                streamNavIndicator.style.display = 'none';
+                streamNavIndicator.style.display = 'block';
+                streamNavIndicator.style.background = '#f44336';
                 streamNavIndicator.style.animation = '';
             }
         }
@@ -2216,6 +2291,9 @@ class MusicPlayerApp {
                         streamStatusText.textContent = streamData.status_text || '未激活';
                         streamStatusText.style.color = streamData.is_active ? '#51cf66' : '#f44336';
                     }
+                    
+                    // 更新导航栏按钮的推流状态 (绿色=正在接收, 红色=断开)
+                    this.updateStreamNavButton(streamData.is_active);
                     
                     if (streamSpeed) {
                         streamSpeed.innerHTML = `速度: <strong>${(streamData.avg_speed || 0).toFixed(2)} KB/s</strong>`;

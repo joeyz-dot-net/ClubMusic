@@ -12,6 +12,12 @@ class StreamManager {
         this.currentFormat = 'mp3'; // 默认格式
         this.audioContext = null;
         this.audioWorklet = null;
+        this.isStreaming = false;
+        this.streamStatus = 'idle';
+        this.clientId = null;
+        this.reconnectAttempts = 0;
+        this.maxReconnectAttempts = 3;
+        this.streamAudio = document.getElementById('browserStreamAudio');
         this.formatConfig = {
             'mp3': {
                 mimeType: 'audio/mpeg',
@@ -183,6 +189,60 @@ class StreamManager {
                     (data[offset + 4] << 3) | 
                     ((data[offset + 5] >> 5) & 0x07);
         return len > 0 ? len : null;
+    }
+
+    /**
+     * 设置音频元素事件监听
+     */
+    setupAudioEventListeners() {
+        if (!this.streamAudio) {
+            return;
+        }
+
+        // 监听音频错误 - 捕捉网络错误
+        this.streamAudio.addEventListener('error', (e) => {
+            const error = this.streamAudio.error;
+            if (error && error.code === error.MEDIA_ERR_NETWORK) {
+                const errorMsg = `Code ${error.code}: 网络错误`;
+                console.error(`[STREAM] 网络错误: ${errorMsg}`);
+                this.onStreamDisconnected();
+            }
+        }, { once: false });
+
+        // 监听 abort 事件 - 连接被中止
+        this.streamAudio.addEventListener('abort', () => {
+            console.warn('[STREAM] 连接已中止');
+            this.onStreamDisconnected();
+        }, { once: false });
+
+        // 监听 stalled 事件 - 数据停止流入
+        this.streamAudio.addEventListener('stalled', () => {
+            // stalled 通常不必立即断开，只在持续超时时才处理
+            console.debug('[STREAM] 连接停滞，等待数据恢复...');
+        }, { once: false });
+    }
+
+    /**
+     * 处理流断开连接
+     */
+    onStreamDisconnected() {
+        this.isStreaming = false;
+        this.streamStatus = 'disconnected';
+        this.reconnectAttempts = 0; // 重置重连计数
+        
+        console.warn('[STREAM] 推流已断开连接');
+
+        // 更新导航栏按钮状态为红色（断开）
+        if (window.MusicPlayerApp && window.MusicPlayerApp.updateStreamNavButton) {
+            window.MusicPlayerApp.updateStreamNavButton(false);
+        }
+
+        // 动态导入 Toast 显示通知
+        import('./ui.js').then(({ Toast }) => {
+            Toast.show('推流已断开，请刷新页面重新连接', 'error', 5000);
+        }).catch(e => {
+            console.error('[STREAM] 导入 Toast 失败:', e);
+        });
     }
 }
 

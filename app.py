@@ -207,6 +207,25 @@ def detect_browser_and_apply_config(request: Request) -> dict:
     return config
 
 
+# ==================== 推流配置读取函数 ====================
+def is_streaming_enabled() -> bool:
+    """
+    从 settings.ini 读取 enable_stream 配置
+    返回推流是否启用（默认启用）
+    """
+    try:
+        import configparser
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.ini")
+        if os.path.exists(config_path):
+            config = configparser.ConfigParser()
+            config.read(config_path, encoding="utf-8")
+            enable_stream_str = config.get("app", "enable_stream", fallback="true")
+            return enable_stream_str.lower() in ("true", "1", "yes")
+    except Exception as e:
+        logger.warning(f"[STREAMING] 读取推流配置失败: {e}，默认启用推流")
+    return True
+
+
 # ============================================
 # 创建 FastAPI 应用
 # ============================================
@@ -335,14 +354,17 @@ async def play(request: Request):
             save_to_history=True
         )
         
-        # 新增：启动推流到浏览器
-        try:
-            from models.stream import start_ffmpeg_stream
-            start_ffmpeg_stream(audio_format=stream_format)
-            stream_started = True
-        except Exception as e:
-            logger.error(f"[Play] 启动推流失败: {e}")
-            stream_started = False
+        # 新增：启动推流到浏览器（仅在启用时）
+        stream_started = False
+        if is_streaming_enabled():
+            try:
+                from models.stream import start_ffmpeg_stream
+                start_ffmpeg_stream(audio_format=stream_format)
+                stream_started = True
+            except Exception as e:
+                logger.error(f"[Play] 启动推流失败: {e}")
+        else:
+            logger.info(f"[Play] 推流功能已禁用，跳过 FFmpeg 启动")
         
         return {
             "status": "OK",
@@ -1773,16 +1795,13 @@ async def stream_play(request: Request, format: str = "mp3", t: str = None):
     - Safari：更频繁的心跳（300ms）
     - Chrome/Firefox/Edge：标准配置
     """
-    # � 检查推流功能是否启用
-    try:
-        enable_stream = SETTINGS.get('enable_stream', True) if SETTINGS else True
-        if not enable_stream:
-            return JSONResponse(
-                status_code=403,
-                content={"status": "ERROR", "message": "推流功能已禁用"}
-            )
-    except Exception as e:
-        logger.warning(f"[STREAM] 检查推流配置失败: {e}")
+    # 检查推流功能是否启用
+    if not is_streaming_enabled():
+        logger.info("[STREAM] 推流功能已禁用 (enable_stream=false)")
+        return JSONResponse(
+            status_code=403,
+            content={"status": "ERROR", "message": "推流功能已禁用"}
+        )
     
     # �🔧 检测浏览器类型
     user_agent = request.headers.get("user-agent", "")
@@ -1874,6 +1893,9 @@ async def stream_play(request: Request, format: str = "mp3", t: str = None):
                                     logger.info(f"⚠️ 客户端 {client_id[:8]} 检测到丢包: 缺失 {gap} 块 (seq {last_seq_id+1}-{seq_id-1})")
                                 
                                 last_seq_id = seq_id
+                            else:
+                                # 记录心跳包 (seq_id < 0)
+                                logger.debug(f"[心跳] 客户端: {client_id[:8]}... | 浏览器: {browser_name:8} | 编码: {audio_format:6} | 序列号: {seq_id}")
                             # 无论是数据块还是心跳，都已经解包到 chunk 变量
                         else:
                             # 非元组格式（兼容旧数据）
@@ -1900,7 +1922,7 @@ async def stream_play(request: Request, format: str = "mp3", t: str = None):
                     # 这样可以避免解码器尝试解码心跳数据导致的爆音
                             
         finally:
-            logger.info(f"[DEBUG-STREAM-END] {client_id[:8]} ({browser_name}) 推流结束")
+            logger.info(f"[STREAM] ✓ 客户端已断开连接: {client_id[:8]} ({browser_name})")
             unregister_client(client_id)
     
     # 🔧 Safari优化HTTP头：禁用代理缓冲，启用分块编码
@@ -1951,16 +1973,13 @@ async def stream_control(request: Request):
     """流控制接口"""
     import models.stream as stream_module
     
-    # 🔥 检查推流功能是否启用
-    try:
-        enable_stream = SETTINGS.get('enable_stream', True) if SETTINGS else True
-        if not enable_stream:
-            return JSONResponse(
-                status_code=403,
-                content={"status": "ERROR", "message": "推流功能已禁用"}
-            )
-    except Exception as e:
-        logger.warning(f"[STREAM] 检查推流配置失败: {e}")
+    # 检查推流功能是否启用
+    if not is_streaming_enabled():
+        logger.info("[STREAM] 推流功能已禁用 (enable_stream=false)")
+        return JSONResponse(
+            status_code=403,
+            content={"status": "ERROR", "message": "推流功能已禁用"}
+        )
     
     try:
         form = await request.form()
@@ -2103,6 +2122,17 @@ async def config_stream():
         "data": {
             "default_format": stream_module.DEFAULT_STREAM_FORMAT
         }
+    })
+
+
+@app.get("/config/streaming-enabled")
+async def config_streaming_enabled():
+    """获取服务器推流是否启用 - 前端检查用户是否可以开启推流"""
+    enabled = is_streaming_enabled()
+    return JSONResponse({
+        "status": "OK",
+        "streaming_enabled": enabled,
+        "message": "推流功能已启用" if enabled else "推流功能已禁用"
     })
 
 

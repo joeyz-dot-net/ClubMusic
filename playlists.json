@@ -18,6 +18,16 @@
           "artist": "Top Hits 2026 ~ Trending Music 2026 🎶 Spotify Hits 2026 ~ Top Songs 2026 🎧"
         },
         {
+          "url": "Lady Gaga - MAYHEM (2025)/01. Disease.flac",
+          "title": "01. Disease.flac",
+          "name": "01. Disease.flac",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766386349,
+          "thumbnail_url": null,
+          "artist": "01. Disease.flac"
+        },
+        {
           "url": "https://www.youtube.com/watch?v=ojA7sPQ0sqU",
           "title": "Spotify Pop Hits 2026 ❄️ Chill Pop Playlist 🌙 Winter 2025/2026 ~ Best New Pop Songs",
           "name": "Spotify Pop Hits 2026 ❄️ Chill Pop Playlist 🌙 Winter 2025/2026 ~ Best New Pop Songs",
@@ -26,16 +36,6 @@
           "ts": 1766370890,
           "thumbnail_url": "https://img.youtube.com/vi/ojA7sPQ0sqU/maxresdefault.jpg",
           "artist": "Spotify Pop Hits 2026 ❄️ Chill Pop Playlist 🌙 Winter 2025/2026 ~ Best New Pop Songs"
-        },
-        {
-          "url": "Stefanie Sun 孫燕姿/2000台北演唱会/01. 孙燕姿 - 天黑黑 (CD Version).flac",
-          "title": "01. 孙燕姿 - 天黑黑 (CD Version)",
-          "name": "01. 孙燕姿 - 天黑黑 (CD Version)",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766370888,
-          "thumbnail_url": null,
-          "artist": "01. 孙燕姿 - 天黑黑 (CD Version)"
         },
         {
           "url": "https://www.youtube.com/watch?v=kzZ7Jc8C4wA",
@@ -50,7 +50,7 @@
       ],
       "song_count": 4,
       "created_at": 1766369731.0493586,
-      "updated_at": 1766374557.3369608,
+      "updated_at": 1766386349.8039727,
       "current_playing_index": -1
     }
   ]

@@ -97,15 +97,6 @@
 	<!-- Full Screen Player Modal -->
 	<div id="fullPlayer" class="full-player" style="display:none;">
 		<div class="full-player-content">
-			<!-- Header with back arrow -->
-			<div class="full-player-header">
-				<button class="full-player-back" id="fullPlayerBack">
-					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-						<path d="M19 9l-7 7-7-7"/>
-					</svg>
-				</button>
-			</div>
-			
 			<!-- Album Art -->
 			<div class="full-player-artwork">
 				<div class="full-player-artwork-container">
@@ -221,17 +212,17 @@
 			<span class="nav-icon">🔍</span>
 			<span class="nav-label">搜索</span>
 		</button>
-		<button class="nav-item" data-tab="stream" id="streamNavBtn" title="推流">
-			<span class="nav-icon" id="streamNavIcon">📡</span>
-			<span class="nav-label">推流</span>
-			<span id="streamNavIndicator" style="position: absolute; width: 10px; height: 10px; background: #51cf66; border-radius: 50%; top: 4px; right: 4px; display: none;"></span>
-		</button>
 		<button class="nav-item" id="settingsNavBtn" title="设置">
 			<span class="nav-icon">⚙️</span>
 			<span class="nav-label">设置</span>
 		</button>
 	</nav>
 	
+	<!-- 推流状态指示器 -->
+	<div id="streamStatusIndicator" class="stream-status-indicator" title="推流状态：禁止">
+		<div class="stream-status-dot stream-status-disabled"></div>
+		<span class="stream-status-text">推流禁止</span>
+	</div>
 	
 	
 	<!-- History modal -->
@@ -446,7 +437,7 @@
 				</div>
 				
 				<!-- 推流设置 -->
-				<div class="settings-section">
+				<div class="settings-section" data-stream-settings>
 					<h3 class="section-title">🎵 推流设置</h3>
 					
 					<div class="settings-item">

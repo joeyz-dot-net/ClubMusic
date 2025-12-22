@@ -62,6 +62,9 @@ export const settingsManager = {
             // 绑定事件
             this.bindEvents();
             
+            // 检查服务器推流状态，更新UI
+            await this.checkServerStreamingStatus();
+            
             // 同步推流状态到 localStorage
             const autoStream = this.getSettings('auto_stream') === 'true' || this.getSettings('auto_stream') === true;
             localStorage.setItem('streamActive', autoStream ? 'true' : 'false');
@@ -70,6 +73,181 @@ export const settingsManager = {
             console.log('✓ 设置管理器已初始化（localStorage）');
         } catch (error) {
             console.error('[设置] 初始化失败:', error);
+        }
+    },
+    
+    /**
+     * 检查服务器推流状态，更新UI可用性
+     */
+    async checkServerStreamingStatus() {
+        try {
+            const response = await api.get('/config/streaming-enabled');
+            const streamingEnabled = response.streaming_enabled;
+            
+            const autoStreamCheckbox = document.getElementById('autoStreamSetting');
+            const streamSettingsSection = document.querySelector('[data-stream-settings]') || 
+                                        document.querySelector('.stream-settings-section');
+            
+            if (streamingEnabled) {
+                console.log('[推流] 服务器已启用推流功能');
+                // 启用推流选项
+                if (autoStreamCheckbox) {
+                    autoStreamCheckbox.disabled = false;
+                }
+                if (streamSettingsSection) {
+                    streamSettingsSection.classList.remove('disabled');
+                    streamSettingsSection.title = '';
+                }
+                // 更新指示器为关闭状态（服务器启用，客户端未启用）
+                this.updateStreamStatusIndicator('closed');
+            } else {
+                console.warn('[推流] 服务器已禁用推流功能，禁用客户端推流选项');
+                // 禁用推流选项
+                if (autoStreamCheckbox) {
+                    autoStreamCheckbox.disabled = true;
+                    autoStreamCheckbox.checked = false;
+                }
+                // 更新localStorage
+                this.setSetting('auto_stream', false);
+                localStorage.setItem('streamActive', 'false');
+                
+                if (streamSettingsSection) {
+                    streamSettingsSection.classList.add('disabled');
+                    streamSettingsSection.title = '服务器已禁用推流功能';
+                }
+                
+                // 停止任何正在运行的推流
+                this.stopStream();
+                this.showNotification('⚠️ 服务器已禁用推流功能', 'warning');
+                
+                // 更新指示器为禁止状态
+                this.updateStreamStatusIndicator('disabled');
+            }
+        } catch (error) {
+            console.warn('[推流] 检查服务器推流状态失败:', error);
+            // 发生错误时保守地禁用推流
+            const autoStreamCheckbox = document.getElementById('autoStreamSetting');
+            if (autoStreamCheckbox) {
+                autoStreamCheckbox.disabled = true;
+            }
+            this.updateStreamStatusIndicator('disabled');
+        }
+    },
+    
+    /**
+     * 更新推流状态指示器
+     * @param {string} status - 状态：disabled(禁止), closed(关闭), buffering(缓冲), playing(播放)
+     */
+    updateStreamStatusIndicator(status) {
+        const indicator = document.getElementById('streamStatusIndicator');
+        const dot = document.querySelector('.stream-status-dot');
+        const text = document.querySelector('.stream-status-text');
+        
+        if (!indicator || !dot || !text) return;
+        
+        // 移除所有状态类
+        dot.classList.remove('stream-status-disabled', 'stream-status-closed', 'stream-status-buffering', 'stream-status-playing');
+        
+        // 添加新状态类和更新文本
+        switch(status) {
+            case 'disabled':
+                dot.classList.add('stream-status-disabled');
+                text.textContent = '推流禁止';
+                indicator.title = '推流状态：服务器已禁用';
+                console.log('[推流指示器] 状态更新为：禁止');
+                break;
+            case 'closed':
+                dot.classList.add('stream-status-closed');
+                text.textContent = '推流关闭';
+                indicator.title = '推流状态：已关闭';
+                console.log('[推流指示器] 状态更新为：关闭');
+                break;
+            case 'buffering':
+                dot.classList.add('stream-status-buffering');
+                text.textContent = '推流缓冲';
+                indicator.title = '推流状态：正在缓冲';
+                console.log('[推流指示器] 状态更新为：缓冲');
+                break;
+            case 'playing':
+                dot.classList.add('stream-status-playing');
+                text.textContent = '推流播放';
+                indicator.title = '推流状态：正在播放';
+                console.log('[推流指示器] 状态更新为：播放');
+                break;
+        }
+        
+        // 为指示器添加点击事件处理，允许用户手动恢复推流
+        this.addIndicatorClickHandler(indicator, status);
+    },
+    
+    /**
+     * 为推流指示器添加点击事件处理
+     * 当推流关闭或出错时，用户可以点击指示器来恢复推流
+     */
+    addIndicatorClickHandler(indicator, status) {
+        // 移除之前的点击处理（如果有）
+        indicator.onclick = null;
+        
+        // 仅在推流关闭或缓冲时添加点击处理
+        if (status === 'closed') {
+            indicator.style.cursor = 'pointer';
+            indicator.title = '点击恢复推流';
+            
+            indicator.onclick = async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                console.log('[推流指示器] 用户点击恢复推流');
+                
+                // 检查服务器是否允许推流
+                try {
+                    const response = await api.get('/config/streaming-enabled');
+                    if (!response.streaming_enabled) {
+                        console.warn('[推流] 服务器已禁用推流功能');
+                        this.showNotification('❌ 服务器已禁用推流功能', 'error');
+                        return;
+                    }
+                } catch (error) {
+                    console.error('[推流] 检查服务器推流状态失败:', error);
+                    this.showNotification('❌ 无法检查推流状态', 'error');
+                    return;
+                }
+                
+                // 启用推流开关
+                const autoStreamCheck = document.getElementById('autoStreamSetting');
+                if (autoStreamCheck && !autoStreamCheck.checked) {
+                    autoStreamCheck.checked = true;
+                    // 触发change事件以启动推流
+                    autoStreamCheck.dispatchEvent(new Event('change', { bubbles: true }));
+                    // 等待推流启动后再播放
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+                
+                // 真正播放音频（此时已有用户交互，浏览器允许）
+                const audioElement = document.getElementById('browserStreamAudio');
+                if (audioElement && audioElement.src) {
+                    try {
+                        console.log('[推流指示器] 用户点击，开始播放...');
+                        await audioElement.play();
+                        this.updateStreamStatusIndicator('playing');
+                        this.showNotification('✓ 推流已启动', 'success');
+                    } catch (error) {
+                        console.error('[推流] 播放失败:', error.name, error.message);
+                        if (error.name === 'NotAllowedError') {
+                            this.showNotification('❌ 浏览器阻止了自动播放', 'error');
+                        } else {
+                            this.showNotification('❌ 播放失败: ' + error.message, 'error');
+                        }
+                    }
+                } else {
+                    console.warn('[推流指示器] 音频元素或推流地址不存在');
+                    this.showNotification('❌ 推流地址加载失败', 'error');
+                }
+            };
+        } else {
+            // 其他状态下不可点击
+            indicator.style.cursor = 'default';
+            indicator.onclick = null;
         }
     },
     
@@ -236,9 +414,6 @@ export const settingsManager = {
                 streamVolumeValue.textContent = `${volume}%`;
             }
             
-            // 【改进】同时从后端获取推流音量，确保同步
-            this.syncStreamVolumeWithBackend();
-            
             // ✅ 初始化音频元素的音量
             const audioElement = document.getElementById('browserStreamAudio');
             if (audioElement) {
@@ -288,6 +463,27 @@ export const settingsManager = {
                 console.log(`%c[推流开关] 用户操作: ${isEnabled ? '✓ 启用' : '✗ 禁用'}`, 
                     `color: ${isEnabled ? '#4CAF50' : '#FF9800'}; font-weight: bold`);
                 
+                // 如果用户要启用推流，先检查服务器是否允许
+                if (isEnabled) {
+                    try {
+                        const response = await api.get('/config/streaming-enabled');
+                        if (!response.streaming_enabled) {
+                            console.warn('[推流] 服务器已禁用推流功能');
+                            this.showNotification('❌ 服务器已禁用推流功能', 'error');
+                            // 取消选中
+                            autoStreamCheck.checked = false;
+                            // 更新指示器为禁止状态
+                            this.updateStreamStatusIndicator('disabled');
+                            return;
+                        }
+                    } catch (error) {
+                        console.error('[推流] 检查服务器推流状态失败:', error);
+                        this.showNotification('❌ 无法检查推流状态，请稍后重试', 'error');
+                        autoStreamCheck.checked = false;
+                        return;
+                    }
+                }
+                
                 // 保存到 localStorage
                 this.setSetting('auto_stream', isEnabled);
                 localStorage.setItem('streamActive', isEnabled ? 'true' : 'false');
@@ -296,6 +492,8 @@ export const settingsManager = {
                 if (isEnabled) {
                     console.log('[接收推流] 用户启用推流，正在启动...');
                     this.showNotification('🔄 正在启动推流服务...', 'info');
+                    // 更新指示器为缓冲状态
+                    this.updateStreamStatusIndicator('buffering');
                     
                     const streamFormat = localStorage.getItem('streamFormat') || 'mp3';
                     const streamVolume = this.getSettings('stream_volume') || 50;
@@ -311,14 +509,20 @@ export const settingsManager = {
                     if (this.player && this.player.startBrowserStream) {
                         console.log('%c[接收推流] 调用 player.startBrowserStream() 启动推流', 'color: #2196F3; font-weight: bold; font-size: 12px');
                         await this.player.startBrowserStream(streamFormat);
+                        // 推流成功，更新指示器为播放状态
+                        this.updateStreamStatusIndicator('playing');
                         this.showNotification('✓ 推流已启用', 'success');
                     } else {
                         console.warn('[接收推流] player 实例不可用');
                         this.playStreamAudio(streamFormat, streamVolume / 100);
+                        // 直接播放音频，更新指示器为播放状态
+                        this.updateStreamStatusIndicator('playing');
                     }
                 } else {
                     console.log('[接收推流] 用户禁用推流');
                     this.stopStream();
+                    // 更新指示器为关闭状态
+                    this.updateStreamStatusIndicator('closed');
                     this.showNotification('✓ 已禁用接收推流', 'success');
                 }
             });
@@ -824,25 +1028,9 @@ export const settingsManager = {
                 console.log('[推流音频] 时长已更新');
             };
             
-            // 尝试播放
-            console.log('[推流音频] 尝试播放...');
-            const playPromise = audioElement.play();
-            
-            if (playPromise !== undefined) {
-                playPromise
-                    .then(() => {
-                        console.log('[推流音频] ✓ 播放成功');
-                    })
-                    .catch(error => {
-                        console.error('[推流音频] ✗ 播放失败:', error.name, error.message);
-                        showStatus('❌ 播放失败', true);
-                        
-                        // 自动播放被浏览器阻止，显示提示
-                        if (error.name === 'NotAllowedError') {
-                            console.warn('[推流音频] 浏览器禁用了自动播放，请用户交互后重试');
-                        }
-                    });
-            }
+            // 仅加载流，不自动播放（浏览器要求用户交互才能播放）
+            console.log('[推流音频] 推流已加载，等待用户交互...');
+            showStatus('👆 点击推流指示器开始播放', false);
             
         } catch (error) {
             console.error('[推流音频] 播放异常:', error);

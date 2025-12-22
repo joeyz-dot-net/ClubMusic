@@ -185,6 +185,10 @@ export class Player {
             // 连接开始
             freshAudioElement.onloadstart = () => {
                 console.log(`[推流] ✓ 开始连接 (格式: ${streamFormat}, MIME: ${mimeType})`);
+                // 更新指示器为缓冲状态
+                if (window.settingsManager) {
+                    window.settingsManager.updateStreamStatusIndicator('buffering');
+                }
                 this.emit('stream:connecting', { format: streamFormat });
             };
             
@@ -224,6 +228,10 @@ export class Player {
             // 播放中
             freshAudioElement.onplay = () => {
                 console.log(`[推流] 🎵 音乐已开始播放`);
+                // 更新推流指示器为播放状态
+                if (window.settingsManager) {
+                    window.settingsManager.updateStreamStatusIndicator('playing');
+                }
                 this.emit('stream:playing');
             };
             
@@ -241,6 +249,12 @@ export class Player {
                     3: 'MEDIA_ERR_DECODE - 解码错误',
                     4: 'MEDIA_ERR_SRC_NOT_SUPPORTED - 不支持的格式'
                 }[errorCode] || `未知错误 (${errorCode})`;
+                
+                // 所有错误都标记为关闭，禁用自动重连
+                // 用户需要手动点击推流指示器来恢复推流
+                if (window.settingsManager) {
+                    window.settingsManager.updateStreamStatusIndicator('closed');
+                }
                 
                 // 静默处理格式不支持错误（code=4），不显示 toast 提示
                 if (errorCode === 4) {
@@ -271,6 +285,10 @@ export class Player {
             // 播放暂停
             freshAudioElement.onpause = () => {
                 console.log(`[推流] ⏸ 已暂停`);
+                // 更新推流指示器为关闭状态
+                if (window.settingsManager) {
+                    window.settingsManager.updateStreamStatusIndicator('closed');
+                }
                 this.emit('stream:paused');
             };
             

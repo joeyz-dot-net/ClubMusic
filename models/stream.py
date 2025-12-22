@@ -408,6 +408,8 @@ class ClientPool:
             "total_chunks_sent": 0,
             "total_bytes_sent": 0,
         }
+        # 断开连接回调列表
+        self.disconnection_callbacks = []
     
     def register(self, client_id: str, audio_format: str = "mp3", browser_name: str = "default") -> queue.Queue:
         """注册客户端 - 使用浏览器特定的队列大小（【新增】格式×浏览器组合优化）"""
@@ -436,6 +438,10 @@ class ClientPool:
                 pass  # 重复注册，无需输出日志
             return self.clients[client_id].queue
     
+    def register_disconnection_callback(self, callback):
+        """注册断开连接回调 - 当客户端断开时会被调用"""
+        self.disconnection_callbacks.append(callback)
+    
     def unregister(self, client_id: str):
         """注销客户端"""
         with self.lock:
@@ -445,6 +451,13 @@ class ClientPool:
                 # 仅在调试模式下输出详细日志
                 pass  # 移除冗长的日志输出
                 del self.clients[client_id]
+                
+                # 触发断开连接回调
+                for callback in self.disconnection_callbacks:
+                    try:
+                        callback(client_id, client, connection_duration)
+                    except Exception as e:
+                        logger.error(f"断开连接回调异常 {client_id[:8]}: {e}")
     
     def get_client(self, client_id: str) -> Optional[ClientInfo]:
         """获取客户端信息"""
