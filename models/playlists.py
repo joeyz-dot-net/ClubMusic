@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import List, Dict, Optional
 
 from models.song import StreamSong
+from models.logger import logger
 
 DEFAULT_PLAYLIST_ID = "default"
 
@@ -289,13 +290,13 @@ class Playlists:
                     if hydration_changed:
                         self.save()
 
-                    print(f"[DEBUG] 已加载 {len(self._playlists)} 个歌单")
+                    logger.debug(f"已加载 {len(self._playlists)} 个歌单")
             except Exception as e:
-                print(f"[ERROR] 加载歌单失败: {e}")
+                logger.error(f"加载歌单失败: {e}")
                 self._playlists = {}
                 self._order = []
         else:
-            print(f"[DEBUG] 歌单文件不存在，创建新的歌单集合")
+            logger.debug("歌单文件不存在，创建新的歌单集合")
             self._playlists = {}
             self._order = []
 
@@ -316,9 +317,9 @@ class Playlists:
             }
             with open(self.data_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
-            print(f"[DEBUG] 已保存 {len(self._playlists)} 个歌单")
+            logger.debug(f"已保存 {len(self._playlists)} 个歌单")
         except Exception as e:
-            print(f"[ERROR] 保存歌单失败: {e}")
+            logger.error(f"保存歌单失败: {e}")
 
     def create_playlist(self, name: str) -> Playlist:
         """创建新歌单
@@ -333,7 +334,7 @@ class Playlists:
         self._playlists[playlist.id] = playlist
         self._order.append(playlist.id)
         self.save()
-        print(f"[DEBUG] 创建新歌单: {name} (ID: {playlist.id})")
+        logger.debug(f"创建新歌单: {name} (ID: {playlist.id})")
         return playlist
 
     def get_playlist(self, playlist_id: str) -> Optional[Playlist]:
@@ -361,7 +362,7 @@ class Playlists:
             if playlist_id in self._order:
                 self._order.remove(playlist_id)
             self.save()
-            print(f"[DEBUG] 删除歌单: {playlist_id}")
+            logger.debug(f"删除歌单: {playlist_id}")
             return True
         return False
 
@@ -380,7 +381,7 @@ class Playlists:
             playlist.name = new_name
             playlist.updated_at = time.time()
             self.save()
-            print(f"[DEBUG] 重命名歌单: {playlist_id} -> {new_name}")
+            logger.debug(f"重命名歌单: {playlist_id} -> {new_name}")
             return True
         return False
 
@@ -536,10 +537,10 @@ class Playlists:
             try:
                 with open(export_file, "w", encoding="utf-8") as f:
                     json.dump(playlist.to_dict(), f, ensure_ascii=False, indent=2)
-                print(f"[DEBUG] 已导出歌单到: {export_file}")
+                logger.debug(f"已导出歌单到: {export_file}")
                 return True
             except Exception as e:
-                print(f"[ERROR] 导出歌单失败: {e}")
+                logger.error(f"导出歌单失败: {e}")
         return False
 
     def import_playlist(self, import_file: str) -> Optional[Playlist]:
@@ -558,10 +559,10 @@ class Playlists:
             self._playlists[playlist.id] = playlist
             self._order.append(playlist.id)
             self.save()
-            print(f"[DEBUG] 已导入歌单: {playlist.name}")
+            logger.debug(f"已导入歌单: {playlist.name}")
             return playlist
         except Exception as e:
-            print(f"[ERROR] 导入歌单失败: {e}")
+            logger.error(f"导入歌单失败: {e}")
             return None
 
     def search_playlists(self, keyword: str) -> List[Playlist]:

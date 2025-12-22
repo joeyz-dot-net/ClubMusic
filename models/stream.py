@@ -21,11 +21,9 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional
 from concurrent.futures import ThreadPoolExecutor
 import struct
+from models.logger import logger
 
-logger = logging.getLogger(__name__)
-
-# 【改进】移除独立的logger配置，统一使用根logger的配置
-# stream模块的logger会自动继承根logger的formatter和filter配置
+# 【改进】统一使用models.logger提供的logger，包含ColoredFormatter格式化
 
 
 # ==================== 推流格式配置 ====================
@@ -286,10 +284,12 @@ def find_available_audio_device():
         output = result.stderr + result.stdout
         lines = output.split('\n')
         
-        # 查找 "audio=" 开头的设备行
+        # 查找音频设备行 - 兼容新旧 FFmpeg 版本
+        # 新版本格式: "Device Name" (audio)
+        # 旧版本格式: "Device Name" (audio=...)
         audio_devices = []
         for line in lines:
-            if 'audio=' in line:
+            if '(audio' in line:  # 同时匹配 (audio) 和 audio=
                 # 提取设备名称
                 start = line.find('"')
                 end = line.rfind('"')
@@ -1297,8 +1297,16 @@ def start_stream_reader_thread():
         - Chrome/Edge/Firefox: 1000ms 标准心跳 + 40秒超时
         - 每个客户端独立心跳配置，互不影响
         """
-        # 维护每个客户端的上次心跳时间
+        # 维护每个客户端的上次心跳时间和上次日志时间
         last_heartbeat_time = {}
+        last_heartbeat_log_time = {}
+        
+        # 从日志配置读取心跳日志采样间隔（默认10秒）
+        try:
+            from models.logger import _LOGGING_CONFIG
+            heartbeat_log_interval = _LOGGING_CONFIG.get('heartbeat_log_interval', 10)
+        except:
+            heartbeat_log_interval = 10  # 默认10秒
         
         while not STREAM_SHOULD_STOP.is_set():
             try:
@@ -1328,8 +1336,15 @@ def start_stream_reader_thread():
                             try:
                                 client.queue.put_nowait((keepalive_seq, keepalive))
                                 last_heartbeat_time[client_id] = now
-                                # 输出心跳日志，包含编码信息
-                                logger.debug(f"[心跳] 客户端: {client_id[:8]}... | 浏览器: {browser:8} | 编码: {client.format:6} | 序列号: {keepalive_seq}")
+                                
+                                # 心跳日志采样：10秒输出一次（防止日志刷屏）
+                                if client_id not in last_heartbeat_log_time:
+                                    last_heartbeat_log_time[client_id] = now
+                                
+                                time_since_log = now - last_heartbeat_log_time[client_id]
+                                if time_since_log >= heartbeat_log_interval:
+                                    logger.debug(f"[心跳] 客户端: {client_id[:8]}... | 浏览器: {browser:8} | 编码: {client.format:6} | 序列号: {keepalive_seq}")
+                                    last_heartbeat_log_time[client_id] = now
                             except queue.Full:
                                 pass  # 队列满，丢弃心跳
                         

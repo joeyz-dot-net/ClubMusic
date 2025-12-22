@@ -208,9 +208,9 @@ class MusicPlayer:
 
         # 加载持久化数据
         self.load_playback_history()
-        #print('[DEBUG] 调用 load_current_playlist 前，current_playlist 类型:', type(self.current_playlist))
+        logger.debug('调用 load_current_playlist 前，current_playlist 类型:', type(self.current_playlist))
         self.load_current_playlist()
-        #print('[DEBUG] 调用 load_current_playlist 后，current_playlist 类型:', type(self.current_playlist))
+        logger.debug('调用 load_current_playlist 后，current_playlist 类型:', type(self.current_playlist))
 
         # 构建本地文件树
         try:

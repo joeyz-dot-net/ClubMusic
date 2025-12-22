@@ -6,6 +6,7 @@
 import os
 import time
 from urllib.parse import urlparse, parse_qs
+from models.logger import logger
 
 
 class Song:
@@ -149,12 +150,12 @@ class LocalSong(Song):
           music_dir: 音乐库目录（用于解析相对路径）
         """
         abs_file = self.get_absolute_path(base_dir=music_dir)
-        print(f"[DEBUG] LocalSong.play -> 播放本地文件: {abs_file}")
+        logger.debug(f"LocalSong.play -> 播放本地文件: {abs_file}")
 
         try:
             # 确保 mpv 管道存在
             if not mpv_pipe_exists_func():
-                print(f"[WARN] mpv 管道不存在，尝试启动 mpv...")
+                logger.warning(f"mpv 管道不存在，尝试启动 mpv...")
                 if not ensure_mpv_func():
                     raise RuntimeError("无法启动或连接到 mpv")
 
@@ -166,7 +167,7 @@ class LocalSong(Song):
 
             return True
         except Exception as e:
-            print(f"[ERROR] LocalSong.play failed: {e}")
+            logger.error(f"LocalSong.play failed: {e}")
             return False
 
     def to_dict(self) -> dict:
@@ -309,20 +310,20 @@ class StreamSong(Song):
           save_to_history: 是否保存到历史
           music_dir: 音乐库目录（串流不需要此参数）
         """
-        print(f"[DEBUG] StreamSong.play -> 播放串流: {self.stream_url}")
+        logger.debug(f"StreamSong.play -> 播放串流: {self.stream_url}")
 
         try:
             # 检查 mpv 进程是否运行
             if not mpv_pipe_exists_func():
-                print(f"[WARN] mpv pipe 不存在，尝试启动 mpv...")
+                logger.warning(f"mpv pipe 不存在，尝试启动 mpv...")
                 if not ensure_mpv_func():
                     raise RuntimeError("无法启动或连接到 mpv")
 
             # 设置 ytdl-format 为最佳音质
-            print(f"[DEBUG] 设置 mpv 属性: ytdl-format=bestaudio")
+            logger.debug("设置 mpv 属性: ytdl-format=bestaudio")
             mpv_command_func(["set_property", "ytdl-format", "bestaudio"])
 
-            print(f"[DEBUG] 加载文件: {self.stream_url}")
+            logger.debug(f"加载文件: {self.stream_url}")
             mpv_command_func(["loadfile", self.stream_url, "replace"])
 
             # 添加到播放历史
@@ -331,7 +332,7 @@ class StreamSong(Song):
 
             return True
         except Exception as e:
-            print(f"[ERROR] StreamSong.play failed: {e}")
+            logger.error(f"StreamSong.play failed: {e}")
             return False
 
     def to_dict(self) -> dict:
@@ -364,7 +365,7 @@ class StreamSong(Song):
         try:
             import yt_dlp
 
-            print(f"[DEBUG] 搜索 YouTube: {query}")
+            logger.debug(f"搜索 YouTube: {query}")
 
             # 使用 yt-dlp 搜索 YouTube
             ydl_opts = {
@@ -396,10 +397,10 @@ class StreamSong(Song):
                                     "thumbnail_url": thumbnail_url,
                                 }
                             )
-                print(f"[DEBUG] 搜索完成，找到 {len(results)} 个结果")
+                logger.debug(f"搜索完成，找到 {len(results)} 个结果")
                 return {"status": "OK", "results": results}
         except Exception as e:
-            print(f"[ERROR] YouTube 搜索失败: {str(e)}")
+            logger.error(f"YouTube 搜索失败: {str(e)}")
             import traceback
 
             traceback.print_exc()
@@ -421,7 +422,7 @@ class StreamSong(Song):
         try:
             import yt_dlp
 
-            print(f"[DEBUG] 提取播放列表: {url}")
+            logger.debug(f"提取播放列表: {url}")
 
             # 使用 yt-dlp 提取播放列表
             ydl_opts = {
@@ -436,7 +437,7 @@ class StreamSong(Song):
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 result = ydl.extract_info(url, download=False)
 
-                print(f"[DEBUG] 提取结果类型: {type(result)}")
+                logger.debug(f"提取结果类型: {type(result)}")
                 if result:
                     print(
                         f"[DEBUG] 结果包含键: {result.keys() if isinstance(result, dict) else 'N/A'}"
@@ -445,10 +446,10 @@ class StreamSong(Song):
                 entries = []
 
                 if result and "entries" in result:
-                    print(f"[DEBUG] 找到 entries，共 {len(result['entries'])} 项")
+                    logger.debug(f"找到 entries，共 {len(result['entries'])} 项")
                     for idx, item in enumerate(result["entries"]):
                         if not item:
-                            print(f"[WARN] 第 {idx} 项为空，跳过")
+                            logger.warning(f"第 {idx} 项为空，跳过")
                             continue
 
                         print(
@@ -470,7 +471,7 @@ class StreamSong(Song):
                                 )
 
                         if not entry_url:
-                            print(f"[WARN] 第 {idx} 项无法获取 URL，跳过")
+                            logger.warning(f"第 {idx} 项无法获取 URL，跳过")
                             continue
 
                         title = item.get("title") or "未知标题"
@@ -479,7 +480,7 @@ class StreamSong(Song):
                         # 生成缩略图 URL
                         thumbnail_url = f"https://img.youtube.com/vi/{video_id}/default.jpg" if video_id else ""
 
-                        print(f"[DEBUG] 添加视频: {title} - {entry_url}")
+                        logger.debug(f"添加视频: {title} - {entry_url}")
 
                         entries.append(
                             {
@@ -493,16 +494,16 @@ class StreamSong(Song):
                             }
                         )
 
-                    print(f"[DEBUG] 成功提取 {len(entries)} 个视频")
+                    logger.debug(f"成功提取 {len(entries)} 个视频")
                     if len(entries) > 0:
                         return {"status": "OK", "entries": entries}
                     else:
                         return {"status": "ERROR", "error": "播放列表中没有有效的视频"}
                 else:
-                    print(f"[WARN] 结果中没有 entries 字段")
+                    logger.warning(f"结果中没有 entries 字段")
                     return {"status": "ERROR", "error": "播放列表为空或无法解析"}
         except Exception as e:
-            print(f"[ERROR] 提取播放列表失败: {str(e)}")
+            logger.error(f"提取播放列表失败: {str(e)}")
             import traceback
 
             traceback.print_exc()
@@ -524,7 +525,7 @@ class StreamSong(Song):
         try:
             import yt_dlp
 
-            print(f"[DEBUG] 提取视频元数据: {url}")
+            logger.debug(f"提取视频元数据: {url}")
 
             # 使用 yt-dlp 提取视频信息
             ydl_opts = {
@@ -562,7 +563,7 @@ class StreamSong(Song):
                 else:
                     return {"status": "ERROR", "error": "无法获取视频信息"}
         except Exception as e:
-            print(f"[ERROR] 提取视频元数据失败: {str(e)}")
+            logger.error(f"提取视频元数据失败: {str(e)}")
             import traceback
 
             traceback.print_exc()

@@ -13,6 +13,12 @@ if sys.stdout and sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8"
 """
 音乐播放器数据模型模块
 """
+print("\n" + "="*50)
+print("初始化 播放器模块...")
+print("="*50 + "\n")
+print("[Models] 加载 Logger 模块...", end=" ", flush=True)
+from .logger import logger, setup_logging, get_logger
+print("✓")
 
 print("[Models] 正在加载数据模型模块...")
 
@@ -54,5 +60,8 @@ __all__ = [
     "MusicPlayer",
     "Rank",
     "HitRank",
+    "logger",
+    "setup_logging",
+    "get_logger",
 ]
 

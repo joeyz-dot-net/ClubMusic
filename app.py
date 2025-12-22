@@ -110,7 +110,7 @@ def _init_default_playlist():
         default_pl.id = DEFAULT_PLAYLIST_ID
         PLAYLISTS_MANAGER._playlists[DEFAULT_PLAYLIST_ID] = default_pl
         PLAYLISTS_MANAGER.save()
-        logger.debug(f"[DEBUG] 创建默认歌单: {DEFAULT_PLAYLIST_ID}")
+        logger.debug(f"创建默认歌单: {DEFAULT_PLAYLIST_ID}")
     return default_pl
 
 # 确保默认歌单存在
@@ -1322,7 +1322,7 @@ async def playlist_remove(request: Request):
         form = await request.form()
         index = int(form.get("index", -1))
         
-        logger.debug(f"[DEBUG] playlist_remove - index: {index}, current_playlist_id: {CURRENT_PLAYLIST_ID}")
+        logger.debug(f"playlist_remove - index: {index}, current_playlist_id: {CURRENT_PLAYLIST_ID}")
         
         if index < 0:
             logger.error(f"[ERROR] 无效的索引: {index}")
@@ -1339,7 +1339,7 @@ async def playlist_remove(request: Request):
                 status_code=404
             )
         
-        logger.debug(f"[DEBUG] 当前歌单歌曲数: {len(playlist.songs)}")
+        logger.debug(f"当前歌单歌曲数: {len(playlist.songs)}")
         
         if index >= len(playlist.songs):
             logger.error(f"[ERROR] 索引超出范围: {index} >= {len(playlist.songs)}")
@@ -1349,7 +1349,7 @@ async def playlist_remove(request: Request):
             )
         
         song_to_remove = playlist.songs[index]
-        logger.debug(f"[DEBUG] 准备删除歌曲: {song_to_remove.get('title', 'Unknown') if isinstance(song_to_remove, dict) else song_to_remove}")
+        logger.debug(f"准备删除歌曲: {song_to_remove.get('title', 'Unknown') if isinstance(song_to_remove, dict) else song_to_remove}")
         
         playlist.songs.pop(index)
         playlist.updated_at = time.time()
