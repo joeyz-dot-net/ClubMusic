@@ -48,7 +48,6 @@ __all__ = [
     "StreamSong",
     "BasePlaylist",
     "PlayHistory",
-    "CurrentPlaylist",
     "LocalPlaylist",
     "Playlist",
     "Playlists",

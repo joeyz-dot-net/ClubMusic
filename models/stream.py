@@ -1328,7 +1328,8 @@ def start_stream_reader_thread():
                             try:
                                 client.queue.put_nowait((keepalive_seq, keepalive))
                                 last_heartbeat_time[client_id] = now
-                                # 仅在调试模式下输出心跳日志（减少日志输出）
+                                # 输出心跳日志，包含编码信息
+                                logger.debug(f"[心跳] 客户端: {client_id[:8]}... | 浏览器: {browser:8} | 编码: {client.format:6} | 序列号: {keepalive_seq}")
                             except queue.Full:
                                 pass  # 队列满，丢弃心跳
                         

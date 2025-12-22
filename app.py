@@ -84,6 +84,19 @@ PLAYLISTS_MANAGER = Playlists(data_file="playlists.json")
 RANK_MANAGER = HitRank(max_size=100)
 SETTINGS = initialize_settings()
 
+# 从配置文件初始化推流音量
+import models.stream as stream_module
+if PLAYER and hasattr(PLAYER, 'config') and PLAYER.config:
+    stream_volume_str = PLAYER.config.get("STREAM_VOLUME", "50")
+    try:
+        stream_module.STREAM_VOLUME = int(stream_volume_str)
+        logger.info(f"从 settings.ini 加载推流音量: {stream_module.STREAM_VOLUME}")
+    except (ValueError, TypeError):
+        stream_module.STREAM_VOLUME = 50
+        logger.warning(f"推流音量配置无效，使用默认值 50")
+else:
+    logger.warning("未能读取播放器配置，推流音量使用默认值 50")
+
 DEFAULT_PLAYLIST_ID = "default"
 CURRENT_PLAYLIST_ID = DEFAULT_PLAYLIST_ID
 PLAYBACK_HISTORY = PLAYER.playback_history
@@ -1089,43 +1102,21 @@ async def set_volume(request: Request):
         )
 
 
-@app.post("/stream/volume")
-async def set_stream_volume(request: Request):
-    """【新增】设置或获取推流音量（独立于MPV本地音量）"""
-    from models.stream import STREAM_VOLUME as current_volume
+@app.get("/stream/volume")
+async def get_stream_volume():
+    """获取推流音量（只读，不支持修改）
+    
+    推流音量只能通过编辑 settings.ini [app] stream_volume 配置项来改变，
+    重启应用后新配置生效。前端无权修改推流音量。
+    """
     import models.stream as stream_module
     
     try:
-        form = await request.form()
-        volume_str = form.get("value", "").strip()
-        
-        if volume_str:
-            # 设置推流音量
-            try:
-                volume = int(volume_str)
-                volume = max(0, min(100, volume))  # 限制在0-100
-                stream_module.STREAM_VOLUME = volume
-                
-                # 如果FFmpeg正在运行，需要重启以应用新的音量设置
-                if stream_module.FFMPEG_PROCESS:
-                    logger.info(f"推流音量已更改为: {volume}%, 将在下一次启动时生效")
-                
-                return {
-                    "status": "OK",
-                    "stream_volume": volume,
-                    "message": "推流音量已设置"
-                }
-            except ValueError as e:
-                return JSONResponse(
-                    {"status": "ERROR", "error": f"无效的推流音量值: {volume_str}"},
-                    status_code=400
-                )
-        else:
-            # 获取当前推流音量
-            return {
-                "status": "OK",
-                "stream_volume": stream_module.STREAM_VOLUME
-            }
+        return {
+            "status": "OK",
+            "stream_volume": stream_module.STREAM_VOLUME,
+            "message": "推流音量为只读，如需修改请编辑 settings.ini [app] stream_volume"
+        }
     except Exception as e:
         logger.error(f"[错误] /stream/volume 路由异常: {type(e).__name__}: {e}")
         return JSONResponse(

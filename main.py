@@ -63,7 +63,7 @@ def main():
         port=port,
         reload=False,
         log_level="debug",
-        use_colors=False,  # 禁用 ANSI 彩色输出，避免乱码
+        use_colors=True,  # 禁用 ANSI 彩色输出，避免乱码
         # Windows 上不支持多进程 workers，使用 asyncio 单进程处理并发
         limit_concurrency=1024,  # 最大并发连接数
         limit_max_requests=10000,  # 优雅重启机制

@@ -255,43 +255,27 @@ export const settingsManager = {
      * 绑定事件
      */
     bindEvents() {
-        // 推流音量滑块实时更新
+        // 推流音量滑块 - 只保存到 localStorage（前端本地偏好）
         const streamVolumeSlider = document.getElementById('streamVolumeSetting');
         const streamVolumeValue = document.getElementById('streamVolumeValue');
         if (streamVolumeSlider) {
-            streamVolumeSlider.addEventListener('input', async (e) => {
+            streamVolumeSlider.addEventListener('input', (e) => {
                 const volumePercent = e.target.value;
                 
-                // 保存到 localStorage
+                // 只保存到 localStorage（客户端本地偏好）
                 this.setSetting('stream_volume', volumePercent);
                 if (streamVolumeValue) {
                     streamVolumeValue.textContent = `${volumePercent}%`;
                 }
                 
-                // 【改进】调用后端API设置推流音量（控制FFmpeg的音量）
-                try {
-                    const response = await api.setStreamVolume(volumePercent);
-                    if (response.status === 'OK') {
-                        console.log(`[推流音量] 已设置为: ${volumePercent}%`);
-                        
-                        // 同时也设置HTML5 audio元素的音量作为备用
-                        const audioElement = document.getElementById('browserStreamAudio');
-                        if (audioElement) {
-                            const volumeDecimal = parseInt(volumePercent) / 100;
-                            audioElement.volume = volumeDecimal;
-                        }
-                    } else {
-                        console.error('[推流音量] 设置失败:', response.error);
-                    }
-                } catch (error) {
-                    console.warn('[推流音量] 后端API调用失败，使用HTML5 audio元素音量:', error);
-                    // 如果后端API失败，降级到HTML5 audio元素
-                    const audioElement = document.getElementById('browserStreamAudio');
-                    if (audioElement) {
-                        const volumeDecimal = parseInt(volumePercent) / 100;
-                        audioElement.volume = volumeDecimal;
-                    }
+                // 应用到 HTML5 audio 元素（浏览器音量）
+                const audioElement = document.getElementById('browserStreamAudio');
+                if (audioElement) {
+                    const volumeDecimal = parseInt(volumePercent) / 100;
+                    audioElement.volume = volumeDecimal;
                 }
+                
+                console.log(`[推流音量] 已保存到 localStorage: ${volumePercent}%（仅影响本浏览器）`);
             });
         }
         
