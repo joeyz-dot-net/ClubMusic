@@ -219,9 +219,9 @@
 	</nav>
 	
 	<!-- 推流状态指示器 -->
-	<div id="streamStatusIndicator" class="stream-status-indicator" title="推流状态：禁止">
+	<div id="streamStatusIndicator" class="stream-status-indicator" title="点击启动推流" style="cursor: pointer;">
 		<div class="stream-status-dot stream-status-disabled"></div>
-		<span class="stream-status-text">推流禁止</span>
+		<span class="stream-status-text">点击启动推流</span>
 	</div>
 	
 	
@@ -444,15 +444,17 @@
 						<label class="settings-label">接收推流</label>
 						<div class="settings-toggle">
 							<input type="checkbox" id="autoStreamSetting" class="toggle-checkbox">
-							<label for="autoStreamSetting" class="toggle-label">
+							<label for="autoStreamSetting" class="toggle-label" title="启用后需点击顶部推流指示器手动开始播放">
 								<span class="toggle-switch"></span>
 								<span class="toggle-text">
 									<span class="toggle-on">启用</span>
 									<span class="toggle-off">禁用</span>
 								</span>
 							</label>
-						</div>
+							<small style="color: #888; font-size: 11px; margin-top: 4px; display: block;">💡 启用后点击推流指示器开始播放</small>
 					</div>
+						</div>
+						
 					
 					<div class="settings-item">
 						<label class="settings-label">推流音量</label>

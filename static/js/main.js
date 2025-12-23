@@ -87,8 +87,8 @@ class MusicPlayerApp {
             // 1. 初始化 UI 元素
             this.initUIElements();
             
-            // 1.5 [关键] 页面刷新后快速恢复流连接（不等待其他初始化）
-            this.fastRestoreStream();
+            // 1.5 [已禁用] 页面刷新后快速恢复流连接（改为手动点击推流指示器启动）
+            // this.fastRestoreStream();
             
             // 2. 初始化播放器
             this.initPlayer();
@@ -595,18 +595,22 @@ class MusicPlayerApp {
 
     async restorePlayState() {
         try {
-            // 恢复推流激活状态
-            const streamActive = localStorage.getItem('streamActive') === 'true';
-            if (streamActive && settingsManager.settings.auto_stream) {
-                const autoStreamEl = document.getElementById('autoStreamSetting');
-                if (autoStreamEl) {
-                    autoStreamEl.checked = true;
-                }
-                console.log('[恢复状态] ✓ 推流已恢复为激活状态');
-            }
+            // [已禁用] 自动恢复推流激活状态（改为手动点击推流指示器启动）
+            // const streamActive = localStorage.getItem('streamActive') === 'true';
+            // if (streamActive && settingsManager.settings.auto_stream) {
+            //     const autoStreamEl = document.getElementById('autoStreamSetting');
+            //     if (autoStreamEl) {
+            //         autoStreamEl.checked = true;
+            //     }
+            //     console.log('[恢复状态] ✓ 推流已恢复为激活状态');
+            // }
             
-            // 恢复播放流的状态（页面刷新后）
-            const savedStreamState = localStorage.getItem('currentStreamState');
+            // [已禁用] 恢复播放流的状态（页面刷新后）- 改为手动点击推流指示器启动
+            // const savedStreamState = localStorage.getItem('currentStreamState');
+            console.log('[恢复状态] 自动推流恢复已禁用，请点击推流指示器手动启动');
+            
+            // [已禁用] 注释掉自动恢复推流的代码
+            /*
             if (savedStreamState) {
                 try {
                     const streamState = JSON.parse(savedStreamState);
@@ -651,6 +655,7 @@ class MusicPlayerApp {
                     localStorage.removeItem('currentStreamState');
                 }
             }
+            */
             
             // 恢复播放状态
             try {

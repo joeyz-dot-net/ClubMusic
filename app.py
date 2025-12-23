@@ -187,11 +187,11 @@ def detect_browser_and_apply_config(request: Request) -> dict:
     if "safari" in user_agent and "chrome" not in user_agent:
         config.update({
             "browser": "Safari",
-            "keepalive_interval": 0.3,   # Safari：更频繁的心跳（每300ms）
+            "keepalive_interval": 0.5,   # Safari：生产环境优化心跳（每500ms，降低CPU）
             "chunk_size": 128 * 1024,     # 🔧 优化2：改为128KB（更低延迟）
-            "queue_timeout": 0.5,        # Safari：更短的超时检测
+            "queue_timeout": 1.0,        # Safari：生产环境增加超时到1.0s（提高容错）
             "force_flush": True,         # Safari：强制立即发送
-            "max_consecutive_empty": 300,  # 🔧 优化3：增加到300（更宽容）
+            "max_consecutive_empty": 400,  # 🔧 优化3：增加到400（更宽容，适应生产网络延迟）
         })
     elif "edge" in user_agent or "edg" in user_agent:
         config.update({
@@ -258,6 +258,22 @@ async def startup_event():
 async def shutdown_event():
     """应用关闭时的清理事件"""
     logger.info("应用正在关闭...")
+    
+    # 清理 FFmpeg 进程
+    try:
+        from models.stream import stop_ffmpeg_stream
+        logger.info("正在关闭 FFmpeg 进程...")
+        stop_ffmpeg_stream()
+        logger.info("✅ FFmpeg 进程已关闭")
+    except Exception as e:
+        logger.error(f"关闭 FFmpeg 进程失败: {e}")
+        # 尝试使用 taskkill 强制终止
+        try:
+            import subprocess
+            subprocess.run(["taskkill", "/IM", "ffmpeg.exe", "/F"], capture_output=True, timeout=2)
+            logger.info("✅ 使用 taskkill 强制终止 FFmpeg 进程")
+        except:
+            pass
     
     # 清理 MPV 进程
     try:
@@ -1958,7 +1974,7 @@ async def stream_play(request: Request, format: str = "mp3", t: str = None):
             loop = asyncio.get_event_loop()
             timeout_count = 0
             last_seq_id = -1  # 上次发送的序列号，用于客户端丢包检测
-            logger.debug(f"[DEBUG-STREAM-START] {client_id[:8]} ({browser_name}) 开始推流 (格式: {audio_format})")
+            logger.info(f"[流开始] {client_id[:8]} ({browser_name}) | 格式: {audio_format} | 超时阈值: {max_consecutive_empty} | 队列超时: {queue_timeout}s")
             
             while timeout_count < max_consecutive_empty:
                 try:
@@ -1971,6 +1987,9 @@ async def stream_play(request: Request, format: str = "mp3", t: str = None):
                         timeout=queue_timeout + 5.0
                     )
                     if item:
+                        # 🔥 关键修复：客户端成功获取数据，更新活动时间
+                        stream_module.CLIENT_POOL.update_activity(client_id)
+                        
                         # 🔥 解包序列号和数据块
                         if isinstance(item, tuple) and len(item) == 2:
                             seq_id, chunk = item
@@ -1984,9 +2003,11 @@ async def stream_play(request: Request, format: str = "mp3", t: str = None):
                                     continue
                                 
                                 # 检测丢包：如果序列号不连续，打印警告（前端可基于此主动重发）
+                                # 🔥 优化：只记录大量连续丢包（>10块），忽略小间隙（可能是正常的异步延迟）
                                 if seq_id > last_seq_id + 1 and last_seq_id >= 0:
                                     gap = seq_id - last_seq_id - 1
-                                    logger.info(f"⚠️ 客户端 {client_id[:8]} 检测到丢包: 缺失 {gap} 块 (seq {last_seq_id+1}-{seq_id-1})")
+                                    if gap >= 10:  # 只记录严重丢包
+                                        logger.warning(f"⚠️ 客户端 {client_id[:8]} 检测到严重丢包: 缺失 {gap} 块 (seq {last_seq_id+1}-{seq_id-1})")
                                 
                                 last_seq_id = seq_id
                             else:
@@ -2014,11 +2035,12 @@ async def stream_play(request: Request, format: str = "mp3", t: str = None):
                         
                 except (asyncio.TimeoutError, queue.Empty):
                     timeout_count += 1
-                    # 🔥 移除心跳包 yield：心跳通过序列号心跳包维护，不需要 yield 有效数据
-                    # 这样可以避免解码器尝试解码心跳数据导致的爆音
+                    # 🔥 每10次超时输出一次日志（避免刷屏）
+                    if timeout_count % 10 == 1:
+                        logger.warning(f"[队列超时] {client_id[:8]} ({browser_name}) | 超时计数: {timeout_count}/{max_consecutive_empty} | 队列大小: {client_queue.qsize()}")
                             
         finally:
-            logger.info(f"[STREAM] ✓ 客户端已断开连接: {client_id[:8]} ({browser_name})")
+            logger.warning(f"[流结束] {client_id[:8]} ({browser_name}) | 最终超时计数: {timeout_count}/{max_consecutive_empty}")
             unregister_client(client_id)
     
     # 🔧 Safari优化HTTP头：禁用代理缓冲，启用分块编码

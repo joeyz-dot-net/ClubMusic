@@ -208,12 +208,12 @@ def interactive_select_streaming_mode(timeout: int = 10) -> bool:
     RESET = '\033[0m'
     
     print("\n请选择音频输出模式:\n")
-    print(f"  {GREEN}{BOLD}► [1] 本地播放 - 播放到本机音频设备 ✓{RESET}")
+    print(f"  [1] 本地播放 - 播放到本机音频设备")
     print(f"      {CYAN}✓ 直接播放，无延迟{RESET}")
     print("")
-    print(f"  [2] 推流模式 - 通过 VB-Cable + FFmpeg 推流到浏览器")
-    print(f"      ✓ 支持浏览器播放{RESET}")
-    print(f"\n⏱️  {timeout}秒后自动选择: 本地播放模式{RESET}")
+    print(f"  {GREEN}{BOLD}► [2] 推流模式 - 通过 VB-Cable + FFmpeg 推流到浏览器 ✓{RESET}")
+    print(f"      {CYAN}✓ 支持浏览器播放{RESET}")
+    print(f"\n⏱️  {timeout}秒后自动选择: 推流模式{RESET}")
     print("─" * 60)
     
     # 使用线程实现超时输入和倒计时显示
@@ -230,12 +230,12 @@ def interactive_select_streaming_mode(timeout: int = 10) -> bool:
     
     def get_input():
         try:
-            user_input = input(f"\n请选择 [1]: ").strip()
+            user_input = input(f"\n请选择 [2]: ").strip()
             countdown_active[0] = False
-            selected[0] = user_input if user_input else "1"
+            selected[0] = user_input if user_input else "2"
         except EOFError:
             countdown_active[0] = False
-            selected[0] = "1"
+            selected[0] = "2"
     
     countdown_thread = threading.Thread(target=show_countdown, daemon=True)
     countdown_thread.start()
@@ -245,7 +245,7 @@ def interactive_select_streaming_mode(timeout: int = 10) -> bool:
     input_thread.join(timeout=timeout)
     
     # 解析用户选择
-    choice = selected[0] if selected[0] is not None else "1"
+    choice = selected[0] if selected[0] is not None else "2"
     
     try:
         choice_num = int(choice)
@@ -266,8 +266,8 @@ def interactive_select_streaming_mode(timeout: int = 10) -> bool:
             print(f"   {CYAN}音频仅播放到本机音频设备{RESET}")
             return False
     except ValueError:
-        print(f"\n❌ 无效选择 '{choice}'，默认本地播放模式")
-        return False
+        print(f"\n❌ 无效选择 '{choice}'，默认推流模式")
+        return True
 
 
 def update_mpv_cmd_with_device(config: configparser.ConfigParser, device_id: str) -> str:
@@ -320,6 +320,14 @@ def cleanup_on_exit():
         print("\n✅ MPV 进程已清理")
     except:
         pass
+    
+    try:
+        import subprocess
+        # 强制终止所有 FFmpeg 进程
+        subprocess.run(["taskkill", "/IM", "ffmpeg.exe", "/F"], capture_output=True, timeout=2)
+        print("✅ FFmpeg 进程已清理")
+    except:
+        pass
 
 def main():
     """启动 FastAPI 服务器"""
@@ -340,7 +348,9 @@ def main():
     def signal_handler(sig, frame):
         print("\n\n⚠️  收到中断信号，正在清理...")
         cleanup_on_exit()
-        sys.exit(0)
+        # 使用 os._exit(0) 避免 SystemExit 异常导致的 traceback
+        import os
+        os._exit(0)
     
     signal.signal(signal.SIGINT, signal_handler)
     if hasattr(signal, 'SIGTERM'):
@@ -451,7 +461,7 @@ def main():
         port=server_port,
         reload=False,  # 禁用自动重载（settings.ini 需要手动重启）
         log_config=None,  # 使用自定义日志配置
-        access_log=True  # 禁用访问日志
+        access_log=False  # 禁用访问日志（避免高频 /status 轮询刷屏）
     )
 
 

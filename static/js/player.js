@@ -182,19 +182,18 @@ export class Player {
             
             freshAudioElement.src = url;
             
-            // 连接开始
-            freshAudioElement.onloadstart = () => {
-                console.log(`[推流] ✓ 开始连接 (格式: ${streamFormat}, MIME: ${mimeType})`);
-                // 更新指示器为缓冲状态
-                if (window.settingsManager) {
-                    window.settingsManager.updateStreamStatusIndicator('buffering');
-                }
-                this.emit('stream:connecting', { format: streamFormat });
-            };
-            
             // 正在加载元数据
             freshAudioElement.onloadedmetadata = () => {
                 console.log(`[推流] ✓ 元数据已加载 (时长: ${freshAudioElement.duration}s)`);
+            };
+            
+            // 开始加载流
+            freshAudioElement.onloadstart = () => {
+                console.log(`[推流] 🔄 开始加载音频流...`);
+                if (window.settingsManager) {
+                    window.settingsManager.updateStreamStatusIndicator('buffering');
+                }
+                this.emit('stream:loadstart');
             };
             
             // 正在缓冲
@@ -208,6 +207,9 @@ export class Player {
                         // 缓冲进度（不输出日志，减少控制台噪音）
                     }
                 }
+                if (window.settingsManager) {
+                    window.settingsManager.updateStreamStatusIndicator('buffering');
+                }
                 this.emit('stream:buffering');
             };
             
@@ -217,6 +219,9 @@ export class Player {
                 canplayTriggered = true;
                 
                 console.log(`[推流] ✓ 缓冲足够，准备播放`);
+                if (window.settingsManager) {
+                    window.settingsManager.updateStreamStatusIndicator('buffering');
+                }
                 this.emit('stream:ready', { format: streamFormat });
                 
                 // 在 canplay 时立即尝试播放（比 load 之后的延迟更可靠）
@@ -227,8 +232,7 @@ export class Player {
             
             // 播放中
             freshAudioElement.onplay = () => {
-                console.log(`[推流] 🎵 音乐已开始播放`);
-                // 更新推流指示器为播放状态
+                console.log(`[推流] ▶️ 播放开始`);
                 if (window.settingsManager) {
                     window.settingsManager.updateStreamStatusIndicator('playing');
                 }
@@ -238,6 +242,9 @@ export class Player {
             // 正在播放中
             freshAudioElement.onplaying = () => {
                 console.log(`[推流] 🎵 正在播放中...`);
+                if (window.settingsManager) {
+                    window.settingsManager.updateStreamStatusIndicator('playing');
+                }
             };
             
             // 播放错误（关键）
@@ -284,10 +291,9 @@ export class Player {
             
             // 播放暂停
             freshAudioElement.onpause = () => {
-                console.log(`[推流] ⏸ 已暂停`);
-                // 更新推流指示器为关闭状态
+                console.log(`[推流] ⏸ 播放已暂停`);
                 if (window.settingsManager) {
-                    window.settingsManager.updateStreamStatusIndicator('closed');
+                    window.settingsManager.updateStreamStatusIndicator('paused');
                 }
                 this.emit('stream:paused');
             };
@@ -295,17 +301,70 @@ export class Player {
             // 播放结束
             freshAudioElement.onended = () => {
                 console.log(`[推流] ✓ 播放结束`);
+                if (window.settingsManager) {
+                    window.settingsManager.updateStreamStatusIndicator('closed');
+                }
                 this.emit('stream:ended');
             };
             
-            // 数据不足（缓冲中断）
+            // 音频卡顿（关键：检测客户端被服务器断开）
             freshAudioElement.onstalled = () => {
-                console.log(`[推流] ⏳ 等待数据...`);
+                console.log(`[推流] ⏸ 数据加载已停滞`);
+                if (window.settingsManager) {
+                    window.settingsManager.updateStreamStatusIndicator('buffering');
+                }
+                // 检测是否是流断开导致的 stalled
+                setTimeout(() => {
+                    if (freshAudioElement.readyState < 2) {  // HAVE_CURRENT_DATA
+                        console.warn(`[推流] ⚠️ 长时间无数据，可能流已断开`);
+                        if (window.settingsManager) {
+                            window.settingsManager.updateStreamStatusIndicator('closed');
+                        }
+                    }
+                }, 5000);  // 5秒后仍无数据则认为断开
+            };
+            
+            // 音频流断开或挂起（关键：检测客户端被服务器断开）
+            freshAudioElement.onsuspend = () => {
+                console.log(`[推流] ⏸ 数据加载已挂起`);
+                if (window.settingsManager) {
+                    window.settingsManager.updateStreamStatusIndicator('buffering');
+                }
+                // 检查是否是真的断开
+                setTimeout(() => {
+                    if (freshAudioElement.readyState === 0 || freshAudioElement.networkState === 3) {
+                        console.warn(`[推流] ⚠️ 流已断开，更新指示器`);
+                        if (window.settingsManager) {
+                            window.settingsManager.updateStreamStatusIndicator('closed');
+                        }
+                    }
+                }, 2000);  // 2秒后检查
+                
+                this.emit('stream:suspend');
             };
             
             // 开始寻求位置
             freshAudioElement.onseeking = () => {
                 console.log(`[推流] 🔍 正在查找...`);
+                if (window.settingsManager) {
+                    window.settingsManager.updateStreamStatusIndicator('buffering');
+                }
+            };
+            
+            // 完成寻求位置
+            freshAudioElement.onseeked = () => {
+                console.log(`[推流] ✓ 查找完成`);
+                if (window.settingsManager) {
+                    window.settingsManager.updateStreamStatusIndicator('playing');
+                }
+            };
+            
+            // 等待数据
+            freshAudioElement.onwaiting = () => {
+                console.log(`[推流] ⏳ 正在等待更多数据...`);
+                if (window.settingsManager) {
+                    window.settingsManager.updateStreamStatusIndicator('buffering');
+                }
             };
             
             // === 启动加载 ===

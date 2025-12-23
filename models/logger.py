@@ -44,6 +44,9 @@ class ColoredFormatter(logging.Formatter):
         'app': Colors.GREEN,
         'playlist': Colors.CYAN,
         'settings': Colors.YELLOW,
+        'uvicorn': Colors.CYAN,      # Uvicorn 主日志
+        'error': Colors.CYAN,        # uvicorn.error 显示为 uvicorn
+        'access': Colors.GRAY,       # uvicorn.access
     }
     
     def format(self, record):
@@ -53,6 +56,13 @@ class ColoredFormatter(logging.Formatter):
         # 解析模块名
         module_parts = record.name.split('.')
         module_name = module_parts[-1] if module_parts else 'root'
+        
+        # 特殊处理 Uvicorn 日志器：uvicorn.error → uvicorn
+        if len(module_parts) >= 2 and module_parts[0] == 'uvicorn':
+            if module_parts[1] == 'error':
+                module_name = 'uvicorn'
+            elif module_parts[1] == 'access':
+                module_name = 'access'
         
         # 获取模块颜色
         module_color = self.MODULE_COLORS.get(module_name, Colors.GRAY)

@@ -685,12 +685,15 @@ BROADCAST_EXECUTOR = ThreadPoolExecutor(max_workers=BROADCAST_EXECUTOR_WORKERS, 
 BROADCAST_QUEUE = queue.Queue(maxsize=BROADCAST_QUEUE_MAXSIZE)
 
 # ==================== 浏览器特定的读取块大小配置 ====================
+# 🔥 2025-12-23 优化：统一使用32KB块大小
+# AAC 128kbps = 16KB/s，32KB ≈ 2秒音频缓冲
+# 原理：块太小(4KB)导致频繁读取和系统开销；块太大(192KB)导致延迟
 CHUNK_SIZE_CONFIG = {
-    "safari": 32 * 1024,     # 🔧🔧 Safari: 32KB（极低延迟）
-    "firefox": 192 * 1024,   # Firefox: 192KB
-    "edge": 192 * 1024,      # Edge: 192KB
-    "chrome": 192 * 1024,    # Chrome: 192KB
-    "default": 192 * 1024,   # 默认: 192KB
+    "safari": 32 * 1024,     # Safari: 32KB（约2秒音频）
+    "firefox": 32 * 1024,    # Firefox: 32KB
+    "edge": 32 * 1024,       # Edge: 32KB
+    "chrome": 32 * 1024,     # Chrome: 32KB
+    "default": 32 * 1024,    # 默认: 32KB
 }
 
 def get_chunk_size_for_browser(browser_name: str) -> int:
@@ -783,8 +786,13 @@ def stop_stream_safely(ffmpeg_process, timeout=3):
 
 def get_audio_format_ffmpeg(audio_format: str) -> tuple[str, str]:
     """
-    【新增】根据音频格式获取FFmpeg编码参数
+    【优化版】根据音频格式获取FFmpeg编码参数
     返回: (编码器, 其他参数)
+    
+    🔥 2025-12-23 优化：
+    - AAC: cutoff 18000 限制高频减少数据量
+    - MP3: reservoir 0 禁用比特池减少延迟
+    - FLAC: 降低压缩级别(8→5)减少CPU
     """
     if audio_format not in AUDIO_FORMAT_CONFIG:
         audio_format = "mp3"
@@ -794,13 +802,16 @@ def get_audio_format_ffmpeg(audio_format: str) -> tuple[str, str]:
     bitrate = config['ffmpeg_bitrate'] or '192k'
     
     if audio_format == 'aac':
-        return codec, f"-b:a {bitrate} -aac_coder fast -profile:a aac_low"
+        # 🔥 AAC优化：cutoff限制高频，减少数据量
+        return codec, f"-b:a {bitrate} -aac_coder fast -profile:a aac_low -cutoff 18000"
     elif audio_format == 'mp3':
-        return codec, f"-b:a {bitrate} -compression_level 0"
+        # 🔥 MP3优化：reservoir 0 禁用比特池，减少延迟
+        return codec, f"-b:a {bitrate} -compression_level 0 -reservoir 0"
     elif audio_format == 'flac':
-        return codec, "-compression_level 8"
+        # 🔥 FLAC优化：降低压缩级别减少CPU
+        return codec, "-compression_level 5"
     else:
-        return 'libmp3lame', "-b:a 128k -compression_level 0"
+        return 'libmp3lame', "-b:a 128k -compression_level 0 -reservoir 0"
 
 def get_ffmpeg_cmd_for_format(device_name: str, audio_format: str) -> str:
     """
@@ -820,25 +831,39 @@ def get_ffmpeg_cmd_for_format(device_name: str, audio_format: str) -> str:
     # 计算音量过滤器参数（0-100 转换为 0.0-1.0）
     volume_factor = max(0, min(100, STREAM_VOLUME)) / 100.0
     
-    # 基础命令
+    # 🔥 2025-12-23 优化后的基础命令
+    # 关键改进：
+    #   - 增大 rtbufsize: 32M→64M，更大输入缓冲
+    #   - 新增 probesize: 快速探测（32KB足够音频）
+    #   - 新增 analyzeduration: 限制分析时间（500ms）
+    #   - 新增 max_delay: 限制最大延迟（500ms）
+    #   - 增大 thread_queue_size: 1024→2048
+    #   - 新增 aresample=async=1: 异步重采样平滑音频
+    #   - 新增 bufsize: 编码器输出缓冲
     base_cmd = (
         f'"{FFMPEG_CMD}" '
-        f'-rtbufsize 32M '
+        f'-rtbufsize 64M '
+        f'-probesize 32768 '
+        f'-analyzeduration 500000 '
         f'-fflags +genpts+igndts '
-        f'-thread_queue_size 1024 '
+        f'-flags low_delay '
+        f'-max_delay 500000 '
+        f'-thread_queue_size 2048 '
         f'-f dshow -i audio="{device_name}" '
         f'-ac 2 -ar 44100 '
-        f'-af "volume={volume_factor}" '
+        f'-af "volume={volume_factor},aresample=async=1" '
         f'-c:a {codec} {extra_params} '
     )
     
-    # 格式特定输出
+    # 格式特定输出 + 输出缓冲控制
     if audio_format == 'aac':
-        return base_cmd + '-f adts -'
+        # 🔥 AAC: 增加256k输出缓冲
+        return base_cmd + '-bufsize 256k -f adts -'
     elif audio_format == 'flac':
         return base_cmd + '-f flac -'
     else:  # mp3 默认
-        return base_cmd + '-f mp3 -'
+        # 🔥 MP3: 增加256k输出缓冲
+        return base_cmd + '-bufsize 256k -f mp3 -'
 
 def start_ffmpeg_stream(device_name="CABLE Output (VB-Audio Virtual Cable)", audio_format=None):
     """
