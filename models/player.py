@@ -36,7 +36,7 @@ class MusicPlayer:
         "SERVER_HOST": "0.0.0.0",
         "SERVER_PORT": "80",
         "DEBUG": "false",
-        "MPV_CMD": r"c:\mpv\mpv.exe --input-ipc-server=\\.\pipe\mpv-pipe --idle=yes --force-window=no",
+        "MPV_CMD": r'bin\mpv.exe --input-ipc-server=\\.\pipe\mpv-pipe --idle=yes --force-window=no --ao=dshow --audio-device="CABLE Output (VB-Audio Virtual Cable)"',
         "LOCAL_SEARCH_MAX_RESULTS": "20",
         "YOUTUBE_SEARCH_MAX_RESULTS": "20",
         "LOCAL_VOLUME": "50",
@@ -45,43 +45,68 @@ class MusicPlayer:
 
     @staticmethod
     def _get_app_dir():
-        """获取应用程序目录，支持打包和开发环境"""
-        import sys
-
-        if getattr(sys, "frozen", False):
-            return os.path.dirname(sys.executable)
+        """获取应用程序目录"""
         return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     @staticmethod
+    def _normalize_mpv_cmd(mpv_cmd: str, app_dir: str = None) -> str:
+        """规范化 MPV 命令中的相对路径为绝对路径
+        
+        参数:
+          mpv_cmd: 原始MPV命令
+          app_dir: 应用程序目录（为None时自动获取）
+        
+        返回:
+          规范化后的MPV命令
+        """
+        if not mpv_cmd:
+            return mpv_cmd
+        
+        if app_dir is None:
+            app_dir = MusicPlayer._get_app_dir()
+        
+        # 简单的路径提取：只处理第一个词（MPV可执行文件路径）
+        parts = mpv_cmd.split(None, 1)  # 按第一个空白符分割成两部分
+        if not parts:
+            return mpv_cmd
+        
+        exe_path = parts[0].strip('"\'')
+        
+        # 如果是相对路径，转换为绝对路径
+        if not os.path.isabs(exe_path):
+            abs_exe_path = os.path.join(app_dir, exe_path)
+            if os.path.exists(abs_exe_path):
+                # 如果路径包含空格，需要加引号
+                if ' ' in abs_exe_path:
+                    normalized_exe = f'"{abs_exe_path}"'
+                else:
+                    normalized_exe = abs_exe_path
+                
+                # 重新组合命令
+                if len(parts) > 1:
+                    return normalized_exe + ' ' + parts[1]
+                else:
+                    return normalized_exe
+        
+        return mpv_cmd
+
+    @staticmethod
     def _get_default_mpv_cmd():
-        """获取默认的 MPV 命令，支持打包环境和开发环境"""
-        import sys
-
-        # 打包环境：mpv.exe 与可执行文件同目录
-        if getattr(sys, "frozen", False):
-            base_path = os.path.dirname(sys.executable)
-            mpv_path = os.path.join(base_path, "mpv.exe")
-            if os.path.exists(mpv_path):
-                return (
-                    f'"{mpv_path}" '
-                    "--input-ipc-server=\\\\.\\\pipe\\\\mpv-pipe "
-                    "--idle=yes --force-window=no"
-                )
-
-        # 开发环境：优先使用项目根目录的 mpv.exe
+        """获取默认的 MPV 命令"""
         app_dir = MusicPlayer._get_app_dir()
-        mpv_path = os.path.join(app_dir, "mpv.exe")
+        mpv_path = os.path.join(app_dir, "bin", "mpv.exe")
         if os.path.exists(mpv_path):
             return (
                 f'"{mpv_path}" '
                 "--input-ipc-server=\\\\.\\\pipe\\\\mpv-pipe "
-                "--idle=yes --force-window=no"
+                "--idle=yes --force-window=no "
+                '--ao=dshow --audio-device="CABLE Output (VB-Audio Virtual Cable)"'
             )
-
         # 回退到默认安装路径
         return (
             r"c:\mpv\mpv.exe "
-            r"--input-ipc-server=\\.\pipe\mpv-pipe --idle=yes --force-window=no"
+            r"--input-ipc-server=\\.\pipe\mpv-pipe --idle=yes --force-window=no "
+            r'--ao=dshow --audio-device="CABLE Output (VB-Audio Virtual Cable)"'
         )
 
     @staticmethod
@@ -156,6 +181,8 @@ class MusicPlayer:
         self.youtube_search_max_results = int(youtube_search_max_results)
         # 使用类方法避免实例绑定问题
         self.mpv_cmd = mpv_cmd or MusicPlayer._get_default_mpv_cmd()
+        # 规范化 MPV 命令中的相对路径
+        self.mpv_cmd = MusicPlayer._normalize_mpv_cmd(self.mpv_cmd)
         self.data_dir = data_dir
         
         # 向后兼容性：提供 flask_host 和 flask_port 别名（已弃用）
@@ -260,6 +287,7 @@ class MusicPlayer:
         logger.info(f"开始加载配置文件")
         logger.debug(f"配置文件路径: {ini_path}")
         cfg = cls._read_ini_file(ini_path)
+        app_dir = MusicPlayer._get_app_dir()
         
         logger.debug(f"解析后的配置内容:")
         for key, value in cfg.items():
@@ -278,6 +306,10 @@ class MusicPlayer:
         debug_str = cfg.get("DEBUG", cls.DEFAULT_CONFIG["DEBUG"])
         debug_flag = debug_str.lower() in ("true", "1", "yes")
         mpv_cmd = cfg.get("MPV_CMD")
+        
+        # 规范化 MPV 命令中的相对路径
+        if mpv_cmd:
+            mpv_cmd = cls._normalize_mpv_cmd(mpv_cmd, app_dir)
         
         logger.info(f"配置参数摘要:")
         logger.info(f" MUSIC_DIR: {music_dir}")
@@ -579,21 +611,25 @@ class MusicPlayer:
             # 查找 yt-dlp 可执行文件路径
             yt_dlp_path = None
             
-            # 1. 优先检查应用主目录
+            # 检查应用主目录
             app_dir = MusicPlayer._get_app_dir()
             app_root_yt_dlp = os.path.join(app_dir, "yt-dlp.exe")
             if os.path.exists(app_root_yt_dlp):
                 yt_dlp_path = app_root_yt_dlp
                 logger.info(f"在应用目录找到 yt-dlp: {app_root_yt_dlp}")
-            # 2. 然后检查 sys._MEIPASS（打包后）
-            elif getattr(sys, "frozen", False):
-                candidate = os.path.join(sys._MEIPASS, "yt-dlp.exe")
-                if os.path.exists(candidate):
-                    yt_dlp_path = candidate
-                    logger.info(f"在打包目录找到 yt-dlp: {candidate}")
             
             # 构建完整的启动命令
             mpv_launch_cmd = self.mpv_cmd
+            
+            # 【新增】检查环境变量中是否有运行时选择的音频设备
+            runtime_audio_device = os.environ.get("MPV_AUDIO_DEVICE", "")
+            if runtime_audio_device:
+                # 移除现有的 --audio-device 参数
+                import re
+                mpv_launch_cmd = re.sub(r'\s*--audio-device=[^\s]+', '', mpv_launch_cmd)
+                mpv_launch_cmd = mpv_launch_cmd.strip() + f" --audio-device={runtime_audio_device}"
+                logger.info(f"使用运行时选择的音频设备: {runtime_audio_device}")
+            
             # 确保启用 mpv 的 ytdl 集成
             if "--ytdl=" not in mpv_launch_cmd:
                 mpv_launch_cmd += " --ytdl=yes"
@@ -605,25 +641,78 @@ class MusicPlayer:
             else:
                 logger.info(f"未找到 yt-dlp，将使用系统 PATH")
             
-            logger.debug(f"完整启动命令: {mpv_launch_cmd}")
+            # ✅ 显示完整的启动命令（多种格式）
+            logger.info("=" * 120)
+            logger.info("🚀 MPV 完整启动命令")
+            logger.info("=" * 120)
+            
+            # 格式 1：完整单行命令
+            logger.info("")
+            logger.info("[完整命令行]")
+            logger.info(mpv_launch_cmd)
+            logger.info("")
+            
+            # 格式 2：按参数分解显示（更详细）
+            logger.info("[执行参数分解]")
+            import shlex
+            try:
+                # 使用 shlex 进行更可靠的参数分解
+                parsed_args = shlex.split(mpv_launch_cmd)
+                logger.info(f"  程序路径: {parsed_args[0]}")
+                logger.info(f"  总参数数: {len(parsed_args) - 1}")
+                logger.info("")
+                
+                # 逐个显示每个参数
+                for idx, arg in enumerate(parsed_args[1:], 1):
+                    # 格式化参数显示
+                    if "=" in arg and arg.startswith("--"):
+                        # 参数形式: --key=value
+                        parts = arg.split("=", 1)
+                        logger.info(f"  [{idx:2d}] {parts[0]} = {parts[1]}")
+                    elif arg.startswith("--"):
+                        # 参数形式: --key
+                        logger.info(f"  [{idx:2d}] {arg}")
+                    elif arg.startswith("-"):
+                        # 短参数
+                        logger.info(f"  [{idx:2d}] {arg}")
+                    else:
+                        # 值参数（通常跟在某个参数后）
+                        logger.info(f"  [{idx:2d}] {arg}")
+            except Exception as e:
+                logger.warning(f"参数分解异常: {e}，显示原始命令")
+                logger.info(mpv_launch_cmd)
+            
+            logger.info("")
+            logger.info("=" * 120)
             
             # 在 Windows 上使用 CREATE_NEW_PROCESS_GROUP 标志来避免进程被挂起
             import ctypes
+            import shlex
             CREATE_NEW_PROCESS_GROUP = 0x00000200
             CREATE_NO_WINDOW = 0x08000000
             
             try:
-                # 方法 1: 尝试使用 creationflags（Windows 特定）
-                subprocess.Popen(
-                    mpv_launch_cmd,
+                # 方法 1: 使用 shlex 解析命令字符串为列表，然后用 Popen
+                cmd_list = shlex.split(mpv_launch_cmd)
+                logger.info(f"✅ 启动mpv进程 (shell=False)")
+                logger.debug(f"  命令列表: {cmd_list}")
+                process = subprocess.Popen(
+                    cmd_list,
                     shell=False,
                     creationflags=CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL
                 )
+                logger.info(f"✅ mpv进程已启动 (PID: {process.pid})")
             except Exception as e2:
-                logger.warning(f"第一种启动方式失败: {e2}，尝试 shell=True")
-                subprocess.Popen(mpv_launch_cmd, shell=True)
+                logger.warning(f"方法1失败: {e2}，尝试方法2 (shell=True)")
+                logger.debug(f"  原始命令: {mpv_launch_cmd}")
+                try:
+                    process = subprocess.Popen(mpv_launch_cmd, shell=True)
+                    logger.info(f"✅ mpv进程已启动 (shell=True, PID: {process.pid})")
+                except Exception as e3:
+                    logger.error(f"方法2也失败: {e3}")
+                    raise
         except Exception as e:
             logger.error("启动 mpv 进程失败:", e)
             return False
@@ -640,29 +729,77 @@ class MusicPlayer:
         """
 
         def _write():
-            # Debug: print the command being sent to mpv pipe
-            logger.debug(f"mpv_command -> sending: {cmd_list} to pipe {self.pipe_name}") 
+            # Debug: 显示发送的命令
+            logger.debug(f"mpv_command -> sending: {cmd_list} to pipe {self.pipe_name}")
+            
+            # ✅ 对特定命令显示更详细的日志
+            if cmd_list and len(cmd_list) > 0:
+                cmd_name = cmd_list[0]
+                if cmd_name == "loadfile":
+                    logger.info(f"📂 [MPV 命令] loadfile: {cmd_list[1] if len(cmd_list) > 1 else 'N/A'}")
+                    
+                    # 显示当前 MPV 完整配置信息（包含运行时参数）
+                    runtime_audio_device = os.environ.get("MPV_AUDIO_DEVICE", "")
+                    mpv_display_cmd = self.mpv_cmd
+                    
+                    if runtime_audio_device:
+                        # 如果有运行时音频设备，显示完整命令
+                        import re
+                        mpv_display_cmd = re.sub(r'\s*--audio-device=[^\s]+', '', mpv_display_cmd)
+                        mpv_display_cmd = mpv_display_cmd.strip() + f" --audio-device={runtime_audio_device}"
+                    
+                    logger.info(f"   🎵 MPV 完整命令: {mpv_display_cmd}")
+                    
+                    # 显示音频输出设备
+                    if runtime_audio_device:
+                        logger.info(f"   🔊 音频设备: {runtime_audio_device}")
+                    else:
+                        logger.info(f"   🔊 音频设备: 系统默认")
+                        
+                elif cmd_name == "set_property":
+                    if len(cmd_list) >= 3:
+                        logger.info(f"⚙️  [MPV 命令] set_property: {cmd_list[1]} = {cmd_list[2]}")
+                    else:
+                        logger.info(f"⚙️  [MPV 命令] set_property: {cmd_list}")
+                elif cmd_name == "cycle":
+                    logger.info(f"🔄 [MPV 命令] cycle: {cmd_list[1] if len(cmd_list) > 1 else 'N/A'}")
+                elif cmd_name == "stop":
+                    logger.info(f"⏹️  [MPV 命令] stop")
+                else:
+                    logger.debug(f"[MPV 命令] {cmd_name}: {cmd_list[1:] if len(cmd_list) > 1 else 'N/A'}")
+            
             with open(self.pipe_name, "wb") as w:
-                w.write((json.dumps({"command": cmd_list}) + "\n").encode("utf-8"))
+                json_cmd = json.dumps({"command": cmd_list})
+                w.write((json_cmd + "\n").encode("utf-8"))
+                logger.debug(f"✅ 命令已发送到管道: {self.pipe_name}")
+                logger.debug(f"  JSON内容: {json_cmd}")
 
         try:
             _write()
             return True
+        except FileNotFoundError as e:
+            logger.error(f"❌ 管道不存在: {self.pipe_name}")
+            logger.error(f"   详情: {e}")
+            logger.warning(f"尝试通过 ensure_mpv() 重新启动 mpv...")
+            if self.ensure_mpv():
+                try:
+                    _write()
+                    logger.info(f"✅ 重试后命令发送成功")
+                    return True
+                except Exception as e2:
+                    logger.error(f"❌ 重试写入仍然失败: {e2}")
+                    return False
+            return False
         except Exception as e:
             import traceback
 
-            logger.warning(f"首次写入失败: {e}. 尝试 ensure_mpv 后重试...")
-            logger.debug("异常类型:", type(e))
-            logger.debug("PIPE_NAME value:", repr(self.pipe_name))
-            try:
-                # On Windows, named pipe path may not be a real file; show os.path.exists result regardless
-                logger.debug("os.path.exists(PIPE_NAME):", os.path.exists(self.pipe_name)
-                )
-            except Exception as ex:
-                logger.debug("os.path.exists raised:", ex)
-            logger.debug("Traceback:")
+            logger.error(f"❌ 写入命令失败: {e}")
+            logger.debug(f"  异常类型: {type(e).__name__}")
+            logger.debug(f"  管道路径: {repr(self.pipe_name)}")
+            logger.debug(f"  完整堆栈:")
             traceback.print_exc()
-            # Try to list mpv process on Windows to help debugging
+            
+            # 检查 mpv 进程状态
             try:
                 if os.name == "nt":
                     tl = subprocess.run(
@@ -670,19 +807,21 @@ class MusicPlayer:
                         capture_output=True,
                         text=True,
                     )
-                    logger.debug("tasklist for mpv.exe:\n", tl.stdout)
+                    if "mpv.exe" in tl.stdout:
+                        logger.info(f"✓ mpv.exe 进程存在")
+                    else:
+                        logger.error(f"✗ mpv.exe 进程不存在，需要重新启动")
             except Exception:
                 pass
 
+            logger.warning(f"尝试通过 ensure_mpv() 重新启动 mpv...")
             if self.ensure_mpv():
                 try:
                     _write()
+                    logger.info(f"✅ 重试后命令发送成功")
                     return True
                 except Exception as e2:
-                    logger.error(f"重试写入失败: {e2}")
-                    import traceback
-
-                    traceback.print_exc()
+                    logger.error(f"❌ 重试写入仍然失败: {e2}")
                     return False
             return False
 
@@ -1080,10 +1219,6 @@ class MusicPlayer:
                 app_root_yt_dlp = os.path.join(app_dir, "yt-dlp.exe")
                 if os.path.exists(app_root_yt_dlp):
                     yt_dlp_exe = app_root_yt_dlp
-                elif getattr(sys, "frozen", False):
-                    candidate = os.path.join(sys._MEIPASS, "yt-dlp.exe")
-                    if os.path.exists(candidate):
-                        yt_dlp_exe = candidate
                 
                 try:
                     logger.debug(f"运行 yt-dlp -g 获取直链...")
@@ -1136,17 +1271,10 @@ class MusicPlayer:
                     logger.debug(f"尝试使用 yt-dlp 提取播放列表信息...")
                     # 查找 yt-dlp 可执行文件
                     yt_dlp_exe = "yt-dlp"
-                    # 1. 优先检查应用主目录
                     app_dir = MusicPlayer._get_app_dir()
                     app_root_yt_dlp = os.path.join(app_dir, "yt-dlp.exe")
                     if os.path.exists(app_root_yt_dlp):
                         yt_dlp_exe = app_root_yt_dlp
-                    # 2. 然后检查打包目录
-                    elif getattr(sys, "frozen", False):
-                        candidate = os.path.join(sys._MEIPASS, "yt-dlp.exe")
-                        if os.path.exists(candidate):
-                            yt_dlp_exe = candidate
-                    # 3. 否则使用 PATH 中的 yt-dlp
                     cmd = [yt_dlp_exe, "--flat-playlist", "-j", url]
                     result = subprocess.run(
                         cmd, capture_output=True, text=True, timeout=30
@@ -1358,6 +1486,7 @@ class MusicPlayer:
         ensure_mpv_func,
         add_to_history_func=None,
         save_to_history: bool = True,
+        mpv_cmd: str = None,
     ):
         """统一的播放接口，根据歌曲对象类型调用相应的播放方法
 
@@ -1368,6 +1497,7 @@ class MusicPlayer:
           ensure_mpv_func: 确保 mpv 运行的函数
           add_to_history_func: 添加到历史记录的函数（可选）
           save_to_history: 是否保存到播放历史
+          mpv_cmd: 实际使用的mpv启动命令（来自配置文件）
 
         返回:
           成功返回 True，失败返回 False
@@ -1380,6 +1510,7 @@ class MusicPlayer:
 
         try:
             # 根据歌曲类型调用相应的播放方法
+            # 注意：mpv_cmd 参数在 song.play() 中不需要，因为 mpv 已在 ensure_mpv 中启动
             success = song.play(
                 mpv_command_func=mpv_command_func,
                 mpv_pipe_exists_func=mpv_pipe_exists_func,

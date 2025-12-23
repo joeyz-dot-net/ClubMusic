@@ -18,14 +18,14 @@
           "artist": "Top Hits 2026 ~ Trending Music 2026 🎶 Spotify Hits 2026 ~ Top Songs 2026 🎧"
         },
         {
-          "url": "Lady Gaga - MAYHEM (2025)/01. Disease.flac",
-          "title": "01. Disease.flac",
-          "name": "01. Disease.flac",
+          "url": "ETC/5 20AM - soldier.flac",
+          "title": "5 20AM - soldier.flac",
+          "name": "5 20AM - soldier.flac",
           "type": "local",
           "duration": 0,
-          "ts": 1766386349,
+          "ts": 1766455994,
           "thumbnail_url": null,
-          "artist": "01. Disease.flac"
+          "artist": "5 20AM - soldier.flac"
         },
         {
           "url": "https://www.youtube.com/watch?v=ojA7sPQ0sqU",
@@ -50,7 +50,7 @@
       ],
       "song_count": 4,
       "created_at": 1766369731.0493586,
-      "updated_at": 1766386349.8039727,
+      "updated_at": 1766455994.7959876,
       "current_playing_index": -1
     }
   ]

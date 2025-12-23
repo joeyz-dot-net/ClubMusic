@@ -25,6 +25,23 @@ from models.logger import logger
 
 # 【改进】统一使用models.logger提供的logger，包含ColoredFormatter格式化
 
+# ==================== 全局推流开关 ====================
+# 从 settings.ini 读取是否启用推流功能
+def get_streaming_enabled():
+    """从配置文件获取推流启用状态"""
+    try:
+        import configparser
+        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "settings.ini")
+        if os.path.exists(config_path):
+            config = configparser.ConfigParser()
+            config.read(config_path, encoding="utf-8")
+            enabled = config.get("app", "enable_stream", fallback="false")
+            return enabled.strip().lower() in ("true", "1", "yes", "on")
+    except Exception as e:
+        logger.warning(f"Failed to read enable_stream from settings.ini: {e}")
+    return False
+
+STREAMING_ENABLED = get_streaming_enabled()
 
 # ==================== 推流格式配置 ====================
 # 从 settings.ini 读取默认推流格式
@@ -256,20 +273,6 @@ def find_available_audio_device():
     Windows dshow 会列出所有音频设备
     优先级：配置文件指定 > CABLE Output > Stereo Mix > 第一个可用设备
     """
-    # 🔥 首先检查配置文件中是否指定了设备
-    try:
-        import configparser
-        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "settings.ini")
-        if os.path.exists(config_path):
-            config = configparser.ConfigParser()
-            config.read(config_path, encoding="utf-8")
-            configured_device = config.get("paths", "audio_input_device", fallback="").strip()
-            if configured_device:
-                logger.info(f"✓ 使用配置的音频设备: {configured_device}")
-                return configured_device
-    except Exception as e:
-        logger.warning(f"读取音频设备配置失败: {e}")
-    
     # 🔥 自动检测可用设备
     try:
         # 尝试列出所有可用的音频设备
@@ -949,7 +952,6 @@ def start_ffmpeg_stream(device_name="CABLE Output (VB-Audio Virtual Cable)", aud
                     logger.info(f"发现 {len(audio_devices)} 个音频设备:")
                     for i, dev in enumerate(audio_devices, 1):
                         logger.info(f"  {i}. {dev}")
-                    logger.info("请在 settings.ini 中将其中一个设备名复制到 [paths] audio_input_device")
                 else:
                     logger.error("未检测到任何音频设备!")
                     logger.error("可能原因:")
@@ -958,12 +960,6 @@ def start_ffmpeg_stream(device_name="CABLE Output (VB-Audio Virtual Cable)", aud
                     logger.error("下载 VB-Cable: https://vb-audio.com/Cable/")
             except Exception as e:
                 logger.warning(f"设备检测异常: {e}")
-            
-            logger.info("配置步骤:")
-            logger.info("  1. 编辑 settings.ini 文件")
-            logger.info("  2. 找到 [paths] 部分的 audio_input_device = ")
-            logger.info("  3. 设置为上面列出的设备名")
-            logger.info("  4. 重新启动应用")
             return False
         
         # Clear stop flag since stop_ffmpeg_stream() has set it
@@ -1112,7 +1108,6 @@ def start_stream_reader_thread():
                                     logger.info(f"发现 {len(audio_devices)} 个音频设备:")
                                     for i, dev in enumerate(audio_devices, 1):
                                         logger.info(f"  {i}. {dev}")
-                                    logger.info("请在 settings.ini 中将其中一个设备名复制到 [paths] audio_input_device")
                                 else:
                                     logger.error("未检测到任何音频设备!")
                                     logger.error("下载 VB-Cable: https://vb-audio.com/Cable/")

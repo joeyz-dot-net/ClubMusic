@@ -57,6 +57,7 @@ from models.stream import (
     FFMPEG_PROCESS,
     FFMPEG_FORMAT,
     STREAM_STATS,
+    STREAMING_ENABLED,  # 【新增】全局推流启用开关
 )
 
 from models.settings import initialize_settings
@@ -68,11 +69,8 @@ logger.info("\n✓ 所有模块初始化完成！\n")
 # ============================================
 
 def _get_resource_path(relative_path):
-    """获取资源文件的绝对路径，支持打包后的环境"""
-    if getattr(sys, "frozen", False):
-        base_path = sys._MEIPASS
-    else:
-        base_path = os.path.dirname(os.path.abspath(__file__))
+    """获取资源文件的绝对路径"""
+    base_path = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base_path, relative_path)
 
 # ============================================
@@ -208,22 +206,6 @@ def detect_browser_and_apply_config(request: Request) -> dict:
 
 
 # ==================== 推流配置读取函数 ====================
-def is_streaming_enabled() -> bool:
-    """
-    从 settings.ini 读取 enable_stream 配置
-    返回推流是否启用（默认启用）
-    """
-    try:
-        import configparser
-        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.ini")
-        if os.path.exists(config_path):
-            config = configparser.ConfigParser()
-            config.read(config_path, encoding="utf-8")
-            enable_stream_str = config.get("app", "enable_stream", fallback="true")
-            return enable_stream_str.lower() in ("true", "1", "yes")
-    except Exception as e:
-        logger.warning(f"[STREAMING] 读取推流配置失败: {e}，默认启用推流")
-    return True
 
 
 # ============================================
@@ -351,12 +333,13 @@ async def play(request: Request):
             mpv_pipe_exists_func=PLAYER.mpv_pipe_exists,
             ensure_mpv_func=PLAYER.ensure_mpv,
             add_to_history_func=PLAYBACK_HISTORY.add_to_history,
-            save_to_history=True
+            save_to_history=True,
+            mpv_cmd=PLAYER.mpv_cmd
         )
         
         # 新增：启动推流到浏览器（仅在启用时）
         stream_started = False
-        if is_streaming_enabled():
+        if STREAMING_ENABLED:
             try:
                 from models.stream import start_ffmpeg_stream
                 start_ffmpeg_stream(audio_format=stream_format)
@@ -1796,8 +1779,8 @@ async def stream_play(request: Request, format: str = "mp3", t: str = None):
     - Chrome/Firefox/Edge：标准配置
     """
     # 检查推流功能是否启用
-    if not is_streaming_enabled():
-        logger.info("[STREAM] 推流功能已禁用 (enable_stream=false)")
+    if not STREAMING_ENABLED:
+        logger.info(f"[STREAM] 推流功能已禁用")
         return JSONResponse(
             status_code=403,
             content={"status": "ERROR", "message": "推流功能已禁用"}
@@ -1974,8 +1957,8 @@ async def stream_control(request: Request):
     import models.stream as stream_module
     
     # 检查推流功能是否启用
-    if not is_streaming_enabled():
-        logger.info("[STREAM] 推流功能已禁用 (enable_stream=false)")
+    if not STREAMING_ENABLED:
+        logger.info(f"[STREAM] 推流功能已禁用")
         return JSONResponse(
             status_code=403,
             content={"status": "ERROR", "message": "推流功能已禁用"}
@@ -2128,11 +2111,10 @@ async def config_stream():
 @app.get("/config/streaming-enabled")
 async def config_streaming_enabled():
     """获取服务器推流是否启用 - 前端检查用户是否可以开启推流"""
-    enabled = is_streaming_enabled()
     return JSONResponse({
         "status": "OK",
-        "streaming_enabled": enabled,
-        "message": "推流功能已启用" if enabled else "推流功能已禁用"
+        "streaming_enabled": STREAMING_ENABLED,
+        "message": "推流功能已启用" if STREAMING_ENABLED else "推流功能已禁用"
     })
 
 
