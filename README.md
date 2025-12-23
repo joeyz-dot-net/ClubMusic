@@ -1,174 +1,105 @@
 # 🎵 音乐播放器 (Music Player)
 
-一个功能完整的网页音乐播放器，支持本地文件和 YouTube 音乐串流播放，具有多歌单管理、播放历史追踪、排行榜统计等高级功能。
-
-## 📁 项目文件结构
-
-详见完整文档：[doc/FILE_STRUCTURE.md](doc/FILE_STRUCTURE.md)
-
-**快速导航：**
-- 🔵 **后端核心**：[app.py](app.py) (890+ 行) 和 [models/](models/) 文件夹
-- 🟢 **前端核心**：[templates/index.html](templates/index.html)、[static/js/main-modular.js](static/js/main-modular.js) 和 [static/js/modules/](static/js/modules/) 文件夹
-- 📚 **详细文档**：[doc/](doc/) 文件夹内有 14+ 个详细说明文档
-- ⚙️ **配置文件**：[settings.ini](settings.ini)
-
-**关键文件说明：**
-
-| 文件 | 行数 | 作用 |
-|------|------|------|
-| `app.py` | 891 | FastAPI 应用主文件，包含所有 API 路由 |
-| `main.py` | 56 | 应用启动入口脚本 |
-| `models/player.py` | 1500+ | 播放器核心逻辑，控制 MPV 后端 |
-| `templates/index.html` | 451 | 主页面结构 |
-| `static/js/main-modular.js` | 314 | 前端主入口，协调所有模块 |
-| `static/js/modules/` | 7 个文件 | 功能模块（api、player、playlist、volume、search、ui、utils） |
-| `static/css/style.css` | - | 样式表 |
-
----
+一个功能完整的网页音乐播放器，支持本地文件和 YouTube 音乐串流播放，具有多歌单管理、播放历史追踪、排行榜统计、**浏览器推流**等高级功能。
 
 ## ✨ 核心功能
 
-### 🎼 音乐播放与管理
-- **本地播放**：支持 MP3、WAV、FLAC 等多种音频格式
-- **YouTube 串流**：直接从 YouTube 搜索和播放音乐
+### 🎼 音乐播放
+- **本地播放**：支持 MP3、WAV、FLAC、AAC、M4A 等多种音频格式
+- **YouTube 串流**：直接搜索和播放 YouTube 音乐
 - **播放控制**：暂停/继续、进度条拖拽、音量调节
-- **全屏播放器**：沉浸式音乐体验
 - **播放历史**：自动记录所有播放过的歌曲
+
+### 🎙️ 浏览器推流 (v6.0 新增)
+- **VB-Cable + FFmpeg**：将本地音频推流到浏览器播放
+- **多格式支持**：AAC、MP3、FLAC 音频编码
+- **低延迟优化**：FFmpeg 参数优化，减少 70% 延迟
+- **Safari 兼容**：专门针对 Safari 浏览器的 3 线程异步广播架构
+- **推流状态指示器**：实时显示推流状态（播放中/缓冲/关闭/禁用）
 
 ### 📋 歌单管理
 - **多歌单支持**：创建、编辑、删除自定义歌单
-- **默认歌单**：系统预设的 "默认歌单" 不可删除
-- **歌单持久化**：所有歌单数据自动保存到本地
-- **固定标题栏**：滚动时歌单名称始终显示在屏幕顶部
-
-### 🎚️ 播放队列
-- **队列管理**：添加、删除、排序队列中的歌曲
-- **拖拽排序**：桌面和移动端都支持拖拽重新排序
-  - 非当前歌曲：鼠标拖拽或触摸拖拽手柄 (☰)
-  - **当前播放歌曲**：也可被拖拽到队列任意位置
-- **左滑删除**：移动端向右滑动快速删除（当前歌曲和队列项相同逻辑）
-- **插入位置控制**：从排行榜选择歌曲时，可直接插入当前歌曲前播放
+- **歌单持久化**：所有歌单数据自动保存
+- **拖拽排序**：支持桌面和移动端拖拽重新排序
 
 ### 🏆 排行榜统计
-- **播放次数追踪**：记录每首歌曲被播放的次数
-- **时间段统计**：
-  - 全部：统计所有播放记录
-  - 本周：过去 7 天的排行
-  - 本月：过去 30 天的排行
+- **播放次数追踪**：记录每首歌曲播放次数
+- **时间段统计**：全部/本周/本月排行
 - **快速播放**：点击排行榜歌曲直接播放
-- **全屏显示**：排行榜以全屏模态框显示（覆盖底部导航栏）
-- **无限制显示**：显示所有有播放记录的歌曲（最多100首）
-
-### 🔍 搜索功能
-- **本地搜索**：快速搜索本地音乐库中的歌曲和艺术家
-- **YouTube 搜索**：在线搜索 YouTube 音乐
-- **搜索历史**：自动保存最近搜索记录，支持一键清除
-- **全屏搜索**：搜索界面不遮挡底部导航栏
-
-### 💾 播放历史
-- **完整记录**：记录所有播放过的歌曲及播放时间
-- **播放次数**：统计每首歌曲被播放的次数
-- **缩略图**：显示歌曲封面（本地默认图标，YouTube 自动获取）
-- **快速访问**：点击历史记录直接播放
-
-### 📱 本地歌曲浏览
-- **全屏模态框**：本地歌曲以全屏显示
-- **树形结构**：按文件夹层级浏览本地音乐库
-- **快速添加**：点击即可添加到播放队列
 
 ### 🎨 用户界面
-- **响应式设计**：完美适配桌面、平板和手机设备
-- **浅色/深色主题**：现代化的深色界面设计
-- **实时状态**：实时显示播放进度、时长、暂停状态
-- **进度显示**：可视化进度条，支持点击和拖拽定位
-- **大封面显示**：正在播放卡片中的歌曲封面放大显示（桌面 120px，手机 110px）
-- **底部导航栏**：固定底部导航，包含歌单、本地、排行、搜索四个标签
-- **固定标题**：歌单页面滚动时标题栏始终可见
-
-### 🔧 Safari 音频流优化 (v5.0)
-- **异步非阻塞广播架构**：采用 3 线程设计（读取线程 + 广播线程 + 心跳线程）
-- **浏览器自适应配置**：针对 Safari/Chrome/Firefox/Edge 分别优化缓冲大小和心跳间隔
-- **FFmpeg 低延迟参数**：通过优化输入缓冲（100M→8M）、队列深度（1024→256）、Python 缓冲（512KB→64KB）降低延迟 70%
-- **格式感知心跳包**：支持 MP3/AAC/FLAC/PCM 格式的专用心跳机制
-- **性能提升**：Safari 连续播放 ✓，MPV CPU 下降 98.6%，单客户端内存下降 97%+
-- **详见文档**：[doc/SAFARI_STREAMING_FIX_COMPLETE.md](doc/SAFARI_STREAMING_FIX_COMPLETE.md) | [doc/SAFARI_TESTING_GUIDE.md](doc/SAFARI_TESTING_GUIDE.md)
+- **响应式设计**：适配桌面、平板和手机
+- **浅色/深色主题**：支持主题切换
+- **多语言支持**：中文/英文界面
+- **Toast 通知**：操作反馈居中显示
 
 ## 🚀 快速开始
 
 ### 系统要求
-- Python 3.7+
-- FastAPI
-- yt-dlp（用于 YouTube 下载）
-- mpv（音频播放引擎）
+- Python 3.8+
+- mpv 播放器
+- FFmpeg（推流功能需要）
+- VB-Cable（推流功能需要）
+- yt-dlp（YouTube 功能需要）
 
 ### 安装步骤
 
-1. **克隆项目**
-   ```bash
-   git clone <repository-url>
-   cd MusicPlayer
-   ```
-
-2. **安装依赖**
+1. **安装依赖**
    ```bash
    pip install -r requirements.txt
    ```
 
-3. **配置设置**
-   编辑 `settings.ini` 文件：
+2. **配置 settings.ini**
    ```ini
-   [music]
-   music_dir=Z:\                  # 本地音乐目录
-   extensions=.mp3,.wav,.flac     # 支持的音频格式
-   
-   [server]
-   host=0.0.0.0
-   port=80
+   [app]
+   music_dir=Z:\                      # 本地音乐目录
+   allowed_extensions=.mp3,.wav,.flac,.aac,.m4a
+   server_host=0.0.0.0
+   server_port=80
+   enable_stream=true                 # 启用推流
+   default_stream_format=aac          # 默认推流格式
    ```
 
-4. **启动应用**
-   
-  
+3. **启动应用**
    ```bash
-   # Windows PowerShell
-   python run_fastapi.py
-   ```
-  
-   # 或 PowerShell
-   python .\app.py
+   python main.py
    ```
 
-5. **访问播放器**
-   打开浏览器访问：`http://localhost:9000` （端口在 `settings.ini` 中配置）
+4. **访问播放器**
+   打开浏览器访问：`http://localhost:80`
+
+### 打包为 EXE
+```bash
+.\build_exe.bat
+```
+生成的 `app.exe` 位于 `dist/` 目录。
 
 ## 📁 项目结构
 
 ```
 MusicPlayer/
-├── app.py                 # FastAPI 主应用（2200+ 行）
-├── index.html            # 前端 HTML
-├── static/
-│   ├── main.js           # 前端交互逻辑（3700+ 行）
-│   └── style.css         # 样式表（5600+ 行）
+├── app.py                 # FastAPI 主应用 (2300+ 行, 60+ 路由)
+├── main.py                # 启动入口
+├── settings.ini           # 配置文件
 ├── models/
-│   ├── __init__.py       # 模块初始化
-│   ├── player.py         # 播放器控制（mpv）
-│   ├── playlist.py       # 单个歌单管理
-│   ├── playlists.py      # 多歌单管理
-│   ├── local_playlist.py # 本地歌曲浏览模块
-│   ├── rank.py           # 播放历史和排行榜统计
-│   └── song.py           # 歌曲数据模型
-├── test/                 # 测试脚本
-├── build/                # 构建输出目录
-├── settings.ini          # 配置文件
-├── requirements.txt      # 依赖列表
-├── playback_history.json # 播放历史数据（包含 play_count）
-├── playlist.json         # 当前播放队列
-├── playlists.json        # 歌单数据
-├── build.bat            # 构建脚本
-├── start.bat            # Windows 启动脚本
-├── start.ps1            # PowerShell 启动脚本
-└── README.md            # 本文档
+│   ├── player.py          # MPV 播放器控制 (1500+ 行)
+│   ├── stream.py          # FFmpeg 推流模块 (1500+ 行)
+│   ├── song.py            # 歌曲数据模型
+│   ├── playlist.py        # 播放列表管理
+│   ├── playlists.py       # 多歌单管理
+│   ├── rank.py            # 播放历史和排行榜
+│   ├── settings.py        # 用户设置管理
+│   └── logger.py          # 日志模块
+├── static/
+│   ├── js/                # 前端 JavaScript 模块
+│   └── css/               # 样式文件
+├── templates/
+│   └── index.html         # 主页面
+├── bin/                   # 可执行文件 (ffmpeg, yt-dlp)
+├── doc/                   # 文档目录
+├── playlists.json         # 歌单数据
+├── playback_history.json  # 播放历史
+└── requirements.txt       # Python 依赖
 ```
 
 ## 🎮 使用指南
@@ -417,10 +348,10 @@ MIT License
 2. 本地音乐目录是否存在
 3. mpv 和 yt-dlp 是否正确安装
 4. 浏览器控制台是否有错误信息
-5. 密码保护功能是否需要修改密码
+
 
 ---
 
+**版本**：6.0.0  
 **更新时间**：2025年12月  
-**版本**：2.0.0  
-**维护人**：Music Player Team
+**许可证**：MIT License
