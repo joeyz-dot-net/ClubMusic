@@ -26,6 +26,28 @@ from models import Song, LocalSong, StreamSong, Playlist, PlayHistory
 logger = logging.getLogger(__name__)
 
 
+def _read_bin_dir_from_config(app_dir: str) -> str:
+    """从配置文件读取 bin_dir
+    
+    参数:
+        app_dir: 应用程序根目录
+    
+    返回:
+        bin_dir 路径名称（相对路径或绝对路径）
+    """
+    bin_dir = "bin"  # 默认值
+    try:
+        config_path = os.path.join(app_dir, "settings.ini")
+        if os.path.exists(config_path):
+            config = configparser.ConfigParser()
+            config.read(config_path, encoding="utf-8")
+            if config.has_section('paths') and config.has_option('paths', 'bin_dir'):
+                bin_dir = config.get('paths', 'bin_dir')
+    except Exception as e:
+        logger.debug(f"读取 bin_dir 配置失败: {e}")
+    return bin_dir
+
+
 class MusicPlayer:
     """音乐播放器类 - 包含所有播放器配置和状态"""
 
@@ -45,15 +67,9 @@ class MusicPlayer:
 
     @staticmethod
     def _get_app_dir():
-        """获取应用程序目录（支持打包环境）"""
-        import sys
-        # PyInstaller 打包后，使用 sys.executable 的目录
-        if getattr(sys, 'frozen', False):
-            # 打包后环境：exe 所在目录
-            return os.path.dirname(os.path.abspath(sys.executable))
-        else:
-            # 开发环境：从 __file__ 推导
-            return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        """获取应用程序目录"""
+        # 使用统一的路径解析方式（从 __file__ 推导）
+        return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     @staticmethod
     def _normalize_mpv_cmd(mpv_cmd: str, app_dir: str = None) -> str:
@@ -101,19 +117,15 @@ class MusicPlayer:
     def _get_default_mpv_cmd():
         """获取默认的 MPV 命令"""
         app_dir = MusicPlayer._get_app_dir()
-        mpv_path = os.path.join(app_dir, "bin", "mpv.exe")
-        if os.path.exists(mpv_path):
-            return (
-                f'"{mpv_path}" '
-                "--input-ipc-server=\\\\.\\\pipe\\\\mpv-pipe "
-                "--idle=yes --force-window=no "
-                '--ao=dshow --audio-device="CABLE Output (VB-Audio Virtual Cable)"'
-            )
-        # 回退到默认安装路径
+        bin_dir = _read_bin_dir_from_config(app_dir)
+        
+        # 从配置文件读取的 bin 目录下构建 mpv.exe 路径
+        mpv_path = os.path.join(app_dir, bin_dir, "mpv.exe")
         return (
-            r"c:\mpv\mpv.exe "
-            r"--input-ipc-server=\\.\pipe\mpv-pipe --idle=yes --force-window=no "
-            r'--ao=dshow --audio-device="CABLE Output (VB-Audio Virtual Cable)"'
+            f'"{mpv_path}" '
+            "--input-ipc-server=\\\\.\\\pipe\\\\mpv-pipe "
+            "--idle=yes --force-window=no "
+            '--ao=dshow --audio-device="CABLE Output (VB-Audio Virtual Cable)"'
         )
 
     @staticmethod
@@ -618,22 +630,15 @@ class MusicPlayer:
 
         logger.info(f"尝试启动 mpv: {self.mpv_cmd}")
         try:
-            # 查找 yt-dlp 可执行文件路径
+            # 从配置文件读取 bin 目录并查找 yt-dlp
+            app_dir = MusicPlayer._get_app_dir()
+            bin_dir = _read_bin_dir_from_config(app_dir)
             yt_dlp_path = None
             
-            # 检查应用主目录
-            app_dir = MusicPlayer._get_app_dir()
-            # 优先检查 bin 目录
-            bin_yt_dlp = os.path.join(app_dir, "bin", "yt-dlp.exe")
+            bin_yt_dlp = os.path.join(app_dir, bin_dir, "yt-dlp.exe")
             if os.path.exists(bin_yt_dlp):
                 yt_dlp_path = bin_yt_dlp
-                logger.info(f"在 bin 目录找到 yt-dlp: {bin_yt_dlp}")
-            # 其次检查应用根目录是否有 yt-dlp.exe
-            else:
-                app_root_yt_dlp = os.path.join(app_dir, "yt-dlp.exe")
-                if os.path.exists(app_root_yt_dlp):
-                    yt_dlp_path = app_root_yt_dlp
-                    logger.info(f"在应用目录找到 yt-dlp: {app_root_yt_dlp}")
+                logger.info(f"在 {bin_dir} 目录找到 yt-dlp: {bin_yt_dlp}")
             
             # 构建完整的启动命令
             mpv_launch_cmd = self.mpv_cmd
@@ -1265,20 +1270,17 @@ class MusicPlayer:
             actual_url = url
             if "youtube.com" in url or "youtu.be" in url:
                 logger.info(f"🎬 检测到 YouTube URL，尝试通过 yt-dlp 获取直链...")
-                # 优先使用 bin 目录下的 yt-dlp.exe
+                # 从配置文件读取 bin 目录
                 app_dir = MusicPlayer._get_app_dir()
-                bin_yt_dlp = os.path.join(app_dir, "bin", "yt-dlp.exe")
+                bin_dir = _read_bin_dir_from_config(app_dir)
+                bin_yt_dlp = os.path.join(app_dir, bin_dir, "yt-dlp.exe")
+                
                 if os.path.exists(bin_yt_dlp):
                     yt_dlp_exe = bin_yt_dlp
                     logger.info(f"   📦 使用 yt-dlp: {bin_yt_dlp}")
                 else:
-                    # 检查应用根目录是否有 yt-dlp.exe
-                    app_root_yt_dlp = os.path.join(app_dir, "yt-dlp.exe")
-                    yt_dlp_exe = app_root_yt_dlp if os.path.exists(app_root_yt_dlp) else "yt-dlp"
-                    if os.path.exists(app_root_yt_dlp):
-                        logger.info(f"   📦 使用 yt-dlp: {app_root_yt_dlp}")
-                    else:
-                        logger.info(f"   📦 使用系统 PATH 中的 yt-dlp")
+                    logger.info(f"   📦 yt-dlp.exe 不在 {bin_dir} 目录，使用系统 PATH")
+                    yt_dlp_exe = "yt-dlp"
                 
                 try:
                     logger.info(f"   ⏳ 运行命令: {yt_dlp_exe} -g {url[:50]}...")
@@ -1329,12 +1331,15 @@ class MusicPlayer:
                 try:
                     # 使用 yt-dlp 获取播放列表信息
                     logger.debug(f"尝试使用 yt-dlp 提取播放列表信息...")
-                    # 查找 yt-dlp 可执行文件
-                    yt_dlp_exe = "yt-dlp"
+                    # 查找 yt-dlp 可执行文件 - 使用统一的 bin_dir
                     app_dir = MusicPlayer._get_app_dir()
-                    app_root_yt_dlp = os.path.join(app_dir, "yt-dlp.exe")
-                    if os.path.exists(app_root_yt_dlp):
-                        yt_dlp_exe = app_root_yt_dlp
+                    bin_dir = _read_bin_dir_from_config(app_dir)
+                    bin_yt_dlp = os.path.join(app_dir, bin_dir, "yt-dlp.exe")
+                    
+                    if os.path.exists(bin_yt_dlp):
+                        yt_dlp_exe = bin_yt_dlp
+                    else:
+                        yt_dlp_exe = "yt-dlp"
                     cmd = [yt_dlp_exe, "--flat-playlist", "-j", url]
                     result = subprocess.run(
                         cmd, capture_output=True, text=True, timeout=30

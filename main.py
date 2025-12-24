@@ -270,6 +270,22 @@ def interactive_select_streaming_mode(timeout: int = 10) -> bool:
         return True
 
 
+def get_bin_dir_from_config(config: configparser.ConfigParser) -> tuple:
+    """从配置文件获取 bin_dir 路径
+    
+    参数:
+        config: 配置解析器
+    
+    返回:
+        (bin_dir_name, bin_dir_full_path, bin_mpv_full_path)
+    """
+    app_dir = os.path.dirname(os.path.abspath(__file__))
+    bin_dir_name = config.get("paths", "bin_dir", fallback="bin") if config.has_section("paths") else "bin"
+    bin_dir = os.path.join(app_dir, bin_dir_name)
+    bin_mpv = os.path.join(bin_dir, "mpv.exe")
+    return bin_dir_name, bin_dir, bin_mpv
+
+
 def update_mpv_cmd_with_device(config: configparser.ConfigParser, device_id: str) -> str:
     """更新 mpv_cmd 配置，添加音频设备参数
     
@@ -280,12 +296,12 @@ def update_mpv_cmd_with_device(config: configparser.ConfigParser, device_id: str
     返回:
         更新后的 mpv_cmd
     """
-    # 优先使用 bin 目录下的 mpv.exe
-    bin_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bin")
-    bin_mpv = os.path.join(bin_dir, "mpv.exe")
+    # 从配置文件获取 bin_dir
+    bin_dir_name, bin_dir, bin_mpv = get_bin_dir_from_config(config)
     
-    # 获取现有的 mpv_cmd 配置
+    # 获取现有的 mpv_cmd 配置并展开 ${bin_dir}
     mpv_cmd = config.get("app", "mpv_cmd", fallback="")
+    mpv_cmd = mpv_cmd.replace("${bin_dir}", bin_dir_name)
     
     # 如果 bin 目录存在 mpv.exe，强制使用它，保留其他参数
     if os.path.exists(bin_mpv):
@@ -380,12 +396,24 @@ def main():
         config.read(config_file, encoding="utf-8")
     
     # 【第一步】交互式选择音频设备（默认VB-Cable）
-    # 优先使用 bin 目录下的 mpv.exe
-    bin_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bin")
+    # 从配置文件读取 bin_dir
+    app_dir = os.path.dirname(os.path.abspath(__file__))
+    bin_dir_name = config.get("paths", "bin_dir", fallback="bin") if config.has_section("paths") else "bin"
+    bin_dir = os.path.join(app_dir, bin_dir_name)
     bin_mpv = os.path.join(bin_dir, "mpv.exe")
     default_mpv = bin_mpv if os.path.exists(bin_mpv) else "mpv"
     
-    mpv_path = config.get("app", "mpv_cmd", fallback=default_mpv).split()[0]
+    logger.info(f"bin_dir 配置: {bin_dir_name}")
+    logger.info(f"MPV 路径: {bin_mpv if os.path.exists(bin_mpv) else 'mpv (系统PATH)'}")
+    
+    # 读取 mpv_cmd 并展开 ${bin_dir} 变量
+    mpv_cmd_raw = config.get("app", "mpv_cmd", fallback=default_mpv)
+    mpv_cmd_expanded = mpv_cmd_raw.replace("${bin_dir}", bin_dir_name)
+    mpv_path = mpv_cmd_expanded.split()[0].strip('"\'')
+    
+    # 如果是相对路径，转换为绝对路径
+    if not os.path.isabs(mpv_path):
+        mpv_path = os.path.join(app_dir, mpv_path)
     selected_device = interactive_select_audio_device(mpv_path=mpv_path, timeout=10)
     
     # 更新 mpv_cmd 配置

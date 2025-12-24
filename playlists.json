@@ -9,26 +9,6 @@
       "name": "默认歌单",
       "songs": [
         {
-          "url": "https://www.youtube.com/watch?v=ojA7sPQ0sqU",
-          "title": "Spotify Pop Hits 2026 ❄️ Chill Pop Playlist 🌙 Winter 2025/2026 ~ Best New Pop Songs",
-          "name": "Spotify Pop Hits 2026 ❄️ Chill Pop Playlist 🌙 Winter 2025/2026 ~ Best New Pop Songs",
-          "type": "youtube",
-          "duration": 0,
-          "ts": 1766370890,
-          "thumbnail_url": "https://img.youtube.com/vi/ojA7sPQ0sqU/maxresdefault.jpg",
-          "artist": "Spotify Pop Hits 2026 ❄️ Chill Pop Playlist 🌙 Winter 2025/2026 ~ Best New Pop Songs"
-        },
-        {
-          "url": "Black Myth - Wukong FLAC/04. Destiny.flac",
-          "title": "04. Destiny.flac",
-          "name": "04. Destiny.flac",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766547235,
-          "thumbnail_url": null,
-          "artist": "04. Destiny.flac"
-        },
-        {
           "url": "Black Myth - Wukong FLAC/03. Nonsense!.flac",
           "title": "03. Nonsense!.flac",
           "name": "03. Nonsense!.flac",
@@ -37,16 +17,6 @@
           "ts": 1766547235,
           "thumbnail_url": null,
           "artist": "03. Nonsense!.flac"
-        },
-        {
-          "url": "Black Myth - Wukong FLAC/02. The Yellow Wind Rises.flac",
-          "title": "02. The Yellow Wind Rises.flac",
-          "name": "02. The Yellow Wind Rises.flac",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766547234,
-          "thumbnail_url": null,
-          "artist": "02. The Yellow Wind Rises.flac"
         },
         {
           "url": "Black Myth - Wukong FLAC/01. I See.flac",
@@ -109,9 +79,9 @@
           "artist": "Top Hits 2026 ~ Trending Music 2026 🎶 Spotify Hits 2026 ~ Top Songs 2026 🎧"
         }
       ],
-      "song_count": 10,
+      "song_count": 7,
       "created_at": 1766369731.0493586,
-      "updated_at": 1766547257.7799208,
+      "updated_at": 1766579544.0843952,
       "current_playing_index": -1
     },
     {

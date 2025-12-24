@@ -1,20 +1,20 @@
 # Music Player AI Agent Guide
 
 ## Quick Start
-Bilingual (Chinese/English) web music player: **FastAPI backend** + **vanilla ES6 frontend** + **MPV audio engine**.
+Bilingual (zh/en) web music player: **FastAPI** + **ES6 modules** + **MPV audio engine** + **FFmpeg streaming**.
 
 ```bash
 pip install -r requirements.txt
-python main.py  # Interactive prompts: audio device + streaming toggle
-# Open http://localhost:80
+python main.py  # Interactive prompts for audio device + streaming
+# → http://localhost:80
 ```
 
-## Critical Rules
+## ⚠️ Critical Rules
 
-1. **API Sync**: When modifying routes, update BOTH `app.py` AND `static/js/api.js`—field names must match exactly
-2. **FormData not JSON**: Player routes (`/play`, `/seek`, `/volume`) use `request.form()`, not JSON body
-3. **Global Singletons**: Use `PLAYER`, `PLAYLISTS_MANAGER`, `RANK_MANAGER` directly—never instantiate new ones
-4. **Config Reload**: `settings.ini` read once at startup—restart required for changes
+1. **API Sync**: Route changes require updating BOTH [app.py](../app.py) AND [static/js/api.js](../static/js/api.js)—field names must match exactly
+2. **FormData not JSON**: Player routes (`/play`, `/seek`, `/volume`) use `await request.form()`, NOT JSON body
+3. **Global Singletons**: Use `PLAYER`, `PLAYLISTS_MANAGER`, `RANK_MANAGER` directly (line ~100 in app.py)—never instantiate new ones
+4. **Config Reload**: `settings.ini` is cached at startup—restart `python main.py` for changes
 
 ## Architecture
 
@@ -24,84 +24,93 @@ Browser ←500ms poll→ FastAPI (app.py) ←→ Global Singletons ←→ MPV (\
 StreamingResponse ←────── FFmpeg 3-thread ←── VB-Cable ←─────── Audio Output
 ```
 
-| Layer | Files | Notes |
-|-------|-------|-------|
-| Entry | `main.py` | Uvicorn, audio device selection, UTF-8 fix (Windows) |
-| Backend | `app.py` | 60+ routes, `STREAMING_ENABLED` env toggles stream module |
-| Player | `models/player.py` | MPV IPC commands, playback state, config loading |
-| Stream | `models/stream.py` | FFmpeg broadcast: `read_stream` → `broadcast_worker` → `send_heartbeats` |
-| Frontend | `static/js/main.js` | `MusicPlayerApp` class, ES6 modules, 500ms status polling |
+| Layer | Key Files | Notes |
+|-------|-----------|-------|
+| Entry | [main.py](../main.py) | Uvicorn startup, audio device selection, `ENABLE_STREAMING` env var |
+| Backend | [app.py](../app.py) | 60+ routes, global singletons initialized at import time |
+| Player | [models/player.py](../models/player.py) | MPV IPC via named pipe, playback state, config from settings.ini |
+| Stream | [models/stream.py](../models/stream.py) | FFmpeg broadcast: `read_stream` → `broadcast_worker` → `send_heartbeats` |
+| Frontend | [static/js/main.js](../static/js/main.js) | `MusicPlayerApp` class, 500ms status polling, ES6 module imports |
 
 ## Adding Features
 
-### New API Route
+### New Backend Route
 ```python
-# app.py
+# app.py - Player control routes use FormData
 @app.post("/my-endpoint")
 async def my_endpoint(request: Request):
-    form = await request.form()  # FormData, not JSON
-    result = PLAYER.some_method()  # Use global singleton
+    form = await request.form()          # FormData, NOT request.json()
+    result = PLAYER.some_method()        # Use global singleton
+    PLAYLISTS_MANAGER.save()             # Persist if modified
     return {"status": "OK", "data": result}
 ```
+
+### Frontend API Wrapper
 ```javascript
-// static/js/api.js
+// static/js/api.js - Add method to MusicAPI class
 async myEndpoint(value) {
     const formData = new FormData();
     formData.append('value', value);
-    return this.postForm('/my-endpoint', formData);
+    return this.postForm('/my-endpoint', formData);  // NOT this.post()
 }
 ```
 
-### Playlist Changes
+### Playlist Persistence
 ```python
-# Auto-saves to playlists.json
-PLAYLISTS_MANAGER.add_song(playlist_id, {"url": path, "title": name, "type": "local"})
+# Auto-saves to playlists.json after modification
+playlist = PLAYLISTS_MANAGER.get_playlist(playlist_id)
+playlist.add_song({"url": path, "title": name, "type": "local"})  # or "youtube"
+PLAYLISTS_MANAGER.save()  # Required to persist
 ```
 
 ### i18n Strings
-Add to both `zh` and `en` objects in `static/js/i18n.js`:
+Add to BOTH `zh` and `en` objects in [static/js/i18n.js](../static/js/i18n.js):
 ```javascript
-'myFeature.label': '我的功能',  // zh
-'myFeature.label': 'My Feature', // en
+// zh object
+'myFeature.label': '我的功能',
+// en object  
+'myFeature.label': 'My Feature',
 ```
 
 ## Config Reference (`settings.ini`)
 
 | Section | Key Settings |
 |---------|-------------|
-| `[app]` | `mpv_cmd`, `music_dir`, `default_stream_format` (aac/mp3/flac) |
-| `[stream]` | `broadcast_queue_maxsize`, `broadcast_executor_workers` |
-| `[browser_configs]` | Safari/Chrome/Firefox tuning: `queue_blocks,heartbeat_ms,timeout,keepalive` |
-| `[formats]` | Audio codec params: `codec,bitrate,profile,chunk_kb,heartbeat,queue_mult` |
+| `[app]` | `mpv_cmd` (with audio-device GUID), `music_dir`, `default_stream_format` (aac/mp3/flac) |
+| `[stream]` | `broadcast_queue_maxsize`, `broadcast_executor_workers` (120 for ~20 clients) |
+| `[browser_configs]` | Safari/Chrome/Firefox: `queue_blocks,heartbeat_ms,timeout,keepalive` |
+| `[formats]` | Per-codec: `codec,bitrate,profile,chunk_kb,heartbeat,queue_mult` |
+| `[logging]` | `level`, `polling_sample_rate` (0.1 = 10% of /status requests logged) |
 
-## Debugging (PowerShell)
+## Debugging
 
 ```powershell
-Get-Process mpv                      # MPV running?
-Test-Path "\\.\pipe\mpv-pipe"        # IPC pipe exists?
-curl http://localhost/status         # Player state
-curl http://localhost/stream/status  # FFmpeg stream diagnostics
+# Check MPV process and IPC pipe
+Get-Process mpv; Test-Path "\\.\pipe\mpv-pipe"
+
+# API diagnostics
+curl http://localhost/status         # Player state (playing, volume, position)
+curl http://localhost/stream/status  # FFmpeg process, client count, format
 ```
 
 ## Common Issues
 
-| Symptom | Cause & Fix |
-|---------|-------------|
-| Settings ignored | Restart `python main.py` (INI cached) |
-| No audio output | Check `[app].mpv_cmd` audio-device in settings.ini |
-| Safari stream cuts | Verify 3 threads in stream.py, check `[browser_configs].safari` |
-| Chinese garbled | UTF-8 wrapper missing—check `sys.stdout` reconfiguration |
-| YouTube 403 | Update `yt-dlp.exe` in `bin/` or PATH |
+| Symptom | Fix |
+|---------|-----|
+| Settings ignored after edit | Restart `python main.py` (INI cached at startup) |
+| No audio output | Check `mpv_cmd` audio-device GUID in settings.ini |
+| Safari stream disconnects | Increase `[browser_configs].safari` keepalive, verify 3-thread arch |
+| Chinese text garbled | Ensure UTF-8 stdout wrapper in entry point (see main.py line ~13) |
+| YouTube 403 errors | Update `yt-dlp.exe` in `bin/` directory |
 
-## File Map
+## Data Files
 
-| Purpose | Path |
-|---------|------|
-| Persistent state | `playlists.json`, `playback_history.json` |
-| Startup config | `settings.ini` |
-| User prefs | `user_settings.json` |
-| Styles | `static/css/base.css`, `theme-dark.css`, `theme-light.css` |
-| Translations | `static/js/i18n.js` |
+| File | Purpose | Format |
+|------|---------|--------|
+| `playlists.json` | All playlists + songs | `{playlist_id: {name, songs: [{url, title, type}]}}` |
+| `playback_history.json` | Play counts for ranking | `{url: {count, last_played, title}}` |
+| `settings.ini` | Server/MPV/FFmpeg config | INI with sections: app, stream, formats |
+| `user_settings.json` | Client preferences | `{theme, language, autoStream}` |
 
 ## Build EXE
 
