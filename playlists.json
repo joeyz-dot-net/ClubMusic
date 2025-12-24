@@ -19,6 +19,46 @@
           "artist": "Spotify Pop Hits 2026 ❄️ Chill Pop Playlist 🌙 Winter 2025/2026 ~ Best New Pop Songs"
         },
         {
+          "url": "Black Myth - Wukong FLAC/04. Destiny.flac",
+          "title": "04. Destiny.flac",
+          "name": "04. Destiny.flac",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766547235,
+          "thumbnail_url": null,
+          "artist": "04. Destiny.flac"
+        },
+        {
+          "url": "Black Myth - Wukong FLAC/03. Nonsense!.flac",
+          "title": "03. Nonsense!.flac",
+          "name": "03. Nonsense!.flac",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766547235,
+          "thumbnail_url": null,
+          "artist": "03. Nonsense!.flac"
+        },
+        {
+          "url": "Black Myth - Wukong FLAC/02. The Yellow Wind Rises.flac",
+          "title": "02. The Yellow Wind Rises.flac",
+          "name": "02. The Yellow Wind Rises.flac",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766547234,
+          "thumbnail_url": null,
+          "artist": "02. The Yellow Wind Rises.flac"
+        },
+        {
+          "url": "Black Myth - Wukong FLAC/01. I See.flac",
+          "title": "01. I See.flac",
+          "name": "01. I See.flac",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766547233,
+          "thumbnail_url": null,
+          "artist": "01. I See.flac"
+        },
+        {
           "url": "ETC/5 20AM.mp3",
           "title": "5 20AM.mp3",
           "name": "5 20AM.mp3",
@@ -29,16 +69,6 @@
           "artist": "5 20AM.mp3"
         },
         {
-          "url": "https://www.youtube.com/watch?v=kzZ7Jc8C4wA",
-          "title": "孫燕姿 Sun Yanzi TOP25 Video 必聽經典25首 [情歌療癒系MV] 串燒 無間斷 完整聆聽 KTV必唱 經典K歌 回憶殺 我懷念的 無敵孫式情歌 我不難過 開始懂了 遇見 天黑黑",
-          "name": "孫燕姿 Sun Yanzi TOP25 Video 必聽經典25首 [情歌療癒系MV] 串燒 無間斷 完整聆聽 KTV必唱 經典K歌 回憶殺 我懷念的 無敵孫式情歌 我不難過 開始懂了 遇見 天黑黑",
-          "type": "youtube",
-          "duration": 0,
-          "ts": 1766370887,
-          "thumbnail_url": "https://img.youtube.com/vi/kzZ7Jc8C4wA/maxresdefault.jpg",
-          "artist": "孫燕姿 Sun Yanzi TOP25 Video 必聽經典25首 [情歌療癒系MV] 串燒 無間斷 完整聆聽 KTV必唱 經典K歌 回憶殺 我懷念的 無敵孫式情歌 我不難過 開始懂了 遇見 天黑黑"
-        },
-        {
           "url": "Spotify/Top Music Playlist 2026 ~ Top Songs 2026 🎶🎧 Top Hits 2026 ~ Spotify Playlist 2026.flac",
           "title": "Top Music Playlist 2026 ~ Top Songs 2026 🎶🎧 Top Hits 2026 ~ Spotify Playlist 2026",
           "name": "Top Music Playlist 2026 ~ Top Songs 2026 🎶🎧 Top Hits 2026 ~ Spotify Playlist 2026",
@@ -47,6 +77,16 @@
           "ts": 1766533903,
           "thumbnail_url": "",
           "artist": "Top Music Playlist 2026 ~ Top Songs 2026 🎶🎧 Top Hits 2026 ~ Spotify Playlist 2026"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=kzZ7Jc8C4wA",
+          "title": "孫燕姿 Sun Yanzi TOP25 Video 必聽經典25首 [情歌療癒系MV] 串燒 無間斷 完整聆聽 KTV必唱 經典K歌 回憶殺 我懷念的 無敵孫式情歌 我不難過 開始懂了 遇見 天黑黑",
+          "name": "孫燕姿 Sun Yanzi TOP25 Video 必聽經典25首 [情歌療癒系MV] 串燒 無間斷 完整聆聽 KTV必唱 經典K歌 回憶殺 我懷念的 無敵孫式情歌 我不難過 開始懂了 遇見 天黑黑",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1766370887,
+          "thumbnail_url": "https://img.youtube.com/vi/kzZ7Jc8C4wA/maxresdefault.jpg",
+          "artist": "孫燕姿 Sun Yanzi TOP25 Video 必聽經典25首 [情歌療癒系MV] 串燒 無間斷 完整聆聽 KTV必唱 經典K歌 回憶殺 我懷念的 無敵孫式情歌 我不難過 開始懂了 遇見 天黑黑"
         },
         {
           "url": "Spotify/Spotify Hits 2026 ❄️  ｜ Winter 2025⧸2026 ｜ Best Spotify Trending Playlist.flac",
@@ -69,9 +109,9 @@
           "artist": "Top Hits 2026 ~ Trending Music 2026 🎶 Spotify Hits 2026 ~ Top Songs 2026 🎧"
         }
       ],
-      "song_count": 6,
+      "song_count": 10,
       "created_at": 1766369731.0493586,
-      "updated_at": 1766542539.664174,
+      "updated_at": 1766547257.7799208,
       "current_playing_index": -1
     },
     {

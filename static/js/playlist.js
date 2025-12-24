@@ -444,9 +444,10 @@ export function renderPlaylistUI({ container, titleEl, onPlay, currentMeta }) {
                 }
             });
             
+            // 左侧：删除按钮，右侧：拖拽手柄
+            item.appendChild(deleteBtn);
             item.appendChild(leftContainer);
             item.appendChild(info);
-            item.appendChild(deleteBtn);
             item.appendChild(dragHandle);
         }
 

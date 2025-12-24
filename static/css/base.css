@@ -654,7 +654,7 @@ button:active { transform: scale(0.98); }
     flex-shrink: 0;
 }
 
-/* 拖拽手柄 - 移动端触摸拖拽 */
+/* 拖拽手柄 - 移动端触摸拖拽（右侧） */
 .drag-handle {
     width: 28px;
     height: 44px;
@@ -669,6 +669,7 @@ button:active { transform: scale(0.98); }
     flex-shrink: 0;
     -webkit-user-select: none;
     user-select: none;
+    margin-left: auto;  /* 推到右侧 */
 }
 .drag-handle:active {
     cursor: grabbing;
@@ -677,6 +678,13 @@ button:active { transform: scale(0.98); }
 }
 .drag-handle svg {
     pointer-events: none;
+}
+
+/* 三点菜单按钮在左侧 */
+.track-menu-btn {
+    order: -1;  /* 确保在最左侧 */
+    margin-right: 8px;
+    flex-shrink: 0;
 }
 
 /* 拖拽占位符 */
