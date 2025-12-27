@@ -1,6 +1,6 @@
 // 播放列表管理模块
 import { api } from './api.js';
-import { Toast } from './ui.js';
+import { Toast, loading } from './ui.js';
 import { operationLock } from './operationLock.js';
 
 export class PlaylistManager {
@@ -238,6 +238,120 @@ async function moveToTopAndPlay(song, currentIndex, onPlay, rerenderArgs) {
     }
 }
 
+// ✅ 新增：批量添加歌单中的所有歌曲到默认歌单
+async function addAllSongsToDefault(playlist, selectedPlaylistId) {
+    if (!playlist || playlist.length === 0) {
+        Toast.error('❌ 歌单为空，无法添加');
+        return;
+    }
+    
+    if (selectedPlaylistId === 'default') {
+        Toast.error('❌ 当前已是默认歌单');
+        return;
+    }
+    
+    try {
+        loading.show(`📀 正在添加 ${playlist.length} 首歌曲...`);
+        
+        // 获取默认歌单以检查重复
+        const defaultPlaylist = playlistManager.playlists.find(p => p.id === 'default');
+        if (!defaultPlaylist) {
+            Toast.error('❌ 默认歌单不存在');
+            loading.hide();
+            return;
+        }
+        
+        const existingUrls = new Set(defaultPlaylist.songs.map(s => s.url));
+        let addedCount = 0;
+        let skippedCount = 0;
+        const failedSongs = [];
+        
+        // 获取默认歌单的当前播放位置，用于计算插入位置
+        const defaultCurrentIndex = defaultPlaylist.current_playing_index ?? -1;
+        let insertIndex = Math.max(0, defaultCurrentIndex + 1);
+        
+        console.log('[批量添加] 开始添加歌曲:', {
+            totalCount: playlist.length,
+            selectedPlaylistId: selectedPlaylistId,
+            insertBaseIndex: insertIndex,
+            existingCount: existingUrls.size
+        });
+        
+        // 逐首歌曲添加到默认歌单
+        for (let i = 0; i < playlist.length; i++) {
+            const song = playlist[i];
+            
+            try {
+                // 检查歌曲是否已存在于默认歌单
+                if (existingUrls.has(song.url)) {
+                    console.log(`[批量添加] 歌曲已存在，跳过: ${song.title}`);
+                    skippedCount++;
+                    continue;
+                }
+                
+                // 调用 API 添加到默认歌单
+                const result = await api.addToPlaylist({
+                    playlist_id: 'default',
+                    song: song,
+                    insert_index: insertIndex + addedCount  // 按顺序插入
+                });
+                
+                if (result.status === 'OK') {
+                    console.log(`[批量添加] [${addedCount + 1}/${playlist.length}] ✓ ${song.title}`);
+                    addedCount++;
+                    existingUrls.add(song.url);  // 标记为已添加
+                    
+                    // 更新UI提示进度
+                    const progress = Math.round((addedCount + skippedCount) / playlist.length * 100);
+                    loading.show(`📀 添加中... ${addedCount}/${playlist.length - skippedCount} (${progress}%)`);
+                } else {
+                    console.error(`[批量添加] ✗ 添加失败: ${song.title}`, result.error);
+                    failedSongs.push(song.title);
+                }
+            } catch (error) {
+                console.error(`[批量添加] ✗ 添加异常: ${song.title}`, error);
+                failedSongs.push(song.title);
+            }
+            
+            // 避免请求过于频繁，每添加一首稍作延迟
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        
+        // 完成后刷新播放列表数据
+        loading.hide();
+        await playlistManager.loadAll();
+        await playlistManager.loadCurrent();
+        
+        // 显示完成结果
+        console.log('[批量添加] 完成:', {
+            addedCount: addedCount,
+            skippedCount: skippedCount,
+            failedCount: failedSongs.length
+        });
+        
+        // 构建结果消息
+        let message = `✅ 成功添加 ${addedCount} 首歌曲`;
+        if (skippedCount > 0) {
+            message += `，跳过 ${skippedCount} 首（已存在）`;
+        }
+        if (failedSongs.length > 0) {
+            message += `，失败 ${failedSongs.length} 首`;
+        }
+        
+        Toast.success(message);
+        
+        // 如果有失败的歌曲，显示详情
+        if (failedSongs.length > 0) {
+            console.warn('[批量添加] 失败的歌曲:', failedSongs.slice(0, 5).join(', '));
+        }
+        
+    } catch (error) {
+        console.error('[批量添加] 操作异常:', error);
+        Toast.error('❌ 操作失败: ' + error.message);
+        loading.hide();
+    }
+}
+
 // ✅ 新增：从当前选择歌单点击歌曲播放
 export async function playSongFromSelectedPlaylist(song, onPlay) {
     try {
@@ -309,6 +423,40 @@ export async function playSongFromSelectedPlaylist(song, onPlay) {
     }
 }
 
+// 获取当前应用的主题（深色/浅色）
+function getCurrentAppTheme() {
+    const theme = document.documentElement.getAttribute('data-theme') || localStorage.getItem('theme') || 'dark';
+    return theme;
+}
+
+// 根据应用主题返回对应颜色
+function getThemeColors(theme) {
+    if (theme === 'light') {
+        return {
+            bgGradient: 'linear-gradient(135deg, #f5f7ff 0%, #e8eaff 100%)',
+            textColor: '#1a1a2e',
+            secondaryText: 'rgba(26, 26, 46, 0.7)',
+            buttonBg: 'rgba(102, 126, 234, 0.15)',
+            buttonBorder: 'rgba(102, 126, 234, 0.4)',
+            buttonHover: 'rgba(102, 126, 234, 0.25)',
+            buttonText: '#2c2d57',
+            shadow: 'rgba(102, 126, 234, 0.2)'
+        };
+    } else {
+        // dark theme
+        return {
+            bgGradient: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+            textColor: '#ffffff',
+            secondaryText: 'rgba(255, 255, 255, 0.75)',
+            buttonBg: 'rgba(255, 255, 255, 0.15)',
+            buttonBorder: 'rgba(255, 255, 255, 0.4)',
+            buttonHover: 'rgba(255, 255, 255, 0.25)',
+            buttonText: '#ffffff',
+            shadow: 'rgba(0, 0, 0, 0.3)'
+        };
+    }
+}
+
 // UI 渲染：当前播放列表
 export function renderPlaylistUI({ container, onPlay, currentMeta }) {
     if (!container) return;
@@ -360,6 +508,293 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
             <div class="playlist-empty">暂无歌曲</div>
         `;
         return;
+    }
+
+    // ✅ 为默认歌单也添加标题栏（适配应用当前主题）
+    if (selectedPlaylistId === 'default') {
+        const appTheme = getCurrentAppTheme();
+        const colors = getThemeColors(appTheme);
+
+        const headerContainer = document.createElement('div');
+        headerContainer.style.cssText = `
+            background: ${colors.bgGradient};
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 16px ${colors.shadow};
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        `;
+
+        const infoSection = document.createElement('div');
+        infoSection.style.cssText = `
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex: 1;
+        `;
+
+        const playlistTitle = document.createElement('div');
+        playlistTitle.style.cssText = `
+            font-size: 16px;
+            font-weight: 700;
+            color: ${colors.textColor};
+            letter-spacing: 0.5px;
+            line-height: 1.2;
+        `;
+        playlistTitle.textContent = playlistName;
+
+        const songCount = document.createElement('div');
+        songCount.style.cssText = `
+            font-size: 12px;
+            color: ${colors.secondaryText};
+            font-weight: 500;
+        `;
+        songCount.textContent = `📊 ${playlist.length} 首歌曲`;
+
+        infoSection.appendChild(playlistTitle);
+        infoSection.appendChild(songCount);
+        headerContainer.appendChild(infoSection);
+
+        // 清空按钮
+        const clearBtn = document.createElement('button');
+        clearBtn.style.cssText = `
+            background: ${colors.buttonBg};
+            border: 1.5px solid ${colors.buttonBorder};
+            color: ${colors.buttonText};
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            white-space: nowrap;
+            min-height: 32px;
+        `;
+        clearBtn.innerHTML = '🗑️ 清空';
+        clearBtn.title = '清空播放队列';
+        clearBtn.addEventListener('mouseover', () => {
+            clearBtn.style.background = colors.buttonHover;
+            clearBtn.style.transform = 'translateY(-1px)';
+        });
+        clearBtn.addEventListener('mouseout', () => {
+            clearBtn.style.background = colors.buttonBg;
+            clearBtn.style.transform = 'translateY(0)';
+        });
+        clearBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (confirm('确定要清空队列吗？')) {
+                try {
+                    await api.post('/playlist_clear', {});
+                    Toast.success('✅ 队列已清空');
+                    await playlistManager.loadCurrent();
+                    renderPlaylistUI({ container, onPlay, currentMeta });
+                } catch (err) {
+                    console.error('清空队列失败:', err);
+                    Toast.error('清空失败: ' + (err.message || err));
+                }
+            }
+        });
+
+        headerContainer.appendChild(clearBtn);
+        container.appendChild(headerContainer);
+    }
+
+    // ✅ 非默认歌单时，在顶部添加标题栏 + 操作按钮（适配应用主题）
+    if (selectedPlaylistId !== 'default') {
+        // 获取应用当前主题（浅色/深色）
+        const appTheme = getCurrentAppTheme();
+        const colors = getThemeColors(appTheme);
+
+        // 判断歌单是否包含YouTube歌曲（作为视觉区分标记）
+        const hasYoutube = playlist.some(song => {
+            const isYoutube = song.type === 'youtube' || song.type === 'stream';
+            const isUrl = song.url && (song.url.startsWith('http') || song.url.startsWith('youtu'));
+            return isYoutube || isUrl;
+        });
+
+        // 创建整体头部容器 - 单行布局，左右分布，使用应用主题颜色
+        const headerContainer = document.createElement('div');
+        headerContainer.style.cssText = `
+            background: ${colors.bgGradient};
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 16px ${colors.shadow};
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        `;
+
+        // 左侧：歌单信息（竖排）
+        const infoSection = document.createElement('div');
+        infoSection.style.cssText = `
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex: 1;
+        `;
+
+        const playlistTitle = document.createElement('div');
+        playlistTitle.style.cssText = `
+            font-size: 16px;
+            font-weight: 700;
+            color: ${colors.textColor};
+            letter-spacing: 0.5px;
+            line-height: 1.2;
+        `;
+        playlistTitle.textContent = playlistName;
+
+        const songCount = document.createElement('div');
+        songCount.style.cssText = `
+            font-size: 12px;
+            color: ${colors.secondaryText};
+            font-weight: 500;
+        `;
+        songCount.textContent = `📊 ${playlist.length} 首歌曲`;
+
+        infoSection.appendChild(playlistTitle);
+        infoSection.appendChild(songCount);
+
+        // 右侧：操作按钮组（两个按钮并排，尽量紧凑）
+        const buttonGroup = document.createElement('div');
+        buttonGroup.style.cssText = `
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-shrink: 0;
+        `;
+
+        // 返回按钮
+        const returnBtn = document.createElement('button');
+        returnBtn.style.cssText = `
+            background: ${colors.buttonBg};
+            border: 1.5px solid ${colors.buttonBorder};
+            color: ${colors.buttonText};
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            white-space: nowrap;
+            min-height: 32px;
+        `;
+        returnBtn.innerHTML = '←';
+        returnBtn.title = '返回到队列（默认歌单）';
+        returnBtn.addEventListener('mouseover', () => {
+            returnBtn.style.background = colors.buttonHover;
+            returnBtn.style.transform = 'translateY(-1px)';
+        });
+        returnBtn.addEventListener('mouseout', () => {
+            returnBtn.style.background = colors.buttonBg;
+            returnBtn.style.transform = 'translateY(0)';
+        });
+        returnBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            playlistManager.setSelectedPlaylist('default');
+            await playlistManager.loadCurrent();
+            renderPlaylistUI({ container, onPlay, currentMeta });
+            console.log('[歌单切换] 已返回默认歌单（队列）');
+            Toast.success('✅ 已返回队列');
+        });
+
+        // 添加全部到队列按钮
+        const addAllBtn = document.createElement('button');
+        addAllBtn.style.cssText = `
+            background: ${colors.buttonBg};
+            border: 1.5px solid ${colors.buttonBorder};
+            color: ${colors.buttonText};
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            white-space: nowrap;
+            min-height: 32px;
+        `;
+        addAllBtn.innerHTML = '➕';
+        addAllBtn.title = '添加全部歌曲到队列';
+        addAllBtn.addEventListener('mouseover', () => {
+            addAllBtn.style.background = colors.buttonHover;
+            addAllBtn.style.transform = 'translateY(-1px)';
+        });
+        addAllBtn.addEventListener('mouseout', () => {
+            addAllBtn.style.background = colors.buttonBg;
+            addAllBtn.style.transform = 'translateY(0)';
+        });
+        addAllBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await addAllSongsToDefault(playlist, selectedPlaylistId);
+        });
+
+        // 清空按钮
+        const clearBtn = document.createElement('button');
+        clearBtn.style.cssText = `
+            background: ${colors.buttonBg};
+            border: 1.5px solid ${colors.buttonBorder};
+            color: ${colors.buttonText};
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            white-space: nowrap;
+            min-height: 32px;
+        `;
+        clearBtn.innerHTML = '🗑️';
+        clearBtn.title = '清空歌单';
+        clearBtn.addEventListener('mouseover', () => {
+            clearBtn.style.background = colors.buttonHover;
+            clearBtn.style.transform = 'translateY(-1px)';
+        });
+        clearBtn.addEventListener('mouseout', () => {
+            clearBtn.style.background = colors.buttonBg;
+            clearBtn.style.transform = 'translateY(0)';
+        });
+        clearBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (confirm(`确定要清空歌单「${playlistName}」吗？`)) {
+                try {
+                    // 清空指定歌单
+                    await api.delete(`/playlists/${selectedPlaylistId}`);
+                    Toast.success('❌ 歌单已删除');
+                    // 返回默认歌单
+                    playlistManager.setSelectedPlaylist('default');
+                    await playlistManager.loadAll();
+                    await playlistManager.loadCurrent();
+                    renderPlaylistUI({ container, onPlay, currentMeta });
+                } catch (err) {
+                    console.error('清空歌单失败:', err);
+                    Toast.error('清空失败: ' + (err.message || err));
+                }
+            }
+        });
+
+        buttonGroup.appendChild(returnBtn);
+        buttonGroup.appendChild(addAllBtn);
+        buttonGroup.appendChild(clearBtn);
+        headerContainer.appendChild(infoSection);
+        headerContainer.appendChild(buttonGroup);
+        container.appendChild(headerContainer);
     }
 
     // 获取当前播放歌曲的URL（用于匹配）

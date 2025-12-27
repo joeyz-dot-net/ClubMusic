@@ -78,4 +78,9 @@ echo.
 echo 🔐 防火墙提示:
 echo 首次运行时 Windows 防火墙可能会提示，请允许访问网络
 echo ========================================
-pause
+echo.
+echo BUILD SUMMARY
+echo ========================================
+echo Status: SUCCESS
+echo Output: dist\ClubMusic.exe
+echo ========================================

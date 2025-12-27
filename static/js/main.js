@@ -740,8 +740,14 @@ class MusicPlayerApp {
                 const timeRemaining = duration - currentTime;
                 const autoPlayThreshold = 2.5;  // 当剩余时间少于2.5秒时触发
                 
+                // ✅ 改进：检测歌曲是否已完全播放结束
+                // 情况1: 正在播放且剩余时间少于阈值
+                // 情况2: 暂停且接近或已超过时长（歌曲播放完毕）
+                const songEndedWithPause = !isPlaying && currentTime >= duration - 0.5 && duration > 0;
+                const aboutToEnd = isPlaying && timeRemaining < autoPlayThreshold && timeRemaining >= -0.5;
+                
                 // 详细的日志用于调试（只在接近结尾时打印）
-                if (timeRemaining < 4 && timeRemaining > 0) {
+                if ((timeRemaining < 4 && timeRemaining > 0) || songEndedWithPause) {
                     if (!window._lastAutoPlayLog || Date.now() - window._lastAutoPlayLog > 2000) {
                         console.log('[自动播放检测]', {
                             isPlaying,
@@ -750,19 +756,21 @@ class MusicPlayerApp {
                             currentTime: currentTime.toFixed(2),
                             paused: mpvData.paused,
                             threshold: autoPlayThreshold,
-                            willTrigger: isPlaying && timeRemaining < autoPlayThreshold,
+                            aboutToEnd,
+                            songEndedWithPause,
+                            willTrigger: aboutToEnd || songEndedWithPause,
                             flagSet: this._autoNextTriggered
                         });
                         window._lastAutoPlayLog = Date.now();
                     }
                 }
                 
-                // 当剩余时间小于阈值且正在播放时，触发下一首
-                if (isPlaying && timeRemaining < autoPlayThreshold && timeRemaining >= -0.5) {
+                // ✅ 改进：触发条件 - 情况1 或 情况2 都能触发自动播放
+                if ((aboutToEnd || songEndedWithPause) && !this._autoNextTriggered) {
                     // 使用标记避免重复触发
-                    if (!this._autoNextTriggered) {
-                        this._autoNextTriggered = true;
-                        console.log('[自动播放] 触发！剩余时间:', timeRemaining.toFixed(2), '秒，即将播放下一首');
+                    this._autoNextTriggered = true;
+                    const triggerReason = aboutToEnd ? '接近结尾' : '播放完毕';
+                    console.log(`[自动播放] 触发！(${triggerReason}) 剩余时间: ${timeRemaining.toFixed(2)}秒，即将播放下一首`);
                         
                         // 先删除当前歌曲，然后播放列表第一首
                         (async () => {
@@ -828,9 +836,8 @@ class MusicPlayerApp {
                                 }, 1000);
                             }
                         })();
-                    }
-                } else if (timeRemaining >= 3 || !isPlaying) {
-                    // 当还有较长时间或暂停时，重置标记
+                } else if (timeRemaining >= 3) {
+                    // 当还有较长时间时，重置标记
                     this._autoNextTriggered = false;
                 }
             }
