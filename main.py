@@ -93,21 +93,34 @@ def interactive_select_audio_device(mpv_path: str = "mpv", timeout: int = 10) ->
         print("─" * 60)
         return "auto"
     
-    # 查找 VB-Cable 设备作为默认选项（优先选择 CABLE-A）
+    # 默认优先选择 2ch CABLE 虚拟音频设备
     default_choice = 0
     default_name = "系统默认设备"
+    
+    # 优先级 1: CABLE-A Input (2ch)
     for idx, (device_id, device_name) in enumerate(devices, 1):
         if "CABLE-A Input" in device_name:
             default_choice = idx
             default_name = device_name
+            print(f"\n✅ 默认选择: {device_name} (优先级1: CABLE-A Input)")
             break
     
-    # 如果没找到 CABLE-A，回退到普通 CABLE Input
+    # 优先级 2: CABLE-B Input (2ch)
     if default_choice == 0:
         for idx, (device_id, device_name) in enumerate(devices, 1):
-            if "CABLE Input" in device_name:
+            if "CABLE-B Input" in device_name:
                 default_choice = idx
                 default_name = device_name
+                print(f"\n✅ 默认选择: {device_name} (优先级2: CABLE-B Input)")
+                break
+    
+    # 优先级 3: 通用 CABLE Input
+    if default_choice == 0:
+        for idx, (device_id, device_name) in enumerate(devices, 1):
+            if "CABLE" in device_name and "Input" in device_name:
+                default_choice = idx
+                default_name = device_name
+                print(f"\n✅ 默认选择: {device_name} (优先级3: 通用 CABLE Input)")
                 break
     
     # ANSI 颜色码
@@ -290,342 +303,6 @@ def update_mpv_cmd_with_device(config: configparser.ConfigParser, device_id: str
     return mpv_cmd
 
 
-def get_sounddevice_input_devices() -> list:
-    """获取 sounddevice 支持的音频输入设备列表（用于 WebRTC 采集）
-    
-    返回: [(device_index, device_name, channels), ...]
-    """
-    devices = []
-    try:
-        import sounddevice as sd
-        all_devices = sd.query_devices()
-        
-        for i, dev in enumerate(all_devices):
-            name = dev.get('name', '')
-            max_input_channels = dev.get('max_input_channels', 0)
-            
-            # 只列出输入设备
-            if max_input_channels > 0:
-                devices.append((i, name, max_input_channels))
-                
-    except ImportError:
-        print("[警告] sounddevice 未安装，无法获取音频输入设备列表")
-    except Exception as e:
-        print(f"[警告] 获取音频输入设备列表失败: {e}")
-    
-    return devices
-
-
-def interactive_select_webrtc_device(timeout: int = 10) -> tuple:
-    """交互式选择 WebRTC 音频采集设备
-    
-    返回:
-        元组 (device_name, device_index) 或 ("", -1) 如果未选择
-    
-    参数:
-        timeout: 超时时间（秒），超时后使用默认值
-    
-    返回:
-        设备名称
-    """
-    print("\n" + "╔" + "═" * 58 + "╗")
-    print("║" + " " * 16 + "🎙️  WebRTC 音频采集设备选择" + " " * 14 + "║")
-    print("╚" + "═" * 58 + "╝")
-    
-    devices = get_sounddevice_input_devices()
-    
-    if not devices:
-        print("\n❌ 未检测到音频输入设备")
-        print("─" * 60)
-        return ""
-    
-    # 查找 VB-Cable 设备作为默认选项（优先选择 2 通道版本）
-    default_choice = 0
-    default_name = "无默认"
-    
-    # 优先查找 CABLE-A Output 2通道版本
-    for idx, (dev_idx, dev_name, channels) in enumerate(devices):
-        if "CABLE" in dev_name and "Output" in dev_name and channels == 2:
-            default_choice = idx + 1
-            default_name = dev_name
-            break
-    
-    # 如果没找到 2 通道的，找任意 CABLE Output
-    if default_choice == 0:
-        for idx, (dev_idx, dev_name, channels) in enumerate(devices):
-            if "CABLE" in dev_name and "Output" in dev_name:
-                default_choice = idx + 1
-                default_name = dev_name
-                break
-    
-    # ANSI 颜色码
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    CYAN = '\033[96m'
-    BOLD = '\033[1m'
-    RESET = '\033[0m'
-    
-    print(f"\n检测到 {CYAN}{len(devices)}{RESET} 个音频输入设备:\n")
-    
-    for idx, (dev_idx, dev_name, channels) in enumerate(devices, 1):
-        # 高亮默认选项和 CABLE 设备
-        if idx == default_choice:
-            print(f"  {GREEN}{BOLD}► [{idx}] {dev_name} ({channels}ch) ✓{RESET}")
-        elif "CABLE" in dev_name:
-            print(f"  {YELLOW}[{idx}] {dev_name} ({channels}ch){RESET}")
-        else:
-            print(f"  [{idx}] {dev_name} ({channels}ch)")
-    
-    if default_choice > 0:
-        print(f"\n⏱️  {timeout}秒后自动选择默认项: {default_name}")
-    else:
-        print(f"\n⏱️  {timeout}秒后自动选择第一个设备")
-        default_choice = 1
-        default_name = devices[0][1]
-    
-    print(f"   💡 按任意键取消倒计时，继续等待输入")
-    print("─" * 60)
-    
-    # Windows 下使用 msvcrt 实现非阻塞按键检测
-    import time
-    if os.name == 'nt':
-        import msvcrt
-        
-        print(f"\n请选择 [{default_choice}]: ", end="", flush=True)
-        
-        input_chars = []
-        start_time = time.time()
-        countdown_cancelled = False
-        
-        while True:
-            elapsed = time.time() - start_time
-            
-            # 检查是否有按键
-            if msvcrt.kbhit():
-                char = msvcrt.getwch()
-                
-                # 如果还在倒计时中，任意按键取消倒计时
-                if not countdown_cancelled and elapsed < timeout:
-                    countdown_cancelled = True
-                    print(f"\n   ⏹️  倒计时已取消，请继续输入...")
-                    print(f"\n请选择 [{default_choice}]: ", end="", flush=True)
-                
-                if char == '\r':  # Enter 键
-                    print()  # 换行
-                    break
-                elif char == '\x03':  # Ctrl+C
-                    raise KeyboardInterrupt
-                elif char == '\x08':  # Backspace
-                    if input_chars:
-                        input_chars.pop()
-                        print('\b \b', end="", flush=True)
-                else:
-                    input_chars.append(char)
-                    print(char, end="", flush=True)
-            
-            # 超时检查
-            if not countdown_cancelled and elapsed >= timeout:
-                print()
-                break
-            
-            time.sleep(0.05)
-        
-        user_input = ''.join(input_chars).strip()
-        choice = user_input if user_input else str(default_choice)
-    else:
-        # 非 Windows 系统
-        selected = [None]
-        
-        def get_input():
-            try:
-                user_input = input(f"\n请选择 [{default_choice}]: ").strip()
-                selected[0] = user_input if user_input else str(default_choice)
-            except EOFError:
-                selected[0] = str(default_choice)
-        
-        input_thread = threading.Thread(target=get_input, daemon=True)
-        input_thread.start()
-        input_thread.join(timeout=timeout)
-        
-        choice = selected[0] if selected[0] is not None else str(default_choice)
-    
-    try:
-        choice_num = int(choice)
-        if 1 <= choice_num <= len(devices):
-            dev_idx, dev_name, channels = devices[choice_num - 1]
-            print(f"\n{GREEN}{BOLD}✅ 已选择: {dev_name} ({channels}ch){RESET}")
-            return (dev_name, dev_idx)  # 返回元组 (名称, 索引)
-        else:
-            # 无效选择，使用默认
-            dev_idx, dev_name, channels = devices[default_choice - 1]
-            print(f"\n❌ 无效选择 '{choice}'，使用默认: {dev_name}")
-            return (dev_name, dev_idx)
-    except ValueError:
-        # 解析失败，使用默认
-        dev_idx, dev_name, channels = devices[default_choice - 1]
-        print(f"\n❌ 无效选择 '{choice}'，使用默认: {dev_name}")
-        return (dev_name, dev_idx)
-
-
-def interactive_select_webrtc_quality(timeout: int = 15) -> dict:
-    """交互式选择 WebRTC 音质配置
-    
-    返回:
-        音质配置字典 {sample_rate, channels, blocksize, bitrate_kbps, profile_name}
-    """
-    print("\n" + "╔" + "═" * 58 + "╗")
-    print("║" + " " * 16 + "🎵 WebRTC 音质配置选择" + " " * 16 + "║")
-    print("╚" + "═" * 58 + "╝")
-    
-    # 预设音质配置
-    quality_profiles = [
-        {
-            "id": 1,
-            "name": "🎧 高音质 (推荐)",
-            "sample_rate": 48000,
-            "channels": 2,
-            "blocksize": 960,  # 优化: 改为960样本(20ms)，减少延迟和卡顿
-            "bitrate_kbps": 256,
-            "description": "48kHz 立体声, 256kbps, 20ms延迟 - 最佳音质"
-        },
-        {
-            "id": 2,
-            "name": "⚡ 低延迟",
-            "sample_rate": 48000,
-            "channels": 2,
-            "blocksize": 480,  # 极低延迟: 10ms
-            "bitrate_kbps": 192,
-            "description": "48kHz 立体声, 192kbps, 10ms延迟 - 极速响应"
-        },
-        {
-            "id": 3,
-            "name": "💾 省带宽",
-            "sample_rate": 44100,
-            "channels": 2,
-            "blocksize": 882,  # 44.1kHz下的约20ms
-            "bitrate_kbps": 128,
-            "description": "44.1kHz 立体声, 128kbps, 20ms延迟 - 节省带宽"
-        },
-        {
-            "id": 4,
-            "name": "🔊 超高音质 (实验)",
-            "sample_rate": 96000,
-            "channels": 2,
-            "blocksize": 1920,  # 96kHz下的约20ms
-            "bitrate_kbps": 384,
-            "description": "96kHz 立体声, 384kbps, 20ms延迟 - 发烧级"
-        },
-        {
-            "id": 5,
-            "name": "📻 单声道",
-            "sample_rate": 48000,
-            "channels": 1,
-            "blocksize": 960,
-            "bitrate_kbps": 128,
-            "description": "48kHz 单声道, 128kbps, 20ms - 语音优化"
-        }
-    ]
-    
-    # 默认选择（高音质）
-    default_choice = 1
-    
-    # ANSI 颜色码
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    CYAN = '\033[96m'
-    BOLD = '\033[1m'
-    RESET = '\033[0m'
-    
-    print(f"\n可选音质配置:\n")
-    
-    for profile in quality_profiles:
-        if profile["id"] == default_choice:
-            print(f"  {GREEN}{BOLD}► [{profile['id']}] {profile['name']} ✓{RESET}")
-            print(f"       {CYAN}{profile['description']}{RESET}")
-        else:
-            print(f"  [{profile['id']}] {profile['name']}")
-            print(f"       {profile['description']}")
-        print()
-    
-    default_profile = quality_profiles[default_choice - 1]
-    print(f"⏱️  {timeout}秒后自动选择默认项: {default_profile['name']}")
-    print(f"   💡 按任意键取消倒计时，继续等待输入")
-    print("─" * 60)
-    
-    import time
-    if os.name == 'nt':
-        import msvcrt
-        
-        print(f"\n请选择 [{default_choice}]: ", end="", flush=True)
-        
-        input_chars = []
-        start_time = time.time()
-        countdown_cancelled = False
-        
-        while True:
-            elapsed = time.time() - start_time
-            
-            if msvcrt.kbhit():
-                char = msvcrt.getwch()
-                
-                if not countdown_cancelled and elapsed < timeout:
-                    countdown_cancelled = True
-                    print(f"\n   ⏹️  倒计时已取消，请继续输入...")
-                    print(f"\n请选择 [{default_choice}]: ", end="", flush=True)
-                
-                if char == '\r':
-                    print()
-                    break
-                elif char == '\x03':
-                    raise KeyboardInterrupt
-                elif char == '\x08':
-                    if input_chars:
-                        input_chars.pop()
-                        print('\b \b', end="", flush=True)
-                else:
-                    input_chars.append(char)
-                    print(char, end="", flush=True)
-            
-            if not countdown_cancelled and elapsed >= timeout:
-                print()
-                break
-            
-            time.sleep(0.05)
-        
-        user_input = ''.join(input_chars).strip()
-        choice = user_input if user_input else str(default_choice)
-    else:
-        # 非 Windows 系统
-        selected = [None]
-        
-        def get_input():
-            try:
-                user_input = input(f"\n请选择 [{default_choice}]: ").strip()
-                selected[0] = user_input if user_input else str(default_choice)
-            except EOFError:
-                selected[0] = str(default_choice)
-        
-        input_thread = threading.Thread(target=get_input, daemon=True)
-        input_thread.start()
-        input_thread.join(timeout=timeout)
-        
-        choice = selected[0] if selected[0] is not None else str(default_choice)
-    
-    try:
-        choice_num = int(choice)
-        if 1 <= choice_num <= len(quality_profiles):
-            selected_profile = quality_profiles[choice_num - 1]
-            print(f"\n{GREEN}{BOLD}✅ 已选择: {selected_profile['name']}{RESET}")
-            print(f"   {CYAN}配置: {selected_profile['description']}{RESET}")
-            return selected_profile
-        else:
-            print(f"\n❌ 无效选择 '{choice}'，使用默认配置")
-            return default_profile
-    except ValueError:
-        print(f"\n❌ 无效选择 '{choice}'，使用默认配置")
-        return default_profile
-
-
 def cleanup_on_exit():
     """程序退出时的清理函数"""
     try:
@@ -687,7 +364,7 @@ def main():
     if config_file.exists():
         config.read(config_file, encoding="utf-8")
     
-    # 【第一步】交互式选择音频设备（默认VB-Cable）
+    # 【第一步】交互式选择音频设备
     # 获取主程序目录
     if getattr(sys, 'frozen', False):
         app_dir = os.path.dirname(sys.executable)
@@ -732,33 +409,6 @@ def main():
     if selected_device != "auto":
         os.environ["MPV_AUDIO_DEVICE"] = selected_device
     
-    # 【第二步】从配置文件读取推流开关（取消交互选择）
-    enable_streaming = config.getboolean("app", "enable_stream", fallback=True)
-    os.environ["ENABLE_STREAMING"] = "true" if enable_streaming else "false"
-    print(f"\n[配置] 推流模式: {'启用 ✅' if enable_streaming else '禁用 ❌'} (读取自 settings.ini)")
-    
-    # 【第三步】如果启用推流，选择 WebRTC 音频采集设备
-    webrtc_device_name = ""
-    webrtc_device_index = -1
-    webrtc_quality_config = {}
-    if enable_streaming:
-        result = interactive_select_webrtc_device(timeout=startup_timeout)
-        if result and result[0]:
-            webrtc_device_name, webrtc_device_index = result
-            os.environ["WEBRTC_AUDIO_DEVICE"] = webrtc_device_name
-            os.environ["WEBRTC_AUDIO_DEVICE_INDEX"] = str(webrtc_device_index)
-        else:
-            print("\n⚠️  未选择 WebRTC 音频设备，推流可能无法正常工作")
-        
-        # 【第四步】选择 WebRTC 音质配置
-        webrtc_quality_config = interactive_select_webrtc_quality(timeout=startup_timeout)
-        if webrtc_quality_config:
-            os.environ["WEBRTC_SAMPLE_RATE"] = str(webrtc_quality_config["sample_rate"])
-            os.environ["WEBRTC_CHANNELS"] = str(webrtc_quality_config["channels"])
-            os.environ["WEBRTC_BLOCKSIZE"] = str(webrtc_quality_config["blocksize"])
-            os.environ["WEBRTC_BITRATE_KBPS"] = str(webrtc_quality_config["bitrate_kbps"])
-            os.environ["WEBRTC_PROFILE_NAME"] = webrtc_quality_config["name"]
-    
     # 显示完整设备名称和设备ID
     device_display = '系统默认 (auto)'
     device_id_display = 'N/A'
@@ -783,15 +433,6 @@ def main():
     print(f"      名称: {device_display}")
     if selected_device != 'auto':
         print(f"      设备ID: {device_id_display}")
-    print(f"\n   🎙️  推流模式: {'启用 ✅' if enable_streaming else '禁用 ❌'}")
-    if enable_streaming and webrtc_device_name:
-        print(f"      采集设备: {webrtc_device_name}")
-    if enable_streaming and webrtc_quality_config:
-        print(f"\n   🎵 音质配置: {webrtc_quality_config['name']}")
-        print(f"      采样率: {webrtc_quality_config['sample_rate']} Hz")
-        print(f"      声道: {webrtc_quality_config['channels']} ({'立体声' if webrtc_quality_config['channels'] == 2 else '单声道'})")
-        print(f"      块大小: {webrtc_quality_config['blocksize']} 样本 ({webrtc_quality_config['blocksize'] * 1000 / webrtc_quality_config['sample_rate']:.1f}ms)")
-        print(f"      目标码率: {webrtc_quality_config['bitrate_kbps']} kbps")
     print("\n" + "=" * 60 + "\n")
     
     # 导入 FastAPI 应用实例

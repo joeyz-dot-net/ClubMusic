@@ -539,18 +539,18 @@ export const settingsManager = {
             });
         }
         
-        // 关闭按钮
+        // 关闭按钮 - 使用 settingsManager 对象引用，确保调用最新的方法（兼容 main.js 的重写）
         const closeBtn = document.getElementById('settingsCloseBtn');
         if (closeBtn) {
-            closeBtn.addEventListener('click', () => this.closePanel());
+            closeBtn.addEventListener('click', () => settingsManager.closePanel());
         }
         
-        // 点击遮罩关闭
+        // 点击遮罩关闭 - 使用 settingsManager 对象引用，确保调用最新的方法（兼容 main.js 的重写）
         const mask = document.getElementById('settingsMask');
         if (mask) {
             mask.addEventListener('click', (e) => {
                 if (e.target === mask) {
-                    this.closePanel();
+                    settingsManager.closePanel();
                 }
             });
         }
@@ -739,10 +739,10 @@ export const settingsManager = {
                 this.showNotification(i18n.t('settings.saveSuccess'), 'success');
                 console.log('[设置] 已保存');
                 
-                // 延迟 1.5 秒后关闭设置面板
+                // 延迟 1.5 秒后关闭设置面板 - 使用 settingsManager 对象引用确保调用最新的方法
                 console.log('[设置] 将在 1.5 秒后关闭设置面板...');
                 setTimeout(() => {
-                    this.closePanel();
+                    settingsManager.closePanel();
                 }, 1500);
             } else {
                 this.showNotification(i18n.t('settings.saveFailed') + ': ' + result.error, 'error');

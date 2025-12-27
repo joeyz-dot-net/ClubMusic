@@ -36,11 +36,10 @@ class MusicPlayer:
         "SERVER_HOST": "0.0.0.0",
         "SERVER_PORT": "80",
         "DEBUG": "false",
-        "MPV_CMD": r'bin\mpv.exe --input-ipc-server=\\.\pipe\mpv-pipe --idle=yes --force-window=no --no-video --ao=dshow --audio-device="CABLE Output (VB-Audio Virtual Cable)"',
+        "MPV_CMD": r'bin\mpv.exe --input-ipc-server=\\.\pipe\mpv-pipe --idle=yes --force-window=no --no-video',
         "LOCAL_SEARCH_MAX_RESULTS": "20",
         "YOUTUBE_SEARCH_MAX_RESULTS": "20",
         "LOCAL_VOLUME": "50",
-        "STREAM_VOLUME": "50",
     }
 
     @staticmethod
@@ -110,8 +109,7 @@ class MusicPlayer:
         return (
             f'"{mpv_path}" '
             "--input-ipc-server=\\\\.\\\pipe\\\\mpv-pipe "
-            "--idle=yes --force-window=no --no-video "
-            '--ao=dshow --audio-device="CABLE Output (VB-Audio Virtual Cable)"'
+            "--idle=yes --force-window=no --no-video"
         )
 
     @staticmethod
@@ -1074,25 +1072,47 @@ class MusicPlayer:
         return tracks
 
     def search_local(self, query: str, max_results: int = 20) -> list:
-        """搜索本地音乐库
+        """搜索本地音乐库，支持文件名和目录名模糊匹配
         
         参数:
           query: 搜索关键词
           max_results: 最大返回结果数（默认20）
         
         返回:
-          匹配的歌曲列表 [{"url": "相对路径", "title": "文件名", "type": "local"}, ...]
+          匹配的结果列表（歌曲和目录）
+          [{"url": "相对路径", "title": "文件/目录名", "type": "local|directory"}, ...]
         """
         if not query or not query.strip():
             return []
         
         query_lower = query.strip().lower()
         results = []
+        found_dirs = set()  # 追踪已找到的目录，避免重复
         abs_root = os.path.abspath(self.music_dir)
         
         try:
             # 遍历整个音乐目录
-            for dp, _, files in os.walk(abs_root):
+            for dp, dirs, files in os.walk(abs_root):
+                # 搜索目录名匹配
+                for dirname in dirs:
+                    if query_lower in dirname.lower():
+                        dir_path = os.path.join(dp, dirname)
+                        rel_path = os.path.relpath(dir_path, abs_root).replace("\\", "/")
+                        
+                        if rel_path not in found_dirs:
+                            found_dirs.add(rel_path)
+                            results.append({
+                                "url": rel_path,
+                                "title": dirname,
+                                "type": "directory",
+                                "is_directory": True
+                            })
+                            
+                            # 达到最大结果数时停止
+                            if len(results) >= max_results:
+                                return results
+                
+                # 搜索文件名匹配
                 for filename in files:
                     ext = os.path.splitext(filename)[1].lower()
                     if ext in self.allowed_extensions:
@@ -1104,7 +1124,8 @@ class MusicPlayer:
                             results.append({
                                 "url": rel_path,
                                 "title": title,
-                                "type": "local"
+                                "type": "local",
+                                "is_directory": False
                             })
                             
                             # 达到最大结果数时停止

@@ -245,15 +245,25 @@ export class SearchManager {
                 return '<div class="search-empty">暂无结果</div>';
             }
             return items.map(song => {
-                const meta = type === 'local'
-                    ? (song.url || '未知位置')
-                    : (song.duration ? formatTime(song.duration) : '未知时长');
+                // ✅ 支持目录类型显示
+                const isDirectory = song.is_directory || song.type === 'directory';
+                const meta = isDirectory
+                    ? '📁 目录'
+                    : (type === 'local'
+                        ? (song.url || '未知位置')
+                        : (song.duration ? formatTime(song.duration) : '未知时长'));
+                
+                const icon = isDirectory
+                    ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>'
+                    : '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>';
+                
                 return buildTrackItemHTML({
                     song,
                     type,
                     metaText: meta,
-                    actionButtonClass: 'track-menu-btn search-result-add',
-                    actionButtonIcon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>'
+                    actionButtonClass: `track-menu-btn search-result-add ${isDirectory ? 'add-directory' : ''}`,
+                    actionButtonIcon: icon,
+                    isCover: song.is_directory || song.type === 'directory' // 标记是目录
                 });
             }).join('');
         };
@@ -292,6 +302,8 @@ export class SearchManager {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const item = e.target.closest('.search-result-item');
+                const isDirectory = item.getAttribute('data-directory') === 'true' || item.getAttribute('data-type') === 'directory';
+                
                 const songData = {
                     url: item.getAttribute('data-url'),
                     title: item.getAttribute('data-title'),
@@ -301,43 +313,150 @@ export class SearchManager {
                 
                 try {
                     const playlistId = this.getCurrentPlaylistId ? this.getCurrentPlaylistId() : this.currentPlaylistId;
-                    const response = await fetch('/playlist_add', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            playlist_id: playlistId,
-                            song: songData
-                        })
-                    });
                     
-                    if (response.ok) {
-                        // 获取歌单名称以显示在toast中
-                        let playlistName = '队列';
-                        if (playlistId === 'default') {
-                            playlistName = '队列';
-                        } else if (window.app && window.app.modules && window.app.modules.playlistManager) {
-                            const playlist = window.app.modules.playlistManager.playlists.find(p => p.id === playlistId);
-                            if (playlist) {
-                                playlistName = playlist.name;
-                            }
-                        }
-                        Toast.success(`➕ 已添加到「${playlistName}」: ${songData.title}`);
-                        btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
+                    if (isDirectory) {
+                        // ✅ 目录处理：添加整个目录下的所有歌曲
+                        console.log('[搜索] 添加整个目录:', songData.url);
+                        
+                        // 显示加载状态
+                        const originalHTML = btn.innerHTML;
+                        btn.innerHTML = '⏳ 加载中...';
                         btn.disabled = true;
                         
-                        // 刷新播放列表显示
-                        if (this.refreshPlaylist) {
-                            await this.refreshPlaylist();
-                        } else {
-                            document.dispatchEvent(new CustomEvent('playlist:refresh'));
+                        try {
+                            // 调用后端API获取目录下的所有歌曲
+                            const response = await fetch('/get_directory_songs', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ directory: songData.url })
+                            });
+                            
+                            if (!response.ok) {
+                                throw new Error('获取目录歌曲失败');
+                            }
+                            
+                            const result = await response.json();
+                            if (result.status !== 'OK') {
+                                throw new Error(result.error || '获取歌曲失败');
+                            }
+                            
+                            const songs = result.songs || [];
+                            if (songs.length === 0) {
+                                Toast.warning('目录中没有音乐文件');
+                                btn.innerHTML = originalHTML;
+                                btn.disabled = false;
+                                return;
+                            }
+                            
+                            // 将所有歌曲添加到歌单（保持原有顺序）
+                            let addedCount = 0;
+                            let insertIndex = null;  // 第一首歌曲的插入位置
+                            
+                            for (let i = 0; i < songs.length; i++) {
+                                const song = songs[i];
+                                
+                                try {
+                                    // 第一首歌曲时计算插入位置
+                                    if (i === 0) {
+                                        try {
+                                            const status = await api.getStatus();
+                                            const currentIndex = status?.current_index ?? -1;
+                                            insertIndex = Math.max(0, currentIndex + 1);
+                                            console.log('[搜索] 计算插入位置:', insertIndex);
+                                        } catch (err) {
+                                            console.warn('[搜索] 无法获取当前位置，使用默认值', err);
+                                            insertIndex = 0;
+                                        }
+                                    }
+                                    
+                                    // 计算当前歌曲的插入位置（后续歌曲依次递增）
+                                    const currentInsertIndex = insertIndex + i;
+                                    
+                                    const addResponse = await fetch('/playlist_add', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            playlist_id: playlistId,
+                                            song: song,
+                                            insert_index: currentInsertIndex
+                                        })
+                                    });
+                                    
+                                    if (addResponse.ok) {
+                                        addedCount++;
+                                        console.log(`[搜索] ✓ 添加歌曲 (${i+1}/${songs.length}): ${song.title} 在位置 ${currentInsertIndex}`);
+                                    } else {
+                                        console.warn(`[搜索] ✗ 添加歌曲失败: ${song.title}`);
+                                    }
+                                } catch (err) {
+                                    console.warn(`[搜索] 添加歌曲异常: ${err.message}`);
+                                }
+                            }
+                            
+                            // 获取歌单名称
+                            let playlistName = '队列';
+                            if (playlistId !== 'default' && window.app && window.app.modules && window.app.modules.playlistManager) {
+                                const playlist = window.app.modules.playlistManager.playlists.find(p => p.id === playlistId);
+                                if (playlist) {
+                                    playlistName = playlist.name;
+                                }
+                            }
+                            
+                            Toast.success(`➕ 已添加 ${addedCount} 首歌曲到「${playlistName}」`);
+                            btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
+                            
+                            // 刷新播放列表显示
+                            if (this.refreshPlaylist) {
+                                await this.refreshPlaylist();
+                            } else {
+                                document.dispatchEvent(new CustomEvent('playlist:refresh'));
+                            }
+                        } catch (error) {
+                            console.error('添加目录歌曲失败:', error);
+                            Toast.error('添加目录失败: ' + error.message);
+                            btn.innerHTML = originalHTML;
+                            btn.disabled = false;
                         }
                     } else {
-                        const error = await response.json();
-                        // 重复歌曲使用警告提示
-                        if (error.duplicate) {
-                            Toast.warning(`${songData.title} 已在播放列表中`);
+                        // ✅ 文件处理：添加单个歌曲
+                        const response = await fetch('/playlist_add', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                playlist_id: playlistId,
+                                song: songData
+                            })
+                        });
+                        
+                        if (response.ok) {
+                            // 获取歌单名称以显示在toast中
+                            let playlistName = '队列';
+                            if (playlistId === 'default') {
+                                playlistName = '队列';
+                            } else if (window.app && window.app.modules && window.app.modules.playlistManager) {
+                                const playlist = window.app.modules.playlistManager.playlists.find(p => p.id === playlistId);
+                                if (playlist) {
+                                    playlistName = playlist.name;
+                                }
+                            }
+                            Toast.success(`➕ 已添加到「${playlistName}」: ${songData.title}`);
+                            btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
+                            btn.disabled = true;
+                            
+                            // 刷新播放列表显示
+                            if (this.refreshPlaylist) {
+                                await this.refreshPlaylist();
+                            } else {
+                                document.dispatchEvent(new CustomEvent('playlist:refresh'));
+                            }
                         } else {
-                            throw new Error(error.error || '添加失败');
+                            const error = await response.json();
+                            // 重复歌曲使用警告提示
+                            if (error.duplicate) {
+                                Toast.warning(`${songData.title} 已在播放列表中`);
+                            } else {
+                                throw new Error(error.error || '添加失败');
+                            }
                         }
                     }
                 } catch (error) {

@@ -42,25 +42,10 @@ const translations = {
         // 导航栏
         'nav.queue': '队列',
         'nav.local': '本地',
-        'nav.ranking': '排行',
         'nav.search': '搜索',
         'nav.stream': '推流',
         'nav.settings': '设置',
         'nav.debug': '调试',
-        
-        // 排行页面
-        'ranking.title': '播放排行榜',
-        'ranking.all': '全部',
-        'ranking.day': '本日',
-        'ranking.week': '本周',
-        'ranking.month': '本月',
-        'ranking.quarter': '季度',
-        'ranking.year': '年度',
-        'ranking.empty': '暂无播放数据',
-        'ranking.play': '▶ 播放',
-        'ranking.loadFailed': '加载排行榜失败',
-        'ranking.playingFailed': '播放失败',
-        'ranking.playing': '正在播放',
     },
     en: {
         // Settings panel - Titles and buttons
@@ -101,25 +86,10 @@ const translations = {
         // Navigation
         'nav.queue': 'Queue',
         'nav.local': 'Local',
-        'nav.ranking': 'Ranking',
         'nav.search': 'Search',
         'nav.stream': 'Stream',
         'nav.settings': 'Settings',
         'nav.debug': 'Debug',
-        
-        // Ranking page
-        'ranking.title': 'Playback Ranking',
-        'ranking.all': 'All Time',
-        'ranking.day': 'Today',
-        'ranking.week': 'This Week',
-        'ranking.month': 'This Month',
-        'ranking.quarter': 'This Quarter',
-        'ranking.year': 'This Year',
-        'ranking.empty': 'No playback data',
-        'ranking.play': '▶ Play',
-        'ranking.loadFailed': 'Failed to load ranking',
-        'ranking.playingFailed': 'Failed to play',
-        'ranking.playing': 'Now playing',
     }
 };
 

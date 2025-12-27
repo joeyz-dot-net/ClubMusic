@@ -158,11 +158,6 @@ export class MusicAPI {
         return this.postForm('/search_youtube', formData);
     }
 
-    // 排行榜 API
-    async getRanking(period = 'all') {
-        return this.get(`/ranking?period=${period}`);
-    }
-
     // 播放历史 API
     async addSongToHistory({ url, title, type = 'local', thumbnail_url = '' }) {
         const formData = new FormData();

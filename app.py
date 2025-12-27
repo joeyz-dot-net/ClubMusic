@@ -16,7 +16,7 @@ from urllib.parse import unquote
 
 logger = logging.getLogger(__name__)
 
-from fastapi import FastAPI, Request, File, UploadFile, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, File, UploadFile, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse, StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
@@ -399,10 +399,14 @@ def _extract_embedded_cover_bytes(file_path: str) -> bytes:
 
 @app.get("/cover/{file_path:path}")
 async def get_cover(file_path: str):
-    """获取本地歌曲封面
+    """获取本地歌曲或目录的封面
     
+    对于文件：
     1. 优先提取音频文件内嵌封面（不保存，直接返回）
-    2. 回退到目录中的 cover.jpg/folder.jpg 等
+    2. 回退到所在目录中的 cover.jpg/folder.jpg 等
+    
+    对于目录：
+    1. 查找目录中的 cover.jpg/folder.jpg 等
     """
     try:
         from fastapi.responses import Response
@@ -416,15 +420,30 @@ async def get_cover(file_path: str):
         else:
             abs_path = os.path.join(PLAYER.music_dir, decoded_path)
         
-        if not os.path.isfile(abs_path):
-            raise HTTPException(status_code=404, detail="音频文件不存在")
+        # 检查是否为目录
+        if os.path.isdir(abs_path):
+            # 目录：查找目录中的封面文件
+            cover_path = _get_cover_from_directory(abs_path)
+            if cover_path and os.path.isfile(cover_path):
+                ext = os.path.splitext(cover_path)[1].lower()
+                media_type = {
+                    ".jpg": "image/jpeg",
+                    ".jpeg": "image/jpeg",
+                    ".png": "image/png",
+                    ".webp": "image/webp",
+                }.get(ext, "image/jpeg")
+                return FileResponse(cover_path, media_type=media_type)
+            raise HTTPException(status_code=404, detail="未找到目录封面")
         
-        # 1. 尝试提取内嵌封面（直接返回字节流，不保存）
+        if not os.path.isfile(abs_path):
+            raise HTTPException(status_code=404, detail="文件不存在")
+        
+        # 文件：1. 尝试提取内嵌封面（直接返回字节流，不保存）
         cover_bytes = _extract_embedded_cover_bytes(abs_path)
         if cover_bytes:
             return Response(content=cover_bytes, media_type="image/jpeg")
         
-        # 2. 尝试目录封面文件
+        # 2. 尝试文件所在目录的封面文件
         cover_path = _get_cover_from_directory(abs_path)
         if cover_path and os.path.isfile(cover_path):
             ext = os.path.splitext(cover_path)[1].lower()
@@ -931,6 +950,82 @@ async def search_youtube(request: Request):
         )
 
 # ============================================
+# ✅ 新增：获取目录下的所有歌曲
+# ============================================
+
+@app.post("/get_directory_songs")
+async def get_directory_songs(request: Request):
+    """获取目录下的所有歌曲
+    
+    参数:
+      directory: 相对于音乐目录的路径（来自搜索结果）
+    
+    返回:
+      目录下所有歌曲的列表
+    """
+    try:
+        data = await request.json()
+        directory = data.get("directory", "").strip()
+        
+        if not directory:
+            return JSONResponse(
+                {"status": "ERROR", "error": "目录路径不能为空"},
+                status_code=400
+            )
+        
+        # 验证目录路径（防止目录遍历攻击）
+        abs_root = os.path.abspath(PLAYER.music_dir)
+        abs_path = os.path.abspath(os.path.join(abs_root, directory))
+        
+        if not abs_path.startswith(abs_root):
+            return JSONResponse(
+                {"status": "ERROR", "error": "无效的目录路径"},
+                status_code=400
+            )
+        
+        if not os.path.isdir(abs_path):
+            return JSONResponse(
+                {"status": "ERROR", "error": "目录不存在"},
+                status_code=404
+            )
+        
+        # 收集目录下的所有音乐文件
+        tracks = []
+        for dp, _, files in os.walk(abs_path):
+            for f in files:
+                ext = os.path.splitext(f)[1].lower()
+                if ext in PLAYER.allowed_extensions:
+                    full_path = os.path.join(dp, f)
+                    rel_path = os.path.relpath(full_path, abs_root).replace("\\", "/")
+                    
+                    # 构建歌曲数据
+                    song = {
+                        "url": rel_path,
+                        "title": os.path.splitext(f)[0],
+                        "type": "local",
+                        "duration": 0
+                    }
+                    tracks.append(song)
+        
+        # 排序
+        tracks.sort(key=lambda x: x["title"].lower())
+        
+        logger.info(f"获取目录歌曲: {directory} → {len(tracks)} 首歌曲")
+        
+        return {
+            "status": "OK",
+            "directory": directory,
+            "songs": tracks,
+            "count": len(tracks)
+        }
+    except Exception as e:
+        logger.error(f"获取目录歌曲失败: {e}")
+        return JSONResponse(
+            {"status": "ERROR", "error": str(e)},
+            status_code=500
+        )
+
+# ============================================
 # API 路由：歌单管理
 # ============================================
 
@@ -1352,26 +1447,21 @@ async def get_volume_defaults():
         # 安全地获取配置，处理 config 属性不存在的情况
         config = getattr(PLAYER, 'config', {})
         local_vol = config.get("LOCAL_VOLUME", "50") if config else "50"
-        stream_vol = config.get("STREAM_VOLUME", "50") if config else "50"
         
         try:
             local_volume = int(local_vol)
-            stream_volume = int(stream_vol)
         except (ValueError, TypeError):
             local_volume = 50
-            stream_volume = 50
         
         return {
             "status": "OK",
-            "local_volume": local_volume,
-            "stream_volume": stream_volume
+            "local_volume": local_volume
         }
     except Exception as e:
         logger.error(f"Failed to get volume defaults: {e}")
         return {
             "status": "OK",
-            "local_volume": 50,
-            "stream_volume": 50
+            "local_volume": 50
         }
 
 @app.delete("/playlists/{playlist_id}")
@@ -1707,101 +1797,6 @@ async def song_add_to_history(request: Request):
             status_code=500
         )
 
-@app.get("/ranking")
-async def get_ranking(period: str = "all"):
-    """获取播放排行榜
-    
-    参数:
-      period: 时间段 - "all" (全部), "day" (本日), "week" (本周), "month" (本月), "quarter" (近三个月), "year" (近一年)
-    
-    返回:
-      按播放次数排序的歌曲列表（基于时间段过滤播放记录）
-    """
-    try:
-        import time
-        from datetime import datetime, timedelta
-        
-        history = PLAYER.playback_history.get_all()
-        
-        if not history:
-            return {
-                "status": "OK",
-                "ranking": [],
-                "period": period
-            }
-        
-        # 计算时间范围
-        now = time.time()
-        
-        if period == "day":
-            # 今天 (00:00:00 至今)
-            today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-            cutoff_time = today_start.timestamp()
-        elif period == "week":
-            # 最近7天
-            today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-            week_start = today_start - timedelta(days=7)
-            cutoff_time = week_start.timestamp()
-        elif period == "month":
-            # 最近30天
-            cutoff_time = now - (30 * 24 * 60 * 60)
-        elif period == "quarter":
-            # 最近90天 (季度)
-            cutoff_time = now - (90 * 24 * 60 * 60)
-        elif period == "year":
-            # 最近365天
-            cutoff_time = now - (365 * 24 * 60 * 60)
-        else:  # "all"
-            cutoff_time = 0
-        
-        # 基于timestamps字段统计各时间段的播放次数
-        ranking_dict = {}
-        for item in history:
-            url = item.get('url', '')
-            timestamps_str = item.get('timestamps', '')
-            
-            if not url or not timestamps_str:
-                continue
-            
-            # 解析timestamps字符串中符合时间范围的播放时间
-            try:
-                all_timestamps = [int(ts) for ts in timestamps_str.split(',')]
-            except:
-                continue
-            
-            # 统计符合时间范围的播放次数
-            period_play_count = sum(1 for ts in all_timestamps if ts >= cutoff_time)
-            
-            # 只有在时间范围内有播放的才加入排行榜
-            if period_play_count > 0:
-                last_played = max([ts for ts in all_timestamps if ts >= cutoff_time])
-                
-                ranking_dict[url] = {
-                    'url': url,
-                    'title': item.get('title', item.get('name', 'Unknown')),
-                    'type': item.get('type', 'unknown'),
-                    'thumbnail_url': item.get('thumbnail_url'),
-                    'play_count': period_play_count,
-                    'last_played': last_played
-                }
-        
-        # 按播放次数排序（降序），次数相同则按最后播放时间排序
-        ranking = sorted(
-            ranking_dict.values(),
-            key=lambda x: (-x['play_count'], -x['last_played'])
-        )
-        
-        return {
-            "status": "OK",
-            "ranking": ranking,
-            "period": period
-        }
-    except Exception as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
-
 @app.post("/youtube_extract_playlist")
 async def youtube_extract_playlist(request: Request):
     """提取YouTube播放列表"""
@@ -1893,8 +1888,6 @@ async def get_user_settings():
             "status": "OK",
             "data": {
                 "theme": "dark",
-                "auto_stream": False,
-                "stream_volume": 50,
                 "language": "auto"
             }
         }
@@ -1933,8 +1926,6 @@ async def update_single_setting(key: str, request: Request):
         # 验证设置项（仅用于验证，实际存储由浏览器处理）
         default_settings = {
             "theme": "dark",
-            "auto_stream": False,
-            "stream_volume": 50,
             "language": "auto"
         }
         
@@ -1965,8 +1956,6 @@ async def reset_settings():
         
         default_settings = {
             "theme": "dark",
-            "auto_stream": False,
-            "stream_volume": 50,
             "language": "auto"
         }
         
@@ -2001,19 +1990,6 @@ async def get_settings_schema():
                 ],
                 "default": "dark"
             },
-            "auto_stream": {
-                "type": "boolean",
-                "label": "自动启动推流",
-                "description": "播放音乐时自动启动浏览器推流",
-                "default": True
-            },
-            "stream_volume": {
-                "type": "range",
-                "label": "推流音量",
-                "min": 0,
-                "max": 100,
-                "default": 50
-            },
             "language": {
                 "type": "select",
                 "label": "语言",
@@ -2026,186 +2002,7 @@ async def get_settings_schema():
             }
         }
     }
-# ============================================
-# WebRTC 信令路由
-# ============================================
 
-# WebRTC 信令服务器实例（延迟初始化）
-WEBRTC_SERVER = None
-
-async def get_webrtc_server():
-    """获取或创建 WebRTC 信令服务器"""
-    global WEBRTC_SERVER
-    
-    # 检查是否启用推流
-    streaming_enabled = os.environ.get("ENABLE_STREAMING", "false").lower() == "true"
-    if not streaming_enabled:
-        logger.debug("[WebRTC] 推流已禁用，跳过 WebRTC 初始化")
-        return None
-    
-    if WEBRTC_SERVER is None:
-        try:
-            from models.webrtc import initialize_signaling_server, AIORTC_AVAILABLE
-            if not AIORTC_AVAILABLE:
-                logger.warning("[WebRTC] aiortc 未安装，WebRTC 功能不可用")
-                return None
-            # 从环境变量获取 WebRTC 音频采集设备（由 main.py 启动时选择）
-            audio_device = os.environ.get("WEBRTC_AUDIO_DEVICE", "")
-            if not audio_device:
-                logger.warning("[WebRTC] 未配置音频采集设备，将使用默认设备")
-                audio_device = "CABLE-A Output (VB-Audio Virtual Cable A)"
-            logger.info(f"[WebRTC] 使用音频采集设备: {audio_device}")
-            WEBRTC_SERVER = await initialize_signaling_server(audio_device)
-        except Exception as e:
-            logger.error(f"[WebRTC] 初始化信令服务器失败: {e}")
-            return None
-    return WEBRTC_SERVER
-
-
-@app.websocket("/ws/signaling")
-async def websocket_signaling(websocket: WebSocket):
-    """
-    WebRTC 信令 WebSocket 端点
-    
-    消息格式:
-    - {"type": "offer", "sdp": "..."} - 客户端发送 Offer
-    - {"type": "answer", "sdp": "..."} - 服务器回复 Answer
-    - {"type": "ice", "candidate": {...}} - ICE candidate 交换
-    - {"type": "error", "message": "..."} - 错误消息
-    """
-    await websocket.accept()
-    
-    # 生成客户端ID
-    client_id = str(uuid.uuid4())
-    logger.info(f"[WebRTC] WebSocket 连接已建立: {client_id[:8]}...")
-    
-    # 获取信令服务器
-    server = await get_webrtc_server()
-    if not server:
-        await websocket.send_json({
-            "type": "error",
-            "message": "WebRTC 信令服务器未启动，请确保已安装 aiortc"
-        })
-        await websocket.close()
-        return
-    
-    try:
-        # 发送客户端ID
-        await websocket.send_json({
-            "type": "client_id",
-            "client_id": client_id
-        })
-        
-        # 消息处理循环
-        while True:
-            try:
-                data = await websocket.receive_json()
-                msg_type = data.get("type")
-                
-                if msg_type == "offer":
-                    # 处理 SDP Offer
-                    sdp = data.get("sdp")
-                    if not sdp:
-                        await websocket.send_json({
-                            "type": "error",
-                            "message": "Offer 缺少 SDP"
-                        })
-                        continue
-                        
-                    answer_sdp = await server.handle_offer(client_id, sdp)
-                    if answer_sdp:
-                        await websocket.send_json({
-                            "type": "answer",
-                            "sdp": answer_sdp
-                        })
-                        logger.info(f"[WebRTC] 已发送 Answer: {client_id[:8]}...")
-                    else:
-                        await websocket.send_json({
-                            "type": "error",
-                            "message": "处理 Offer 失败"
-                        })
-                        
-                elif msg_type == "ice":
-                    # 处理 ICE Candidate
-                    candidate = data.get("candidate")
-                    if candidate:
-                        success = await server.handle_ice_candidate(client_id, candidate)
-                        if not success:
-                            logger.warning(f"[WebRTC] ICE candidate 处理失败: {client_id[:8]}")
-                            
-                elif msg_type == "ping":
-                    # 心跳响应 - 更新客户端活动时间
-                    client = server.get_client(client_id)
-                    if client:
-                        client.update_activity()
-                    await websocket.send_json({"type": "pong"})
-                    
-                else:
-                    logger.warning(f"[WebRTC] 未知消息类型: {msg_type}")
-                    
-            except WebSocketDisconnect:
-                logger.info(f"[WebRTC] 客户端断开连接: {client_id[:8]}...")
-                break
-            except json.JSONDecodeError as e:
-                logger.warning(f"[WebRTC] JSON 解析失败: {e}")
-                await websocket.send_json({
-                    "type": "error",
-                    "message": "无效的 JSON 格式"
-                })
-                
-    except Exception as e:
-        logger.error(f"[WebRTC] WebSocket 异常: {e}")
-    finally:
-        # 清理客户端
-        if server:
-            await server.remove_client(client_id)
-        logger.info(f"[WebRTC] WebSocket 连接已关闭: {client_id[:8]}...")
-
-
-@app.get("/webrtc/status")
-async def webrtc_status():
-    """获取 WebRTC 信令服务器状态"""
-    server = await get_webrtc_server()
-    if not server:
-        return JSONResponse({
-            "status": "ERROR",
-            "message": "WebRTC 信令服务器未启动"
-        })
-        
-    stats = server.get_stats()
-    return JSONResponse({
-        "status": "OK",
-        "data": stats
-    })
-
-
-@app.get("/config/webrtc-enabled")
-async def config_webrtc_enabled():
-    """检查 WebRTC 功能是否可用"""
-    try:
-        from models.webrtc import AIORTC_AVAILABLE
-        return JSONResponse({
-            "status": "OK",
-            "webrtc_enabled": AIORTC_AVAILABLE,
-            "message": "WebRTC 功能可用" if AIORTC_AVAILABLE else "需要安装 aiortc: pip install aiortc"
-        })
-    except ImportError:
-        return JSONResponse({
-            "status": "OK",
-            "webrtc_enabled": False,
-            "message": "WebRTC 模块未加载"
-        })
-
-
-@app.get("/config/streaming-enabled")
-async def config_streaming_enabled():
-    """检查推流是否在启动时被启用"""
-    streaming_enabled = os.environ.get("ENABLE_STREAMING", "false").lower() == "true"
-    return JSONResponse({
-        "status": "OK",
-        "streaming_enabled": streaming_enabled,
-        "message": "推流已启用" if streaming_enabled else "推流已禁用（启动时选择）"
-    })
 
 # ============================================
 # 错误处理

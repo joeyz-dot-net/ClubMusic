@@ -47,11 +47,10 @@ export class VolumeControl {
                 throw new Error(`HTTP ${response.status}`);
             }
             const data = await response.json();
-            if (data.status === 'OK' && data.local_volume && data.stream_volume) {
+            if (data.status === 'OK' && data.local_volume !== undefined) {
                 this.defaultLocalVolume = parseInt(data.local_volume) || 50;
-                this.defaultStreamVolume = parseInt(data.stream_volume) || 50;
                 this.currentVolume = this.defaultLocalVolume;
-                console.log(`[音量] 从服务器加载默认值: 本地=${this.defaultLocalVolume}%, 推流=${this.defaultStreamVolume}%`);
+                console.log(`[音量] 从服务器加载默认值: ${this.defaultLocalVolume}%`);
             } else {
                 throw new Error('Invalid response format');
             }
@@ -59,7 +58,6 @@ export class VolumeControl {
             console.warn('[音量] 无法从服务器加载默认值，使用硬编码默认值:', error);
             // 使用硬编码默认值
             this.defaultLocalVolume = 50;
-            this.defaultStreamVolume = 50;
             this.currentVolume = 50;
         }
     }
@@ -87,17 +85,17 @@ export class VolumeControl {
             }
         });
 
-        // 触摸事件
+        // 触摸事件（标记为passive以提升性能）
         this.slider.addEventListener('touchstart', () => {
             this.isDragging = true;
-        });
+        }, { passive: true });
 
         this.slider.addEventListener('touchend', (e) => {
             if (this.isDragging) {
                 this.setVolume(this.slider.value);
                 this.isDragging = false;
             }
-        });
+        }, { passive: true });
     }
 
     // 更新显示

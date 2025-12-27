@@ -62,10 +62,6 @@ echo      下载: https://mpv.io/installation/
 echo      或: choco install mpv
 echo.
 echo 3. 可选依赖:
-echo    • FFmpeg - 推流功能需要
-echo      下载: https://ffmpeg.org/download.html
-echo      放入: C:\ffmpeg\bin\ffmpeg.exe 或系统 PATH
-echo.
 echo    • yt-dlp.exe - YouTube 播放支持
 echo      下载: https://github.com/yt-dlp/yt-dlp/releases
 echo      与 ClubMusic.exe 同目录

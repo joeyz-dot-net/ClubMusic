@@ -48,22 +48,6 @@
 			width: 100%;
 			height: 100%;
 		}
-		
-		/* 推流指示器脉冲动画 */
-		@keyframes pulse {
-			0% {
-				opacity: 1;
-				transform: scale(1);
-			}
-			50% {
-				opacity: 0.7;
-				transform: scale(1.2);
-			}
-			100% {
-				opacity: 1;
-				transform: scale(1);
-			}
-		}
 	</style>
 </head>
 <body>
@@ -174,13 +158,10 @@
 
 	<!-- Mini Player 已移除 -->
 	
-	<!-- Bottom Navigation (简化版：队列、排行、搜索、设置) -->
+	<!-- Bottom Navigation (简化版：队列、搜索、设置) -->
 	<nav id="bottomNav" class="bottom-nav">
 		<button class="nav-item active" data-tab="playlists">
 			<span class="nav-icon">🎵</span>
-		</button>
-		<button class="nav-item" data-tab="ranking">
-			<span class="nav-icon">🏆</span>
 		</button>
 		<button class="nav-item" data-tab="search">
 			<span class="nav-icon">🔍</span>
@@ -189,13 +170,6 @@
 			<span class="nav-icon">⚙️</span>
 		</button>
 	</nav>
-	
-	<!-- 推流状态指示器 -->
-	<div id="streamStatusIndicator" class="stream-status-indicator" title="点击启动推流" style="cursor: pointer; display: none;">
-		<div class="stream-status-dot stream-status-disabled"></div>
-		<span class="stream-status-text">点击启动推流</span>
-	</div>
-	
 	
 	<!-- History modal -->
 	<div id="historyModal" class="history-modal" style="display:none;">
@@ -271,26 +245,6 @@
 		</div>
 	</div>
 
-	<!-- 排行榜 Modal -->
-	<div id="rankingModal" class="modal" style="display:none;">
-		<div class="modal-content ranking-modal-content">
-			<div class="modal-header ranking-modal-header">
-				<h2 class="modal-title">播放排行榜</h2>
-			</div>
-			<div class="ranking-tabs">
-				<button class="ranking-tab active" data-period="all">全部</button>
-				<button class="ranking-tab" data-period="day">本日</button>
-				<button class="ranking-tab" data-period="week">本周</button>
-				<button class="ranking-tab" data-period="month">本月</button>
-				<button class="ranking-tab" data-period="quarter">季度</button>
-				<button class="ranking-tab" data-period="year">年度</button>
-			</div>
-			<div class="ranking-modal-body" id="rankingModalBody">
-				<!-- 排行榜列表将在这里动态生成 -->
-			</div>
-		</div>
-	</div>
-
 	<!-- Debug Modal -->
 	<div id="debugModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0a0a0a; display: none; z-index: 9999;">
 		<div style="background: #1e1f24; width: 100%; height: 100%; display: flex; flex-direction: column; overflow: hidden;">
@@ -303,23 +257,6 @@
 			<!-- Content -->
 			<div style="overflow-y: auto; flex: 1; padding: 20px; color: #fff; background: #1e1f24;">
 				
-				<!-- 推流控制 -->
-				<div style="margin-bottom: 20px;">
-					<h4 style="margin: 0 0 10px 0; color: #51cf66; font-size: 14px; font-weight: bold;">推流控制</h4>
-					<div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
-						<button id="startStreamBtn" style="padding: 10px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; transition: background 0.2s;">▶️ 开启推流</button>
-						<button id="stopStreamBtn" style="padding: 10px 16px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; transition: background 0.2s;">⏹️ 停止推流</button>
-					</div>
-					<p style="margin: 10px 0; font-size: 12px; color: #aaa;">推流状态: <span id="streamStatusDisplay" style="color: #f44336; font-weight: bold;">●</span> <span id="streamStatusText">未激活</span></p>
-					<div style="padding: 10px; background: #0a0a0a; border-radius: 4px; font-size: 12px; line-height: 1.8; color: #51cf66; font-family: 'Courier New', monospace; border-left: 3px solid #51cf66;">
-						<div>📊 <span id="streamSpeed">速度: --</span></div>
-						<div>📈 <span id="streamTotal">总数据: --</span></div>
-						<div>⏱️ <span id="streamDuration">用时: --</span></div>
-						<div>👥 <span id="streamClients">活跃客户端: --</span></div>
-						<div>🎵 <span id="streamFormat">格式: --</span></div>
-					</div>
-				</div>
-
 				<!-- 播放器状态 -->
 				<div style="margin-bottom: 20px;">
 					<h4 style="margin: 0 0 10px 0; color: #51cf66; font-size: 14px; font-weight: bold;">播放器状态</h4>
@@ -362,9 +299,6 @@
 
 
 	<script type="module" src="/static/js/main.js?v=18"></script>
-	
-	<!-- 浏览器推流音频播放器（隐藏） -->
-	<audio id="browserStreamAudio" style="display: none;" crossorigin="anonymous" controls="false" autoplay="false"></audio>
 
 	<!-- 调试面板模块 HTML 模板（由 debug-panel.module.js 动态创建） -->
 	<template id="debugPanelTemplate">
@@ -406,50 +340,6 @@
 							<option value="zh">中文 (Chinese)</option>
 							<option value="en">English</option>
 						</select>
-					</div>
-				</div>
-				
-				<!-- 推流设置 -->
-				<div class="settings-section" data-stream-settings>
-					<h3 class="section-title">🎵 推流设置</h3>
-					
-					<div class="settings-item">
-						<label class="settings-label">接收推流</label>
-						<div class="settings-toggle">
-							<input type="checkbox" id="autoStreamSetting" class="toggle-checkbox">
-							<label for="autoStreamSetting" class="toggle-label" title="启用后需点击顶部推流指示器手动开始播放">
-								<span class="toggle-switch"></span>
-								<span class="toggle-text">
-									<span class="toggle-on">启用</span>
-									<span class="toggle-off">禁用</span>
-								</span>
-							</label>
-							<small style="color: #888; font-size: 11px; margin-top: 4px; display: block;">💡 启用后点击推流指示器开始播放</small>
-					</div>
-						</div>
-						
-					
-					<div class="settings-item">
-						<label class="settings-label">推流音量</label>
-						<div class="settings-volume">
-							<input type="range" id="streamVolumeSetting" class="volume-slider" min="0" max="50" value="50">
-							<span id="streamVolumeValue" class="volume-value">50%</span>
-						</div>
-					</div>
-				</div>
-				
-				<!-- 功能入口 -->
-				<div class="settings-section">
-					<h3 class="section-title">📁 功能入口</h3>
-					<div style="display: flex; gap: 12px; margin-bottom: 12px;">
-						<button id="localFilesBtn" data-tab="local" style="flex: 1; padding: 14px; background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 8px rgba(67, 233, 123, 0.3);">
-							<span style="font-size: 18px;">📂</span>
-							<span>本地歌曲</span>
-						</button>
-						<button id="rankingBtn" data-tab="ranking" style="flex: 1; padding: 14px; background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 8px rgba(250, 112, 154, 0.3);">
-							<span style="font-size: 18px;">🏆</span>
-							<span>播放排行</span>
-						</button>
 					</div>
 				</div>
 				

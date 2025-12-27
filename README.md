@@ -1,6 +1,6 @@
 # 🎵 ClubMusic
 
-一个功能完整的网页音乐播放器，支持本地文件和 YouTube 音乐串流播放，具有多歌单管理、播放历史追踪、排行榜统计、**浏览器推流**等高级功能。
+一个功能完整的网页音乐播放器，支持本地文件和 YouTube 音乐串流播放，具有多歌单管理、播放历史追踪、排行榜统计等高级功能。
 
 [English Documentation](README_EN.md)
 
@@ -11,13 +11,6 @@
 - **YouTube 串流**：直接搜索和播放 YouTube 音乐
 - **播放控制**：暂停/继续、进度条拖拽、音量调节
 - **播放历史**：自动记录所有播放过的歌曲
-
-### 🎙️ 浏览器推流 (v6.0 新增)
-- **VB-Cable + FFmpeg**：将本地音频推流到浏览器播放
-- **多格式支持**：AAC、MP3、FLAC 音频编码
-- **低延迟优化**：FFmpeg 参数优化，减少 70% 延迟
-- **Safari 兼容**：专门针对 Safari 浏览器的 3 线程异步广播架构
-- **推流状态指示器**：实时显示推流状态（播放中/缓冲/关闭/禁用）
 
 ### 📋 歌单管理
 - **多歌单支持**：创建、编辑、删除自定义歌单
@@ -40,8 +33,6 @@
 ### 系统要求
 - Python 3.8+
 - mpv 播放器
-- FFmpeg（推流功能需要）
-- VB-Cable（推流功能需要）
 - yt-dlp（YouTube 功能需要）
 
 ### 安装步骤
@@ -58,8 +49,6 @@
    allowed_extensions=.mp3,.wav,.flac,.aac,.m4a
    server_host=0.0.0.0
    server_port=80
-   enable_stream=true                 # 启用推流
-   default_stream_format=aac          # 默认推流格式
    ```
 
 3. **启动应用**
@@ -85,7 +74,6 @@ ClubMusic/
 ├── settings.ini           # 配置文件
 ├── models/
 │   ├── player.py          # MPV 播放器控制 (1500+ 行)
-│   ├── stream.py          # FFmpeg 推流模块 (1500+ 行)
 │   ├── song.py            # 歌曲数据模型
 │   ├── playlist.py        # 播放列表管理
 │   ├── playlists.py       # 多歌单管理

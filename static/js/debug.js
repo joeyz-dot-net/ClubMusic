@@ -17,19 +17,9 @@ export class Debug {
             debugLogs: document.getElementById('debugLogs'),
             themeDarkBtn: document.getElementById('themeDarkBtn'),
             themeLightBtn: document.getElementById('themeLightBtn'),
-            startStreamBtn: document.getElementById('startStreamBtn'),
-            stopStreamBtn: document.getElementById('stopStreamBtn'),
-            streamStatusDisplay: document.getElementById('streamStatusDisplay'),
-            streamStatusText: document.getElementById('streamStatusText'),
-            logToggle: document.getElementById('logToggle'),
-            streamSpeed: document.getElementById('streamSpeed'),
-            streamTotal: document.getElementById('streamTotal'),
-            streamDuration: document.getElementById('streamDuration'),
-            streamClients: document.getElementById('streamClients'),
-            streamFormat: document.getElementById('streamFormat')
+            logToggle: document.getElementById('logToggle')
         };
         this.themeManager = themeManager;
-        this.isStreaming = false;
     }
 
     // 初始化调试面板
@@ -39,31 +29,8 @@ export class Debug {
         this.playlistManager = playlistManager;
         this.setupConsoleCapture();
         this.setupEventListeners();
-        
-        // 启动推流统计轮询（每1秒更新一次）
-        this.startStreamStatsPolling();
     }
-    
-    // 启动推流统计轮询
-    startStreamStatsPolling() {
-        // 清除旧的轮询
-        if (this.streamStatsInterval) {
-            clearInterval(this.streamStatsInterval);
-        }
-        
-        // 每1秒更新一次推流统计
-        this.streamStatsInterval = setInterval(() => {
-            this.updateStreamStats();
-        }, 1000);
-    }
-    
-    // 停止推流统计轮询
-    stopStreamStatsPolling() {
-        if (this.streamStatsInterval) {
-            clearInterval(this.streamStatsInterval);
-            this.streamStatsInterval = null;
-        }
-    }
+
 
     // 捕获console日志
     setupConsoleCapture() {
@@ -130,18 +97,6 @@ export class Debug {
             });
         }
 
-        // 推流控制按钮
-        if (this.elements.startStreamBtn) {
-            this.elements.startStreamBtn.addEventListener('click', () => {
-                this.startBrowserStream();
-            });
-        }
-        if (this.elements.stopStreamBtn) {
-            this.elements.stopStreamBtn.addEventListener('click', () => {
-                this.stopBrowserStream();
-            });
-        }
-
         // 主题切换按钮
         if (this.elements.themeDarkBtn) {
             this.elements.themeDarkBtn.addEventListener('click', () => {
@@ -201,7 +156,6 @@ export class Debug {
         this.updatePlayerInfo();
         this.updatePlaylistInfo();
         this.updateStorageInfo();
-        this.updateStreamStats();
         this.updateLogs();
     }
 
@@ -273,70 +227,6 @@ export class Debug {
         }
     }
 
-    // 更新推流统计信息
-    async updateStreamStats() {
-        try {
-            const response = await fetch('/webrtc/status');
-            const result = await response.json();
-            
-            // 处理响应数据
-            const data = result.data || result || {};
-            
-            // WebRTC 状态：有活跃客户端即视为激活
-            const isActive = (data.active_clients || 0) > 0;
-            
-            // 更新设备信息
-            if (this.elements.streamSpeed) {
-                const device = data.audio_device || '--';
-                this.elements.streamSpeed.textContent = `设备: ${device}`;
-            }
-            
-            // 更新 Offer 处理数
-            if (this.elements.streamTotal) {
-                const offers = data.total_offers_processed || 0;
-                this.elements.streamTotal.textContent = `已处理Offer: ${offers}`;
-            }
-            
-            // 更新 Answer 发送数
-            if (this.elements.streamDuration) {
-                const answers = data.total_answers_sent || 0;
-                this.elements.streamDuration.textContent = `已发送Answer: ${answers}`;
-            }
-            
-            // 更新活跃客户端
-            if (this.elements.streamClients) {
-                const clients = data.active_clients || 0;
-                this.elements.streamClients.textContent = `活跃客户端: ${clients}`;
-                // 根据实际连接数更新推流状态指示器
-                this.updateStreamStatus(isActive);
-            }
-            
-            // 更新峰值连接
-            if (this.elements.streamFormat) {
-                const peak = data.peak_concurrent || 0;
-                this.elements.streamFormat.textContent = `峰值连接: ${peak}`;
-            }
-        } catch (err) {
-            console.error('[调试] 获取推流统计失败:', err);
-            // 显示离线状态
-            if (this.elements.streamSpeed) {
-                this.elements.streamSpeed.textContent = `设备: --`;
-            }
-            if (this.elements.streamTotal) {
-                this.elements.streamTotal.textContent = `已处理Offer: --`;
-            }
-            if (this.elements.streamDuration) {
-                this.elements.streamDuration.textContent = `已发送Answer: --`;
-            }
-            if (this.elements.streamClients) {
-                this.elements.streamClients.textContent = `活跃客户端: --`;
-            }
-            if (this.elements.streamFormat) {
-                this.elements.streamFormat.textContent = `峰值连接: --`;
-            }
-        }
-    }
-
     // 获取日志颜色
     getLogColor(type) {
         switch (type) {
@@ -381,77 +271,6 @@ export class Debug {
                 this.elements.themeDarkBtn.style.fontWeight = 'normal';
                 this.elements.themeLightBtn.style.borderColor = '#667eea';
                 this.elements.themeLightBtn.style.fontWeight = 'bold';
-            }
-        }
-    }
-
-    // 开启浏览器推流
-    startBrowserStream() {
-        if (this.isStreaming) {
-            console.log('[推流] 推流已在运行中');
-            return;
-        }
-        
-        const streamFormat = 'mp3';  // 默认格式 mp3
-        console.log(`[推流] 手动开启推流 (格式: ${streamFormat})`);
-        
-        // 调用 player 的推流方法
-        if (this.player && typeof this.player.startBrowserStream === 'function') {
-            this.isStreaming = true;
-            
-            // 绑定推流事件以更新状态
-            this.player.on('stream:connecting', () => {
-                console.log('[推流] 正在连接...');
-            });
-            
-            this.player.on('stream:ready', () => {
-                console.log('[推流] 推流已就绪');
-                this.updateStreamStatus(true);
-            });
-            
-            this.player.on('stream:playing', () => {
-                console.log('[推流] 推流播放中');
-                this.updateStreamStatus(true);
-            });
-            
-            this.player.on('stream:error', (data) => {
-                console.error('[推流] 推流错误:', data.errorMsg);
-                this.updateStreamStatus(false);
-                this.isStreaming = false;
-            });
-            
-            // 启动推流
-            this.player.startBrowserStream(streamFormat);
-            this.updateStreamStatus(true);
-        }
-    }
-
-    // 停止浏览器推流
-    stopBrowserStream() {
-        const audioElement = document.getElementById('browserStreamAudio');
-        if (audioElement && !audioElement.paused) {
-            audioElement.pause();
-            audioElement.currentTime = 0;
-            audioElement.src = '';
-            console.log('[推流] 已停止推流');
-            this.isStreaming = false;
-            this.updateStreamStatus(false);
-        }
-    }
-
-    // 更新推流状态指示器
-    updateStreamStatus(isActive) {
-        if (this.elements.streamStatusDisplay && this.elements.streamStatusText) {
-            if (isActive) {
-                this.elements.streamStatusDisplay.textContent = '●';
-                this.elements.streamStatusDisplay.style.color = '#4CAF50';
-                this.elements.streamStatusText.textContent = '激活中';
-                this.elements.streamStatusText.style.color = '#4CAF50';
-            } else {
-                this.elements.streamStatusDisplay.textContent = '●';
-                this.elements.streamStatusDisplay.style.color = '#f44336';
-                this.elements.streamStatusText.textContent = '未激活';
-                this.elements.streamStatusText.style.color = '#f44336';
             }
         }
     }

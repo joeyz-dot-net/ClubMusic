@@ -66,10 +66,13 @@ export class PlaylistsManagement {
     // 隐藏模态框
     hide() {
         if (this.modal) {
+            console.log('[歌单管理] 隐藏模态框');
             this.modal.classList.remove('modal-visible');
+            // 缩短延迟，确保回调执行后模态框已隐藏
             setTimeout(() => {
                 this.modal.style.display = 'none';
-            }, 300);
+                console.log('[歌单管理] ✓ 模态框已隐藏');
+            }, 100);
         }
     }
 
@@ -169,13 +172,19 @@ export class PlaylistsManagement {
                     
                     console.log('[歌单管理] ✅ 歌单切换完成:', playlist.name);
                     Toast.success(`📋 已切换到：${playlist.name}`);
+                    
+                    // ✅ 先隐藏模态框
+                    console.log('[歌单管理] 步骤4: 隐藏模态框');
                     this.hide();
                     
-                    // 通知外部需要刷新播放列表
-                    if (this.onPlaylistSwitchCallback && typeof this.onPlaylistSwitchCallback === 'function') {
-                        console.log('[歌单管理] 步骤4: 触发回调函数');
-                        this.onPlaylistSwitchCallback(playlist.id, playlist.name);
-                    }
+                    // ✅ 延迟后触发回调，确保模态框隐藏动画开始后再触发
+                    setTimeout(() => {
+                        // 通知外部需要刷新播放列表
+                        if (this.onPlaylistSwitchCallback && typeof this.onPlaylistSwitchCallback === 'function') {
+                            console.log('[歌单管理] 步骤5: 触发回调函数，更新主界面显示');
+                            this.onPlaylistSwitchCallback(playlist.id, playlist.name);
+                        }
+                    }, 50);
                 } catch (error) {
                     console.error('[歌单管理] 切换失败:', error);
                     Toast.error('❌ 切换失败: ' + error.message);

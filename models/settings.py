@@ -15,8 +15,6 @@ class UserSettings:
     # 默认设置
     DEFAULT_SETTINGS = {
         "theme": "dark",  # light / dark / auto
-        "auto_stream": False,  # 是否自动启动推流
-        "stream_volume": 50,  # 推流音量 0-100
         "language": "auto",  # auto / zh / en
     }
     
