@@ -550,6 +550,8 @@ class MusicPlayer:
         """初始化 MPV IPC 连接（在播放器初始化时只调用一次）"""
         self._extract_pipe_name_from_cmd()
         self.ensure_mpv()
+        # 启动 MPV 事件监听线程（用于服务端自动播放）
+        self._start_event_listener()
 
     def _extract_pipe_name_from_cmd(self):
         """从 MPV 命令行中提取管道名称"""
@@ -564,6 +566,79 @@ class MusicPlayer:
             self.pipe_name = match.group(2)
         else:
             self.pipe_name = r"\\.\pipe\mpv-pipe"  # 默认管道名称
+
+    def _start_event_listener(self):
+        """启动后台线程监听 MPV 事件（用于服务端自动播放）"""
+        def event_listener_thread():
+            """后台线程：监听 MPV IPC 管道上的事件"""
+            logger.info("🎵 [事件监听] 后台线程已启动")
+            
+            consecutive_errors = 0
+            max_consecutive_errors = 10
+            
+            while True:
+                try:
+                    # 确保 MPV 运行
+                    if not self.mpv_pipe_exists():
+                        consecutive_errors += 1
+                        if consecutive_errors > max_consecutive_errors:
+                            logger.warning("[事件监听] ⚠️ 无法连接 MPV 管道，停止事件监听")
+                            break
+                        time.sleep(0.5)
+                        continue
+                    
+                    consecutive_errors = 0
+                    
+                    # 从管道读取事件
+                    with open(self.pipe_name, "r", encoding="utf-8") as pipe:
+                        for line in pipe:
+                            try:
+                                event_data = json.loads(line.strip())
+                                
+                                # 处理 end-file 事件
+                                if event_data.get("event") == "end-file":
+                                    reason = event_data.get("reason", "")
+                                    logger.info(f"[事件监听] 🛑 检测到 end-file 事件，reason: {reason}")
+                                    
+                                    # 仅在正常播放结束时触发自动播放
+                                    if reason == "eof":
+                                        logger.info("[事件监听] ✓ 检测到歌曲播放结束（EOF），触发自动播放")
+                                        try:
+                                            self.handle_playback_end()
+                                        except Exception as e:
+                                            logger.error(f"[事件监听] ✗ 处理播放结束失败: {e}")
+                                    
+                            except json.JSONDecodeError:
+                                # 跳过不是有效 JSON 的行（例如不相关的输出）
+                                pass
+                            except Exception as e:
+                                logger.warning(f"[事件监听] ⚠️ 处理事件异常: {e}")
+                
+                except (FileNotFoundError, IOError) as e:
+                    consecutive_errors += 1
+                    logger.debug(f"[事件监听] 管道不可用或已关闭 (尝试 {consecutive_errors}/{max_consecutive_errors}): {e}")
+                    time.sleep(0.5)
+                except Exception as e:
+                    logger.error(f"[事件监听] 异常: {e}")
+                    time.sleep(1)
+
+        # 启动守护线程
+        listener_thread = threading.Thread(target=event_listener_thread, daemon=True, name="MPVEventListener")
+        listener_thread.start()
+        logger.info("[事件监听] ✓ 事件监听器线程已启动")
+
+    def handle_playback_end(self):
+        """处理歌曲播放结束事件（后端事件通知，前端执行）
+        
+        说明：
+        - 此方法被后台事件监听线程调用（detect end-file 事件）
+        - 无法直接访问 app.py 中的全局 PLAYLISTS_MANAGER（线程隔离）
+        - 前端会通过轮询检测到播放状态变化，自动删除+播放下一首
+        
+        此方法仅记录事件，具体执行由前端 main.js 中的 updatePlayerUI() 处理
+        """
+        logger.info("[自动播放] ✓ 后端已确认歌曲播放结束事件")
+        logger.info("[自动播放] 💡 前端轮询将在下一周期内自动检测并播放下一首歌曲")
 
     def mpv_pipe_exists(self) -> bool:
         """检查 MPV 管道是否存在（仅在 Windows 上检查）"""

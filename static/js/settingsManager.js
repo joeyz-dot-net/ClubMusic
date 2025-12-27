@@ -610,6 +610,17 @@ export const settingsManager = {
                 }
             }, 100);
         }
+        
+        // ✅ 【新增】主题改变时重新渲染播放列表抬头
+        // 延迟执行，确保DOM已更新
+        setTimeout(() => {
+            if (window.app && typeof window.app.renderPlaylist === 'function') {
+                console.log(`[设置] 重新渲染播放列表抬头（主题切换到 ${actualTheme}）`);
+                window.app.renderPlaylist();
+            } else {
+                console.log('[设置] 无法找到 window.app.renderPlaylist 方法');
+            }
+        }, 200);
     },
     
     /**

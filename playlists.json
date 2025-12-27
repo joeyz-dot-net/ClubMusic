@@ -9,46 +9,6 @@
       "name": "正在播放",
       "songs": [
         {
-          "url": "SF6/1-07. Kimberly's Theme - Ninjastar Pop.mp3",
-          "title": "1-07. Kimberly's Theme - Ninjastar Pop",
-          "name": "1-07. Kimberly's Theme - Ninjastar Pop",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766833262,
-          "thumbnail_url": null,
-          "artist": "1-07. Kimberly's Theme - Ninjastar Pop"
-        },
-        {
-          "url": "SF6/1-08. Juri's Theme - ÅrachniD＊＊.mp3",
-          "title": "1-08. Juri's Theme - ÅrachniD＊＊",
-          "name": "1-08. Juri's Theme - ÅrachniD＊＊",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766833263,
-          "thumbnail_url": null,
-          "artist": "1-08. Juri's Theme - ÅrachniD＊＊"
-        },
-        {
-          "url": "SF6/1-09. Ken's Theme - Spirit of the Flame.mp3",
-          "title": "1-09. Ken's Theme - Spirit of the Flame",
-          "name": "1-09. Ken's Theme - Spirit of the Flame",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766833263,
-          "thumbnail_url": null,
-          "artist": "1-09. Ken's Theme - Spirit of the Flame"
-        },
-        {
-          "url": "SF6/1-10. Blanka's Theme - zilra zilra.mp3",
-          "title": "1-10. Blanka's Theme - zilra zilra",
-          "name": "1-10. Blanka's Theme - zilra zilra",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766833263,
-          "thumbnail_url": null,
-          "artist": "1-10. Blanka's Theme - zilra zilra"
-        },
-        {
           "url": "SF6/1-11. Dhalsim's Theme - The Great Sunlight.mp3",
           "title": "1-11. Dhalsim's Theme - The Great Sunlight",
           "name": "1-11. Dhalsim's Theme - The Great Sunlight",
@@ -199,9 +159,9 @@
           "artist": "2-03. Metro City Downtown - Stage Battle"
         }
       ],
-      "song_count": 19,
+      "song_count": 15,
       "created_at": 1766369731.0493586,
-      "updated_at": 1766833264.574376,
+      "updated_at": 1766837643.4240737,
       "current_playing_index": -1
     },
     {

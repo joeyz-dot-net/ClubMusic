@@ -510,14 +510,25 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
         return;
     }
 
-    // ✅ 为默认歌单也添加标题栏（适配应用当前主题）
+    // ✅ 为默认歌单也添加标题栏（适配应用当前主题，液态玻璃效果）
     if (selectedPlaylistId === 'default') {
         const appTheme = getCurrentAppTheme();
         const colors = getThemeColors(appTheme);
 
         const headerContainer = document.createElement('div');
+        const isLightTheme = appTheme === 'light';
+        const headerBg = isLightTheme 
+            ? 'rgba(255, 255, 255, 0.7)'
+            : 'rgba(26, 26, 26, 0.6)';
+        const headerBorder = isLightTheme
+            ? 'rgba(224, 224, 224, 0.5)'
+            : 'rgba(51, 51, 51, 0.5)';
+        
         headerContainer.style.cssText = `
-            background: ${colors.bgGradient};
+            background: ${headerBg};
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid ${headerBorder};
             border-radius: 12px;
             padding: 14px 16px;
             margin-bottom: 16px;
@@ -567,24 +578,28 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
             background: ${colors.buttonBg};
             border: 1.5px solid ${colors.buttonBorder};
             color: ${colors.buttonText};
-            padding: 8px 12px;
-            border-radius: 6px;
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
             cursor: pointer;
-            font-size: 13px;
-            font-weight: 600;
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-            white-space: nowrap;
-            min-height: 32px;
+            font-size: 18px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
         `;
-        clearBtn.innerHTML = '🗑️ 清空';
+        clearBtn.innerHTML = '🗑️';
         clearBtn.title = '清空播放队列';
         clearBtn.addEventListener('mouseover', () => {
             clearBtn.style.background = colors.buttonHover;
-            clearBtn.style.transform = 'translateY(-1px)';
+            clearBtn.style.transform = 'scale(1.1)';
+            clearBtn.style.boxShadow = `0 4px 12px ${colors.shadow}`;
         });
         clearBtn.addEventListener('mouseout', () => {
             clearBtn.style.background = colors.buttonBg;
-            clearBtn.style.transform = 'translateY(0)';
+            clearBtn.style.transform = 'scale(1)';
+            clearBtn.style.boxShadow = 'none';
         });
         clearBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
@@ -618,10 +633,21 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
             return isYoutube || isUrl;
         });
 
-        // 创建整体头部容器 - 单行布局，左右分布，使用应用主题颜色
+        // 创建整体头部容器 - 单行布局，左右分布，使用应用主题颜色，液态玻璃效果
         const headerContainer = document.createElement('div');
+        const isLightTheme = appTheme === 'light';
+        const headerBg = isLightTheme 
+            ? 'rgba(255, 255, 255, 0.7)'
+            : 'rgba(26, 26, 26, 0.6)';
+        const headerBorder = isLightTheme
+            ? 'rgba(224, 224, 224, 0.5)'
+            : 'rgba(51, 51, 51, 0.5)';
+        
         headerContainer.style.cssText = `
-            background: ${colors.bgGradient};
+            background: ${headerBg};
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid ${headerBorder};
             border-radius: 12px;
             padding: 14px 16px;
             margin-bottom: 16px;
@@ -680,27 +706,28 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
             background: ${colors.buttonBg};
             border: 1.5px solid ${colors.buttonBorder};
             color: ${colors.buttonText};
-            padding: 8px 12px;
-            border-radius: 6px;
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 13px;
-            font-weight: 600;
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-            white-space: nowrap;
-            min-height: 32px;
+            font-size: 20px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            flex-shrink: 0;
         `;
         returnBtn.innerHTML = '←';
         returnBtn.title = '返回到队列（默认歌单）';
         returnBtn.addEventListener('mouseover', () => {
             returnBtn.style.background = colors.buttonHover;
-            returnBtn.style.transform = 'translateY(-1px)';
+            returnBtn.style.transform = 'scale(1.1) translateX(-2px)';
+            returnBtn.style.boxShadow = `0 4px 12px ${colors.shadow}`;
         });
         returnBtn.addEventListener('mouseout', () => {
             returnBtn.style.background = colors.buttonBg;
-            returnBtn.style.transform = 'translateY(0)';
+            returnBtn.style.transform = 'scale(1)';
+            returnBtn.style.boxShadow = 'none';
         });
         returnBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
@@ -717,28 +744,28 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
             background: ${colors.buttonBg};
             border: 1.5px solid ${colors.buttonBorder};
             color: ${colors.buttonText};
-            padding: 8px 12px;
-            border-radius: 6px;
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
             cursor: pointer;
-            font-size: 13px;
-            font-weight: 600;
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            font-size: 20px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 4px;
-            white-space: nowrap;
-            min-height: 32px;
+            flex-shrink: 0;
         `;
         addAllBtn.innerHTML = '➕';
         addAllBtn.title = '添加全部歌曲到队列';
         addAllBtn.addEventListener('mouseover', () => {
             addAllBtn.style.background = colors.buttonHover;
-            addAllBtn.style.transform = 'translateY(-1px)';
+            addAllBtn.style.transform = 'scale(1.1) rotate(90deg)';
+            addAllBtn.style.boxShadow = `0 4px 12px ${colors.shadow}`;
         });
         addAllBtn.addEventListener('mouseout', () => {
             addAllBtn.style.background = colors.buttonBg;
-            addAllBtn.style.transform = 'translateY(0)';
+            addAllBtn.style.transform = 'scale(1) rotate(0deg)';
+            addAllBtn.style.boxShadow = 'none';
         });
         addAllBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
@@ -751,14 +778,16 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
             background: ${colors.buttonBg};
             border: 1.5px solid ${colors.buttonBorder};
             color: ${colors.buttonText};
-            padding: 8px 12px;
-            border-radius: 6px;
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
             cursor: pointer;
-            font-size: 13px;
-            font-weight: 600;
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-            white-space: nowrap;
-            min-height: 32px;
+            font-size: 18px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
         `;
         clearBtn.innerHTML = '🗑️';
         clearBtn.title = '清空歌单';
@@ -1125,64 +1154,71 @@ function initTouchDragSort(container, rerenderFn, rerenderArgs) {
     async function endDrag(e) {
         if (!isDragging || !draggedItem || !placeholder) return;
 
-        // 计算新位置
-        const items = Array.from(container.querySelectorAll('.playlist-track-item:not(.dragging)'));
-        let newIndex = items.indexOf(placeholder.nextSibling ? 
-            items.find(item => item === placeholder.nextSibling) : null);
-        
-        if (newIndex === -1) {
-            newIndex = items.length;
-        }
-        
-        // 调整索引（考虑占位符位置）
-        const placeholderIndex = Array.from(container.children).indexOf(placeholder);
-        const draggedItemOriginalIndex = draggedIndex;
-        
-        // 计算实际的新索引
-        let actualNewIndex = 0;
-        const allChildren = Array.from(container.children);
-        for (let i = 0; i < allChildren.length; i++) {
-            if (allChildren[i] === placeholder) {
-                actualNewIndex = i;
-                break;
+        try {
+            // 计算新位置
+            const items = Array.from(container.querySelectorAll('.playlist-track-item:not(.dragging)'));
+            let newIndex = items.indexOf(placeholder.nextSibling ? 
+                items.find(item => item === placeholder.nextSibling) : null);
+            
+            if (newIndex === -1) {
+                newIndex = items.length;
             }
-        }
-        
-        // 移除占位符，恢复拖拽元素
-        placeholder.remove();
-        draggedItem.classList.remove('dragging');
-        draggedItem.style.position = '';
-        draggedItem.style.left = '';
-        draggedItem.style.top = '';
-        draggedItem.style.width = '';
-        draggedItem.style.zIndex = '';
-        delete draggedItem.dataset.originalTop;
+            
+            // 调整索引（考虑占位符位置）
+            const placeholderIndex = Array.from(container.children).indexOf(placeholder);
+            const draggedItemOriginalIndex = draggedIndex;
+            
+            // 计算实际的新索引
+            let actualNewIndex = 0;
+            const allChildren = Array.from(container.children);
+            for (let i = 0; i < allChildren.length; i++) {
+                if (allChildren[i] === placeholder) {
+                    actualNewIndex = i;
+                    break;
+                }
+            }
+            
+            // 移除占位符，恢复拖拽元素
+            placeholder.remove();
+            draggedItem.classList.remove('dragging');
+            draggedItem.style.position = '';
+            draggedItem.style.left = '';
+            draggedItem.style.top = '';
+            draggedItem.style.width = '';
+            draggedItem.style.zIndex = '';
+            delete draggedItem.dataset.originalTop;
 
-        // 如果位置变化了，调用 API 更新顺序
-        if (actualNewIndex !== draggedItemOriginalIndex) {
-            try {
-                const selectedPlaylistId = playlistManager.getSelectedPlaylistId();
-                const result = await api.reorderPlaylist(selectedPlaylistId, draggedItemOriginalIndex, actualNewIndex);
-                
-                if (result.status === 'OK') {
-                    Toast.success('已调整顺序');
-                    // 先刷新数据，再重新渲染列表
-                    await playlistManager.loadCurrent();
-                    await playlistManager.loadAll();
-                    rerenderFn(rerenderArgs);
-                } else {
-                    Toast.error('调整失败: ' + (result.error || result.message));
+            // 如果位置变化了，调用 API 更新顺序
+            if (actualNewIndex !== draggedItemOriginalIndex) {
+                try {
+                    const selectedPlaylistId = playlistManager.getSelectedPlaylistId();
+                    const result = await api.reorderPlaylist(selectedPlaylistId, draggedItemOriginalIndex, actualNewIndex);
+                    
+                    if (result.status === 'OK') {
+                        Toast.success('已调整顺序');
+                        // 先刷新数据，再重新渲染列表
+                        await playlistManager.loadCurrent();
+                        await playlistManager.loadAll();
+                        rerenderFn(rerenderArgs);
+                    } else {
+                        Toast.error('调整失败: ' + (result.error || result.message));
+                        await playlistManager.loadCurrent();
+                        await playlistManager.loadAll();
+                        rerenderFn(rerenderArgs);
+                    }
+                } catch (err) {
+                    console.error('调整顺序失败:', err);
+                    Toast.error('调整失败');
                     await playlistManager.loadCurrent();
                     await playlistManager.loadAll();
                     rerenderFn(rerenderArgs);
                 }
-            } catch (err) {
-                console.error('调整顺序失败:', err);
-                Toast.error('调整失败');
-                await playlistManager.loadCurrent();
-                await playlistManager.loadAll();
-                rerenderFn(rerenderArgs);
             }
+        } finally {
+            // 【关键修复】确保在任何情况下都释放操作锁
+            // 这防止了拖拽失败导致的轮询永久暂停
+            operationLock.release('drag');
+            console.log('[拖拽] ✓ 操作锁已释放');
         }
     }
 

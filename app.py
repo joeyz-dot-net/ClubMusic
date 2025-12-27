@@ -247,17 +247,30 @@ async def shutdown_event():
     logger.info("应用已关闭")
 
 async def monitor_playback_progress():
-    """监控播放进度，定期输出日志"""
+    """监控播放进度，智能聚合重复日志"""
     logger.info("🎵 播放进度监控任务已启动")
     
+    last_log_time = 0
+    log_interval = 5  # 采样间隔：每5秒输出一次日志
+    last_log_hash = None  # 追踪上一条日志的哈希值
+    consecutive_same_logs = 0  # 连续相同日志计数
+    
     while True:
-        await asyncio.sleep(5)  # 每 5 秒检查一次
+        await asyncio.sleep(5)  # 每5秒检查一次
         
         # 仅在有歌曲播放时输出
         if not PLAYER.current_meta or not PLAYER.current_meta.get("url"):
+            last_log_hash = None  # 重置哈希
+            consecutive_same_logs = 0
             continue
         
         try:
+            current_time = time.time()
+            
+            # 采样：仅在时间间隔足够时输出日志
+            if current_time - last_log_time < log_interval:
+                continue
+            
             # 获取 MPV 状态
             paused = mpv_get("pause")
             time_pos = mpv_get("time-pos") or 0
@@ -277,8 +290,8 @@ async def monitor_playback_progress():
             # 计算进度百分比
             progress_percent = (time_pos / duration * 100) if duration > 0 else 0
             
-            # 输出监控日志（INFO 级别，便于查看）
-            logger.info(
+            # 构建日志内容（不含时间戳）
+            log_content = (
                 f"🎵 [播放监控] "
                 f"{title} | "
                 f"{'⏸️ 暂停' if paused else '▶️ 播放中'} | "
@@ -287,8 +300,37 @@ async def monitor_playback_progress():
                 f"类型: {song_type}"
             )
             
+            # 计算日志哈希值，用于检测重复
+            log_hash = hashlib.md5(log_content.encode()).hexdigest()
+            
+            # ✅ 日志去重逻辑
+            if log_hash == last_log_hash:
+                # 与上一条日志相同
+                consecutive_same_logs += 1
+                
+                # 只在第一次重复时输出"..."提示，避免继续刷屏
+                if consecutive_same_logs == 1:
+                    logger.info(f"🎵 [播放监控] ... (持续播放中，5秒后更新状态)")
+                
+                # 不输出完整日志内容，只更新时间戳
+                last_log_time = current_time
+                continue
+            else:
+                # 日志内容改变了
+                if consecutive_same_logs > 0:
+                    # 之前有连续的重复日志，现在输出新日志
+                    logger.info(f"🎵 [播放监控] (重复 {consecutive_same_logs} 次后更新)")
+                
+                # 输出新日志
+                logger.info(log_content)
+                last_log_hash = log_hash
+                consecutive_same_logs = 0
+                last_log_time = current_time
+            
         except Exception as e:
             logger.warning(f"监控任务异常: {e}")
+            last_log_hash = None
+            consecutive_same_logs = 0
             continue
 
 # ============================================

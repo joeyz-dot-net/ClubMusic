@@ -34,7 +34,7 @@ Browser ←poll /status→ FastAPI (app.py) ←→ Singletons ←→ MPV (\\.\pi
 ### Data Flow: Playback
 1. User clicks song → `player.js:play()` → `api.js:play()` → POST `/play`
 2. Backend: `app.py` → `PLAYER.play(song)` → MPV IPC `loadfile` command
-3. Frontend polls `/status` every 2s → updates UI via `player.js:updateStatus()`
+3. Frontend polls `/status` every 1s → updates UI via `player.js:updateStatus()`
 4. Auto-next: When `timeRemaining < 2.5s`, `main.js` triggers next song
 
 ### Key Files & Responsibilities
@@ -42,9 +42,8 @@ Browser ←poll /status→ FastAPI (app.py) ←→ Singletons ←→ MPV (\\.\pi
 | File | Purpose |
 |------|---------|
 | [main.py](../main.py) | Uvicorn startup, interactive audio device selection (MPV output) |
-| [app.py](../app.py) | 60+ routes, global singletons |
+| [app.py](../app.py) | 60+ routes, global singletons initialization |
 | [models/player.py](../models/player.py) | `MusicPlayer` class: MPV IPC via `\\.\pipe\mpv-pipe`, config loading, yt-dlp integration |
-
 | [models/playlists.py](../models/playlists.py) | `Playlists` manager: multi-playlist CRUD, auto-save to `playlists.json` |
 | [models/song.py](../models/song.py) | `Song`, `LocalSong`, `StreamSong`; YouTube metadata/search via yt-dlp |
 | [static/js/api.js](../static/js/api.js) | `MusicAPI` class—**must mirror backend routes exactly** |
@@ -130,42 +129,19 @@ $env:MPV_AUDIO_DEVICE       # Check selected audio device UUID
 ```
 
 ### 4. VS Code Tasks (`Ctrl+Shift+B`)
-- **Build Only** → `dist/ClubMusic.exe` (no network deploy)
-- **Build & Deploy to All** → build + copy to B560 + copy to local
-- **Clean Build** → remove `build/`, `dist/`, `__pycache__/` then rebuild
-- **启动音乐播放器** → `python main.py` (dev server)
-- **安装依赖** → `pip install -r requirements.txt`
+- **Build** (default) → `dist/ClubMusic.exe` (no network deploy)
+- **Deploy Remote** → deploy to `\\B560\code\ClubMusic` (backup before deploy)
+- **Build & Deploy** → sequential execution of both tasks
 
 ## Streaming Responses & Safari Optimization
 
-Frontend polling (every 2s `GET /status`) is critical for responsive UI. Safari requires special handling:
+Frontend polling (every 1s `GET /status`) is critical for responsive UI. Safari requires special handling:
 - **Keepalive interval**: Every 0.5s heartbeat to prevent timeout
 - **Chunk size**: 128KB vs 256KB (Safari uses smaller chunks)
 - **Max consecutive empty**: 400 empty packets before timeout (Safari more lenient)
 - Implementation: [app.py#L95-125](../app.py#L95-L125) `detect_browser_and_apply_config()`
 
 **Testing browser compatibility**: Check request header `User-Agent` contains "Safari" but NOT "Chrome" to identify Safari.
-
-## Debugging & Testing Patterns
-
-**Development server**:
-```powershell
-python main.py              # Starts Uvicorn + interactive audio device selection dialog
-                             # Will prompt for MPV output device (defaults to CABLE-A Input)
-```
-
-**Building & Deployment**:
-```powershell
-.\build_exe.bat             # PyInstaller → dist/ClubMusic.exe (reads app.spec)
-                             # Bundles: bin/ (mpv.exe, yt-dlp.exe), static/, templates/
-```
-
-**Verification Commands**:
-```powershell
-Get-Process mpv             # Confirm MPV process running
-Test-Path "\\.\pipe\mpv-pipe"  # Confirm MPV IPC pipe exists
-$env:MPV_AUDIO_DEVICE       # Check selected audio device UUID
-```
 
 ## Common Pitfalls & Debugging
 
@@ -191,8 +167,8 @@ $env:MPV_AUDIO_DEVICE       # Check selected audio device UUID
 
 **Key Implementation**:
 - [playlist.js#L10-25](../static/js/playlist.js#L10-L25): `PlaylistManager.selectedPlaylistId` is restored from localStorage
-- [main.js#L385-410](../static/js/main.js#L385-L410): App initializes with `this.currentPlaylistId = localStorage.getItem('selectedPlaylistId') || 'default'`
-- Backend [app.py#L440-480](../app.py#L440-L480): `/playlist` endpoint receives `playlist_id` from frontend, not global state
+- [main.js#L25-30](../static/js/main.js#L25-L30): App initializes with `this.currentPlaylistId = localStorage.getItem('selectedPlaylistId') || 'default'`
+- Backend [app.py#L1355-1420](../app.py#L1355-L1420): `/playlist` endpoint receives `playlist_id` from frontend, not global state
 - **Pattern**: Never sync playlist selection from server to frontend—trust frontend's localStorage as source of truth
 
 ## Frontend Module System
@@ -207,7 +183,7 @@ ES6 modules in [static/js/](../static/js/):
 
 ## Auto-Next & Track End Detection
 
-**When current song ends** ([main.js#L410-530](../main.js)):
+**When current song ends** ([main.js#L410-530](../static/js/main.js#L410-L530)):
 1. `updatePlayerUI()` detects `timeRemaining < 2.5s` + `isPlaying === true`
 2. Calls `removeCurrentSongFromPlaylist()` → removes first song from "default" playlist
 3. Immediately plays first song of remaining list
@@ -218,7 +194,7 @@ ES6 modules in [static/js/](../static/js/):
 
 ## Modal Navigation Stack
 
-[main.js#L1080-1170](../main.js) implements non-modal stack for tab switching:
+[main.js#L1080-1170](../static/js/main.js#L1080-L1170) implements non-modal stack for tab switching:
 - Maintains navigation history: `navigationStack = ['playlists']` (default tab)
 - Back button pops stack, returns to previous tab
 - Settings button is intercepted: closing settings calls `navigateBack()`
@@ -233,7 +209,7 @@ ES6 modules in [static/js/](../static/js/):
 - Move threshold 10px before drag activates (prevents accidental trigger on scroll)
 - Real-time placeholder position during drag
 - `operationLock.acquire('drag')` pauses status polling while dragging
-- Server-side reorder via [app.py#L742-760](../app.py#L742-L760): `/playlist_reorder` uses `from_index`/`to_index`
+- Server-side reorder via [app.py#L1684-1702](../app.py#L1684-L1702): `/playlist_reorder` uses `from_index`/`to_index`
 
 **Critical**: Must release lock on `touchcancel` AND `touchend`, else polling freezes forever.
 
@@ -250,16 +226,17 @@ ES6 modules in [static/js/](../static/js/):
 **Data Format** ([models/rank.py](../models/rank.py)):
 - `playback_history.json`: `[{url, title, type, timestamps: "1234567890,1234567891", thumbnail_url}]`
 - **timestamps** field stores comma-separated Unix timestamps of every play occurrence
-- Ranking API ([app.py#L680-720](../app.py#L680-L720)) filters by time period: `all|day|week|month|quarter|year`
+- Ranking API ([app.py](../app.py)) filters by time period: `all|day|week|month|quarter|year`
 - Counts only plays within the period cutoff, not total count
 
 **Auto-add pattern**: Every `/play` call with `save_to_history=True` adds to `playback_history.json` immediately. No batching.
 
 **Gotcha**: YouTube URL transforms via yt-dlp occur AFTER history save, so history keeps original URL. Ranking search matches on original URL.
 
+## MPV Audio Device Selection
+
 [main.py](../main.py) orchestrates interactive prompt at startup:
 
-### MPV Output Device
 ```python
 interactive_select_audio_device()  # Prompts for WASAPI output
                                    # Populates mpv_cmd with audio-device GUID

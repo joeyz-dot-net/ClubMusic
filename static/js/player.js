@@ -119,12 +119,45 @@ export class Player {
                 console.error('状态轮询失败:', error);
             }
         }, interval);
+        
+        // 【关键修复】启动轮询监控防止意外暂停
+        // 如果轮询被暂停但没有活跃的锁，说明有地方没有正确释放锁
+        // 这会导致播放停止，所以需要强制恢复
+        this.startPollingMonitor();
+    }
+
+    // 【新增】轮询监控：防止轮询被意外暂停
+    startPollingMonitor() {
+        if (this.monitorInterval) return;
+        
+        this.monitorInterval = setInterval(() => {
+            // 检查是否轮询被暂停但没有活跃的锁
+            if ((this.pollingPaused || operationLock.isPollingPaused()) && 
+                !operationLock.hasActiveLocks()) {
+                console.warn('[Player] ⚠️ 轮询被暂停但无活跃锁，这可能导致播放停止！');
+                console.warn('[Player] 锁状态:', operationLock.getStatus());
+                console.warn('[Player] 强制恢复轮询...');
+                
+                // 强制恢复轮询
+                try {
+                    operationLock.resumePolling();
+                    this.pollingPaused = false;
+                    console.log('[Player] ✓ 轮询已强制恢复');
+                } catch (err) {
+                    console.error('[Player] 恢复轮询失败:', err);
+                }
+            }
+        }, 5000);  // 每5秒检查一次
     }
 
     stopPolling() {
         if (this.pollInterval) {
             clearInterval(this.pollInterval);
             this.pollInterval = null;
+        }
+        if (this.monitorInterval) {
+            clearInterval(this.monitorInterval);
+            this.monitorInterval = null;
         }
     }
 
