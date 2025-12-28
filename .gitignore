@@ -28,8 +28,8 @@ app.spec
 
 #playlist.json
 *.json
-playlists.json
-playback_history.json
+/playlists.json
+/playback_history.json
 
 # Documentation (local only, not tracked)
 doc/
