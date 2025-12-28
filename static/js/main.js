@@ -731,58 +731,7 @@ class MusicPlayerApp {
             const currentTime = mpvData.time_pos || mpvData.time || 0;
             const duration = mpvData.duration || 0;
 
-            // ✅ 改进的自动播放检测：检查是否歌曲已播放完毕
-            // 情况1: 歌曲接近结尾（还在播放但剩余时间少于阈值）
-            // 情况2: 歌曲完全播放结束（暂停且接近或已超过时长）
-            if (duration > 1 && currentTime >= 0) {
-                const isPlaying = (mpvData.paused === false) || (mpvData.paused === null) || (mpvData.paused === undefined);
-                const timeRemaining = duration - currentTime;
-                const autoPlayThreshold = 2.5;  // 当剩余时间少于2.5秒时触发
-                
-                // 情况1: 正在播放且接近结尾
-                const aboutToEnd = isPlaying && timeRemaining < autoPlayThreshold && timeRemaining >= -0.5;
-                // 情况2: 播放完毕（暂停且接近或已超过时长）
-                const songEndedWithPause = !isPlaying && currentTime >= duration - 0.5 && duration > 0;
-                
-                // 只触发一次，避免重复播放
-                if ((aboutToEnd || songEndedWithPause) && !this._autoNextTriggered) {
-                    this._autoNextTriggered = true;
-                    const triggerReason = aboutToEnd ? '接近结尾' : '播放完毕';
-                    console.log(`[自动播放] 触发！(${triggerReason}) 剩余时间: ${timeRemaining.toFixed(2)}秒，即将播放下一首`);
-                    
-                    // 异步处理下一首
-                    (async () => {
-                        try {
-                            // 删除当前歌曲
-                            await this.removeCurrentSongFromPlaylist();
-                            
-                            // 重新加载播放列表
-                            await playlistManager.loadCurrent();
-                            this.renderPlaylist();
-                            
-                            // 播放第一首
-                            if (playlistManager && playlistManager.currentPlaylist && playlistManager.currentPlaylist.length > 0) {
-                                const firstSong = playlistManager.currentPlaylist[0];
-                                console.log('[自动播放] ✓ 播放下一首:', firstSong.title);
-                                await this.playSong(firstSong);
-                            } else {
-                                console.log('[自动播放] ⚠️ 播放列表已空');
-                            }
-                        } catch (err) {
-                            console.error('[自动播放] ✗ 失败:', err.message);
-                            Toast.error('自动播放失败: ' + err.message);
-                        } finally {
-                            // 延迟重置标记，防止快速重复触发
-                            setTimeout(() => {
-                                this._autoNextTriggered = false;
-                            }, 2000);
-                        }
-                    })();
-                } else if (timeRemaining >= 3) {
-                    // 有较长时间时，重置标记
-                    this._autoNextTriggered = false;
-                }
-            }
+            // 前端只负责显示播放进度，自动播放完全由后端控制
 
             // 更新全屏播放器时间
             if (this.elements.fullPlayerCurrentTime) {

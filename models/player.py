@@ -628,17 +628,87 @@ class MusicPlayer:
         logger.info("[事件监听] ✓ 事件监听器线程已启动")
 
     def handle_playback_end(self):
-        """处理歌曲播放结束事件（后端事件通知，前端执行）
+        """处理歌曲播放结束事件（后端完全控制自动播放）
         
         说明：
         - 此方法被后台事件监听线程调用（detect end-file 事件）
-        - 无法直接访问 app.py 中的全局 PLAYLISTS_MANAGER（线程隔离）
-        - 前端会通过轮询检测到播放状态变化，自动删除+播放下一首
+        - 直接在后端完成自动播放逻辑：删除当前歌曲+播放下一首
+        - 前端只负责状态显示，不再参与自动播放控制
         
-        此方法仅记录事件，具体执行由前端 main.js 中的 updatePlayerUI() 处理
+        实现完整的后端控制自动播放流程
         """
-        logger.info("[自动播放] ✓ 后端已确认歌曲播放结束事件")
-        logger.info("[自动播放] 💡 前端轮询将在下一周期内自动检测并播放下一首歌曲")
+        try:
+            # 通过模块导入获取全局管理器实例（绕过线程隔离限制）
+            import app
+            
+            logger.info("[自动播放] ✓ 检测到歌曲播放结束，开始后端自动播放逻辑")
+            
+            # 获取默认歌单（当前播放队列）
+            default_playlist = app.PLAYLISTS_MANAGER.get_playlist(app.DEFAULT_PLAYLIST_ID)
+            if not default_playlist or len(default_playlist.songs) == 0:
+                logger.info("[自动播放] ⚠️ 默认歌单为空，停止自动播放")
+                return
+            
+            # 删除第一首歌曲（当前播放完毕的歌曲）
+            if len(default_playlist.songs) > 0:
+                removed_song = default_playlist.songs.pop(0)
+                default_playlist.updated_at = time.time()
+                app.PLAYLISTS_MANAGER.save()
+                
+                song_title = removed_song.get('title') if isinstance(removed_song, dict) else str(removed_song)
+                logger.info(f"[自动播放] ✓ 已删除播放完毕的歌曲: {song_title}")
+            
+            # 播放下一首（删除后的第一首）
+            if len(default_playlist.songs) > 0:
+                next_song = default_playlist.songs[0]
+                
+                if isinstance(next_song, dict):
+                    url = next_song.get("url")
+                    title = next_song.get("title") or url
+                    song_type = next_song.get("type", "local")
+                else:
+                    url = str(next_song)
+                    title = os.path.basename(url)
+                    song_type = "local"
+                
+                logger.info(f"[自动播放] ▶️ 开始播放下一首: {title}")
+                
+                # 根据歌曲类型创建Song对象并播放
+                if song_type == "youtube" or (url and str(url).startswith("http")):
+                    from models.song import StreamSong
+                    song = StreamSong(stream_url=url, title=title)
+                else:
+                    from models.song import LocalSong
+                    song = LocalSong(file_path=url, title=title)
+                
+                # 播放歌曲
+                success = song.play(
+                    mpv_command_func=self.mpv_command,
+                    mpv_pipe_exists_func=self.mpv_pipe_exists,
+                    ensure_mpv_func=self.ensure_mpv,
+                    add_to_history_func=app.PLAYBACK_HISTORY.add_to_history,
+                    save_to_history=True,
+                    music_dir=self.music_dir
+                )
+                
+                if success:
+                    # 更新当前播放元数据
+                    self.current_meta = song.to_dict()
+                    self.current_index = 0  # 重置为第一首
+                    self._last_play_time = time.time()
+                    logger.info(f"[自动播放] ✅ 自动播放成功: {title}")
+                else:
+                    logger.error(f"[自动播放] ❌ 播放失败: {title}")
+            else:
+                logger.info("[自动播放] ℹ️ 播放列表已空，停止自动播放")
+                # 清空当前播放信息
+                self.current_meta = {}
+                self.current_index = -1
+                
+        except Exception as e:
+            logger.error(f"[自动播放] ❌ 后端自动播放异常: {e}")
+            import traceback
+            traceback.print_exc()
 
     def mpv_pipe_exists(self) -> bool:
         """检查 MPV 管道是否存在（仅在 Windows 上检查）"""

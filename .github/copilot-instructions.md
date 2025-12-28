@@ -129,9 +129,10 @@ $env:MPV_AUDIO_DEVICE       # Check selected audio device UUID
 ```
 
 ### 4. VS Code Tasks (`Ctrl+Shift+B`)
-- **Build** (default) → `dist/ClubMusic.exe` (no network deploy)
-- **Deploy Remote** → deploy to `\\B560\code\ClubMusic` (backup before deploy)
-- **Build & Deploy** → sequential execution of both tasks
+Available via `run_task` or `Ctrl+Shift+B` in VS Code:
+- **Build** (default) → `dist/ClubMusic.exe` (local build only, no network deploy)
+- **Deploy Remote** → deploy to `\\B560\code\ClubMusic` (backup before deploy)  
+- **Build & Deploy** → sequential execution of both tasks (dependsOrder: sequence)
 
 ## Streaming Responses & Safari Optimization
 
@@ -246,3 +247,25 @@ interactive_select_audio_device()  # Prompts for WASAPI output
 ```
 
 **Key insight**: Device selection dialog appears BEFORE Uvicorn starts. If user doesn't input within timeout, uses defaults.
+
+## Development Commands
+
+**Essential workflows** for immediate development:
+```powershell
+# 🚀 Start development server (with audio device selection)
+python main.py
+
+# 📦 Build executable for distribution
+.\build_exe.bat                    # Creates dist/ClubMusic.exe
+
+# 🔧 Development verification commands  
+Get-Process mpv                    # Confirm MPV process running
+Test-Path "\\.\pipe\mpv-pipe"     # Confirm MPV IPC pipe exists  
+taskkill /IM mpv.exe /F           # Force-kill stuck MPV processes
+
+# 🔍 Quick dependency check
+pip install -r requirements.txt   # Install/update dependencies
+python -c "import fastapi, uvicorn, mutagen" # Verify core imports
+```
+
+**VS Code Integration**: Use task runner (`Ctrl+Shift+B`) for build operations. Tasks are defined in workspace-level configuration accessible via `run_task` tool.
