@@ -160,7 +160,7 @@ class MusicPlayerApp {
     // 初始化播放器
     initPlayer() {
         // 监听播放状态更新
-        player.on('statusUpdate', ({ status }) => {
+        player.on('statusUpdate', async ({ status }) => {
             // 【用户隔离】不再从后端同步 current_playlist_id
             // 歌单选择由前端 localStorage 独立管理，每个浏览器独立
             // status.current_playlist_id 只用于调试，不覆盖前端状态
@@ -205,11 +205,16 @@ class MusicPlayerApp {
             this.lastPlayStatus = status;
             this.updatePlayerUI(status);
             
-            // 只在歌曲变化时重新渲染播放列表（避免每次状态更新都重建DOM导致进度条被重置）
+            // ✅【关键修复】歌曲变化时：先刷新播放列表数据，再重新渲染
+            // 这样才能显示后端删除当前歌曲后的最新列表
             const currentUrl = status?.current_meta?.url || status?.current_meta?.rel || null;
             if (currentUrl !== this._lastRenderedSongUrl) {
                 this._lastRenderedSongUrl = currentUrl;
+                // 【步骤1】重新加载最新的播放列表数据（自动播放后会删除已播放的歌曲）
+                await playlistManager.loadCurrent();
+                // 【步骤2】重新渲染列表，显示最新数据
                 this.renderPlaylist();
+                console.log('[歌曲变化] ✓ 已刷新播放列表数据');
             }
         });
 

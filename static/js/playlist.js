@@ -1551,21 +1551,48 @@ async function showPlaybackHistory() {
                         }
                         
                         // 刷新播放列表数据
-                        await playlistManager.loadCurrent();
                         await playlistManager.loadAll();
+                        
+                        // ✅ 切换到默认歌单并重新加载
+                        playlistManager.setSelectedPlaylist('default');
+                        await playlistManager.loadCurrent();
+                        
+                        // ✅【关键】重新渲染播放列表 UI，显示新添加的歌曲
+                        const container = document.getElementById('playListContainer');
+                        
+                        // ✅【修复】获取最新的播放状态，而不是使用缓存数据
+                        let currentStatus = { current_meta: null };
+                        try {
+                            const latestStatus = await api.getStatus();
+                            if (latestStatus && latestStatus.current_meta) {
+                                currentStatus = latestStatus;
+                            }
+                        } catch (err) {
+                            console.warn('[历史] 获取最新播放状态失败:', err);
+                            currentStatus = window.app?.lastPlayStatus || { current_meta: null };
+                        }
+                        
+                        if (container && window.app) {
+                            renderPlaylistUI({
+                                container,
+                                onPlay: (s) => window.app.playSong(s),
+                                currentMeta: currentStatus.current_meta
+                            });
+                            // 更新队列导航按钮图标（如果方法存在）
+                            if (typeof window.app.updateQueueNavIcon === 'function') {
+                                window.app.updateQueueNavIcon();
+                            }
+                        }
                         
                         // 关闭历史模态框
                         historyModal.style.display = 'none';
                         historyModal.classList.remove('modal-visible');
                         
-                        // 立即播放该歌曲
-                        if (window.app) {
-                            loading.show('🎵 正在播放...');
-                            await window.app.playSong(song);
-                            loading.hide();
-                        }
+                        loading.hide();
                         
-                        console.log('[历史] 已将歌曲添加到下一曲位置并开始播放:', song.title);
+                        // ✅ 只添加到队列，不播放！显示提示信息
+                        Toast.success(`✅ 已添加到队列下一曲: ${song.title}`);
+                        console.log('[历史] ✓ 已将歌曲添加到下一曲位置，不改变当前播放:', song.title);
                         
                     } catch (error) {
                         console.error('[历史] 播放失败:', error);

@@ -214,8 +214,6 @@ app.add_middleware(
 async def startup_event():
     """应用启动时的初始化事件"""
     logger.info("应用启动完成")
-    # 启动播放进度监控任务
-    asyncio.create_task(monitor_playback_progress())
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -245,93 +243,6 @@ async def shutdown_event():
             pass
     
     logger.info("应用已关闭")
-
-async def monitor_playback_progress():
-    """监控播放进度，智能聚合重复日志"""
-    logger.info("🎵 播放进度监控任务已启动")
-    
-    last_log_time = 0
-    log_interval = 5  # 采样间隔：每5秒输出一次日志
-    last_log_hash = None  # 追踪上一条日志的哈希值
-    consecutive_same_logs = 0  # 连续相同日志计数
-    
-    while True:
-        await asyncio.sleep(5)  # 每5秒检查一次
-        
-        # 仅在有歌曲播放时输出
-        if not PLAYER.current_meta or not PLAYER.current_meta.get("url"):
-            last_log_hash = None  # 重置哈希
-            consecutive_same_logs = 0
-            continue
-        
-        try:
-            current_time = time.time()
-            
-            # 采样：仅在时间间隔足够时输出日志
-            if current_time - last_log_time < log_interval:
-                continue
-            
-            # 获取 MPV 状态
-            paused = mpv_get("pause")
-            time_pos = mpv_get("time-pos") or 0
-            duration = mpv_get("duration") or 0
-            volume = mpv_get("volume") or 0
-            
-            # 格式化时间显示
-            def format_time(seconds):
-                mins = int(seconds // 60)
-                secs = int(seconds % 60)
-                return f"{mins:02d}:{secs:02d}"
-            
-            # 获取歌曲信息
-            title = PLAYER.current_meta.get("title", "未知歌曲")
-            song_type = PLAYER.current_meta.get("type", "unknown")
-            
-            # 计算进度百分比
-            progress_percent = (time_pos / duration * 100) if duration > 0 else 0
-            
-            # 构建日志内容（不含时间戳）
-            log_content = (
-                f"🎵 [播放监控] "
-                f"{title} | "
-                f"{'⏸️ 暂停' if paused else '▶️ 播放中'} | "
-                f"进度: {format_time(time_pos)}/{format_time(duration)} ({progress_percent:.1f}%) | "
-                f"音量: {int(volume)}% | "
-                f"类型: {song_type}"
-            )
-            
-            # 计算日志哈希值，用于检测重复
-            log_hash = hashlib.md5(log_content.encode()).hexdigest()
-            
-            # ✅ 日志去重逻辑
-            if log_hash == last_log_hash:
-                # 与上一条日志相同
-                consecutive_same_logs += 1
-                
-                # 只在第一次重复时输出"..."提示，避免继续刷屏
-                if consecutive_same_logs == 1:
-                    logger.info(f"🎵 [播放监控] ... (持续播放中，5秒后更新状态)")
-                
-                # 不输出完整日志内容，只更新时间戳
-                last_log_time = current_time
-                continue
-            else:
-                # 日志内容改变了
-                if consecutive_same_logs > 0:
-                    # 之前有连续的重复日志，现在输出新日志
-                    logger.info(f"🎵 [播放监控] (重复 {consecutive_same_logs} 次后更新)")
-                
-                # 输出新日志
-                logger.info(log_content)
-                last_log_hash = log_hash
-                consecutive_same_logs = 0
-                last_log_time = current_time
-            
-        except Exception as e:
-            logger.warning(f"监控任务异常: {e}")
-            last_log_hash = None
-            consecutive_same_logs = 0
-            continue
 
 # ============================================
 # 挂载静态文件
@@ -568,7 +479,9 @@ async def play(request: Request):
         else:
             song = LocalSong(file_path=url, title=title)
         
-        # 播放 - 使用 MusicPlayer 的实例方法
+        # ✅【核心修改】播放逻辑：直接播放指定歌曲，不添加到队列
+        # 如果用户想"添加到队列下一曲"，应该使用 /playlist_add 端点
+        # 这样确保：1. 不打断当前播放  2. 新歌曲在下一曲位置  3. 前后台数据同步
         PLAYER.play(
             song,
             mpv_command_func=PLAYER.mpv_command,
@@ -579,8 +492,12 @@ async def play(request: Request):
             mpv_cmd=PLAYER.mpv_cmd
         )
         
-        # 【新增】更新 PLAYER.current_index：查找当前播放歌曲在列表中的索引
-        # 这样下次添加歌曲时才能计算正确的插入位置
+        # 【状态改变显示】显示正在播放的歌曲信息
+        logger.info(
+            f"▶️ [播放状态改变] 正在播放: {title} (类型: {song_type})"
+        )
+        
+        # 更新 PLAYER.current_index：查找当前播放歌曲在列表中的索引
         try:
             playlist = PLAYLISTS_MANAGER.get_playlist(CURRENT_PLAYLIST_ID)
             if playlist:
@@ -588,7 +505,7 @@ async def play(request: Request):
                     song_item_url = song_item.get("url") if isinstance(song_item, dict) else str(song_item)
                     if song_item_url == url:
                         PLAYER.current_index = idx
-                        logger.info(f"[播放] 已更新 current_index = {idx}, 歌曲: {title}")
+                        logger.info(f"[播放] ✓ 已更新 current_index = {idx}, 歌曲: {title}")
                         break
         except Exception as e:
             logger.warning(f"[播放] 更新 current_index 失败: {e}")
@@ -794,7 +711,7 @@ async def get_status():
         "volume": mpv_get("volume")
     }
     
-    # DEBUG 日志：显示当前播放歌曲状态
+    # ✅ 实时播放状态日志显示（每次调用 /status 时输出）
     if PLAYER.current_meta and PLAYER.current_meta.get("url"):
         title = PLAYER.current_meta.get("title", "N/A")
         song_type = PLAYER.current_meta.get("type", "N/A")
@@ -803,14 +720,25 @@ async def get_status():
         duration = mpv_state.get("duration", 0) or 0
         volume = mpv_state.get("volume", 0) or 0
         
-        logger.debug(
-            f"🎵 [播放状态] "
-            f"歌曲: {title} | "
-            f"类型: {song_type} | "
-            f"状态: {'暂停' if paused else '播放中'} | "
-            f"进度: {int(time_pos)}/{int(duration)}s | "
-            f"音量: {int(volume)}%"
+        # 格式化时间显示
+        def format_time(seconds):
+            mins = int(seconds // 60)
+            secs = int(seconds % 60)
+            return f"{mins:02d}:{secs:02d}"
+        
+        # 计算进度百分比
+        progress_percent = (time_pos / duration * 100) if duration > 0 else 0
+        
+        # 构建状态日志（单行，使用 \r 覆盖）
+        status_text = "⏸️ 暂停" if paused else "▶️ 播放中"
+        log_content = (
+            f"🎵 [播放监控] {title} | {status_text} | "
+            f"进度: {format_time(time_pos)}/{format_time(duration)} ({progress_percent:.1f}%) | "
+            f"音量: {int(volume)}% | 类型: {song_type}"
         )
+        
+        # 输出日志（覆盖同一行，不换行）
+        print(f"\r{log_content}", end="", flush=True)
     
     # 为本地歌曲添加封面 URL（仅当封面存在时）
     current_meta = dict(PLAYER.current_meta) if PLAYER.current_meta else {}
@@ -854,6 +782,16 @@ async def pause():
     try:
         paused = mpv_get("pause")
         mpv_command(["set_property", "pause", not paused])
+        
+        # 【状态改变显示】暂停状态改变时显示
+        new_paused = not paused
+        if PLAYER.current_meta and PLAYER.current_meta.get("url"):
+            title = PLAYER.current_meta.get("title", "N/A")
+            status_text = "⏸️ 暂停" if new_paused else "▶️ 播放中"
+            logger.info(
+                f"[播放状态改变] {status_text} | 歌曲: {title}"
+            )
+        
         return {
             "status": "OK",
             "paused": not paused
@@ -876,17 +814,21 @@ async def seek(request: Request):
         form = await request.form()
         percent = float(form.get("percent", 0))
         
-        # 获取总时长
+        # 限制百分比范围
+        percent = max(0, min(100, percent))
+        
+        # ✅【修复】尝试使用百分比绝对寻址（更兼容，不需要先获取 duration）
+        # 如果有 duration，计算具体位置；如果没有，直接用百分比寻址
         duration = mpv_get("duration")
-        if duration:
+        if duration and duration > 0:
             position = (percent / 100) * duration
             mpv_command(["seek", position, "absolute"])
             return {"status": "OK", "position": position}
         else:
-            return JSONResponse(
-                {"status": "ERROR", "error": "无法获取时长"},
-                status_code=400
-            )
+            # 没有 duration 时，用百分比进行寻址（更灵活）
+            # MPV 会自动解析百分比值
+            mpv_command(["seek", percent, "absolute-percent"])
+            return {"status": "OK", "percent": percent}
     except Exception as e:
         return JSONResponse(
             {"status": "ERROR", "error": str(e)},
@@ -898,6 +840,18 @@ async def set_loop_mode():
     """设置循环模式"""
     try:
         PLAYER.toggle_loop_mode()
+        
+        # 【状态改变显示】循环模式改变时显示
+        loop_modes = {
+            0: "❌ 不循环",
+            1: "🔂 单曲循环",
+            2: "🔁 全部循环"
+        }
+        mode_text = loop_modes.get(PLAYER.loop_mode, "未知")
+        logger.info(
+            f"[播放状态改变] 循环模式: {mode_text}"
+        )
+        
         return {
             "status": "OK",
             "loop_mode": PLAYER.loop_mode
@@ -1147,12 +1101,18 @@ async def create_playlist(request: Request):
 
 @app.post("/playlist_add")
 async def add_to_playlist(request: Request):
-    """添加歌曲到歌单（支持指定插入位置）"""
+    """添加歌曲到歌单（支持指定插入位置）
+    
+    核心逻辑：
+    1. 不打断当前播放的歌曲（位置0）
+    2. 新歌曲插入到"下一曲"位置（current_index + 1）
+    3. 前后台数据同步（PLAYER.current_index 由 /play 更新）
+    """
     try:
         data = await request.json()
         playlist_id = data.get("playlist_id", CURRENT_PLAYLIST_ID)
         song_data = data.get("song")
-        insert_index = data.get("insert_index")  # ✅ 新增：支持指定插入位置
+        insert_index = data.get("insert_index")  # 可选：指定插入位置
         
         if not song_data:
             return JSONResponse(
@@ -1167,7 +1127,7 @@ async def add_to_playlist(request: Request):
                 status_code=404
             )
         
-        # ✅ 检查歌曲是否已存在于歌单中
+        # 检查歌曲是否已存在于歌单中（防止重复）
         song_url = song_data.get("url", "")
         for existing_song in playlist.songs:
             existing_url = existing_song.get("url", "")
@@ -1177,17 +1137,16 @@ async def add_to_playlist(request: Request):
                     status_code=409
                 )
         
-        # ✅ 如果未指定 insert_index，插入到当前播放歌曲的下一个位置（插队）
+        # 计算插入位置：不打断当前播放，新歌曲在下一曲位置
         if insert_index is None:
-            # 【修复】使用 PLAYER.current_index 而不是 playlist.current_playing_index
-            # 因为 current_playing_index 从未被更新，总是 -1
+            # 获取当前播放歌曲的索引（由 /play 端点维护）
             current_index = PLAYER.current_index if hasattr(PLAYER, 'current_index') else -1
             
             logger.info(f"[添加歌曲] 计算插入位置 - PLAYER.current_index: {current_index}, 歌单长度: {len(playlist.songs)}")
             
             # 如果有当前播放的歌曲，则插入到下一个位置；否则插入到第一首之后
             if current_index >= 0 and current_index < len(playlist.songs):
-                insert_index = current_index + 1
+                insert_index = current_index + 1  # 下一曲位置
                 logger.info(f"[添加歌曲] 有当前播放的歌曲，插入到下一个位置: {insert_index}")
             else:
                 insert_index = 1 if playlist.songs else 0  # 第一首之后，或如果空列表则位置0
@@ -1218,11 +1177,13 @@ async def add_to_playlist(request: Request):
         
         # 转换为字典格式后插入
         song_dict = song_obj.to_dict()
-        # ✅ 确保 insert_index 不超出范围
+        # 确保 insert_index 不超出范围
         insert_index = max(0, min(insert_index, len(playlist.songs)))
         playlist.songs.insert(insert_index, song_dict)
         playlist.updated_at = time.time()
         PLAYLISTS_MANAGER.save()
+        
+        logger.info(f"[添加歌曲] ✓ 已插入 - 歌单: {playlist_id}, 位置: {insert_index}, 歌曲: {song_data.get('title', 'N/A')}")
         
         return {
             "status": "OK",

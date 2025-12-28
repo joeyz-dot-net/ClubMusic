@@ -1,8 +1,8 @@
 {
   "order": [
     "default",
-    "1766831711746",
-    "1766887077456"
+    "1766887077456",
+    "1766911672416"
   ],
   "playlists": [
     {
@@ -10,14 +10,34 @@
       "name": "正在播放",
       "songs": [
         {
-          "url": "单依纯/单依纯 - 不值得 (Live).flac",
-          "title": "单依纯 - 不值得 (Live)",
-          "name": "单依纯 - 不值得 (Live)",
+          "url": "SF6/1-12. E. Honda's Theme - Kumadori.mp3",
+          "title": "1-12. E. Honda's Theme - Kumadori",
+          "name": "1-12. E. Honda's Theme - Kumadori",
           "type": "local",
           "duration": 0,
-          "ts": 1766898198,
-          "thumbnail_url": "",
-          "artist": "单依纯 - 不值得 (Live)"
+          "ts": 1766912926,
+          "thumbnail_url": null,
+          "artist": "1-12. E. Honda's Theme - Kumadori"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=PisAtilDIis",
+          "title": "【歌手2025·纯享】 #单依纯《君》“经典传承”！创新串烧改编 传递跨越时空的怀念 |《歌手2025》| SINGER 2025｜MangoTV",
+          "name": "【歌手2025·纯享】 #单依纯《君》“经典传承”！创新串烧改编 传递跨越时空的怀念 |《歌手2025》| SINGER 2025｜MangoTV",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1766913113,
+          "thumbnail_url": "https://img.youtube.com/vi/PisAtilDIis/default.jpg",
+          "artist": "【歌手2025·纯享】 #单依纯《君》“经典传承”！创新串烧改编 传递跨越时空的怀念 |《歌手2025》| SINGER 2025｜MangoTV"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=1s3Lgj1FrTM",
+          "title": "單依純《還你茉莉》 官方歌詞版MV｜騰訊音樂發行頻道",
+          "name": "單依純《還你茉莉》 官方歌詞版MV｜騰訊音樂發行頻道",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1766913109,
+          "thumbnail_url": "https://img.youtube.com/vi/1s3Lgj1FrTM/default.jpg",
+          "artist": "單依純《還你茉莉》 官方歌詞版MV｜騰訊音樂發行頻道"
         },
         {
           "url": "https://www.youtube.com/watch?v=nzB9f6RAniA",
@@ -25,29 +45,9 @@
           "name": "SF6 ▰ PUNK (Ryu) vs NUCKLEDU (Mai) ▰ High Level Gameplay",
           "type": "youtube",
           "duration": 0,
-          "ts": 1766898304,
-          "thumbnail_url": "https://img.youtube.com/vi/nzB9f6RAniA/default.jpg",
+          "ts": 1766913088,
+          "thumbnail_url": "https://img.youtube.com/vi/nzB9f6RAniA/maxresdefault.jpg",
           "artist": "SF6 ▰ PUNK (Ryu) vs NUCKLEDU (Mai) ▰ High Level Gameplay"
-        },
-        {
-          "url": "SF6/1-01. NOT ON THE SIDELINES (MV Ver.).mp3",
-          "title": "1-01. NOT ON THE SIDELINES (MV Ver.)",
-          "name": "1-01. NOT ON THE SIDELINES (MV Ver.)",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898290,
-          "thumbnail_url": null,
-          "artist": "1-01. NOT ON THE SIDELINES (MV Ver.)"
-        },
-        {
-          "url": "SF6/1-02. Luke's Theme - Taking Aim.mp3",
-          "title": "1-02. Luke's Theme - Taking Aim",
-          "name": "1-02. Luke's Theme - Taking Aim",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898291,
-          "thumbnail_url": null,
-          "artist": "1-02. Luke's Theme - Taking Aim"
         },
         {
           "url": "SF6/1-03. Ryu's Theme - Viator.mp3",
@@ -55,574 +55,24 @@
           "name": "1-03. Ryu's Theme - Viator",
           "type": "local",
           "duration": 0,
-          "ts": 1766898291,
+          "ts": 1766913084,
           "thumbnail_url": null,
           "artist": "1-03. Ryu's Theme - Viator"
         },
         {
-          "url": "SF6/1-04. Chun-Li's Theme - Not A Little Girl.mp3",
-          "title": "1-04. Chun-Li's Theme - Not A Little Girl",
-          "name": "1-04. Chun-Li's Theme - Not A Little Girl",
+          "url": "单依纯/单依纯 - 不值得 (Live).flac",
+          "title": "单依纯 - 不值得 (Live)",
+          "name": "单依纯 - 不值得 (Live)",
           "type": "local",
           "duration": 0,
-          "ts": 1766898291,
+          "ts": 1766913081,
           "thumbnail_url": null,
-          "artist": "1-04. Chun-Li's Theme - Not A Little Girl"
-        },
-        {
-          "url": "SF6/1-05. Jamie's Theme - Mr. Top Player.mp3",
-          "title": "1-05. Jamie's Theme - Mr. Top Player",
-          "name": "1-05. Jamie's Theme - Mr. Top Player",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898291,
-          "thumbnail_url": null,
-          "artist": "1-05. Jamie's Theme - Mr. Top Player"
-        },
-        {
-          "url": "SF6/1-06. Guile's Theme - Sharpened Sonic.mp3",
-          "title": "1-06. Guile's Theme - Sharpened Sonic",
-          "name": "1-06. Guile's Theme - Sharpened Sonic",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898291,
-          "thumbnail_url": null,
-          "artist": "1-06. Guile's Theme - Sharpened Sonic"
-        },
-        {
-          "url": "SF6/1-07. Kimberly's Theme - Ninjastar Pop.mp3",
-          "title": "1-07. Kimberly's Theme - Ninjastar Pop",
-          "name": "1-07. Kimberly's Theme - Ninjastar Pop",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898291,
-          "thumbnail_url": null,
-          "artist": "1-07. Kimberly's Theme - Ninjastar Pop"
-        },
-        {
-          "url": "SF6/1-08. Juri's Theme - ÅrachniD＊＊.mp3",
-          "title": "1-08. Juri's Theme - ÅrachniD＊＊",
-          "name": "1-08. Juri's Theme - ÅrachniD＊＊",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898291,
-          "thumbnail_url": null,
-          "artist": "1-08. Juri's Theme - ÅrachniD＊＊"
-        },
-        {
-          "url": "SF6/1-09. Ken's Theme - Spirit of the Flame.mp3",
-          "title": "1-09. Ken's Theme - Spirit of the Flame",
-          "name": "1-09. Ken's Theme - Spirit of the Flame",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898291,
-          "thumbnail_url": null,
-          "artist": "1-09. Ken's Theme - Spirit of the Flame"
-        },
-        {
-          "url": "SF6/1-10. Blanka's Theme - zilra zilra.mp3",
-          "title": "1-10. Blanka's Theme - zilra zilra",
-          "name": "1-10. Blanka's Theme - zilra zilra",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898291,
-          "thumbnail_url": null,
-          "artist": "1-10. Blanka's Theme - zilra zilra"
-        },
-        {
-          "url": "SF6/1-11. Dhalsim's Theme - The Great Sunlight.mp3",
-          "title": "1-11. Dhalsim's Theme - The Great Sunlight",
-          "name": "1-11. Dhalsim's Theme - The Great Sunlight",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898291,
-          "thumbnail_url": null,
-          "artist": "1-11. Dhalsim's Theme - The Great Sunlight"
-        },
-        {
-          "url": "SF6/1-12. E. Honda's Theme - Kumadori.mp3",
-          "title": "1-12. E. Honda's Theme - Kumadori",
-          "name": "1-12. E. Honda's Theme - Kumadori",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898291,
-          "thumbnail_url": null,
-          "artist": "1-12. E. Honda's Theme - Kumadori"
-        },
-        {
-          "url": "SF6/1-13. Marisa's Theme - Pankration.mp3",
-          "title": "1-13. Marisa's Theme - Pankration",
-          "name": "1-13. Marisa's Theme - Pankration",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898291,
-          "thumbnail_url": null,
-          "artist": "1-13. Marisa's Theme - Pankration"
-        },
-        {
-          "url": "SF6/1-14. Manon's Theme - Walk With Grace.mp3",
-          "title": "1-14. Manon's Theme - Walk With Grace",
-          "name": "1-14. Manon's Theme - Walk With Grace",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898291,
-          "thumbnail_url": null,
-          "artist": "1-14. Manon's Theme - Walk With Grace"
-        },
-        {
-          "url": "SF6/1-15. Dee Jay's Theme - All Right!.mp3",
-          "title": "1-15. Dee Jay's Theme - All Right!",
-          "name": "1-15. Dee Jay's Theme - All Right!",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898291,
-          "thumbnail_url": null,
-          "artist": "1-15. Dee Jay's Theme - All Right!"
-        },
-        {
-          "url": "SF6/1-16. JP's Theme - The Plunderer.mp3",
-          "title": "1-16. JP's Theme - The Plunderer",
-          "name": "1-16. JP's Theme - The Plunderer",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898291,
-          "thumbnail_url": null,
-          "artist": "1-16. JP's Theme - The Plunderer"
-        },
-        {
-          "url": "SF6/1-17. Zangief's Theme - R.E.D..mp3",
-          "title": "1-17. Zangief's Theme - R.E.D.",
-          "name": "1-17. Zangief's Theme - R.E.D.",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898291,
-          "thumbnail_url": null,
-          "artist": "1-17. Zangief's Theme - R.E.D."
-        },
-        {
-          "url": "SF6/1-18. Lily's Theme - Diosa Del Sol.mp3",
-          "title": "1-18. Lily's Theme - Diosa Del Sol",
-          "name": "1-18. Lily's Theme - Diosa Del Sol",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898292,
-          "thumbnail_url": null,
-          "artist": "1-18. Lily's Theme - Diosa Del Sol"
-        },
-        {
-          "url": "SF6/1-19. Cammy's Theme - OverTrip.mp3",
-          "title": "1-19. Cammy's Theme - OverTrip",
-          "name": "1-19. Cammy's Theme - OverTrip",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898292,
-          "thumbnail_url": null,
-          "artist": "1-19. Cammy's Theme - OverTrip"
-        },
-        {
-          "url": "SF6/1-20. Rashid's Theme - The Turbulent Wind.mp3",
-          "title": "1-20. Rashid's Theme - The Turbulent Wind",
-          "name": "1-20. Rashid's Theme - The Turbulent Wind",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898292,
-          "thumbnail_url": null,
-          "artist": "1-20. Rashid's Theme - The Turbulent Wind"
-        },
-        {
-          "url": "SF6/1-21. A.K.I.'s Theme - Poisonous Passion.mp3",
-          "title": "1-21. A.K.I.'s Theme - Poisonous Passion",
-          "name": "1-21. A.K.I.'s Theme - Poisonous Passion",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898292,
-          "thumbnail_url": null,
-          "artist": "1-21. A.K.I.'s Theme - Poisonous Passion"
-        },
-        {
-          "url": "SF6/1-22. Ed's Theme - König oder Feigling.mp3",
-          "title": "1-22. Ed's Theme - König oder Feigling",
-          "name": "1-22. Ed's Theme - König oder Feigling",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898292,
-          "thumbnail_url": null,
-          "artist": "1-22. Ed's Theme - König oder Feigling"
-        },
-        {
-          "url": "SF6/2-01. World Tour - Main Menu.mp3",
-          "title": "2-01. World Tour - Main Menu",
-          "name": "2-01. World Tour - Main Menu",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898292,
-          "thumbnail_url": null,
-          "artist": "2-01. World Tour - Main Menu"
-        },
-        {
-          "url": "SF6/2-02. Body Shop - Avatar Creator.mp3",
-          "title": "2-02. Body Shop - Avatar Creator",
-          "name": "2-02. Body Shop - Avatar Creator",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898292,
-          "thumbnail_url": null,
-          "artist": "2-02. Body Shop - Avatar Creator"
-        },
-        {
-          "url": "SF6/2-03. Metro City Downtown - Stage Battle.mp3",
-          "title": "2-03. Metro City Downtown - Stage Battle",
-          "name": "2-03. Metro City Downtown - Stage Battle",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898292,
-          "thumbnail_url": null,
-          "artist": "2-03. Metro City Downtown - Stage Battle"
-        },
-        {
-          "url": "https://www.youtube.com/watch?v=viis5-_JjXQ",
-          "title": "【張學友 - Jacky Cheung 粤语歌曲】張學友20精選歌曲《還是覺得妳最好, 分手總要在雨天, 情已逝, 暗戀你, 我醒著做夢, 真情流露, 一千个伤心的理由, 藍雨, ...》",
-          "name": "【張學友 - Jacky Cheung 粤语歌曲】張學友20精選歌曲《還是覺得妳最好, 分手總要在雨天, 情已逝, 暗戀你, 我醒著做夢, 真情流露, 一千个伤心的理由, 藍雨, ...》",
-          "type": "youtube",
-          "duration": 0,
-          "ts": 1766898218,
-          "thumbnail_url": "https://img.youtube.com/vi/viis5-_JjXQ/default.jpg",
-          "artist": "【張學友 - Jacky Cheung 粤语歌曲】張學友20精選歌曲《還是覺得妳最好, 分手總要在雨天, 情已逝, 暗戀你, 我醒著做夢, 真情流露, 一千个伤心的理由, 藍雨, ...》"
-        },
-        {
-          "url": "https://www.youtube.com/watch?v=CA5CwZ4Nmnk",
-          "title": "張學友 - 心如刀割 (Official Video)",
-          "name": "張學友 - 心如刀割 (Official Video)",
-          "type": "youtube",
-          "duration": 0,
-          "ts": 1766898218,
-          "thumbnail_url": "https://img.youtube.com/vi/CA5CwZ4Nmnk/default.jpg",
-          "artist": "張學友 - 心如刀割 (Official Video)"
-        },
-        {
-          "url": "单依纯/单依纯 - 爱的回归线 (Live版).flac",
-          "title": "单依纯 - 爱的回归线 (Live版)",
-          "name": "单依纯 - 爱的回归线 (Live版)",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898227,
-          "thumbnail_url": null,
-          "artist": "单依纯 - 爱的回归线 (Live版)"
-        },
-        {
-          "url": "单依纯/单依纯 还有什么更好的.flac",
-          "title": "单依纯 还有什么更好的",
-          "name": "单依纯 还有什么更好的",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898227,
-          "thumbnail_url": null,
-          "artist": "单依纯 还有什么更好的"
-        },
-        {
-          "url": "单依纯/李白 (Live).flac",
-          "title": "李白 (Live)",
-          "name": "李白 (Live)",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898227,
-          "thumbnail_url": null,
-          "artist": "李白 (Live)"
-        },
-        {
-          "url": "单依纯/永不失联的爱.flac",
-          "title": "永不失联的爱",
-          "name": "永不失联的爱",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898228,
-          "thumbnail_url": null,
-          "artist": "永不失联的爱"
-        },
-        {
-          "url": "单依纯/珠玉.flac",
-          "title": "珠玉",
-          "name": "珠玉",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898228,
-          "thumbnail_url": null,
-          "artist": "珠玉"
-        },
-        {
-          "url": "单依纯/珠玉-Live.flac",
-          "title": "珠玉-Live",
-          "name": "珠玉-Live",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898228,
-          "thumbnail_url": null,
-          "artist": "珠玉-Live"
-        },
-        {
-          "url": "https://www.youtube.com/watch?v=7Sw2ZWTt0_U",
-          "title": "【怀旧音乐】高品质张学友国语音乐专辑，感受无损的HIFI魅力！",
-          "name": "【怀旧音乐】高品质张学友国语音乐专辑，感受无损的HIFI魅力！",
-          "type": "youtube",
-          "duration": 0,
-          "ts": 1766898218,
-          "thumbnail_url": "https://img.youtube.com/vi/7Sw2ZWTt0_U/default.jpg",
-          "artist": "【怀旧音乐】高品质张学友国语音乐专辑，感受无损的HIFI魅力！"
-        },
-        {
-          "url": "https://www.youtube.com/watch?v=V51lvMylpNA",
-          "title": "Jophia版-張學友 活出生命live演唱會2004全集 高清",
-          "name": "Jophia版-張學友 活出生命live演唱會2004全集 高清",
-          "type": "youtube",
-          "duration": 0,
-          "ts": 1766898218,
-          "thumbnail_url": "https://img.youtube.com/vi/V51lvMylpNA/default.jpg",
-          "artist": "Jophia版-張學友 活出生命live演唱會2004全集 高清"
-        },
-        {
-          "url": "https://www.youtube.com/watch?v=xThHm69dnFA",
-          "title": "【張學友 - Jacky Cheung 2024】張學友傳唱金曲 20 《還是覺得妳最好, 情已逝, 吻別, 暗戀你, 分手總要在雨天, 用餘生去愛, 怎麼捨得你, 李香蘭, ...》",
-          "name": "【張學友 - Jacky Cheung 2024】張學友傳唱金曲 20 《還是覺得妳最好, 情已逝, 吻別, 暗戀你, 分手總要在雨天, 用餘生去愛, 怎麼捨得你, 李香蘭, ...》",
-          "type": "youtube",
-          "duration": 0,
-          "ts": 1766898219,
-          "thumbnail_url": "https://img.youtube.com/vi/xThHm69dnFA/default.jpg",
-          "artist": "【張學友 - Jacky Cheung 2024】張學友傳唱金曲 20 《還是覺得妳最好, 情已逝, 吻別, 暗戀你, 分手總要在雨天, 用餘生去愛, 怎麼捨得你, 李香蘭, ...》"
-        },
-        {
-          "url": "https://www.youtube.com/watch?v=Qj2aSallqxI",
-          "title": "从《只想一生跟你走》开始听张学友Jacky Cheung 30分钟精选歌单 |《华语金曲串烧》中国音乐电视 Music TV",
-          "name": "从《只想一生跟你走》开始听张学友Jacky Cheung 30分钟精选歌单 |《华语金曲串烧》中国音乐电视 Music TV",
-          "type": "youtube",
-          "duration": 0,
-          "ts": 1766898219,
-          "thumbnail_url": "https://img.youtube.com/vi/Qj2aSallqxI/default.jpg",
-          "artist": "从《只想一生跟你走》开始听张学友Jacky Cheung 30分钟精选歌单 |《华语金曲串烧》中国音乐电视 Music TV"
-        },
-        {
-          "url": "单依纯/单依纯 - 开始懂了 (live).flac",
-          "title": "单依纯 - 开始懂了 (live)",
-          "name": "单依纯 - 开始懂了 (live)",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766898201,
-          "thumbnail_url": "",
-          "artist": "单依纯 - 开始懂了 (live)"
+          "artist": "单依纯 - 不值得 (Live)"
         }
       ],
-      "song_count": 40,
+      "song_count": 6,
       "created_at": 1766369731.0493586,
-      "updated_at": 1766898304.8364744,
-      "current_playing_index": -1
-    },
-    {
-      "id": "1766831711746",
-      "name": "test",
-      "songs": [
-        {
-          "url": "https://www.youtube.com/watch?v=nzB9f6RAniA",
-          "title": "SF6 ▰ PUNK (Ryu) vs NUCKLEDU (Mai) ▰ High Level Gameplay",
-          "name": "SF6 ▰ PUNK (Ryu) vs NUCKLEDU (Mai) ▰ High Level Gameplay",
-          "type": "youtube",
-          "duration": 0,
-          "ts": 1766897547,
-          "thumbnail_url": "https://img.youtube.com/vi/nzB9f6RAniA/default.jpg",
-          "artist": "SF6 ▰ PUNK (Ryu) vs NUCKLEDU (Mai) ▰ High Level Gameplay"
-        },
-        {
-          "url": "SF6/1-07. Kimberly's Theme - Ninjastar Pop.mp3",
-          "title": "1-07. Kimberly's Theme - Ninjastar Pop",
-          "name": "1-07. Kimberly's Theme - Ninjastar Pop",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766831716,
-          "thumbnail_url": null,
-          "artist": "1-07. Kimberly's Theme - Ninjastar Pop"
-        },
-        {
-          "url": "SF6/1-08. Juri's Theme - ÅrachniD＊＊.mp3",
-          "title": "1-08. Juri's Theme - ÅrachniD＊＊",
-          "name": "1-08. Juri's Theme - ÅrachniD＊＊",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766831716,
-          "thumbnail_url": null,
-          "artist": "1-08. Juri's Theme - ÅrachniD＊＊"
-        },
-        {
-          "url": "SF6/1-09. Ken's Theme - Spirit of the Flame.mp3",
-          "title": "1-09. Ken's Theme - Spirit of the Flame",
-          "name": "1-09. Ken's Theme - Spirit of the Flame",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766831716,
-          "thumbnail_url": null,
-          "artist": "1-09. Ken's Theme - Spirit of the Flame"
-        },
-        {
-          "url": "SF6/1-10. Blanka's Theme - zilra zilra.mp3",
-          "title": "1-10. Blanka's Theme - zilra zilra",
-          "name": "1-10. Blanka's Theme - zilra zilra",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766831716,
-          "thumbnail_url": null,
-          "artist": "1-10. Blanka's Theme - zilra zilra"
-        },
-        {
-          "url": "SF6/1-11. Dhalsim's Theme - The Great Sunlight.mp3",
-          "title": "1-11. Dhalsim's Theme - The Great Sunlight",
-          "name": "1-11. Dhalsim's Theme - The Great Sunlight",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766831716,
-          "thumbnail_url": null,
-          "artist": "1-11. Dhalsim's Theme - The Great Sunlight"
-        },
-        {
-          "url": "SF6/1-12. E. Honda's Theme - Kumadori.mp3",
-          "title": "1-12. E. Honda's Theme - Kumadori",
-          "name": "1-12. E. Honda's Theme - Kumadori",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766831716,
-          "thumbnail_url": null,
-          "artist": "1-12. E. Honda's Theme - Kumadori"
-        },
-        {
-          "url": "SF6/1-13. Marisa's Theme - Pankration.mp3",
-          "title": "1-13. Marisa's Theme - Pankration",
-          "name": "1-13. Marisa's Theme - Pankration",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766831716,
-          "thumbnail_url": null,
-          "artist": "1-13. Marisa's Theme - Pankration"
-        },
-        {
-          "url": "SF6/1-14. Manon's Theme - Walk With Grace.mp3",
-          "title": "1-14. Manon's Theme - Walk With Grace",
-          "name": "1-14. Manon's Theme - Walk With Grace",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766831716,
-          "thumbnail_url": null,
-          "artist": "1-14. Manon's Theme - Walk With Grace"
-        },
-        {
-          "url": "SF6/1-15. Dee Jay's Theme - All Right!.mp3",
-          "title": "1-15. Dee Jay's Theme - All Right!",
-          "name": "1-15. Dee Jay's Theme - All Right!",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766831716,
-          "thumbnail_url": null,
-          "artist": "1-15. Dee Jay's Theme - All Right!"
-        },
-        {
-          "url": "SF6/1-16. JP's Theme - The Plunderer.mp3",
-          "title": "1-16. JP's Theme - The Plunderer",
-          "name": "1-16. JP's Theme - The Plunderer",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766831716,
-          "thumbnail_url": null,
-          "artist": "1-16. JP's Theme - The Plunderer"
-        },
-        {
-          "url": "SF6/1-17. Zangief's Theme - R.E.D..mp3",
-          "title": "1-17. Zangief's Theme - R.E.D.",
-          "name": "1-17. Zangief's Theme - R.E.D.",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766831717,
-          "thumbnail_url": null,
-          "artist": "1-17. Zangief's Theme - R.E.D."
-        },
-        {
-          "url": "SF6/1-18. Lily's Theme - Diosa Del Sol.mp3",
-          "title": "1-18. Lily's Theme - Diosa Del Sol",
-          "name": "1-18. Lily's Theme - Diosa Del Sol",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766831717,
-          "thumbnail_url": null,
-          "artist": "1-18. Lily's Theme - Diosa Del Sol"
-        },
-        {
-          "url": "SF6/1-19. Cammy's Theme - OverTrip.mp3",
-          "title": "1-19. Cammy's Theme - OverTrip",
-          "name": "1-19. Cammy's Theme - OverTrip",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766831717,
-          "thumbnail_url": null,
-          "artist": "1-19. Cammy's Theme - OverTrip"
-        },
-        {
-          "url": "SF6/1-20. Rashid's Theme - The Turbulent Wind.mp3",
-          "title": "1-20. Rashid's Theme - The Turbulent Wind",
-          "name": "1-20. Rashid's Theme - The Turbulent Wind",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766831717,
-          "thumbnail_url": null,
-          "artist": "1-20. Rashid's Theme - The Turbulent Wind"
-        },
-        {
-          "url": "SF6/1-21. A.K.I.'s Theme - Poisonous Passion.mp3",
-          "title": "1-21. A.K.I.'s Theme - Poisonous Passion",
-          "name": "1-21. A.K.I.'s Theme - Poisonous Passion",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766831717,
-          "thumbnail_url": null,
-          "artist": "1-21. A.K.I.'s Theme - Poisonous Passion"
-        },
-        {
-          "url": "SF6/1-22. Ed's Theme - König oder Feigling.mp3",
-          "title": "1-22. Ed's Theme - König oder Feigling",
-          "name": "1-22. Ed's Theme - König oder Feigling",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766831717,
-          "thumbnail_url": null,
-          "artist": "1-22. Ed's Theme - König oder Feigling"
-        },
-        {
-          "url": "SF6/2-01. World Tour - Main Menu.mp3",
-          "title": "2-01. World Tour - Main Menu",
-          "name": "2-01. World Tour - Main Menu",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766831717,
-          "thumbnail_url": null,
-          "artist": "2-01. World Tour - Main Menu"
-        },
-        {
-          "url": "SF6/2-02. Body Shop - Avatar Creator.mp3",
-          "title": "2-02. Body Shop - Avatar Creator",
-          "name": "2-02. Body Shop - Avatar Creator",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766831717,
-          "thumbnail_url": null,
-          "artist": "2-02. Body Shop - Avatar Creator"
-        },
-        {
-          "url": "SF6/2-03. Metro City Downtown - Stage Battle.mp3",
-          "title": "2-03. Metro City Downtown - Stage Battle",
-          "name": "2-03. Metro City Downtown - Stage Battle",
-          "type": "local",
-          "duration": 0,
-          "ts": 1766831717,
-          "thumbnail_url": null,
-          "artist": "2-03. Metro City Downtown - Stage Battle"
-        }
-      ],
-      "song_count": 20,
-      "created_at": 1766831711.7465794,
-      "updated_at": 1766897547.631541,
+      "updated_at": 1766913113.7461488,
       "current_playing_index": -1
     },
     {
@@ -703,6 +153,96 @@
       "song_count": 7,
       "created_at": 1766887077.4568253,
       "updated_at": 1766898245.428132,
+      "current_playing_index": -1
+    },
+    {
+      "id": "1766911672416",
+      "name": "单依纯",
+      "songs": [
+        {
+          "url": "单依纯/单依纯 - 不值得 (Live).flac",
+          "title": "单依纯 - 不值得 (Live)",
+          "name": "单依纯 - 不值得 (Live)",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766911691,
+          "thumbnail_url": null,
+          "artist": "单依纯 - 不值得 (Live)"
+        },
+        {
+          "url": "单依纯/单依纯 - 开始懂了 (live).flac",
+          "title": "单依纯 - 开始懂了 (live)",
+          "name": "单依纯 - 开始懂了 (live)",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766911692,
+          "thumbnail_url": null,
+          "artist": "单依纯 - 开始懂了 (live)"
+        },
+        {
+          "url": "单依纯/单依纯 - 爱的回归线 (Live版).flac",
+          "title": "单依纯 - 爱的回归线 (Live版)",
+          "name": "单依纯 - 爱的回归线 (Live版)",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766911692,
+          "thumbnail_url": null,
+          "artist": "单依纯 - 爱的回归线 (Live版)"
+        },
+        {
+          "url": "单依纯/单依纯 还有什么更好的.flac",
+          "title": "单依纯 还有什么更好的",
+          "name": "单依纯 还有什么更好的",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766911692,
+          "thumbnail_url": null,
+          "artist": "单依纯 还有什么更好的"
+        },
+        {
+          "url": "单依纯/李白 (Live).flac",
+          "title": "李白 (Live)",
+          "name": "李白 (Live)",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766911692,
+          "thumbnail_url": null,
+          "artist": "李白 (Live)"
+        },
+        {
+          "url": "单依纯/永不失联的爱.flac",
+          "title": "永不失联的爱",
+          "name": "永不失联的爱",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766911692,
+          "thumbnail_url": null,
+          "artist": "永不失联的爱"
+        },
+        {
+          "url": "单依纯/珠玉.flac",
+          "title": "珠玉",
+          "name": "珠玉",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766911692,
+          "thumbnail_url": null,
+          "artist": "珠玉"
+        },
+        {
+          "url": "单依纯/珠玉-Live.flac",
+          "title": "珠玉-Live",
+          "name": "珠玉-Live",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766911692,
+          "thumbnail_url": null,
+          "artist": "珠玉-Live"
+        }
+      ],
+      "song_count": 8,
+      "created_at": 1766911672.416202,
+      "updated_at": 1766911692.7433047,
       "current_playing_index": -1
     }
   ]

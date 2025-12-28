@@ -405,11 +405,30 @@ export class SearchManager {
                             Toast.success(`➕ 已添加 ${addedCount} 首歌曲到「${playlistName}」`);
                             btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
                             
-                            // 刷新播放列表显示
-                            if (this.refreshPlaylist) {
-                                await this.refreshPlaylist();
-                            } else {
-                                document.dispatchEvent(new CustomEvent('playlist:refresh'));
+                            // ✅【关键】刷新播放列表显示 - 直接调用 renderPlaylistUI 确保立即显示
+                            try {
+                                await playlistManager.loadCurrent();
+                                await playlistManager.loadAll();
+                                
+                                const container = document.getElementById('playListContainer');
+                                const currentStatus = window.app?.lastPlayStatus || { current_meta: null };
+                                if (container && window.app?.modules?.playlistManager) {
+                                    const { renderPlaylistUI } = await import('./playlist.js');
+                                    renderPlaylistUI({
+                                        container,
+                                        onPlay: (s) => window.app?.playSong(s),
+                                        currentMeta: currentStatus.current_meta
+                                    });
+                                    console.log('[搜索] ✓ 播放列表已刷新 - ' + addedCount + ' 首歌曲');
+                                }
+                            } catch (err) {
+                                console.warn('[搜索] 刷新播放列表失败:', err);
+                                // 回退方案
+                                if (this.refreshPlaylist) {
+                                    await this.refreshPlaylist();
+                                } else {
+                                    document.dispatchEvent(new CustomEvent('playlist:refresh'));
+                                }
                             }
                         } catch (error) {
                             console.error('添加目录歌曲失败:', error);
@@ -457,11 +476,30 @@ export class SearchManager {
                             btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
                             btn.disabled = true;
                             
-                            // 刷新播放列表显示
-                            if (this.refreshPlaylist) {
-                                await this.refreshPlaylist();
-                            } else {
-                                document.dispatchEvent(new CustomEvent('playlist:refresh'));
+                            // ✅【关键】刷新播放列表显示 - 直接调用 renderPlaylistUI 确保立即显示
+                            try {
+                                await playlistManager.loadCurrent();
+                                await playlistManager.loadAll();
+                                
+                                const container = document.getElementById('playListContainer');
+                                const currentStatus = window.app?.lastPlayStatus || { current_meta: null };
+                                if (container && window.app?.modules?.playlistManager) {
+                                    const { renderPlaylistUI } = await import('./playlist.js');
+                                    renderPlaylistUI({
+                                        container,
+                                        onPlay: (s) => window.app?.playSong(s),
+                                        currentMeta: currentStatus.current_meta
+                                    });
+                                    console.log('[搜索] ✓ 播放列表已刷新 - 添加了: ' + songData.title);
+                                }
+                            } catch (err) {
+                                console.warn('[搜索] 刷新播放列表失败:', err);
+                                // 回退方案
+                                if (this.refreshPlaylist) {
+                                    await this.refreshPlaylist();
+                                } else {
+                                    document.dispatchEvent(new CustomEvent('playlist:refresh'));
+                                }
                             }
                         } else {
                             const error = await response.json();
