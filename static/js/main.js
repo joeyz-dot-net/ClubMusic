@@ -1732,25 +1732,7 @@ class MusicPlayerApp {
             });
         }
         
-        // 推流控制按钮
-        if (startStreamBtn) {
-            startStreamBtn.addEventListener('click', () => {
-                console.log('🔴 调试面板: 启动推流');
-                player.startStream('mp3').catch(err => {
-                    console.error('启动推流失败:', err);
-                });
-            });
-        }
-        
-        if (stopStreamBtn) {
-            stopStreamBtn.addEventListener('click', () => {
-                console.log('🔴 调试面板: 停止推流');
-                player.stopStream().catch(err => {
-                    console.error('停止推流失败:', err);
-                });
-            });
-        }
-        
+
         // 清空日志按钮
         if (debugClearLogs) {
             debugClearLogs.addEventListener('click', () => {
@@ -1862,8 +1844,8 @@ class MusicPlayerApp {
     }
 
     // 刷新调试信息
-    // 检查服务器推流状态
-    refreshDebugInfo() {
+    
+   async refreshDebugInfo() {
         const debugPlayer = document.getElementById('debugPlayer');
         const debugPlaylist = document.getElementById('debugPlaylist');
         const debugStorage = document.getElementById('debugStorage');

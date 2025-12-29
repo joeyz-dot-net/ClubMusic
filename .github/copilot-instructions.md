@@ -169,52 +169,16 @@ Frontend polling (every 1s `GET /status`) is critical for responsive UI. Safari 
 |---------|---------|------|
 | Settings changes ignored | Config cached on startup | Restart `python main.py` |
 | No audio output | Wrong WASAPI device GUID in `mpv_cmd` | Re-run startup device selection or edit `settings.ini` |
-| Chinese text garbled | Missing UTF-8 wrapper in entry point | Add wrapper in [models/__init__.py#L6](../models/__init__.py) |
-| YouTube videos 403 | yt-dlp outdated | `pip install --upgrade yt-dlp` or replace `bin/yt-dlp.exe` |
-| Frontend API 400 errors | FormData/JSON mismatch (POST `/play` expects form, not JSON) | Check [api.js](../static/js/api.js) calls vs [app.py](../app.py) route handler |
 | Playlist changes lost | Code forgot `PLAYLISTS_MANAGER.save()` | Add call after [models/playlists.py](../models/playlists.py) modifications |
 | Playlist appears empty in another browser | Each browser has independent `localStorage.selectedPlaylistId` | This is intentional—user isolation feature |
-| MPV won't start | IPC pipe busy OR mpv.exe path wrong | Kill lingering processes: `taskkill /IM mpv.exe /F`, check [settings.ini](../settings.ini) |
-| Drag-sort freezes UI | `operationLock` not released on `touchcancel` | Verify both listeners exist in [playlist.js#L450-500](../static/js/playlist.js#L450-L500) |
-| Auto-next not triggering | Backend event listener crashed or MPV pipe disconnected | Check server logs for `[事件监听]` errors, verify `\\.\pipe\mpv-pipe` exists |
-| Song won't play after adding from non-default playlist | Frontend didn't add to default playlist queue | Check [playlist.js](../static/js/playlist.js) `playSongFromSelectedPlaylist()` function |
 | Duplicate songs in queue | Code didn't check URL before adding | All `/playlist_add` calls must validate via `api.addToPlaylist()` which returns 409 Conflict |
 | Current index out of sync | Backend `PLAYER.current_index` ≠ actual position | After deletions, verify [app.py](../app.py) `/playlists/{id}/remove` recalculates index |
-
-## User-Isolation & State Management (Critical Pattern)
-
-⚠️ **Each browser tab/device maintains independent playlist selection**:
-- Frontend reads/writes `localStorage.selectedPlaylistId` (per-tab isolated)
-- Backend `/playlists/{id}/switch` only validates playlist exists, doesn't modify server state
-- Result: Multiple users/browsers can work with different playlists simultaneously without server-side global state conflicts
-
-**Key Implementation**:
-- [playlist.js#L10-25](../static/js/playlist.js#L10-L25): `PlaylistManager.selectedPlaylistId` is restored from localStorage
 - [main.js#L25-30](../static/js/main.js#L25-L30): App initializes with `this.currentPlaylistId = localStorage.getItem('selectedPlaylistId') || 'default'`
 - Backend [app.py#L1355-1420](../app.py#L1355-L1420): `/playlist` endpoint receives `playlist_id` from frontend, not global state
-- **Pattern**: Never sync playlist selection from server to frontend—trust frontend's localStorage as source of truth
-
-**State Sync Rules**:
-- Playback state (`paused`, `time_pos`, `volume`): Server is source of truth (via MPV)
-- Playlist order/content: Server is source of truth (via `playlists.json`)
 - Current playlist selection: **Frontend is source of truth** (via `localStorage.selectedPlaylistId`)
 - Theme/Language: Frontend only (via `localStorage`)
-- Do NOT add playlist selection to HTTP response headers or backend state—would break multi-tab isolation
-
-## Frontend Module System
-
-ES6 modules in [static/js/](../static/js/):
-- **Entry**: [main.js](../static/js/main.js) → imports all modules, `MusicPlayerApp` class
-- **Core**: `api.js` (HTTP), `player.js` (playback control), `playlist.js` (queue state)
-- **Features**: `search.js`, `ranking.js`, `local.js`, `playlists-management.js`
 - **UI**: `ui.js` (Toast, loading), `themeManager.js`, `navManager.js`, `settingsManager.js`
 - **State**: `localStorage` keys: `selectedPlaylistId`, `theme`, `language`
-- **Operation Lock**: [operationLock.js](../static/js/operationLock.js) prevents concurrent API calls during drag/reorder
-
-## Advanced Patterns & Edge Cases
-
-### URL Transformation & History Tracking
-- YouTube URLs via yt-dlp may transform from `youtu.be/ID` → full `youtube.com/watch?v=ID`
 - **Critical**: Always save ORIGINAL URL to `playback_history.json` BEFORE transformation
 - Ranking system matches on original URL, not transformed URL
 - [models/song.py](../models/song.py): `StreamSong.play()` applies transformation AFTER history save
@@ -241,13 +205,7 @@ ES6 modules in [static/js/](../static/js/):
 [main.js#L1080-1170](../static/js/main.js#L1080-L1170) implements non-modal stack for tab switching:
 - Maintains navigation history: `navigationStack = ['playlists']` (default tab)
 - Back button pops stack, returns to previous tab
-- Settings button is intercepted: closing settings calls `navigateBack()`
-- Pattern: Modals (ranking, search, settings) overlay tab content, not replace it
-
-**Closure issue**: Each modal cleanup must call `operationLock.release('drag')` to restore polling
-
 ## Touch Drag-Sort Implementation
-
 [playlist.js#L350-500](../static/js/playlist.js#L350-L500):
 - Long-press 300ms on drag handle to start reorder
 - Move threshold 10px before drag activates (prevents accidental trigger on scroll)
