@@ -5,41 +5,66 @@ export class MusicAPI {
     }
 
     async get(endpoint) {
-        const response = await fetch(`${this.baseURL}${endpoint}`);
-        return response.json();
+        try {
+            const response = await fetch(`${this.baseURL}${endpoint}`);
+            return await response.json();
+        } catch (err) {
+            console.warn(`[API] GET ${endpoint} failed:`, err);
+            return {}; // 保证调用方不会得到 undefined 导致读取属性时报错
+        }
     }
 
     async post(endpoint, data) {
-        const response = await fetch(`${this.baseURL}${endpoint}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        return response.json();
+        try {
+            const response = await fetch(`${this.baseURL}${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            return await response.json();
+        } catch (err) {
+            console.warn(`[API] POST ${endpoint} failed:`, err);
+            return {};
+        }
     }
 
     async postForm(endpoint, formData) {
-        const response = await fetch(`${this.baseURL}${endpoint}`, {
-            method: 'POST',
-            body: formData
-        });
-        return response.json();
+        try {
+            const response = await fetch(`${this.baseURL}${endpoint}`, {
+                method: 'POST',
+                body: formData
+            });
+            return await response.json();
+        } catch (err) {
+            console.warn(`[API] POST-FORM ${endpoint} failed:`, err);
+            return {};
+        }
     }
 
     async delete(endpoint) {
-        const response = await fetch(`${this.baseURL}${endpoint}`, {
-            method: 'DELETE'
-        });
-        return response.json();
+        try {
+            const response = await fetch(`${this.baseURL}${endpoint}`, {
+                method: 'DELETE'
+            });
+            return await response.json();
+        } catch (err) {
+            console.warn(`[API] DELETE ${endpoint} failed:`, err);
+            return {};
+        }
     }
 
     async put(endpoint, data) {
-        const response = await fetch(`${this.baseURL}${endpoint}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        return response.json();
+        try {
+            const response = await fetch(`${this.baseURL}${endpoint}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            return await response.json();
+        } catch (err) {
+            console.warn(`[API] PUT ${endpoint} failed:`, err);
+            return {};
+        }
     }
 
     // 播放器相关 API

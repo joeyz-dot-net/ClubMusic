@@ -35,7 +35,11 @@ export class PlaylistManager {
     async loadCurrent() {
         // 使用前端独立维护的 selectedPlaylistId，每个浏览器独立
         const result = await api.getPlaylist(this.selectedPlaylistId);
-        if (result.status === 'OK' && Array.isArray(result.playlist)) {
+        if (!result || result.status !== 'OK') {
+            console.warn('[歌单管理] loadCurrent: 无效的后端响应', result);
+            throw new Error('加载播放列表失败（后端响应无效）');
+        }
+        if (Array.isArray(result.playlist)) {
             this.currentPlaylist = result.playlist;
             this.currentPlaylistName = result.playlist_name || '当前播放列表'; // 获取歌单名称
             // 如果返回的歌单ID与请求不同（例如歌单被删除），同步更新
@@ -951,11 +955,11 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
             height: 40px;
             border-radius: 8px;
             cursor: pointer;
-            font-size: 20px;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             display: flex;
             align-items: center;
             justify-content: center;
+            font-size: 20px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             flex-shrink: 0;
         `;
         addAllBtn.innerHTML = '➕';

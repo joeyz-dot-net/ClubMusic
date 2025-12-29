@@ -1238,8 +1238,10 @@ class MusicPlayerApp {
         const playlistsModal = document.getElementById('playlistsModal');
 
         // 导航历史栈
-        let navigationStack = ['playlists'];  // 初始栏目
-        let currentModal = null; // 追踪当前打开的模态框
+        // 保持导航栈为 app 实例属性，确保在外部回调也可访问
+        this.navigationStack = this.navigationStack || ['playlists'];
+        const navigationStack = this.navigationStack; // 局部引用（用于闭包）
+         let currentModal = null; // 追踪当前打开的模态框
         
         // 获取当前栏目
         const getCurrentTab = () => navigationStack[navigationStack.length - 1];
@@ -1456,19 +1458,30 @@ class MusicPlayerApp {
             // 移除设置按钮的active状态
             if (settingsBtn) settingsBtn.classList.remove('active');
             
-            // ✅ 直接显示播放列表容器，而不是调用 navigateBack()
+            // ✅ 直接显示播放列表，而不是调用 navigateBack()
             setTimeout(() => {
-                navigationStack.pop();  // 弹出当前栏目
-                if (this.elements.playlist) {
-                    this.elements.playlist.style.display = 'block';
+                // 安全弹出导航栈（避免 navigationStack 未定义错误）
+                try {
+                    if (window.app && Array.isArray(window.app.navigationStack)) {
+                        window.app.navigationStack.pop();
+                    } else if (Array.isArray(navigationStack)) {
+                        navigationStack.pop();
+                    }
+                } catch (e) { console.warn('[导航] 无法弹出 navigationStack:', e); }
+
+                // 修复：settingsManager 的 this 不包含 UI 元素，使用全局 app.elements
+                const appElements = (window.app && window.app.elements) || (typeof app !== 'undefined' && app.elements) || null;
+                if (appElements && appElements.playlist) {
+                    appElements.playlist.style.display = 'block';
                     setTimeout(() => {
-                        this.elements.playlist.classList.add('tab-visible');
+                        appElements.playlist.classList.add('tab-visible');
                     }, 10);
                 }
-                if (this.elements.tree) {
-                    this.elements.tree.classList.remove('tab-visible');
-                    this.elements.tree.style.display = 'none';
+                if (appElements && appElements.tree) {
+                    appElements.tree.classList.remove('tab-visible');
+                    appElements.tree.style.display = 'none';
                 }
+
                 const playlistsNavBtn = navItems[0];
                 if (playlistsNavBtn) {
                     playlistsNavBtn.classList.add('active');
@@ -1934,7 +1947,7 @@ class MusicPlayerApp {
                 const value = localStorage.getItem(key);
                 storageInfo[key] = value && value.length > 200 ? value.substring(0, 200) + '...' : value;
             }
-            debugStorage.innerHTML = `<pre style="margin: 0; color: #51cf66;">${JSON.stringify(storageInfo, null, 2)}</pre>`;
+            debugStorage.innerHTML = `<pre style="margin: 0; color: #51cf66;">${JSON.stringify(storageInfo, null,  2)}</pre>`;
             console.log('[DEBUG] debugStorage 已更新');
         } else {
             console.warn('[DEBUG] debugStorage 元素不存在');
