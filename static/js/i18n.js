@@ -19,6 +19,13 @@ const translations = {
         'settings.language.zh': '中文 (Chinese)',
         'settings.language.en': 'English',
         
+        // ClubVoice 语音设置
+        'settings.clubvoice': '🎧 房间语音',
+        'settings.clubvoiceLabel': '实时语音',
+        'settings.clubvoiceVolume': '语音音量',
+        'settings.streaming': '直播',
+        'settings.autoStream': '自动开启直播',
+        'settings.streamVolume': '直播音量',
         // 按钮
         'settings.reset': '🔄 重置为默认',
         'settings.save': '✓ 保存设置',
@@ -56,6 +63,13 @@ const translations = {
         'settings.language.zh': '中文 (Chinese)',
         'settings.language.en': 'English',
         
+        // ClubVoice Settings
+        'settings.clubvoice': '🎧 Room Voice',
+        'settings.clubvoiceLabel': 'Live Voice',
+        'settings.clubvoiceVolume': 'Voice Volume',
+        'settings.streaming': 'live',
+        'settings.autoStream': 'Auto Enable Live',
+        'settings.streamVolume': 'Live Volume',
         // Buttons
         'settings.reset': '🔄 Reset to Default',
         'settings.save': '✓ Save Settings',

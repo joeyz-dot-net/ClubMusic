@@ -381,6 +381,148 @@
 	</script>		
 			</div>
 		
+			<!-- ClubVoice 语音收听控件 -->
+		<div class="settings-section" id="clubvoiceSection">
+			<h3 class="section-title" data-i18n="settings.clubvoice">🎧 房间语音</h3>
+
+			<!-- 连接控制行 -->
+			<div class="settings-item">
+				<label class="settings-label" data-i18n="settings.clubvoiceLabel">实时语音</label>
+				<div style="display:flex;align-items:center;gap:12px;flex:1;">
+					<button id="clubvoiceToggleBtn" type="button" class="settings-btn settings-btn-save" style="flex:0;padding:8px 12px;min-width:80px;white-space:nowrap;" disabled>连接中...</button>
+					<span id="clubvoiceStatus" class="toggle-text" style="flex:1;text-align:right;">正在连接...</span>
+				</div>
+			</div>
+
+			<!-- 音量控制行 -->
+			<div class="settings-item">
+				<label class="settings-label" data-i18n="settings.clubvoiceVolume">语音音量</label>
+				<div class="settings-volume">
+					<input id="clubvoiceVolume" type="range" min="0" max="100" value="80" class="volume-slider" disabled />
+					<span id="clubvoiceVolumeValue" class="volume-value">80%</span>
+				</div>
+			</div>
+
+			<!-- 统计信息行 -->
+			<div class="settings-item" style="border-bottom:none;">
+				<span id="clubvoiceStats" class="toggle-text">0 packets</span>
+			</div>
+
+			<script src="//e.joeyz.net/sdk/clubvoice.js"></script>
+			<script>
+			(function(){
+				let clubVoiceSDK = null;
+				const btn = document.getElementById('clubvoiceToggleBtn');
+				const status = document.getElementById('clubvoiceStatus');
+				const vol = document.getElementById('clubvoiceVolume');
+				const volValue = document.getElementById('clubvoiceVolumeValue');
+				const stats = document.getElementById('clubvoiceStats');
+
+				// 协议自适应
+				const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+				const SERVER_URL = `${protocol}//e.joeyz.net`;
+
+				async function initClubVoice(){
+					try{
+						if(typeof ClubVoiceSDK === 'undefined'){
+							throw new Error('ClubVoiceSDK not loaded');
+						}
+
+						clubVoiceSDK = new ClubVoiceSDK(SERVER_URL);
+
+						// 连接成功
+						clubVoiceSDK.onConnected = (data) => {
+							console.log('✅ ClubVoice 已连接', data);
+							status.textContent = '✓ 已连接';
+							btn.textContent = '开始收听';
+							btn.disabled = false;
+							vol.disabled = false;
+						};
+
+						// 连接断开
+						clubVoiceSDK.onDisconnected = () => {
+							console.log('❌ ClubVoice 连接断开');
+							status.textContent = '✕ 连接断开';
+							btn.textContent = '重新连接';
+						};
+
+						// 错误处理
+						clubVoiceSDK.onError = (error) => {
+							console.error('ClubVoice 错误:', error);
+							status.textContent = `✕ 错误`;
+						};
+
+						// 收听状态改变
+						clubVoiceSDK.onListeningChanged = (listening) => {
+							btn.textContent = listening ? '停止收听' : '开始收听';
+							status.textContent = listening ? '▶️ 正在收听' : '⏸️ 已停止';
+						};
+
+						// 音频数据接收
+						clubVoiceSDK.onAudioReceived = (info) => {
+							if(clubVoiceSDK.stats){
+								stats.textContent = `${clubVoiceSDK.stats.packetsReceived} packets`;
+							}
+						};
+
+						// 初始化连接
+						await clubVoiceSDK.init();
+					}catch(err){
+						console.error('ClubVoice 初始化失败:', err);
+						status.textContent = '连接失败';
+						btn.textContent = '重试';
+						btn.disabled = false;
+					}
+				}
+
+				// 切换收听状态
+				btn.addEventListener('click', async () => {
+					if(!clubVoiceSDK){
+						await initClubVoice();
+						return;
+					}
+
+					try{
+						if(clubVoiceSDK.isListening){
+							clubVoiceSDK.stopListening();
+						}else if(clubVoiceSDK.isConnected){
+							await clubVoiceSDK.startListening();
+						}else{
+							// 重新连接
+							status.textContent = '正在重连...';
+							btn.disabled = true;
+							await clubVoiceSDK.init();
+							btn.disabled = false;
+						}
+					}catch(err){
+						console.error('操作失败:', err);
+						status.textContent = '操作失败';
+					}
+				});
+
+				// 音量控制
+				vol.addEventListener('input', () => {
+					const value = parseInt(vol.value, 10);
+					volValue.textContent = `${value}%`;
+					if(clubVoiceSDK){
+						clubVoiceSDK.setVolume(value / 100);
+					}
+				});
+
+				// 页面关闭时清理
+				window.addEventListener('beforeunload', () => {
+					if(clubVoiceSDK){
+						try{ clubVoiceSDK.disconnect(); }catch(e){}
+					}
+				});
+
+				// 延迟初始化（等待 SDK 加载）
+				setTimeout(() => {
+					initClubVoice();
+				}, 500);
+			})();
+			</script>
+
 			<!-- 底部操作栏 -->
 			<div class="settings-footer">
 			</div>
