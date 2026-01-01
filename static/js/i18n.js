@@ -19,13 +19,6 @@ const translations = {
         'settings.language.zh': '中文 (Chinese)',
         'settings.language.en': 'English',
         
-        // 推流设置
-        'settings.streaming': '🎵 推流设置',
-        'settings.autoStream': '接收推流',
-        'settings.autoStream.enable': '启用',
-        'settings.autoStream.disable': '禁用',
-        'settings.streamVolume': '推流音量',
-        
         // 按钮
         'settings.reset': '🔄 重置为默认',
         'settings.save': '✓ 保存设置',
@@ -44,7 +37,6 @@ const translations = {
         'nav.local': '本地',
         'nav.search': '搜索',
         'search.history': '播放历史',
-        'nav.stream': '推流',
         'nav.settings': '设置',
         'nav.debug': '调试',
     },
@@ -64,13 +56,6 @@ const translations = {
         'settings.language.zh': '中文 (Chinese)',
         'settings.language.en': 'English',
         
-        // Streaming settings
-        'settings.streaming': '🎵 Streaming Settings',
-        'settings.autoStream': 'Receive Streaming',
-        'settings.autoStream.enable': 'Enable',
-        'settings.autoStream.disable': 'Disable',
-        'settings.streamVolume': 'Streaming Volume',
-        
         // Buttons
         'settings.reset': '🔄 Reset to Default',
         'settings.save': '✓ Save Settings',
@@ -89,7 +74,6 @@ const translations = {
         'nav.local': 'Local',
         'nav.search': 'Search',
         'search.history': 'Playback History',
-        'nav.stream': 'Stream',
         'nav.settings': 'Settings',
         'nav.debug': 'Debug',
     }

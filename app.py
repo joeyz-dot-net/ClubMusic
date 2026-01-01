@@ -20,6 +20,7 @@ from fastapi import FastAPI, Request, File, UploadFile, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse, StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 import uuid
 import asyncio
 import queue
@@ -192,13 +193,55 @@ def detect_browser_and_apply_config(request: Request) -> dict:
 
 
 # ============================================
+# 定义应用生命周期处理
+# ============================================
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理（启动和关闭事件）"""
+    # 启动事件
+    logger.info("应用启动完成")
+    auto_fill_and_play_if_idle()
+    
+    yield  # 应用运行期间
+    
+    # 关闭事件
+    logger.info("应用正在关闭...")
+
+    # 清理 MPV 进程
+    try:
+        if PLAYER and PLAYER.mpv_process:
+            logger.info("正在关闭 MPV 进程...")
+            PLAYER.mpv_process.terminate()
+            try:
+                PLAYER.mpv_process.wait(timeout=3)
+                logger.info("✅ MPV 进程已正常关闭")
+            except:
+                logger.warning("MPV 进程未响应，强制终止...")
+                PLAYER.mpv_process.kill()
+                logger.info("✅ MPV 进程已强制终止")
+    except Exception as e:
+        logger.error(f"关闭 MPV 进程失败: {e}")
+        # 尝试使用 taskkill 强制终止
+        try:
+            import subprocess
+            subprocess.run(["taskkill", "/IM", "mpv.exe", "/F"], capture_output=True, timeout=2)
+            logger.info("✅ 使用 taskkill 强制终止 MPV 进程")
+        except:
+            pass
+    
+    logger.info("应用已关闭")
+
+
+# ============================================
 # 创建 FastAPI 应用
 # ============================================
 
 app = FastAPI(
     title="ClubMusic",
     description="ClubMusic - 网页音乐播放器",
-    version="2.0.0"
+    version="2.0.0",
+    lifespan=lifespan
 )
 
 # 添加 CORS 中间件（允许跨域请求）
@@ -488,42 +531,6 @@ def auto_fill_and_play_if_idle():
 
     t = threading.Thread(target=monitor, daemon=True, name="AutoFillIdleThread")
     t.start()
-
-# 在FastAPI启动事件中启动后台线程
-@app.on_event("startup")
-async def startup_event():
-    """应用启动时的初始化事件"""
-    logger.info("应用启动完成")
-    auto_fill_and_play_if_idle()
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """应用关闭时的清理事件"""
-    logger.info("应用正在关闭...")
-
-    # 清理 MPV 进程
-    try:
-        if PLAYER and PLAYER.mpv_process:
-            logger.info("正在关闭 MPV 进程...")
-            PLAYER.mpv_process.terminate()
-            try:
-                PLAYER.mpv_process.wait(timeout=3)
-                logger.info("✅ MPV 进程已正常关闭")
-            except:
-                logger.warning("MPV 进程未响应，强制终止...")
-                PLAYER.mpv_process.kill()
-                logger.info("✅ MPV 进程已强制终止")
-    except Exception as e:
-        logger.error(f"关闭 MPV 进程失败: {e}")
-        # 尝试使用 taskkill 强制终止
-        try:
-            import subprocess
-            subprocess.run(["taskkill", "/IM", "mpv.exe", "/F"], capture_output=True, timeout=2)
-            logger.info("✅ 使用 taskkill 强制终止 MPV 进程")
-        except:
-            pass
-    
-    logger.info("应用已关闭")
 
 # ============================================
 # 挂载静态文件
