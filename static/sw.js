@@ -1,5 +1,5 @@
 // ClubMusic Service Worker
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const CACHE_NAME = `clubmusic-${CACHE_VERSION}`;
 
 // 需要缓存的静态资源
@@ -27,6 +27,7 @@ const STATIC_ASSETS = [
   '/static/js/navManager.js',
   '/static/js/templates.js',
   '/static/js/operationLock.js',
+  '/static/js/iosBackgroundAudio.js',
   '/static/images/preview.png',
   '/static/images/icon-192.png',
   '/static/images/icon-512.png'
