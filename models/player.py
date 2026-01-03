@@ -1565,9 +1565,11 @@ class MusicPlayer:
                     yt_dlp_exe = "yt-dlp"
                 
                 try:
-                    logger.info(f"   ⏳ 运行命令: {yt_dlp_exe} -g {url[:50]}...")
+                    # 使用 -f bestaudio 确保只获取音频流
+                    cmd = [yt_dlp_exe, "-f", "bestaudio", "-g", url]
+                    logger.info(f"   ⏳ 运行命令: {' '.join(cmd[:3])} {url[:50]}...")
                     result = subprocess.run(
-                        [yt_dlp_exe, "-g", url],
+                        cmd,
                         capture_output=True,
                         text=True,
                         timeout=30
@@ -1575,8 +1577,9 @@ class MusicPlayer:
                     if result.returncode == 0:
                         direct_urls = result.stdout.strip().split("\n")
                         if direct_urls and direct_urls[0]:
-                            actual_url = direct_urls[-1].strip()  # 通常最后一个是音频/最优质
-                            logger.info(f"   ✅ 获取到直链（前100字符）: {actual_url[:100]}...")
+                            # 使用第一个 URL（bestaudio 模式下只返回一个音频流）
+                            actual_url = direct_urls[0].strip()
+                            logger.info(f"   ✅ 获取到音频直链（前100字符）: {actual_url[:100]}...")
                     else:
                         logger.warning(f"   ⚠️  yt-dlp -g 失败 (code={result.returncode}): {result.stderr[:200]}")
                 except Exception as e:
@@ -1853,11 +1856,19 @@ class MusicPlayer:
             logger.error(f"play() called with None song")
             return False
 
-        logger.debug(f"play() -> 播放歌曲: {song}")
+        # 🔍 详细调试日志 - 网络歌曲播放追踪
+        is_stream = song.is_stream() if hasattr(song, 'is_stream') else False
+        logger.info("=" * 60)
+        logger.info(f"🎵 [MusicPlayer.play] 开始播放")
+        logger.info(f"   📌 歌曲对象: {type(song).__name__}")
+        logger.info(f"   📌 URL: {getattr(song, 'url', 'N/A')}")
+        logger.info(f"   📌 标题: {getattr(song, 'title', 'N/A')}")
+        logger.info(f"   📌 是否串流: {'✅ 是' if is_stream else '❌ 否'}")
+        logger.info("=" * 60)
 
         try:
             # 根据歌曲类型调用相应的播放方法
-            # 注意：mpv_cmd 参数在 song.play() 中不需要，因为 mpv 已在 ensure_mpv 中启动
+            logger.info(f"[MusicPlayer.play] 调用 song.play()...")
             success = song.play(
                 mpv_command_func=mpv_command_func,
                 mpv_pipe_exists_func=mpv_pipe_exists_func,
@@ -1868,12 +1879,15 @@ class MusicPlayer:
             )
 
             if not success:
+                logger.error(f"[MusicPlayer.play] ❌ song.play() 返回失败")
                 return False
+            
+            logger.info(f"[MusicPlayer.play] ✅ song.play() 返回成功")
 
             # 更新当前播放的元数据
             self.current_meta = song.to_dict()
             self._last_play_time = time.time()
-            logger.info(f"[Player.play] 已更新 current_meta: duration={self.current_meta.get('duration', 'N/A')}")
+            logger.info(f"[MusicPlayer.play] 已更新 current_meta: duration={self.current_meta.get('duration', 'N/A')}")
             logger.debug(f"已更新 current_meta: {self.current_meta}")
 
             # 对于串流媒体，尝试获取真实的媒体标题

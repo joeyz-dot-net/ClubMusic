@@ -37,15 +37,19 @@ export class Player {
 
     // 播放控制
     async play(url, title, type = 'local', duration = 0) {
-        console.log(`[Player.play] 接收参数: url=${url.substring(0, 50)}, title=${title}, type=${type}, duration=${duration}`);
-        const result = await api.play(url, title, type, duration);
-        
-        // 记录当前播放的URL
-        this.currentPlayingUrl = url;
-        
-        this.emit('play', { url, title, type });
-        
-        return result;
+        try {
+            const result = await api.play(url, title, type, duration);
+            
+            // 记录当前播放的URL
+            this.currentPlayingUrl = url;
+            
+            this.emit('play', { url, title, type });
+            
+            return result;
+        } catch (error) {
+            console.error('[Player.play] 播放异常:', error);
+            throw error;
+        }
     }
     
     async pause() {

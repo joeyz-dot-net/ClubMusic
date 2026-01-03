@@ -311,14 +311,27 @@ class StreamSong(Song):
           save_to_history: 是否保存到历史
           music_dir: 音乐库目录（串流不需要此参数）
         """
-        logger.debug(f"StreamSong.play -> 播放串流: {self.stream_url}")
+        # 🔍 详细调试日志 - 网络歌曲播放追踪
+        logger.info("="*60)
+        logger.info(f"🎵 [StreamSong.play] 开始播放网络歌曲")
+        logger.info(f"   📌 URL: {self.stream_url}")
+        logger.info(f"   📌 标题: {self.title}")
+        logger.info(f"   📌 类型: {self.stream_type}")
+        logger.info(f"   📌 视频ID: {self.video_id}")
+        logger.info(f"   📌 时长: {self.duration}秒")
+        logger.info("="*60)
 
         try:
             # 检查 mpv 进程是否运行
+            logger.info(f"   🔍 检查 MPV 管道状态...")
             if not mpv_pipe_exists_func():
-                logger.warning(f"mpv pipe 不存在，尝试启动 mpv...")
+                logger.warning(f"   ⚠️ mpv pipe 不存在，尝试启动 mpv...")
                 if not ensure_mpv_func():
+                    logger.error(f"   ❌ 无法启动或连接到 mpv")
                     raise RuntimeError("无法启动或连接到 mpv")
+                logger.info(f"   ✅ MPV 已启动")
+            else:
+                logger.info(f"   ✅ MPV 管道已存在")
 
             # 设置 ytdl-format 为最佳音质
             logger.debug("设置 mpv 属性: ytdl-format=bestaudio")
@@ -349,33 +362,59 @@ class StreamSong(Song):
                     yt_dlp_exe = "yt-dlp"
                 
                 try:
-                    logger.info(f"   ⏳ 运行命令: {os.path.basename(yt_dlp_exe)} -g {self.stream_url[:50]}...")
+                    import time as _time
+                    start_time = _time.time()
+                    # 使用 -f bestaudio 确保只获取音频流，避免获取到视频流
+                    cmd = [yt_dlp_exe, "-f", "bestaudio", "-g", self.stream_url]
+                    logger.info(f"   ⏳ 运行命令: {' '.join(cmd)}")
+                    logger.info(f"   ⏳ 开始获取直链...")
                     result = subprocess.run(
-                        [yt_dlp_exe, "-g", self.stream_url],
+                        cmd,
                         capture_output=True,
                         text=True,
                         timeout=30
                     )
+                    elapsed = _time.time() - start_time
+                    logger.info(f"   ⏱️ yt-dlp 执行耗时: {elapsed:.2f}秒")
+                    
                     if result.returncode == 0:
                         direct_urls = result.stdout.strip().split("\n")
+                        logger.info(f"   📋 yt-dlp 返回 {len(direct_urls)} 个URL")
+                        for i, u in enumerate(direct_urls):
+                            logger.info(f"      URL[{i}]: {u[:80]}..." if len(u) > 80 else f"      URL[{i}]: {u}")
                         if direct_urls and direct_urls[0]:
-                            actual_url = direct_urls[-1].strip()
-                            logger.info(f"   ✅ 获取到直链（前100字符）: {actual_url[:100]}...")
+                            # 使用第一个 URL（bestaudio 模式下只返回一个音频流）
+                            actual_url = direct_urls[0].strip()
+                            logger.info(f"   ✅ 使用音频直链: {actual_url[:100]}..." if len(actual_url) > 100 else f"   ✅ 使用音频直链: {actual_url}")
                     else:
-                        logger.warning(f"   ⚠️  yt-dlp -g 失败 (code={result.returncode}): {result.stderr[:200]}")
+                        logger.warning(f"   ⚠️ yt-dlp 失败 (code={result.returncode})")
+                        logger.warning(f"   ⚠️ stderr: {result.stderr[:500]}")
+                        logger.warning(f"   ⚠️ stdout: {result.stdout[:500]}")
+                except subprocess.TimeoutExpired:
+                    logger.error(f"   ❌ yt-dlp 超时（30秒）")
                 except Exception as e:
-                    logger.warning(f"   ⚠️  yt-dlp 获取直链异常: {e}，使用原始 URL")
+                    logger.warning(f"   ⚠️ yt-dlp 获取直链异常: {type(e).__name__}: {e}")
+                    logger.warning(f"   ⚠️ 将使用原始 URL: {self.stream_url}")
 
             logger.info(f"📤 调用 mpv loadfile 播放网络歌曲...")
+            logger.info(f"   📌 actual_url 长度: {len(actual_url)} 字符")
+            logger.info(f"   📌 actual_url 前缀: {actual_url[:50]}..." if len(actual_url) > 50 else f"   📌 actual_url: {actual_url}")
+            
             mpv_command_func(["loadfile", actual_url, "replace"])
+            logger.info(f"   ✅ mpv loadfile 命令已发送")
 
             # 添加到播放历史
             if save_to_history and add_to_history_func:
                 add_to_history_func(self.stream_url, self.title, is_local=False, thumbnail_url=self.get_thumbnail_url())
+                logger.info(f"   ✅ 已添加到播放历史")
 
+            logger.info(f"🎵 [StreamSong.play] ✅ 播放流程完成")
+            logger.info("="*60)
             return True
         except Exception as e:
-            logger.error(f"StreamSong.play failed: {e}")
+            logger.error(f"❌ [StreamSong.play] 播放失败: {type(e).__name__}: {e}")
+            import traceback
+            logger.error(f"❌ 堆栈:\n{traceback.format_exc()}")
             return False
 
     def to_dict(self) -> dict:

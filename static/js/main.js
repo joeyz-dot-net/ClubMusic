@@ -1606,7 +1606,7 @@ class MusicPlayerApp {
                     });
                     // ✅ 直接显示播放列表而不是调用navigateBack
                     setTimeout(() => {
-                        navigationStack.pop();  // 弹出当前栏目
+                        this.navigationStack.pop();  // 弹出当前栏目
                         if (this.elements.playlist) {
                             this.elements.playlist.style.display = 'block';
                             setTimeout(() => {
@@ -1639,7 +1639,7 @@ class MusicPlayerApp {
                     });
                     // ✅ 直接显示播放列表而不是调用navigateBack
                     setTimeout(() => {
-                        navigationStack.pop();  // 弹出当前栏目
+                        this.navigationStack.pop();  // 弹出当前栏目
                         if (this.elements.playlist) {
                             this.elements.playlist.style.display = 'block';
                             setTimeout(() => {
@@ -1684,7 +1684,7 @@ class MusicPlayerApp {
                     
                     // ✅ 直接显示播放列表而不是调用navigateBack
                     setTimeout(() => {
-                        navigationStack.pop();  // 弹出当前栏目
+                        this.navigationStack.pop();  // 弹出当前栏目
                         if (this.elements.playlist) {
                             this.elements.playlist.style.display = 'block';
                             setTimeout(() => {
@@ -1845,11 +1845,6 @@ class MusicPlayerApp {
         const debugPlaylist = document.getElementById('debugPlaylist');
         const debugStorage = document.getElementById('debugStorage');
         
-        console.log('[DEBUG] refreshDebugInfo 开始...');
-        console.log('debugPlayer:', debugPlayer);
-        console.log('debugPlaylist:', debugPlaylist);
-        console.log('debugStorage:', debugStorage);
-        
         // 优先从本地 player 缓存获取状态，若不可用则主动调用后端 /status 拉取
         let status = null;
         try {
@@ -1897,12 +1892,9 @@ class MusicPlayerApp {
                     loopMode: status.loop_mode ?? player?.loop_mode ?? 0,
                     currentSong: status.current_meta?.title || status.current_title || (status.current_meta && (status.current_meta.name || status.current_meta.title)) || 'N/A'
                 }, null, 2)}</pre>`;
-                console.log('[DEBUG] debugPlayer 已更新');
             } else {
                 debugPlayer.innerHTML = '<pre style="margin: 0; color: #ff6b6b;">无法获取播放器状态</pre>';
             }
-        } else {
-            console.warn('[DEBUG] debugPlayer 元素不存在');
         }
         
         // 获取歌单信息
@@ -1913,12 +1905,9 @@ class MusicPlayerApp {
                     playlistLength: playlistManager.currentPlaylist?.length || (playlistManager.getCurrent()?.length || 0),
                     playlistCount: playlistManager.playlists?.length || (playlistManager.getAll?.()?.length || 0)
                 }, null, 2)}</pre>`;
-                console.log('[DEBUG] debugPlaylist 已更新');
             } else {
                 debugPlaylist.innerHTML = '<pre style="margin: 0; color: #ff6b6b;">playlistManager 未初始化</pre>';
             }
-        } else {
-            console.warn('[DEBUG] debugPlaylist 元素不存在');
         }
         
         // 获取本地存储信息
@@ -1930,9 +1919,6 @@ class MusicPlayerApp {
                 storageInfo[key] = value && value.length > 200 ? value.substring(0, 200) + '...' : value;
             }
             debugStorage.innerHTML = `<pre style="margin: 0; color: #51cf66;">${JSON.stringify(storageInfo, null,  2)}</pre>`;
-            console.log('[DEBUG] debugStorage 已更新');
-        } else {
-            console.warn('[DEBUG] debugStorage 元素不存在');
         }
     }
 

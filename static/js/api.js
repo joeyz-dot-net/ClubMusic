@@ -78,8 +78,28 @@ export class MusicAPI {
         formData.append('title', title);
         formData.append('type', type);
         formData.append('duration', duration);
-        console.log(`[API.play] 发送参数: url=${url.substring(0, 50)}, title=${title}, type=${type}, duration=${duration}`);
-        return this.postForm('/play', formData);
+        
+        // 🔍 详细调试日志
+        console.log('%c[API.play] 🎵 发起播放请求', 'color: #4CAF50; font-weight: bold');
+        console.log('  📌 URL:', url);
+        console.log('  📌 标题:', title);
+        console.log('  📌 类型:', type);
+        console.log('  📌 时长:', duration);
+        console.log('  📌 是否网络歌曲:', type === 'youtube' || url.startsWith('http'));
+        
+        const startTime = performance.now();
+        const result = await this.postForm('/play', formData);
+        const elapsed = (performance.now() - startTime).toFixed(0);
+        
+        if (result.status === 'OK') {
+            console.log(`%c[API.play] ✅ 播放请求成功 (${elapsed}ms)`, 'color: #4CAF50');
+            console.log('  📦 返回数据:', result);
+        } else {
+            console.error(`%c[API.play] ❌ 播放请求失败 (${elapsed}ms)`, 'color: #f44336');
+            console.error('  ❌ 错误:', result.error || result);
+        }
+        
+        return result;
     }
 
     async pause() {

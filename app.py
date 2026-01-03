@@ -765,19 +765,31 @@ async def play(request: Request):
         title = form.get("title", "").strip()
         song_type = form.get("type", "local").strip()
         stream_format = form.get("stream_format", "mp3").strip() or "mp3"
-        duration = float(form.get("duration", "0") or "0")  # \u83b7\u53d6duration\u53c2\u6570
-        logger.info(f"[/play] 接收到参数: url={url[:50]}, title={title}, type={song_type}, duration={duration}")
+        duration = float(form.get("duration", "0") or "0")
+        
+        # 🔍 详细调试日志 - 网络歌曲播放追踪
+        is_network_song = song_type == "youtube" or url.startswith("http")
+        logger.info("=" * 60)
+        logger.info(f"🎵 [/play] 接收到播放请求")
+        logger.info(f"   📌 URL: {url}")
+        logger.info(f"   📌 标题: {title}")
+        logger.info(f"   📌 类型: {song_type}")
+        logger.info(f"   📌 时长: {duration}秒")
+        logger.info(f"   📌 是否网络歌曲: {'✅ 是' if is_network_song else '❌ 否'}")
+        logger.info("=" * 60)
         
         if not url:
+            logger.error("[/play] ❌ URL为空")
             return JSONResponse(
                 {"status": "ERROR", "error": "URL不能为空"},
                 status_code=400
             )
         
         # 创建Song对象
-        if song_type == "youtube" or url.startswith("http"):
+        if is_network_song:
+            logger.info(f"[/play] 🌐 创建 StreamSong 对象...")
             song = StreamSong(stream_url=url, title=title or url, duration=duration)
-            logger.info(f"[/play] 创建StreamSong: duration={song.duration}")
+            logger.info(f"[/play] ✓ StreamSong 已创建: video_id={song.video_id}, duration={song.duration}")
         else:
             song = LocalSong(file_path=url, title=title)
         
@@ -1016,49 +1028,6 @@ async def get_status():
         "duration": mpv_get("duration"),
         "volume": mpv_get("volume")
     }
-    
-    # ✅ 实时播放状态日志显示（每次调用 /status 时输出）
-    # 格式化时间显示
-    def format_time(seconds):
-        if seconds is None or seconds == 0:
-            return "00:00"
-        mins = int(seconds // 60)
-        secs = int(seconds % 60)
-        return f"{mins:02d}:{secs:02d}"
-    
-    # 获取播放状态
-    title = PLAYER.current_meta.get("title", "未播放") if PLAYER.current_meta else "未播放"
-    song_type = PLAYER.current_meta.get("type", "N/A") if PLAYER.current_meta else "N/A"
-    paused = mpv_state.get("paused", False)
-    time_pos = mpv_state.get("time_pos", 0) or 0
-    duration = mpv_state.get("duration", 0) or 0
-    volume = mpv_state.get("volume", 0) or 0
-    
-    # 计算进度百分比
-    progress_percent = (time_pos / duration * 100) if duration and duration > 0 else 0
-    
-    # 构建状态日志（单行，使用 \r 覆盖）
-    status_text = "⏸️ 暂停" if paused else "▶️ 播放中"
-    
-    # 截断标题避免过长（最多30个字符）
-    display_title = title[:30] + "..." if len(title) > 30 else title
-    
-    # 获取当前音频设备名称
-    device_name = PLAYER.get_audio_device_name()
-    
-    # 组建日志内容（音频设备名称放在行首）
-    log_content = (
-        f"📢 {device_name} | 🎵 {display_title} | {status_text} | "
-        f"{format_time(time_pos)}/{format_time(duration)} ({progress_percent:5.1f}%) | "
-        f"🔊 {int(volume):3d}%"
-    )
-    
-    # 用空格填充到固定宽度（160字符），确保完全覆盖上一行
-    # 使用 sys.stdout.write 确保原子操作（不分割输出）
-    import sys
-    log_with_return = f"\r{log_content.ljust(160)}"
-    sys.stdout.write(log_with_return)
-    sys.stdout.flush()
     
     # 为本地歌曲添加封面 URL（仅当封面存在时）
     current_meta = dict(PLAYER.current_meta) if PLAYER.current_meta else {}
