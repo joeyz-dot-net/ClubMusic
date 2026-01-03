@@ -246,9 +246,9 @@ class MusicPlayer:
 
         # 加载持久化数据
         self.load_playback_history()
-        logger.debug('调用 load_current_playlist 前，current_playlist 类型:', type(self.current_playlist))
+        logger.debug(f'调用 load_current_playlist 前，current_playlist 类型: {type(self.current_playlist)}')
         self.load_current_playlist()
-        logger.debug('调用 load_current_playlist 后，current_playlist 类型:', type(self.current_playlist))
+        logger.debug(f'调用 load_current_playlist 后，current_playlist 类型: {type(self.current_playlist)}')
 
         # 构建本地文件树
         try:
@@ -999,12 +999,12 @@ class MusicPlayer:
                     logger.error(f"请检查 MPV 路径配置: {self.mpv_cmd}")
                     raise
         except Exception as e:
-            logger.error("启动 mpv 进程失败:", e)
+            logger.error(f"启动 mpv 进程失败: {e}")
             return False
 
         ready = self._wait_pipe()
         if not ready:
-            logger.error("等待 mpv 管道超时: ", self.pipe_name)
+            logger.error(f"等待 mpv 管道超时: {self.pipe_name}")
             return False
         
         # 🔊 MPV 启动成功后，设置默认音量为 50%
@@ -1065,12 +1065,6 @@ class MusicPlayer:
                                 logger.info(f"   🎬 ytdl-format: {ytdl_format}")
                         except:
                             pass
-                    
-                    # 显示音频输出设备
-                    if runtime_audio_device:
-                        logger.info(f"   🔊 音频设备: {runtime_audio_device}")
-                    else:
-                        logger.info(f"   🔊 音频设备: 系统默认")
                         
                 elif cmd_name == "set_property":
                     if len(cmd_list) >= 3:
@@ -1353,8 +1347,15 @@ class MusicPlayer:
         try:
             # 遍历整个音乐目录
             for dp, dirs, files in os.walk(abs_root):
+                # ✅ 早期退出：达到max_results后立即返回
+                if len(results) >= max_results:
+                    return results
+                
                 # 搜索目录名匹配
                 for dirname in dirs:
+                    if len(results) >= max_results:
+                        return results
+                    
                     if query_lower in dirname.lower():
                         dir_path = os.path.join(dp, dirname)
                         rel_path = os.path.relpath(dir_path, abs_root).replace("\\", "/")
@@ -1374,6 +1375,9 @@ class MusicPlayer:
                 
                 # 搜索文件名匹配
                 for filename in files:
+                    if len(results) >= max_results:
+                        return results
+                    
                     ext = os.path.splitext(filename)[1].lower()
                     if ext in self.allowed_extensions:
                         # 检查文件名是否包含搜索关键词
@@ -1387,10 +1391,6 @@ class MusicPlayer:
                                 "type": "local",
                                 "is_directory": False
                             })
-                            
-                            # 达到最大结果数时停止
-                            if len(results) >= max_results:
-                                return results
         except Exception as e:
             logger.error(f"本地搜索失败: {e}")
         

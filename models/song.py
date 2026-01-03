@@ -450,12 +450,13 @@ class StreamSong(Song):
             logger.debug(f"搜索 YouTube: {query}")
 
             # 使用 yt-dlp 搜索 YouTube
-            # ✅ 移除 extract_flat 以获取完整的元数据（包括 duration）
+            # ✅ 使用 extract_flat 模式快速获取搜索结果（包含 duration 字段）
             ydl_opts = {
                 "quiet": True,
                 "no_warnings": True,
                 "default_search": "ytsearch",
-                # "extract_flat": "in_playlist",  # ❌ extract_flat 模式不返回 duration
+                "extract_flat": "in_playlist",  # 快速模式：只提取基本信息，避免下载完整格式列表
+                "skip_download": True,  # 明确不下载视频
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 # 搜索结果
@@ -470,9 +471,6 @@ class StreamSong(Song):
                             duration = item.get("duration", 0)
                             # 生成缩略图 URL
                             thumbnail_url = f"https://img.youtube.com/vi/{video_id}/default.jpg" if video_id else ""
-                            
-                            # ✅ 诊断日志：检查 yt-dlp 返回的完整数据
-                            logger.info(f"[YouTube搜索] title={item.get('title', 'Unknown')[:40]}, duration={duration}, keys={list(item.keys())[:10]}")
                             
                             results.append(
                                 {

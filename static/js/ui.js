@@ -185,5 +185,49 @@ export class Modal {
     }
 }
 
+// 搜索专用全屏加载动画
+export class SearchLoadingOverlay {
+    constructor() {
+        this.overlay = null;
+    }
+
+    show(message = '🔍 正在搜索...') {
+        if (this.overlay) return;
+
+        this.overlay = createElement('div', 'search-loading-overlay');
+        this.overlay.innerHTML = `
+            <div class="search-loading-content">
+                <div class="search-loading-spinner">
+                    <div class="spinner-ring"></div>
+                    <div class="spinner-ring"></div>
+                    <div class="spinner-ring"></div>
+                    <svg class="search-icon" viewBox="0 0 24 24" width="48" height="48">
+                        <path fill="currentColor" d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                    </svg>
+                </div>
+                <div class="search-loading-message">${message}</div>
+                <div class="search-loading-submessage">正在检索本地和网络资源...</div>
+            </div>
+        `;
+
+        document.body.appendChild(this.overlay);
+        // 触发动画
+        setTimeout(() => this.overlay.classList.add('visible'), 10);
+    }
+
+    hide() {
+        if (this.overlay) {
+            this.overlay.classList.remove('visible');
+            setTimeout(() => {
+                if (this.overlay && this.overlay.parentNode) {
+                    document.body.removeChild(this.overlay);
+                }
+                this.overlay = null;
+            }, 300);
+        }
+    }
+}
+
 // 导出单例工具
 export const loading = new LoadingIndicator();
+export const searchLoading = new SearchLoadingOverlay();

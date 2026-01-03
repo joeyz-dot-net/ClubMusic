@@ -21,7 +21,7 @@ export function buildTrackItemHTML({
         <div class="search-result-item playlist-track-item" data-url="${song.url || ''}" data-title="${title}" data-type="${isDirectory ? 'directory' : type}" data-thumbnail_url="${cover || ''}" data-directory="${isDirectory}">
             <div class="track-left">
                 <div class="track-cover">
-                    <img src="${cover}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                    <img src="${cover}" alt="" crossorigin="anonymous" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
                     <div class="track-cover-placeholder">${isDirectory ? '📁' : '🎵'}</div>
                 </div>
                 <div class="track-type">${displayType}</div>

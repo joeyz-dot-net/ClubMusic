@@ -1159,6 +1159,9 @@ async def set_loop_mode():
 async def search_song(request: Request):
     """搜索歌曲（本地 + YouTube）"""
     try:
+        import time as time_module  # 避免与内置time冲突
+        start_time = time_module.time()
+        
         data = await request.json()
         query = data.get("query", "").strip()
         
@@ -1176,6 +1179,7 @@ async def search_song(request: Request):
         
         if is_url:
             # 如果是 URL，尝试提取播放列表或视频
+            yt_start = time_module.time()
             try:
                 # 先尝试作为播放列表处理
                 playlist_result = StreamSong.extract_playlist(query)
@@ -1191,19 +1195,27 @@ async def search_song(request: Request):
                     video_result = StreamSong.extract_metadata(query)
                     if video_result.get("status") == "OK":
                         youtube_results = [video_result.get("data", {})]
+                logger.info(f"[搜索性能] YouTube URL 提取耗时: {time_module.time() - yt_start:.2f}秒，结果数: {len(youtube_results)}")
             except Exception as e:
                 logger.warning(f"[警告] 提取 YouTube URL 失败: {e}")
         else:
             # 本地搜索
+            local_start = time_module.time()
             local_results = PLAYER.search_local(query, max_results=PLAYER.local_search_max_results)
+            logger.info(f"[搜索性能] 本地搜索耗时: {time_module.time() - local_start:.2f}秒，结果数: {len(local_results)}")
             
             # YouTube 关键词搜索
+            yt_start = time_module.time()
             try:
                 yt_search_result = StreamSong.search(query, max_results=PLAYER.youtube_search_max_results)
                 if yt_search_result.get("status") == "OK":
                     youtube_results = yt_search_result.get("results", [])
+                logger.info(f"[搜索性能] YouTube 搜索耗时: {time_module.time() - yt_start:.2f}秒，结果数: {len(youtube_results)}")
             except Exception as e:
                 logger.warning(f"[警告] YouTube搜索失败: {e}")
+        
+        total_time = time_module.time() - start_time
+        logger.info(f"[搜索性能] ✅ 总搜索耗时: {total_time:.2f}秒")
         
         return {
             "status": "OK",

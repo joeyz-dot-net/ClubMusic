@@ -840,6 +840,132 @@ button:active { transform: scale(0.98); }
     padding-bottom: 80px;
 }
 
+/* ==========================================
+   搜索加载动画
+   ========================================== */
+.search-loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.95) 0%, rgba(118, 75, 162, 0.95) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.search-loading-overlay.visible {
+    opacity: 1;
+}
+
+.search-loading-content {
+    text-align: center;
+    color: white;
+}
+
+.search-loading-spinner {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.spinner-ring {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border: 3px solid transparent;
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 1.5s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite;
+}
+
+.spinner-ring:nth-child(1) {
+    width: 100%;
+    height: 100%;
+    animation-delay: 0s;
+    border-top-color: rgba(255, 255, 255, 0.9);
+}
+
+.spinner-ring:nth-child(2) {
+    width: 75%;
+    height: 75%;
+    animation-delay: -0.5s;
+    border-top-color: rgba(255, 255, 255, 0.7);
+}
+
+.spinner-ring:nth-child(3) {
+    width: 50%;
+    height: 50%;
+    animation-delay: -1s;
+    border-top-color: rgba(255, 255, 255, 0.5);
+}
+
+.search-loading-spinner .search-icon {
+    position: relative;
+    z-index: 1;
+    animation: pulse 1.5s ease-in-out infinite;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.search-loading-message {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    animation: fadeInUp 0.5s ease-out;
+}
+
+.search-loading-submessage {
+    font-size: 14px;
+    opacity: 0.9;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    animation: fadeInUp 0.5s ease-out 0.1s backwards;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.1);
+        opacity: 0.8;
+    }
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 浅色主题下的搜索加载动画 */
+[data-theme="light"] .search-loading-overlay {
+    background: linear-gradient(135deg, rgba(79, 172, 254, 0.95) 0%, rgba(0, 242, 254, 0.95) 100%);
+}
+
 /* 响应式调整 */
 @media (max-width: 600px) {
     .playlists-modal-content {
@@ -847,6 +973,19 @@ button:active { transform: scale(0.98); }
         max-width: 100%;
         max-height: 90vh;
         border-radius: 0;
+    }
+    
+    .search-loading-spinner {
+        width: 100px;
+        height: 100px;
+    }
+    
+    .search-loading-message {
+        font-size: 20px;
+    }
+    
+    .search-loading-submessage {
+        font-size: 13px;
     }
 }
 
@@ -2159,4 +2298,154 @@ button:active { transform: scale(0.98); }
 
 [data-theme="light"] .select-playlist-modal .modal-footer {
     border-top-color: rgba(0, 0, 0, 0.1);
+}
+
+/* ===== 搜索结果操作菜单（全屏模态框） ===== */
+.search-action-menu {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+}
+
+.search-action-menu.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.search-action-menu-content {
+    background: #2a2a2a;
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 400px;
+    width: 90%;
+    transform: scale(0.9);
+    transition: transform 0.3s;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.search-action-menu.show .search-action-menu-content {
+    transform: scale(1);
+}
+
+.search-action-menu-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.search-action-menu-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #fff;
+}
+
+.search-action-menu-close {
+    background: transparent;
+    border: none;
+    color: #999;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background 0.2s, color 0.2s;
+}
+
+.search-action-menu-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.search-action-menu-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.search-action-menu-item {
+    padding: 16px 20px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 16px;
+    color: #e0e0e0;
+    border: none;
+    background: rgba(255, 255, 255, 0.05);
+    width: 100%;
+    text-align: left;
+    border-radius: 12px;
+}
+
+.search-action-menu-item:hover {
+    background: rgba(255, 255, 255, 0.12);
+    transform: translateY(-2px);
+}
+
+.search-action-menu-item:active {
+    background: rgba(255, 255, 255, 0.18);
+    transform: translateY(0);
+}
+
+.search-action-menu-item .icon {
+    font-size: 24px;
+    width: 28px;
+    text-align: center;
+}
+
+.search-action-menu-item .label {
+    flex: 1;
+    font-weight: 500;
+}
+
+/* 浅色主题 */
+[data-theme="light"] .search-action-menu {
+    background: rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="light"] .search-action-menu-content {
+    background: #ffffff;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="light"] .search-action-menu-title {
+    color: #333;
+}
+
+[data-theme="light"] .search-action-menu-close {
+    color: #666;
+}
+
+[data-theme="light"] .search-action-menu-close:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: #333;
+}
+
+[data-theme="light"] .search-action-menu-item {
+    color: #333;
+    background: rgba(0, 0, 0, 0.03);
+}
+
+[data-theme="light"] .search-action-menu-item:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .search-action-menu-item:active {
+    background: rgba(0, 0, 0, 0.12);
 }

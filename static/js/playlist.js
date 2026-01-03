@@ -1524,6 +1524,7 @@ async function showPlaybackHistory() {
                 
                 // 封面
                 const cover = document.createElement('img');
+                cover.crossOrigin = 'anonymous';  // 防止跟踪防护警告
                 cover.style.cssText = `
                     width: 40px;
                     height: 40px;
