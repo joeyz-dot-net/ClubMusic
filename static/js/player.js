@@ -2,7 +2,6 @@
 import { api } from './api.js';
 import { settingsManager } from './settingsManager.js';
 import { operationLock } from './operationLock.js';
-import { iosBackgroundAudio } from './iosBackgroundAudio.js';
 
 export class Player {
     constructor() {
@@ -11,7 +10,6 @@ export class Player {
         this.listeners = new Map();
         this.currentPlayingUrl = null;  // 追踪当前播放的歌曲URL
         this.pollingPaused = false;  // 轮询暂停标志
-        this.iosBackgroundInitialized = false;  // iOS 后台模块初始化标志
         
         // 注册操作锁回调
         operationLock.onPause(() => {
@@ -24,31 +22,6 @@ export class Player {
         });
     }
     
-    /**
-     * 初始化 iOS 后台播放支持
-     */
-    initIOSBackgroundAudio() {
-        if (this.iosBackgroundInitialized) return;
-        
-        iosBackgroundAudio.init({
-            onStatusRefresh: async () => {
-                // 页面恢复前台时强制刷新状态
-                try {
-                    const status = await api.getStatus();
-                    this.updateStatus(status);
-                } catch (err) {
-                    console.warn('[Player] iOS后台恢复刷新失败:', err);
-                }
-            },
-            onPlayPause: () => this.togglePlayPause(),
-            onNext: () => this.next(),
-            onPrev: () => this.prev()
-        });
-        
-        this.iosBackgroundInitialized = true;
-        console.log('[Player] iOS 后台音频支持已初始化');
-    }
-
     // 事件监听
     on(event, callback) {
         if (!this.listeners.has(event)) {
@@ -63,8 +36,9 @@ export class Player {
     }
 
     // 播放控制
-    async play(url, title, type = 'local') {
-        const result = await api.play(url, title, type);
+    async play(url, title, type = 'local', duration = 0) {
+        console.log(`[Player.play] 接收参数: url=${url.substring(0, 50)}, title=${title}, type=${type}, duration=${duration}`);
+        const result = await api.play(url, title, type, duration);
         
         // 记录当前播放的URL
         this.currentPlayingUrl = url;
@@ -132,9 +106,6 @@ export class Player {
     startPolling(interval = 5000) {
         if (this.pollInterval) return;
         
-        // 自动初始化 iOS 后台播放支持
-        this.initIOSBackgroundAudio();
-        
         this.pollInterval = setInterval(async () => {
             // 检查操作锁：如果有活跃的锁，跳过本次轮询
             if (this.pollingPaused || operationLock.isPollingPaused()) {
@@ -195,23 +166,6 @@ export class Player {
         const oldStatus = this.status;
         this.status = status;
         this.emit('statusUpdate', { status, oldStatus });
-        
-        // 同步更新 iOS 后台 Media Session 显示
-        if (this.iosBackgroundInitialized && status) {
-            // 更新正在播放的歌曲信息
-            if (status.current_meta) {
-                iosBackgroundAudio.updateNowPlaying({
-                    title: status.current_meta.title || status.current_meta.name || '未知歌曲',
-                    artist: status.current_meta.artist || 'ClubMusic',
-                    album: status.current_playlist_name || '',
-                    artwork: status.current_meta.thumbnail_url || status.thumbnail_url
-                });
-            }
-            
-            // 更新播放状态
-            const isPlaying = status.mpv_state?.paused === false || status.mpv?.paused === false;
-            iosBackgroundAudio.setPlaybackState(isPlaying);
-        }
     }
 
     // 获取当前状态

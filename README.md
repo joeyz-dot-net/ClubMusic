@@ -41,7 +41,7 @@
 
 | 文件 | 说明 |
 |------|------|
-| `main.py` | 启动器，音频设备选择，启动 FastAPI |
+| `run.py` | 启动器，音频设备选择，启动 FastAPI |
 | `app.py` | FastAPI 主应用，所有 API 路由 |
 | `models/player.py` | 播放器核心，MPV IPC、自动播放、事件监听 |
 | `models/playlists.py` | 多歌单管理，持久化 |

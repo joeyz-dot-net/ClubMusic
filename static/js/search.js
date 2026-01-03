@@ -513,12 +513,15 @@ export class SearchManager {
                             
                             // ✅【关键】刷新播放列表显示 - 直接调用 renderPlaylistUI 确保立即显示
                             try {
-                                await playlistManager.loadCurrent();
-                                await playlistManager.loadAll();
+                                const playlistManager = window.app?.modules?.playlistManager;
+                                if (playlistManager) {
+                                    await playlistManager.loadCurrent();
+                                    await playlistManager.loadAll();
+                                }
 
                                 const container = document.getElementById('playListContainer');
                                 const currentStatus = window.app?.lastPlayStatus || { current_meta: null };
-                                if (container && window.app?.modules?.playlistManager) {
+                                if (container && playlistManager) {
                                     const { renderPlaylistUI } = await import('./playlist.js');
                                     renderPlaylistUI({
                                         container,

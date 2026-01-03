@@ -260,7 +260,87 @@ class MusicPlayer:
         # 初始化 MPV IPC（只加载一次）
         self._init_mpv_ipc()
 
+        # 初始化音频设备名映射表（GUID -> 设备友好名）
+        self._audio_device_names = self._init_audio_device_map()
+
         logger.info(f"播放器初始化完成: music_dir={self.music_dir}, extensions={self.allowed_extensions}")
+
+    def _init_audio_device_map(self) -> dict:
+        """初始化音频设备 GUID 到设备名的映射表
+        
+        返回:
+            {"d90d29b4-4976-44b8-900f-915b7d2bc58c": "VB-Cable Output", ...}
+        """
+        # 常见的 GUID 映射（Windows 音频设备）
+        known_devices = {
+            # VB-Cable 虚拟音频设备
+            "d90d29b4-4976-44b8-900f-915b7d2bc58c": "VB-Cable Output",
+            # 添加其他已知设备的映射（可根据需要扩展）
+        }
+        
+        # 尝试从注册表获取更多设备信息（Windows 特定）
+        try:
+            import winreg
+            reg_path = r"Software\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render"
+            try:
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path) as key:
+                    for i in range(winreg.QueryInfoKey(key)[0]):
+                        try:
+                            subkey_name = winreg.EnumKey(key, i)
+                            with winreg.OpenKey(key, f"{subkey_name}\\Properties") as subkey:
+                                try:
+                                    friendly_name, _ = winreg.QueryValueEx(subkey, "{b3f8fa53-0004-438e-9003-51a46e139bfc},2")
+                                    if friendly_name:
+                                        known_devices[subkey_name.lower()] = friendly_name
+                                except OSError:
+                                    pass
+                        except OSError:
+                            pass
+            except OSError:
+                pass
+        except ImportError:
+            # Windows Registry 模块在非 Windows 系统不可用
+            pass
+        
+        return known_devices
+
+    def get_audio_device_name(self) -> str:
+        """获取当前音频设备名称
+        
+        从 mpv_cmd 中解析 --audio-device 参数，返回对应的设备友好名
+        
+        返回:
+            设备名称（如 "VB-Cable Output"），未找到则返回 "System Default"
+        """
+        try:
+            if not self.mpv_cmd:
+                return "System Default"
+            
+            # 提取 --audio-device 参数值
+            import re
+            match = re.search(r'--audio-device=([^\s]+)', self.mpv_cmd)
+            if not match:
+                return "System Default"
+            
+            device_id = match.group(1).strip()
+            
+            # 如果是 wasapi/{GUID} 格式，提取 GUID
+            if device_id.startswith("wasapi/{"):
+                guid = device_id.replace("wasapi/{", "").rstrip("}")
+            else:
+                guid = device_id
+            
+            # 从映射表查找设备名
+            device_name = self._audio_device_names.get(guid.lower())
+            if device_name:
+                return device_name
+            
+            # 未找到映射，返回缩写的 GUID（前 8 位）
+            return f"Device ({guid[:8]})" if guid else "Unknown"
+            
+        except Exception as e:
+            logger.debug(f"获取音频设备名失败: {e}")
+            return "Unknown"
 
     @classmethod
     def initialize(cls, data_dir: str = "."):
@@ -696,17 +776,19 @@ class MusicPlayer:
                     url = next_song.get("url")
                     title = next_song.get("title") or url
                     song_type = next_song.get("type", "local")
+                    duration = next_song.get("duration", 0)
                 else:
                     url = str(next_song)
                     title = os.path.basename(url)
                     song_type = "local"
+                    duration = 0
                 
                 logger.info(f"[自动播放] ▶️ 开始播放下一首: {title}")
                 
                 # 根据歌曲类型创建Song对象并播放
                 if song_type == "youtube" or (url and str(url).startswith("http")):
                     from models.song import StreamSong
-                    song = StreamSong(stream_url=url, title=title)
+                    song = StreamSong(stream_url=url, title=title, duration=duration)
                 else:
                     from models.song import LocalSong
                     song = LocalSong(file_path=url, title=title)
@@ -814,10 +896,13 @@ class MusicPlayer:
             if "--ytdl=" not in mpv_launch_cmd:
                 mpv_launch_cmd += " --ytdl=yes"
             if yt_dlp_path:
+                # 转换为绝对路径并设置环境变量（提高兼容性）
+                abs_yt_dlp_path = os.path.abspath(yt_dlp_path)
+                os.environ['YT_DLP_PATH'] = abs_yt_dlp_path
                 # 将路径中的反斜杠转换为正斜杠，避免转义问题
-                yt_dlp_path_escaped = yt_dlp_path.replace("\\", "/")
+                yt_dlp_path_escaped = abs_yt_dlp_path.replace("\\", "/")
                 mpv_launch_cmd += f' --script-opts=ytdl_hook-ytdl_path="{yt_dlp_path_escaped}"'
-                logger.info(f"配置 MPV 使用 yt-dlp: {yt_dlp_path}")
+                logger.info(f"配置 MPV 使用 yt-dlp (绝对路径+环境变量): {abs_yt_dlp_path}")
             else:
                 logger.info(f"未找到 yt-dlp，将使用系统 PATH")
             
@@ -1788,6 +1873,7 @@ class MusicPlayer:
             # 更新当前播放的元数据
             self.current_meta = song.to_dict()
             self._last_play_time = time.time()
+            logger.info(f"[Player.play] 已更新 current_meta: duration={self.current_meta.get('duration', 'N/A')}")
             logger.debug(f"已更新 current_meta: {self.current_meta}")
 
             # 对于串流媒体，尝试获取真实的媒体标题

@@ -492,8 +492,9 @@ def auto_fill_and_play_if_idle():
                 url = first.get("url")
                 title = first.get("title", url)
                 typ = first.get("type", "local")
+                duration = first.get("duration", 0)
                 if typ == "youtube" or (isinstance(url, str) and url.startswith("http")):
-                    s = StreamSong(stream_url=url, title=title)
+                    s = StreamSong(stream_url=url, title=title, duration=duration)
                 else:
                     s = LocalSong(file_path=url, title=title)
                 PLAYER.play(
@@ -725,71 +726,7 @@ async def index():
 
 
 
-@app.get("/pwa-test")
-async def pwa_test_page():
-    """返回 PWA 测试页面"""
-    try:
-        template_path = _get_resource_path("templates/pwa-test.html")
-        with open(template_path, "r", encoding="utf-8") as f:
-            return HTMLResponse(f.read())
-    except Exception as e:
-        return HTMLResponse(f"<h1>错误</h1><p>{str(e)}</p>", status_code=500)
 
-@app.get("/safari-debug")
-async def safari_debug_page():
-    """返回 Safari PWA 诊断工具页面"""
-    try:
-        template_path = _get_resource_path("templates/safari-debug.html")
-        with open(template_path, "r", encoding="utf-8") as f:
-            return HTMLResponse(f.read())
-    except Exception as e:
-        return HTMLResponse(f"<h1>错误</h1><p>{str(e)}</p>", status_code=500)
-
-@app.get("/sw.js")
-async def service_worker():
-    """返回 Service Worker 脚本"""
-    try:
-        from fastapi.responses import Response
-        sw_path = _get_resource_path("static/sw.js")
-        with open(sw_path, "r", encoding="utf-8") as f:
-            content = f.read()
-        return Response(
-            content=content,
-            media_type="application/javascript",
-            headers={
-                "Service-Worker-Allowed": "/",
-                "Cache-Control": "no-cache, no-store, must-revalidate"
-            }
-        )
-    except Exception as e:
-        logger.error(f"读取 Service Worker 失败: {e}")
-        return Response(
-            content=f"// Error loading Service Worker: {str(e)}",
-            media_type="application/javascript",
-            status_code=500
-        )
-
-@app.get("/manifest.json")
-async def manifest():
-    """返回 PWA Manifest"""
-    try:
-        from fastapi.responses import Response
-        manifest_path = _get_resource_path("static/manifest.json")
-        with open(manifest_path, "r", encoding="utf-8") as f:
-            content = f.read()
-        return Response(
-            content=content,
-            media_type="application/manifest+json",
-            headers={
-                "Cache-Control": "public, max-age=3600"
-            }
-        )
-    except Exception as e:
-        logger.error(f"读取 Manifest 失败: {e}")
-        return JSONResponse(
-            {"error": f"Failed to load manifest: {str(e)}"},
-            status_code=500
-        )
 
 # ============================================
 # API 路由：歌单管理
@@ -828,6 +765,8 @@ async def play(request: Request):
         title = form.get("title", "").strip()
         song_type = form.get("type", "local").strip()
         stream_format = form.get("stream_format", "mp3").strip() or "mp3"
+        duration = float(form.get("duration", "0") or "0")  # \u83b7\u53d6duration\u53c2\u6570
+        logger.info(f"[/play] 接收到参数: url={url[:50]}, title={title}, type={song_type}, duration={duration}")
         
         if not url:
             return JSONResponse(
@@ -837,7 +776,8 @@ async def play(request: Request):
         
         # 创建Song对象
         if song_type == "youtube" or url.startswith("http"):
-            song = StreamSong(stream_url=url, title=title or url)
+            song = StreamSong(stream_url=url, title=title or url, duration=duration)
+            logger.info(f"[/play] 创建StreamSong: duration={song.duration}")
         else:
             song = LocalSong(file_path=url, title=title)
         
@@ -922,10 +862,12 @@ async def next_track():
             url = song_data.get("url", "")
             title = song_data.get("title", url)
             song_type = song_data.get("type", "local")
+            duration = song_data.get("duration", 0)
         else:
             url = str(song_data)
             title = os.path.basename(url)
             song_type = "local"
+            duration = 0
 
         if not url:
             logger.error(f"[ERROR] /next: 歌曲数据不完整: {song_data}")
@@ -936,7 +878,7 @@ async def next_track():
 
         # 构造Song对象并播放
         if song_type == "youtube" or url.startswith("http"):
-            song = StreamSong(stream_url=url, title=title or url)
+            song = StreamSong(stream_url=url, title=title or url, duration=duration)
             logger.info(f"[自动播放] 播放YouTube: {title}")
         else:
             song = LocalSong(file_path=url, title=title)
@@ -1007,10 +949,12 @@ async def prev_track():
             url = song_data.get("url", "")
             title = song_data.get("title", url)
             song_type = song_data.get("type", "local")
+            duration = song_data.get("duration", 0)
         else:
             url = str(song_data)
             title = os.path.basename(url)
             song_type = "local"
+            duration = 0
 
         if not url:
             logger.error(f"[ERROR] /prev: 歌曲数据不完整: {song_data}")
@@ -1021,7 +965,7 @@ async def prev_track():
 
         # 构造Song对象并播放
         if song_type == "youtube" or url.startswith("http"):
-            song = StreamSong(stream_url=url, title=title or url)
+            song = StreamSong(stream_url=url, title=title or url, duration=duration)
             logger.info(f"[上一首] 播放YouTube: {title}")
         else:
             song = LocalSong(file_path=url, title=title)
@@ -1074,40 +1018,47 @@ async def get_status():
     }
     
     # ✅ 实时播放状态日志显示（每次调用 /status 时输出）
-    if PLAYER.current_meta and PLAYER.current_meta.get("url"):
-        title = PLAYER.current_meta.get("title", "N/A")
-        song_type = PLAYER.current_meta.get("type", "N/A")
-        paused = mpv_state.get("paused", False)
-        time_pos = mpv_state.get("time_pos", 0) or 0
-        duration = mpv_state.get("duration", 0) or 0
-        volume = mpv_state.get("volume", 0) or 0
-        
-        # 格式化时间显示
-        def format_time(seconds):
-            mins = int(seconds // 60)
-            secs = int(seconds % 60)
-            return f"{mins:02d}:{secs:02d}"
-        
-        # 计算进度百分比
-        progress_percent = (time_pos / duration * 100) if duration > 0 else 0
-        
-        # 构建状态日志（单行，使用 \r 覆盖）
-        status_text = "⏸️ 暂停" if paused else "▶️ 播放中"
-        
-        # 截断标题避免过长（最多30个字符）
-        display_title = title[:30] + "..." if len(title) > 30 else title
-        
-        log_content = (
-            f"🎵 {display_title} | {status_text} | "
-            f"{format_time(time_pos)}/{format_time(duration)} ({progress_percent:5.1f}%) | "
-            f"🔊 {int(volume):3d}%"
-        )
-        
-        # 用空格填充到固定宽度（120字符），确保完全覆盖上一行
-        log_content = log_content.ljust(120)
-        
-        # 输出日志（覆盖同一行，不换行）
-        print(f"\r{log_content}", end="", flush=True)
+    # 格式化时间显示
+    def format_time(seconds):
+        if seconds is None or seconds == 0:
+            return "00:00"
+        mins = int(seconds // 60)
+        secs = int(seconds % 60)
+        return f"{mins:02d}:{secs:02d}"
+    
+    # 获取播放状态
+    title = PLAYER.current_meta.get("title", "未播放") if PLAYER.current_meta else "未播放"
+    song_type = PLAYER.current_meta.get("type", "N/A") if PLAYER.current_meta else "N/A"
+    paused = mpv_state.get("paused", False)
+    time_pos = mpv_state.get("time_pos", 0) or 0
+    duration = mpv_state.get("duration", 0) or 0
+    volume = mpv_state.get("volume", 0) or 0
+    
+    # 计算进度百分比
+    progress_percent = (time_pos / duration * 100) if duration and duration > 0 else 0
+    
+    # 构建状态日志（单行，使用 \r 覆盖）
+    status_text = "⏸️ 暂停" if paused else "▶️ 播放中"
+    
+    # 截断标题避免过长（最多30个字符）
+    display_title = title[:30] + "..." if len(title) > 30 else title
+    
+    # 获取当前音频设备名称
+    device_name = PLAYER.get_audio_device_name()
+    
+    # 组建日志内容（音频设备名称放在行首）
+    log_content = (
+        f"📢 {device_name} | 🎵 {display_title} | {status_text} | "
+        f"{format_time(time_pos)}/{format_time(duration)} ({progress_percent:5.1f}%) | "
+        f"🔊 {int(volume):3d}%"
+    )
+    
+    # 用空格填充到固定宽度（160字符），确保完全覆盖上一行
+    # 使用 sys.stdout.write 确保原子操作（不分割输出）
+    import sys
+    log_with_return = f"\r{log_content.ljust(160)}"
+    sys.stdout.write(log_with_return)
+    sys.stdout.flush()
     
     # 为本地歌曲添加封面 URL（仅当封面存在时）
     current_meta = dict(PLAYER.current_meta) if PLAYER.current_meta else {}
@@ -2163,6 +2114,45 @@ async def playlist_clear():
             logger.info(f"[清空队列] 队列已清空，重置 PLAYER.current_index = -1")
         
         return JSONResponse({"status": "OK", "message": "清空成功"})
+    except Exception as e:
+        return JSONResponse(
+            {"status": "ERROR", "error": str(e)},
+            status_code=500
+        )
+
+@app.get("/diagnostic/ytdlp")
+async def diagnostic_ytdlp():
+    """诊断 yt-dlp 配置状态（用于排查网络歌曲播放问题）"""
+    try:
+        app_dir = os.path.dirname(os.path.abspath(__file__))
+        bin_yt_dlp = os.path.join(app_dir, "bin", "yt-dlp.exe")
+        
+        result = {
+            "status": "OK",
+            "yt_dlp_path": bin_yt_dlp,
+            "exists": os.path.exists(bin_yt_dlp),
+            "executable": os.access(bin_yt_dlp, os.X_OK) if os.path.exists(bin_yt_dlp) else False,
+            "mpv_running": PLAYER.mpv_pipe_exists(),
+            "mpv_cmd": PLAYER.mpv_cmd,
+            "env_yt_dlp_path": os.environ.get('YT_DLP_PATH', 'Not Set'),
+        }
+        
+        # 测试 yt-dlp 是否可以正常运行
+        if result["exists"]:
+            try:
+                test_result = subprocess.run(
+                    [bin_yt_dlp, "--version"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                result["version"] = test_result.stdout.strip()
+                result["working"] = test_result.returncode == 0
+            except Exception as e:
+                result["test_error"] = str(e)
+                result["working"] = False
+        
+        return result
     except Exception as e:
         return JSONResponse(
             {"status": "ERROR", "error": str(e)},

@@ -411,11 +411,12 @@ class StreamSong(Song):
             logger.debug(f"搜索 YouTube: {query}")
 
             # 使用 yt-dlp 搜索 YouTube
+            # ✅ 移除 extract_flat 以获取完整的元数据（包括 duration）
             ydl_opts = {
                 "quiet": True,
                 "no_warnings": True,
                 "default_search": "ytsearch",
-                "extract_flat": "in_playlist",
+                # "extract_flat": "in_playlist",  # ❌ extract_flat 模式不返回 duration
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 # 搜索结果
@@ -427,20 +428,25 @@ class StreamSong(Song):
                     for item in result["entries"][:max_results]:
                         if item:
                             video_id = item.get("id", "")
+                            duration = item.get("duration", 0)
                             # 生成缩略图 URL
                             thumbnail_url = f"https://img.youtube.com/vi/{video_id}/default.jpg" if video_id else ""
+                            
+                            # ✅ 诊断日志：检查 yt-dlp 返回的完整数据
+                            logger.info(f"[YouTube搜索] title={item.get('title', 'Unknown')[:40]}, duration={duration}, keys={list(item.keys())[:10]}")
+                            
                             results.append(
                                 {
                                     "url": f"https://www.youtube.com/watch?v={video_id}",
                                     "title": item.get("title", "Unknown"),
-                                    "duration": item.get("duration", 0),
+                                    "duration": duration,
                                     "uploader": item.get("uploader", "Unknown"),
                                     "id": video_id,
                                     "type": "youtube",
                                     "thumbnail_url": thumbnail_url,
                                 }
                             )
-                logger.debug(f"搜索完成，找到 {len(results)} 个结果")
+                logger.info(f"[YouTube搜索] 搜索完成，找到 {len(results)} 个结果")
                 return {"status": "OK", "results": results}
         except Exception as e:
             logger.error(f"YouTube 搜索失败: {str(e)}")

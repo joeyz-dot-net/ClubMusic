@@ -72,11 +72,13 @@ export class MusicAPI {
         return this.get('/status');
     }
 
-    async play(url, title, type = 'local') {
+    async play(url, title, type = 'local', duration = 0) {
         const formData = new FormData();
         formData.append('url', url);
         formData.append('title', title);
         formData.append('type', type);
+        formData.append('duration', duration);
+        console.log(`[API.play] 发送参数: url=${url.substring(0, 50)}, title=${title}, type=${type}, duration=${duration}`);
         return this.postForm('/play', formData);
     }
 

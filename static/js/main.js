@@ -985,7 +985,8 @@ class MusicPlayerApp {
             
             for (let retry = 0; retry < maxRetries; retry++) {
                 try {
-                    await player.play(song.url, song.title, song.type);
+                    console.log(`[Main.playSong] 调用player.play - song.url=${song.url.substring(0, 50)}, song.title=${song.title}, song.type=${song.type}, song.duration=${song.duration || 0}`);
+                    await player.play(song.url, song.title, song.type, song.duration || 0);
                     playSuccess = true;
                     break; // 播放成功，跳出重试循环
                 } catch (err) {
