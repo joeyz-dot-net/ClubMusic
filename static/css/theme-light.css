@@ -120,63 +120,101 @@ body.theme-light {
     border-color: #3b82f6 !important;
 }
 
-/* 歌单管理模态框主题 */
-/* 亮色主题 */
-#playlistsModal.bright-theme {
-    background: #ffffff;
+/* ==========================================
+   歌单管理模态框 - 浅色主题
+   设计理念：清新明亮、层次分明、细腻质感
+   ========================================== */
+
+/* 模态框背景 - 柔和的半透明遮罩 */
+[data-theme="light"] .playlists-modal {
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
 }
 
-#playlistsModal.bright-theme .playlists-modal {
-    background: rgba(245, 247, 250, 0.6);
+/* 内容容器 - 白色磨砂玻璃效果 */
+[data-theme="light"] .playlists-modal-content {
+    background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.98) 0%, 
+        rgba(250, 251, 253, 0.95) 100%);
     backdrop-filter: blur(20px) saturate(180%);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
+    box-shadow: 
+        0 20px 60px rgba(0, 0, 0, 0.08),
+        0 8px 24px rgba(0, 0, 0, 0.04),
+        inset 0 1px 0 rgba(255, 255, 255, 1);
+    border: 1px solid rgba(229, 234, 242, 0.8);
 }
 
-#playlistsModal.bright-theme .playlists-modal-content {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
-    border: 1px solid rgba(230, 235, 240, 0.8);
+/* 头部区域 - 清新渐变 */
+[data-theme="light"] .playlists-modal-header {
+    background: linear-gradient(180deg, 
+        rgba(250, 252, 255, 0.95) 0%, 
+        rgba(247, 250, 254, 0.90) 100%);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(220, 227, 238, 0.5);
 }
 
-#playlistsModal.bright-theme .playlists-modal-header {
-    background: linear-gradient(180deg, rgba(250, 251, 252, 0.95) 0%, rgba(255, 255, 255, 0.9) 100%);
+/* 标题文字 - 深色优雅 */
+[data-theme="light"] .playlists-modal-header h2 {
+    color: #1a2332;
+    font-weight: 700;
+    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+/* 按钮 - 柔和蓝灰色调 */
+[data-theme="light"] .playlists-back-btn,
+[data-theme="light"] .playlists-add-btn {
+    color: #475569;
+    background: rgba(241, 245, 249, 0.6);
+    border: 1px solid rgba(203, 213, 225, 0.3);
+}
+
+[data-theme="light"] .playlists-back-btn:hover,
+[data-theme="light"] .playlists-add-btn:hover {
+    background: rgba(226, 232, 240, 0.8);
+    color: #334155;
+    border-color: rgba(148, 163, 184, 0.4);
+    box-shadow: 0 2px 8px rgba(100, 116, 139, 0.12);
+}
+
+[data-theme="light"] .playlists-add-btn:active {
+    background: rgba(203, 213, 225, 0.9);
+    transform: scale(0.96);
+}
+
+/* 主体区域 - 细腻渐变背景 */
+[data-theme="light"] .playlists-modal-body {
+    background: linear-gradient(180deg, 
+        rgba(252, 253, 255, 0.85) 0%, 
+        rgba(247, 249, 252, 0.90) 50%,
+        rgba(243, 246, 250, 0.92) 100%);
+}
+
+/* 歌单项 - 卡片式设计，柔和阴影 */
+[data-theme="light"] .playlist-item {
+    background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.95) 0%, 
+        rgba(249, 250, 252, 0.90) 100%);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    border-bottom: 1px solid rgba(230, 235, 240, 0.6);
+    border: 1px solid rgba(226, 232, 240, 0.6);
+    box-shadow: 
+        0 2px 8px rgba(100, 116, 139, 0.06),
+        0 1px 3px rgba(100, 116, 139, 0.04);
 }
 
-#playlistsModal.bright-theme .playlists-modal-header h2 {
-    color: #2c3e50;
-    font-weight: 600;
+[data-theme="light"] .playlist-item:hover {
+    background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 1) 0%, 
+        rgba(248, 250, 253, 0.98) 100%);
+    border-color: rgba(148, 163, 184, 0.5);
+    box-shadow: 
+        0 6px 20px rgba(100, 116, 139, 0.12),
+        0 2px 8px rgba(100, 116, 139, 0.08);
+    transform: translateY(-3px);
 }
-
-#playlistsModal.bright-theme .playlists-back-btn,
-#playlistsModal.bright-theme .playlists-add-btn {
-    color: #5a6c7d;
-}
-
-#playlistsModal.bright-theme .playlists-back-btn:hover,
-#playlistsModal.bright-theme .playlists-add-btn:hover {
-    background: rgba(103, 138, 174, 0.12);
-    color: #3d5467;
-}
-
-#playlistsModal.bright-theme .playlists-modal-body {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(250, 251, 252, 0.85) 100%);
-}
-
-#playlistsModal.bright-theme .playlist-item {
-    background: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-    border: 1px solid rgba(230, 235, 240, 0.6);
-}
-
-#playlistsModal.bright-theme .playlist-item:hover {
-    background: rgba(255, 255, 255, 0.95);
-    border-color: rgba(103, 138, 174, 0.3);
     box-shadow: 0 4px 16px rgba(103, 138, 174, 0.12), 0 2px 8px rgba(0, 0, 0, 0.04);
     transform: translateY(-2px);
 }
