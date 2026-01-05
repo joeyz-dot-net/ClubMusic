@@ -10,7 +10,7 @@ version = "1.0.0"
 description = "全栈网页音乐播放器 - FastAPI 后端 + ES6 前端 + MPV 播放引擎"
 readme = "README.md"
 authors = [
-    { name = "ClubMusic Team", email = "support@clubmusic.local" }
+    { name = "FlyingPig", email = "hnzzyagami@gmail.com" }
 ]
 license = { text = "MIT" }
 requires-python = ">=3.8"
