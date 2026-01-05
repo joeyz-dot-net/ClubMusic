@@ -469,8 +469,8 @@ class StreamSong(Song):
                         if item:
                             video_id = item.get("id", "")
                             duration = item.get("duration", 0)
-                            # 生成缩略图 URL
-                            thumbnail_url = f"https://img.youtube.com/vi/{video_id}/default.jpg" if video_id else ""
+                            # 生成缩略图 URL（使用 sddefault 中等质量，前端会降级到 mqdefault/default）
+                            thumbnail_url = f"https://img.youtube.com/vi/{video_id}/sddefault.jpg" if video_id else ""
                             
                             results.append(
                                 {
@@ -563,8 +563,8 @@ class StreamSong(Song):
                         title = item.get("title") or "未知标题"
                         duration = item.get("duration", 0)
                         
-                        # 生成缩略图 URL
-                        thumbnail_url = f"https://img.youtube.com/vi/{video_id}/default.jpg" if video_id else ""
+                        # 生成缩略图 URL（使用 sddefault 中等质量，前端会降级到 mqdefault/default）
+                        thumbnail_url = f"https://img.youtube.com/vi/{video_id}/sddefault.jpg" if video_id else ""
 
                         logger.debug(f"添加视频: {title} - {entry_url}")
 
@@ -628,8 +628,8 @@ class StreamSong(Song):
                     title = result.get("title", "Unknown")
                     duration = result.get("duration", 0)
                     
-                    # 生成缩略图 URL
-                    thumbnail_url = f"https://img.youtube.com/vi/{video_id}/default.jpg" if video_id else ""
+                    # 生成缩略图 URL（使用 sddefault 中等质量，前端会降级到 mqdefault/default）
+                    thumbnail_url = f"https://img.youtube.com/vi/{video_id}/sddefault.jpg" if video_id else ""
                     
                     # 构建完整的 YouTube URL
                     entry_url = f"https://www.youtube.com/watch?v={video_id}" if video_id else url

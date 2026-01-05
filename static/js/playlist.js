@@ -1522,54 +1522,86 @@ async function showPlaybackHistory() {
                     historyItem.style.background = 'transparent';
                 });
                 
-                // 封面
-                const cover = document.createElement('img');
-                cover.crossOrigin = 'anonymous';  // 防止跟踪防护警告
-                cover.style.cssText = `
+                // 封面 - 检查是否有有效的缩略图URL
+                const thumbnailUrl = item.thumbnail_url;
+                const hasValidThumbnail = thumbnailUrl && thumbnailUrl !== 'null' && thumbnailUrl !== 'undefined' && thumbnailUrl.trim() !== '';
+                
+                const coverContainer = document.createElement('div');
+                coverContainer.style.cssText = `
                     width: 40px;
                     height: 40px;
                     border-radius: 4px;
-                    object-fit: cover;
                     background: ${colors.buttonBg};
                     flex-shrink: 0;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    overflow: hidden;
                 `;
-                cover.src = item.thumbnail_url || '';
-                // YouTube 缩略图降级策略
-                const getThumbnailFallbacks = (url) => {
-                    if (url && url.includes('img.youtube.com/vi/')) {
-                        const baseUrl = url.substring(0, url.lastIndexOf('/'));
-                        return [
-                            url,
-                            baseUrl + '/mqdefault.jpg',
-                            baseUrl + '/default.jpg'
-                        ];
-                    }
-                    return [url];
-                };
-                const fallbackUrls = getThumbnailFallbacks(item.thumbnail_url);
-                cover.onerror = function() {
-                    const currentIndex = fallbackUrls.indexOf(this.src);
-                    if (currentIndex < fallbackUrls.length - 1) {
-                        // 尝试下一个降级版本，静默处理
-                        this.src = fallbackUrls[currentIndex + 1];
-                    } else {
-                        // 所有降级都失败，显示占位符
-                        this.style.display = 'none';
-                        const placeholder = document.createElement('div');
-                        placeholder.style.cssText = `
-                            width: 40px;
-                            height: 40px;
-                            border-radius: 4px;
-                            background: ${colors.buttonBg};
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            font-size: 20px;
-                        `;
-                        placeholder.textContent = '🎵';
-                        this.parentNode.replaceChild(placeholder, this);
-                    }
-                };
+                
+                if (hasValidThumbnail) {
+                    const cover = document.createElement('img');
+                    cover.crossOrigin = 'anonymous';
+                    cover.style.cssText = `
+                        width: 100%;
+                        height: 100%;
+                        object-fit: cover;
+                    `;
+                    
+                    // YouTube 缩略图降级策略
+                    const getThumbnailFallbacks = (url) => {
+                        if (url && url.includes('img.youtube.com/vi/')) {
+                            const baseUrl = url.substring(0, url.lastIndexOf('/'));
+                            return [
+                                url,
+                                baseUrl + '/mqdefault.jpg',
+                                baseUrl + '/default.jpg'
+                            ];
+                        }
+                        return [url];
+                    };
+                    
+                    const fallbackUrls = getThumbnailFallbacks(thumbnailUrl);
+                    let currentFallbackIndex = 0;
+                    
+                    cover.onerror = function() {
+                        currentFallbackIndex++;
+                        if (currentFallbackIndex < fallbackUrls.length) {
+                            // 尝试下一个降级版本
+                            this.src = fallbackUrls[currentFallbackIndex];
+                        } else {
+                            // 所有降级都失败，显示占位符
+                            this.style.display = 'none';
+                            const placeholder = document.createElement('div');
+                            placeholder.style.cssText = `
+                                width: 100%;
+                                height: 100%;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-size: 20px;
+                            `;
+                            placeholder.textContent = '🎵';
+                            coverContainer.appendChild(placeholder);
+                        }
+                    };
+                    
+                    cover.src = fallbackUrls[0];
+                    coverContainer.appendChild(cover);
+                } else {
+                    // 没有有效缩略图，直接显示占位符
+                    const placeholder = document.createElement('div');
+                    placeholder.style.cssText = `
+                        width: 100%;
+                        height: 100%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 20px;
+                    `;
+                    placeholder.textContent = '🎵';
+                    coverContainer.appendChild(placeholder);
+                }
                 
                 // 信息
                 const info = document.createElement('div');
@@ -1621,7 +1653,7 @@ async function showPlaybackHistory() {
                     hour12: false
                 });
                 
-                historyItem.appendChild(cover);
+                historyItem.appendChild(coverContainer);
                 historyItem.appendChild(info);
                 historyItem.appendChild(timeEl);
                 
@@ -1925,6 +1957,7 @@ async function closeHistoryModal(historyModal) {
         historyModal.style.display = 'none';
         
         // ✅【修复】获取最新的播放状态，而不是使用缓存数据
+
         const container = document.getElementById('playListContainer');
         let currentStatus = { current_meta: null };
         try {

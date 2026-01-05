@@ -185,3 +185,150 @@ export class EventEmitter {
         this.on(event, onceWrapper);
     }
 }
+
+// ==========================================
+// 缩略图管理器 - 统一处理 YouTube 缩略图降级
+// ==========================================
+
+/**
+ * ThumbnailManager - 缩略图降级与失败缓存管理
+ * 
+ * YouTube 缩略图质量选项:
+ *   - maxresdefault.jpg (1280x720) - 可能不存在
+ *   - sddefault.jpg (640x480) - 推荐默认
+ *   - mqdefault.jpg (320x180) - 中等质量
+ *   - default.jpg (120x90) - 最低质量，总是存在
+ */
+export class ThumbnailManager {
+    constructor() {
+        // 缓存失败的 URL，避免重复请求
+        this._failedUrls = new Set();
+    }
+
+    /**
+     * 检查 URL 是否已知失败
+     * @param {string} url - 缩略图 URL
+     * @returns {boolean}
+     */
+    isKnownFailed(url) {
+        return this._failedUrls.has(url);
+    }
+
+    /**
+     * 标记 URL 为失败
+     * @param {string} url - 缩略图 URL
+     */
+    markAsFailed(url) {
+        if (url) {
+            this._failedUrls.add(url);
+        }
+    }
+
+    /**
+     * 获取 YouTube 缩略图的降级 URL 列表
+     * @param {string} url - 原始缩略图 URL
+     * @returns {string[]} - 降级 URL 列表（按质量从高到低）
+     */
+    getFallbackUrls(url) {
+        if (!url || typeof url !== 'string') {
+            return [];
+        }
+
+        // 检查是否是 YouTube 缩略图
+        if (url.includes('img.youtube.com/vi/')) {
+            const baseUrl = url.substring(0, url.lastIndexOf('/'));
+            return [
+                url,
+                baseUrl + '/sddefault.jpg',
+                baseUrl + '/mqdefault.jpg',
+                baseUrl + '/default.jpg'
+            ];
+        }
+
+        // 非 YouTube URL，直接返回原始 URL
+        return [url];
+    }
+
+    /**
+     * 为图片元素设置降级处理
+     * @param {HTMLImageElement} imgElement - 图片元素
+     * @param {string} originalUrl - 原始缩略图 URL
+     * @param {string} placeholderEmoji - 失败时显示的占位符 emoji（默认 '🎵'）
+     */
+    setupFallback(imgElement, originalUrl, placeholderEmoji = '🎵') {
+        if (!imgElement || !originalUrl) return;
+
+        // 如果已知失败，直接隐藏
+        if (this.isKnownFailed(originalUrl)) {
+            imgElement.style.display = 'none';
+            this._showPlaceholder(imgElement, placeholderEmoji);
+            return;
+        }
+
+        const fallbackUrls = this.getFallbackUrls(originalUrl);
+        let currentIndex = 0;
+
+        // 设置初始 src
+        imgElement.crossOrigin = 'anonymous';
+        imgElement.src = fallbackUrls[0] || originalUrl;
+
+        // 设置 onerror 处理
+        imgElement.onerror = () => {
+            currentIndex++;
+            if (currentIndex < fallbackUrls.length) {
+                // 尝试下一个降级版本
+                imgElement.src = fallbackUrls[currentIndex];
+            } else {
+                // 所有降级都失败，标记并显示占位符
+                this.markAsFailed(originalUrl);
+                imgElement.style.display = 'none';
+                this._showPlaceholder(imgElement, placeholderEmoji);
+            }
+        };
+    }
+
+    /**
+     * 批量为容器内的所有图片设置降级处理
+     * @param {HTMLElement} container - 容器元素
+     * @param {string} selector - 图片选择器（默认 'img[data-original-url]'）
+     * @param {string} placeholderEmoji - 占位符 emoji
+     */
+    setupFallbackForContainer(container, selector = 'img[data-original-url]', placeholderEmoji = '🎵') {
+        if (!container) return;
+
+        const images = container.querySelectorAll(selector);
+        images.forEach(img => {
+            const originalUrl = img.getAttribute('data-original-url') || img.src;
+            this.setupFallback(img, originalUrl, placeholderEmoji);
+        });
+    }
+
+    /**
+     * 显示占位符
+     * @private
+     */
+    _showPlaceholder(imgElement, emoji) {
+        const placeholder = imgElement.nextElementSibling;
+        if (placeholder && placeholder.classList.contains('track-cover-placeholder')) {
+            placeholder.style.display = 'flex';
+        }
+    }
+
+    /**
+     * 清除失败缓存（用于测试或重试）
+     */
+    clearFailedCache() {
+        this._failedUrls.clear();
+    }
+
+    /**
+     * 获取失败缓存大小
+     * @returns {number}
+     */
+    getFailedCacheSize() {
+        return this._failedUrls.size;
+    }
+}
+
+// 导出单例
+export const thumbnailManager = new ThumbnailManager();
