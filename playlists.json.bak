@@ -1,0 +1,785 @@
+{
+  "order": [
+    "default",
+    "1766911672416",
+    "1767071907467",
+    "1767109269489",
+    "1767113101316",
+    "1767117111107",
+    "1767283971700",
+    "1767286415178",
+    "1767294416875"
+  ],
+  "playlists": [
+    {
+      "id": "default",
+      "name": "正在播放",
+      "songs": [
+        {
+          "url": "https://www.youtube.com/watch?v=aGZDE8ZpBWM",
+          "title": "張學友 - 每天愛妳多一些 (每天愛你多一些演唱會'91)",
+          "name": "張學友 - 每天愛妳多一些 (每天愛你多一些演唱會'91)",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1769783411,
+          "thumbnail_url": "https://img.youtube.com/vi/aGZDE8ZpBWM/sddefault.jpg",
+          "artist": "張學友 - 每天愛妳多一些 (每天愛你多一些演唱會'91)"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=lM06-EB74Ag",
+          "title": "Spotify Playlist 2026 🔥 TikTok Hits Collection ~ Latest Viral Songs 🎵 Best New Songs to Add",
+          "name": "Spotify Playlist 2026 🔥 TikTok Hits Collection ~ Latest Viral Songs 🎵 Best New Songs to Add",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1768526428,
+          "thumbnail_url": "https://img.youtube.com/vi/lM06-EB74Ag/sddefault.jpg",
+          "artist": "Spotify Playlist 2026 🔥 TikTok Hits Collection ~ Latest Viral Songs 🎵 Best New Songs to Add"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=viis5-_JjXQ",
+          "title": "【張學友 - Jacky Cheung 粤语歌曲】張學友20精選歌曲《還是覺得妳最好, 分手總要在雨天, 情已逝, 暗戀你, 我醒著做夢, 真情流露, 一千个伤心的理由, 藍雨, ...》",
+          "name": "【張學友 - Jacky Cheung 粤语歌曲】張學友20精選歌曲《還是覺得妳最好, 分手總要在雨天, 情已逝, 暗戀你, 我醒著做夢, 真情流露, 一千个伤心的理由, 藍雨, ...》",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1769783317,
+          "thumbnail_url": "https://img.youtube.com/vi/viis5-_JjXQ/sddefault.jpg",
+          "artist": "【張學友 - Jacky Cheung 粤语歌曲】張學友20精選歌曲《還是覺得妳最好, 分手總要在雨天, 情已逝, 暗戀你, 我醒著做夢, 真情流露, 一千个伤心的理由, 藍雨, ...》"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=IMD7E_-zf3A",
+          "title": "Spotify Pop Mix 2026 – Top 20 Pop Spotify 2026 – Viral Hits 2026 – Trending Playlist Collection",
+          "name": "Spotify Pop Mix 2026 – Top 20 Pop Spotify 2026 – Viral Hits 2026 – Trending Playlist Collection",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1768526430,
+          "thumbnail_url": "https://img.youtube.com/vi/IMD7E_-zf3A/sddefault.jpg",
+          "artist": "Spotify Pop Mix 2026 – Top 20 Pop Spotify 2026 – Viral Hits 2026 – Trending Playlist Collection"
+        }
+      ],
+      "song_count": 4,
+      "created_at": 1766369731.0493586,
+      "updated_at": 1769783411.6509216,
+      "current_playing_index": -1
+    },
+    {
+      "id": "1766911672416",
+      "name": "单依纯",
+      "songs": [
+        {
+          "url": "单依纯/单依纯 - 不值得 (Live).flac",
+          "title": "单依纯 - 不值得 (Live)",
+          "name": "单依纯 - 不值得 (Live)",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766911691,
+          "thumbnail_url": null,
+          "artist": "单依纯 - 不值得 (Live)"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=JM7QTQSdrmE",
+          "title": "張學友 - 離人 (Official Video)",
+          "name": "張學友 - 離人 (Official Video)",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767344958,
+          "thumbnail_url": "https://img.youtube.com/vi/JM7QTQSdrmE/maxresdefault.jpg",
+          "artist": "張學友 - 離人 (Official Video)"
+        },
+        {
+          "url": "Samurai Shodown/Samurai Shodown 1/2-19 Final Boss Defeat.flac",
+          "title": "2-19 Final Boss Defeat",
+          "name": "2-19 Final Boss Defeat",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766981758,
+          "thumbnail_url": null,
+          "artist": "2-19 Final Boss Defeat"
+        },
+        {
+          "url": "单依纯/单依纯 - 开始懂了 (live).flac",
+          "title": "单依纯 - 开始懂了 (live)",
+          "name": "单依纯 - 开始懂了 (live)",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766911692,
+          "thumbnail_url": null,
+          "artist": "单依纯 - 开始懂了 (live)"
+        },
+        {
+          "url": "单依纯/单依纯 - 爱的回归线 (Live版).flac",
+          "title": "单依纯 - 爱的回归线 (Live版)",
+          "name": "单依纯 - 爱的回归线 (Live版)",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766911692,
+          "thumbnail_url": null,
+          "artist": "单依纯 - 爱的回归线 (Live版)"
+        },
+        {
+          "url": "单依纯/单依纯 还有什么更好的.flac",
+          "title": "单依纯 还有什么更好的",
+          "name": "单依纯 还有什么更好的",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766911692,
+          "thumbnail_url": null,
+          "artist": "单依纯 还有什么更好的"
+        },
+        {
+          "url": "单依纯/李白 (Live).flac",
+          "title": "李白 (Live)",
+          "name": "李白 (Live)",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766911692,
+          "thumbnail_url": null,
+          "artist": "李白 (Live)"
+        },
+        {
+          "url": "单依纯/永不失联的爱.flac",
+          "title": "永不失联的爱",
+          "name": "永不失联的爱",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766911692,
+          "thumbnail_url": null,
+          "artist": "永不失联的爱"
+        },
+        {
+          "url": "单依纯/珠玉.flac",
+          "title": "珠玉",
+          "name": "珠玉",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766911692,
+          "thumbnail_url": null,
+          "artist": "珠玉"
+        },
+        {
+          "url": "单依纯/珠玉-Live.flac",
+          "title": "珠玉-Live",
+          "name": "珠玉-Live",
+          "type": "local",
+          "duration": 0,
+          "ts": 1766911692,
+          "thumbnail_url": null,
+          "artist": "珠玉-Live"
+        }
+      ],
+      "song_count": 10,
+      "created_at": 1766911672.416202,
+      "updated_at": 1767344958.7670217,
+      "current_playing_index": -1
+    },
+    {
+      "id": "1767071907467",
+      "name": "🥔",
+      "songs": [
+        {
+          "url": "https://www.youtube.com/watch?v=zQ9_wH2Gy64",
+          "title": "【(G)I-DLE】宋雨琦(Yuqi)演绎陶喆经典情歌《普通朋友(Regular Friends)》(CHN)",
+          "name": "【(G)I-DLE】宋雨琦(Yuqi)演绎陶喆经典情歌《普通朋友(Regular Friends)》(CHN)",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767071938,
+          "thumbnail_url": "https://img.youtube.com/vi/zQ9_wH2Gy64/default.jpg",
+          "artist": "【(G)I-DLE】宋雨琦(Yuqi)演绎陶喆经典情歌《普通朋友(Regular Friends)》(CHN)"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=xFYQQPAOz7Y",
+          "title": "Eminem - Lose Yourself",
+          "name": "Eminem - Lose Yourself",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767452609,
+          "thumbnail_url": "https://img.youtube.com/vi/xFYQQPAOz7Y/default.jpg",
+          "artist": "Eminem - Lose Yourself"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=j5-yKhDd64s",
+          "title": "Eminem - Not Afraid",
+          "name": "Eminem - Not Afraid",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767452605,
+          "thumbnail_url": "https://img.youtube.com/vi/j5-yKhDd64s/default.jpg",
+          "artist": "Eminem - Not Afraid"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=rKR7mg3MC0E",
+          "title": "Vinicius de Moraes e Toquinho - Complete Edition",
+          "name": "Vinicius de Moraes e Toquinho - Complete Edition",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767139283,
+          "thumbnail_url": "https://img.youtube.com/vi/rKR7mg3MC0E/default.jpg",
+          "artist": "Vinicius de Moraes e Toquinho - Complete Edition"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=iSA0NG0GS-s",
+          "title": "Gregor McMurray - What I Want",
+          "name": "Gregor McMurray - What I Want",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767139126,
+          "thumbnail_url": "https://img.youtube.com/vi/iSA0NG0GS-s/default.jpg",
+          "artist": "Gregor McMurray - What I Want"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=JM7QTQSdrmE",
+          "title": "張學友 - 離人 (Official Video)",
+          "name": "張學友 - 離人 (Official Video)",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767139023,
+          "thumbnail_url": "https://img.youtube.com/vi/JM7QTQSdrmE/default.jpg",
+          "artist": "張學友 - 離人 (Official Video)"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=rXvY5Ft1KWo",
+          "title": "mazie - people don't change (official audio)",
+          "name": "mazie - people don't change (official audio)",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767117274,
+          "thumbnail_url": "https://img.youtube.com/vi/rXvY5Ft1KWo/default.jpg",
+          "artist": "mazie - people don't change (official audio)"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=on2YS_3YrgU",
+          "title": "The Dinosaur's Skin 恐龍的皮 x Summer Salt - If I Say I love You",
+          "name": "The Dinosaur's Skin 恐龍的皮 x Summer Salt - If I Say I love You",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767117206,
+          "thumbnail_url": "https://img.youtube.com/vi/on2YS_3YrgU/default.jpg",
+          "artist": "The Dinosaur's Skin 恐龍的皮 x Summer Salt - If I Say I love You"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=5HgcUO4jq1U",
+          "title": "额尔敦山影",
+          "name": "额尔敦山影",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767117128,
+          "thumbnail_url": "https://img.youtube.com/vi/5HgcUO4jq1U/default.jpg",
+          "artist": "额尔敦山影"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=G1vvNwoW9AQ",
+          "title": "La petite cascade",
+          "name": "La petite cascade",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767117060,
+          "thumbnail_url": "https://img.youtube.com/vi/G1vvNwoW9AQ/default.jpg",
+          "artist": "La petite cascade"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=Dlz_XHeUUis",
+          "title": "Frank Ocean - White Ferrari",
+          "name": "Frank Ocean - White Ferrari",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767117018,
+          "thumbnail_url": "https://img.youtube.com/vi/Dlz_XHeUUis/default.jpg",
+          "artist": "Frank Ocean - White Ferrari"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=xlB9cK7HSRs",
+          "title": "林生祥／b2 大地書房 (鐵花村 2012.07.21.)",
+          "name": "林生祥／b2 大地書房 (鐵花村 2012.07.21.)",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767116993,
+          "thumbnail_url": "https://img.youtube.com/vi/xlB9cK7HSRs/default.jpg",
+          "artist": "林生祥／b2 大地書房 (鐵花村 2012.07.21.)"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=PnQrpi1_Jg8",
+          "title": "Any Place",
+          "name": "Any Place",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767116951,
+          "thumbnail_url": "https://img.youtube.com/vi/PnQrpi1_Jg8/default.jpg",
+          "artist": "Any Place"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=aD_NrJGNYH8",
+          "title": "Your Unscripted Side",
+          "name": "Your Unscripted Side",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767116898,
+          "thumbnail_url": "https://img.youtube.com/vi/aD_NrJGNYH8/default.jpg",
+          "artist": "Your Unscripted Side"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=HI3oeIxSQfE",
+          "title": "Humor Tumor",
+          "name": "Humor Tumor",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767116841,
+          "thumbnail_url": "https://img.youtube.com/vi/HI3oeIxSQfE/default.jpg",
+          "artist": "Humor Tumor"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=I0OfLC-gcwM",
+          "title": "ODUCHU - Bombureng Hoo (Tuvan Throat Singing)",
+          "name": "ODUCHU - Bombureng Hoo (Tuvan Throat Singing)",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767116762,
+          "thumbnail_url": "https://img.youtube.com/vi/I0OfLC-gcwM/default.jpg",
+          "artist": "ODUCHU - Bombureng Hoo (Tuvan Throat Singing)"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=Jt3mN54bYQQ",
+          "title": "莫西子詩 - 在四季裡等待",
+          "name": "莫西子詩 - 在四季裡等待",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767116725,
+          "thumbnail_url": "https://img.youtube.com/vi/Jt3mN54bYQQ/default.jpg",
+          "artist": "莫西子詩 - 在四季裡等待"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=FthjxGvEmkc",
+          "title": "Open Letter (Official Lyric Video)",
+          "name": "Open Letter (Official Lyric Video)",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767116692,
+          "thumbnail_url": "https://img.youtube.com/vi/FthjxGvEmkc/default.jpg",
+          "artist": "Open Letter (Official Lyric Video)"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=hLC9ZxtuLxI",
+          "title": "Joji - ATTENTION | A COLORS SHOW",
+          "name": "Joji - ATTENTION | A COLORS SHOW",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767072148,
+          "thumbnail_url": "https://img.youtube.com/vi/hLC9ZxtuLxI/default.jpg",
+          "artist": "Joji - ATTENTION | A COLORS SHOW"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=cW8VLC9nnTo",
+          "title": "Billie Eilish - What Was I Made For? (Official Music Video)",
+          "name": "Billie Eilish - What Was I Made For? (Official Music Video)",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767072114,
+          "thumbnail_url": "https://img.youtube.com/vi/cW8VLC9nnTo/default.jpg",
+          "artist": "Billie Eilish - What Was I Made For? (Official Music Video)"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=V9PVRfjEBTI",
+          "title": "Billie Eilish - BIRDS OF A FEATHER (Official Music Video)",
+          "name": "Billie Eilish - BIRDS OF A FEATHER (Official Music Video)",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767072090,
+          "thumbnail_url": "https://img.youtube.com/vi/V9PVRfjEBTI/default.jpg",
+          "artist": "Billie Eilish - BIRDS OF A FEATHER (Official Music Video)"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=GLHUzvH0k0s",
+          "title": "gareth.t - 泥菩薩 (official video)",
+          "name": "gareth.t - 泥菩薩 (official video)",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767072065,
+          "thumbnail_url": "https://img.youtube.com/vi/GLHUzvH0k0s/default.jpg",
+          "artist": "gareth.t - 泥菩薩 (official video)"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=MbD7TAlBFDc",
+          "title": "gareth.t - 國際孤獨等級 (official video)",
+          "name": "gareth.t - 國際孤獨等級 (official video)",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767072063,
+          "thumbnail_url": "https://img.youtube.com/vi/MbD7TAlBFDc/default.jpg",
+          "artist": "gareth.t - 國際孤獨等級 (official video)"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=osB_fLYdkkM",
+          "title": "gareth.t - 遇上你之前的我 (official video)",
+          "name": "gareth.t - 遇上你之前的我 (official video)",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767072059,
+          "thumbnail_url": "https://img.youtube.com/vi/osB_fLYdkkM/default.jpg",
+          "artist": "gareth.t - 遇上你之前的我 (official video)"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=mt56HEafeWU",
+          "title": "gareth.t -  緊急聯絡人 (official video)",
+          "name": "gareth.t -  緊急聯絡人 (official video)",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767072055,
+          "thumbnail_url": "https://img.youtube.com/vi/mt56HEafeWU/default.jpg",
+          "artist": "gareth.t -  緊急聯絡人 (official video)"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=falq0Gr3rc0",
+          "title": "gareth.t - 用背脊唱情歌 (official video)",
+          "name": "gareth.t - 用背脊唱情歌 (official video)",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767072053,
+          "thumbnail_url": "https://img.youtube.com/vi/falq0Gr3rc0/default.jpg",
+          "artist": "gareth.t - 用背脊唱情歌 (official video)"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=nja_0BaQcNg",
+          "title": "GIVĒON - Heartbreak Anniversary (Audio)",
+          "name": "GIVĒON - Heartbreak Anniversary (Audio)",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767072031,
+          "thumbnail_url": "https://img.youtube.com/vi/nja_0BaQcNg/default.jpg",
+          "artist": "GIVĒON - Heartbreak Anniversary (Audio)"
+        }
+      ],
+      "song_count": 27,
+      "created_at": 1767071907.467971,
+      "updated_at": 1767452609.360693,
+      "current_playing_index": -1
+    },
+    {
+      "id": "1767109269489",
+      "name": "Grace",
+      "songs": [
+        {
+          "url": "https://www.youtube.com/watch?v=BAUSVk-GcN4",
+          "title": "張信哲 Jeff Chang [ 屬於我們的故事 ] 官方完整版 Official MV",
+          "name": "張信哲 Jeff Chang [ 屬於我們的故事 ] 官方完整版 Official MV",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767109335,
+          "thumbnail_url": "https://img.youtube.com/vi/BAUSVk-GcN4/maxresdefault.jpg",
+          "artist": "張信哲 Jeff Chang [ 屬於我們的故事 ] 官方完整版 Official MV"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=04kIBM0IsrM",
+          "title": "海来阿木 - 新年/Hai lai  a mu - Xīn nian",
+          "name": "海来阿木 - 新年/Hai lai  a mu - Xīn nian",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767277883,
+          "thumbnail_url": "https://img.youtube.com/vi/04kIBM0IsrM/default.jpg",
+          "artist": "海来阿木 - 新年/Hai lai  a mu - Xīn nian"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=h3Hy9NNw5fw",
+          "title": "星辰妙漫 月光不归（右伴左唱）",
+          "name": "星辰妙漫 月光不归（右伴左唱）",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767180150,
+          "thumbnail_url": "https://img.youtube.com/vi/h3Hy9NNw5fw/maxresdefault.jpg",
+          "artist": "星辰妙漫 月光不归（右伴左唱）"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=uRPo23_vnmc",
+          "title": "【纯享】#张信哲 深情演绎《信仰》醇厚嗓音穿透灵魂，用歌声诉说炽热且坚定的爱 | 我是歌手4 | I Am A Singer 4 | MangoTV",
+          "name": "【纯享】#张信哲 深情演绎《信仰》醇厚嗓音穿透灵魂，用歌声诉说炽热且坚定的爱 | 我是歌手4 | I Am A Singer 4 | MangoTV",
+          "type": "history",
+          "duration": 0,
+          "ts": 1767109937,
+          "thumbnail_url": "https://img.youtube.com/vi/uRPo23_vnmc/maxresdefault.jpg",
+          "artist": "【纯享】#张信哲 深情演绎《信仰》醇厚嗓音穿透灵魂，用歌声诉说炽热且坚定的爱 | 我是歌手4 | I Am A Singer 4 | MangoTV"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=bklKDuYoO_0",
+          "title": "【#张信哲 舞台合辑】一小时金曲串烧🎶无损最高音质, 多首情歌一次听个够！《声生不息•宝岛季》 | Infinity and Beyond 2023 Jeff Chang CUT | MangoTV",
+          "name": "【#张信哲 舞台合辑】一小时金曲串烧🎶无损最高音质, 多首情歌一次听个够！《声生不息•宝岛季》 | Infinity and Beyond 2023 Jeff Chang CUT | MangoTV",
+          "type": "history",
+          "duration": 0,
+          "ts": 1767109936,
+          "thumbnail_url": "https://img.youtube.com/vi/bklKDuYoO_0/maxresdefault.jpg",
+          "artist": "【#张信哲 舞台合辑】一小时金曲串烧🎶无损最高音质, 多首情歌一次听个够！《声生不息•宝岛季》 | Infinity and Beyond 2023 Jeff Chang CUT | MangoTV"
+        }
+      ],
+      "song_count": 5,
+      "created_at": 1767109269.4898167,
+      "updated_at": 1767277883.7827008,
+      "current_playing_index": -1
+    },
+    {
+      "id": "1767113101316",
+      "name": "K",
+      "songs": [
+        {
+          "url": "https://www.youtube.com/watch?v=h3Hy9NNw5fw",
+          "title": "星辰妙漫 月光不归（右伴左唱）",
+          "name": "星辰妙漫 月光不归（右伴左唱）",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767113198,
+          "thumbnail_url": "https://img.youtube.com/vi/h3Hy9NNw5fw/default.jpg",
+          "artist": "星辰妙漫 月光不归（右伴左唱）"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=sre44fHAujc",
+          "title": "李宗盛 Jonathan Lee【愛的代價 The price of love】Official Music Video",
+          "name": "李宗盛 Jonathan Lee【愛的代價 The price of love】Official Music Video",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767388836,
+          "thumbnail_url": "https://img.youtube.com/vi/sre44fHAujc/default.jpg",
+          "artist": "李宗盛 Jonathan Lee【愛的代價 The price of love】Official Music Video"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=d8el6yq8X-4",
+          "title": "Top Hits Playlist 2026 🎶 Spotify Hits 2026 🎧 Trending Pop Music | New Songs 2026 Mix",
+          "name": "Top Hits Playlist 2026 🎶 Spotify Hits 2026 🎧 Trending Pop Music | New Songs 2026 Mix",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767344366,
+          "thumbnail_url": "https://img.youtube.com/vi/d8el6yq8X-4/default.jpg",
+          "artist": "Top Hits Playlist 2026 🎶 Spotify Hits 2026 🎧 Trending Pop Music | New Songs 2026 Mix"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=4DJuJCcxO98",
+          "title": "彭佳慧 Julia Peng《好久不見》歌詞版 Lyrics Video",
+          "name": "彭佳慧 Julia Peng《好久不見》歌詞版 Lyrics Video",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767296502,
+          "thumbnail_url": "https://img.youtube.com/vi/4DJuJCcxO98/default.jpg",
+          "artist": "彭佳慧 Julia Peng《好久不見》歌詞版 Lyrics Video"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=fiOHNwYsUS8",
+          "title": "窩窩 - 你是朝朝暮暮 「日為朝 月為暮 而你是朝朝暮暮」【動態歌詞/PinyinLyrics】♪",
+          "name": "窩窩 - 你是朝朝暮暮 「日為朝 月為暮 而你是朝朝暮暮」【動態歌詞/PinyinLyrics】♪",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767113543,
+          "thumbnail_url": "https://img.youtube.com/vi/fiOHNwYsUS8/default.jpg",
+          "artist": "窩窩 - 你是朝朝暮暮 「日為朝 月為暮 而你是朝朝暮暮」【動態歌詞/PinyinLyrics】♪"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=Xa29JWgVcS8",
+          "title": "海来阿木《只字不提》#内容启发搜索",
+          "name": "海来阿木《只字不提》#内容启发搜索",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767113875,
+          "thumbnail_url": "https://img.youtube.com/vi/Xa29JWgVcS8/default.jpg",
+          "artist": "海来阿木《只字不提》#内容启发搜索"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=8pynxuFi03w",
+          "title": "《各自安好》-海來阿木「誰都不可能再回到從前 如今的我們只能各自安好」【Lyrics Video】♪【HKMG】",
+          "name": "《各自安好》-海來阿木「誰都不可能再回到從前 如今的我們只能各自安好」【Lyrics Video】♪【HKMG】",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767113728,
+          "thumbnail_url": "https://img.youtube.com/vi/8pynxuFi03w/default.jpg",
+          "artist": "《各自安好》-海來阿木「誰都不可能再回到從前 如今的我們只能各自安好」【Lyrics Video】♪【HKMG】"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=KA6yIAE9No4",
+          "title": "齊秦 - 夜夜夜夜 (MV)",
+          "name": "齊秦 - 夜夜夜夜 (MV)",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767113420,
+          "thumbnail_url": "https://img.youtube.com/vi/KA6yIAE9No4/default.jpg",
+          "artist": "齊秦 - 夜夜夜夜 (MV)"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=ldAkqJMfm2k",
+          "title": "海來阿木 - 我想你了 「我想你了 我想你了 是否收到我寄的信箋 我多想要再見你一面」【動態歌詞】♪",
+          "name": "海來阿木 - 我想你了 「我想你了 我想你了 是否收到我寄的信箋 我多想要再見你一面」【動態歌詞】♪",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767113632,
+          "thumbnail_url": "https://img.youtube.com/vi/ldAkqJMfm2k/default.jpg",
+          "artist": "海來阿木 - 我想你了 「我想你了 我想你了 是否收到我寄的信箋 我多想要再見你一面」【動態歌詞】♪"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=hpz2TLDwQho",
+          "title": "海来阿木 单依纯 深情对唱《不如见一面》 每一个音符都是对爱与渴望的真挚表达「2024央视春晚」| CCTV春晚",
+          "name": "海来阿木 单依纯 深情对唱《不如见一面》 每一个音符都是对爱与渴望的真挚表达「2024央视春晚」| CCTV春晚",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767113473,
+          "thumbnail_url": "https://img.youtube.com/vi/hpz2TLDwQho/default.jpg",
+          "artist": "海来阿木 单依纯 深情对唱《不如见一面》 每一个音符都是对爱与渴望的真挚表达「2024央视春晚」| CCTV春晚"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=-TrB10KCNWk",
+          "title": "古筝与竹笛   中国古风放松疗愈音乐 || Guzheng & Bamboo Flute – Chinese Relaxing Healing Music",
+          "name": "古筝与竹笛   中国古风放松疗愈音乐 || Guzheng & Bamboo Flute – Chinese Relaxing Healing Music",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767116238,
+          "thumbnail_url": "https://img.youtube.com/vi/-TrB10KCNWk/maxresdefault.jpg",
+          "artist": "古筝与竹笛   中国古风放松疗愈音乐 || Guzheng & Bamboo Flute – Chinese Relaxing Healing Music"
+        }
+      ],
+      "song_count": 11,
+      "created_at": 1767113101.3162632,
+      "updated_at": 1767388836.7984443,
+      "current_playing_index": -1
+    },
+    {
+      "id": "1767117111107",
+      "name": "云南",
+      "songs": [
+        {
+          "url": "https://www.youtube.com/watch?v=WehPV3gM9ms",
+          "title": "云南山歌  老司机带带我 高清",
+          "name": "云南山歌  老司机带带我 高清",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767117395,
+          "thumbnail_url": "https://img.youtube.com/vi/WehPV3gM9ms/default.jpg",
+          "artist": "云南山歌  老司机带带我 高清"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=UY3o4zmsaGs",
+          "title": "云南山歌【想喝小妹龙潭水】太污了",
+          "name": "云南山歌【想喝小妹龙潭水】太污了",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767118038,
+          "thumbnail_url": "https://img.youtube.com/vi/UY3o4zmsaGs/default.jpg",
+          "artist": "云南山歌【想喝小妹龙潭水】太污了"
+        }
+      ],
+      "song_count": 2,
+      "created_at": 1767117111.1076946,
+      "updated_at": 1767118038.0405073,
+      "current_playing_index": -1
+    },
+    {
+      "id": "1767283971700",
+      "name": "cocoa 🐈‍⬛",
+      "songs": [
+        {
+          "url": "https://www.youtube.com/watch?v=Sm0m34gApy0",
+          "title": "新年賀歲歌曲 | 華納群星經典演繹 《祝福你》《財神到》《迎春花》《恭喜恭喜》《歡樂年年》《恭喜發財》",
+          "name": "新年賀歲歌曲 | 華納群星經典演繹 《祝福你》《財神到》《迎春花》《恭喜恭喜》《歡樂年年》《恭喜發財》",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767284047,
+          "thumbnail_url": "https://img.youtube.com/vi/Sm0m34gApy0/default.jpg",
+          "artist": "新年賀歲歌曲 | 華納群星經典演繹 《祝福你》《財神到》《迎春花》《恭喜恭喜》《歡樂年年》《恭喜發財》"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=MVD7fhKgGzc",
+          "title": "周杰倫最好聽的20首歌曲 | 在雨天聽周杰倫－絕佳的選擇 | Listening to Jay Chou on a rainy day - An excellent choice",
+          "name": "周杰倫最好聽的20首歌曲 | 在雨天聽周杰倫－絕佳的選擇 | Listening to Jay Chou on a rainy day - An excellent choice",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767284073,
+          "thumbnail_url": "https://img.youtube.com/vi/MVD7fhKgGzc/default.jpg",
+          "artist": "周杰倫最好聽的20首歌曲 | 在雨天聽周杰倫－絕佳的選擇 | Listening to Jay Chou on a rainy day - An excellent choice"
+        }
+      ],
+      "song_count": 2,
+      "created_at": 1767283971.7004917,
+      "updated_at": 1767284073.9846847,
+      "current_playing_index": -1
+    },
+    {
+      "id": "1767286415178",
+      "name": "Goon",
+      "songs": [
+        {
+          "url": "https://www.youtube.com/watch?v=0iDH3ydk-Vc",
+          "title": "Bruckner - Symphony No. 8 in C minor, WAB 108 (Cleveland Orchestra, Welser-Möst)",
+          "name": "Bruckner - Symphony No. 8 in C minor, WAB 108 (Cleveland Orchestra, Welser-Möst)",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767286486,
+          "thumbnail_url": "https://img.youtube.com/vi/0iDH3ydk-Vc/maxresdefault.jpg",
+          "artist": "Bruckner - Symphony No. 8 in C minor, WAB 108 (Cleveland Orchestra, Welser-Möst)"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=rKR7mg3MC0E",
+          "title": "Vinicius de Moraes e Toquinho - Complete Edition",
+          "name": "Vinicius de Moraes e Toquinho - Complete Edition",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767286705,
+          "thumbnail_url": "https://img.youtube.com/vi/rKR7mg3MC0E/maxresdefault.jpg",
+          "artist": "Vinicius de Moraes e Toquinho - Complete Edition"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=F-xMBqsZlOQ",
+          "title": "Schubert: Piano Sonata No. 21 in B-Flat Major, D. 960: II. Andante sostenuto",
+          "name": "Schubert: Piano Sonata No. 21 in B-Flat Major, D. 960: II. Andante sostenuto",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767286677,
+          "thumbnail_url": "https://img.youtube.com/vi/F-xMBqsZlOQ/maxresdefault.jpg",
+          "artist": "Schubert: Piano Sonata No. 21 in B-Flat Major, D. 960: II. Andante sostenuto"
+        }
+      ],
+      "song_count": 3,
+      "created_at": 1767286415.1788926,
+      "updated_at": 1767286705.8995376,
+      "current_playing_index": -1
+    },
+    {
+      "id": "1767294416875",
+      "name": "H",
+      "songs": [
+        {
+          "url": "https://www.youtube.com/watch?v=93OZm8Z2S8o",
+          "title": "周華健 Wakin Chau【難唸的經 】1997 香港無線「天龍八部」主題曲 Official Music Video(粵)",
+          "name": "周華健 Wakin Chau【難唸的經 】1997 香港無線「天龍八部」主題曲 Official Music Video(粵)",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767294779,
+          "thumbnail_url": "https://img.youtube.com/vi/93OZm8Z2S8o/default.jpg",
+          "artist": "周華健 Wakin Chau【難唸的經 】1997 香港無線「天龍八部」主題曲 Official Music Video(粵)"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=4SnT_9ZrwMM",
+          "title": "黄凯芹 - 雨中的恋人们",
+          "name": "黄凯芹 - 雨中的恋人们",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767294926,
+          "thumbnail_url": "https://img.youtube.com/vi/4SnT_9ZrwMM/default.jpg",
+          "artist": "黄凯芹 - 雨中的恋人们"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=--Qcfa5Kwbo",
+          "title": "罗振宇2026“时间的朋友”跨年演讲",
+          "name": "罗振宇2026“时间的朋友”跨年演讲",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767294841,
+          "thumbnail_url": "https://img.youtube.com/vi/--Qcfa5Kwbo/default.jpg",
+          "artist": "罗振宇2026“时间的朋友”跨年演讲"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=ZQR_S8dVrvE",
+          "title": "朋友 谭咏麟 (歌词版)",
+          "name": "朋友 谭咏麟 (歌词版)",
+          "type": "youtube",
+          "duration": 0,
+          "ts": 1767294831,
+          "thumbnail_url": "https://img.youtube.com/vi/ZQR_S8dVrvE/default.jpg",
+          "artist": "朋友 谭咏麟 (歌词版)"
+        }
+      ],
+      "song_count": 4,
+      "created_at": 1767294416.8752074,
+      "updated_at": 1767294926.7495959,
+      "current_playing_index": -1
+    }
+  ]
+}
