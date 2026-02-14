@@ -77,6 +77,16 @@ export class Player {
         try {
             const status = await api.getStatus();
             this.updateStatus(status);
+            // 恢复播放时，发送当前歌曲元数据
+            if (!result?.paused) {
+                const meta = status?.current_meta || {};
+                this.emit('play', { 
+                    url: meta.url || meta.rel, 
+                    title: meta.title || meta.name,
+                    type: meta.type 
+                });
+                return result;
+            }
         } catch (err) {
             console.warn('刷新状态失败:', err);
         }

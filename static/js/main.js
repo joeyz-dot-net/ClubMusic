@@ -219,8 +219,11 @@ class MusicPlayerApp {
         });
 
         // 监听播放事件
-        player.on('play', ({ url, title }) => {
-            Toast.success(`正在播放: ${title}`);
+        player.on('play', (data) => {
+            const { url, title } = data || {};
+            if (title) {
+                Toast.success(`正在播放: ${title}`);
+            }
         });
 
         // 监听暂停事件
