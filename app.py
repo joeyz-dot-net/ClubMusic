@@ -253,6 +253,34 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 添加安全头中间件（允许YouTube iframe嵌入）
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """添加安全头以支持YouTube iframe在Cloudflare tunnel中正常工作"""
+    response = await call_next(request)
+
+    # 允许在iframe中嵌入（不限制来源）
+    # 注意：DENY会完全禁止iframe，SAMEORIGIN只允许同源iframe
+    # 如果要在Cloudflare tunnel中使用，需要移除X-Frame-Options或设置为合适的值
+    # response.headers["X-Frame-Options"] = "SAMEORIGIN"
+
+    # 设置CSP允许YouTube iframe和Cloudflare资源
+    csp_policy = (
+        "default-src 'self' https:; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://s.ytimg.com https://static.cloudflareinsights.com; "
+        "style-src 'self' 'unsafe-inline' https:; "
+        "img-src 'self' data: https: http:; "
+        "font-src 'self' data: https:; "
+        "connect-src 'self' https: wss: ws:; "
+        "media-src 'self' https: http: blob:; "
+        "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; "
+        "worker-src 'self' blob:; "
+        "child-src 'self' https://www.youtube.com https://www.youtube-nocookie.com blob:;"
+    )
+    response.headers["Content-Security-Policy"] = csp_policy
+
+    return response
+
 
 # ============================================
 # 自动填充队列并自动播放（后台空闲1分钟后无歌曲自动填充）

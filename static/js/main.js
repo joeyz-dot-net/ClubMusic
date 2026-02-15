@@ -10,7 +10,7 @@ import { searchManager } from './search.js';
 import { themeManager } from './themeManager.js';
 import { debug } from './debug.js';
 import { Toast, loading, formatTime } from './ui.js';
-import { isMobile } from './utils.js';
+import { isMobile, ThumbnailManager } from './utils.js';
 import { localFiles } from './local.js';
 import { settingsManager } from './settingsManager.js';
 import { navManager } from './navManager.js';
@@ -27,7 +27,7 @@ class MusicPlayerApp {
         // 【用户隔离】从 localStorage 恢复歌单选择，默认为 'default'
         this.currentPlaylistId = localStorage.getItem('selectedPlaylistId') || 'default';
         this.lastPlayStatus = null;  // 追踪上一次的播放状态，用于检测播放停止
-        
+
         // 状态追踪变量 - 用于只在改变时输出日志
         this.lastLoopMode = null;  // 循环模式
         this.lastVolume = null;    // 音量
@@ -35,7 +35,10 @@ class MusicPlayerApp {
         this.lastUILoopMode = null;  // UI更新中的循环模式跟踪，防止重复日志
         this.lastThumbnailUrl = null;  // 缩略图URL追踪
         this._autoNextTriggered = false;  // 自动播放下一首的标记
-        
+
+        // 初始化缩略图管理器 - 用于处理YouTube缩略图降级
+        this.thumbnailManager = new ThumbnailManager();
+
         // ✅ playlistManager 会在 constructor 中自动从 localStorage 恢复选择歌单
     }
 
@@ -766,69 +769,31 @@ class MusicPlayerApp {
             }
         }
 
-        // 更新封面 - 支持高质量缩略图和备用方案
+        // 更新封面 - 使用ThumbnailManager处理降级和缓存
         const thumbnailUrl = status.thumbnail_url || status.current_meta?.thumbnail_url || '';
-        
+
         if (thumbnailUrl) {
-            // 检查是否是已知失败的URL（避免重复请求）
-            if (this._failedCoverUrls && this._failedCoverUrls.has(thumbnailUrl)) {
-                // 已知失败，不再尝试
-                if (this.elements.miniPlayerCover) this.elements.miniPlayerCover.style.display = 'none';
-                if (this.elements.fullPlayerCover) this.elements.fullPlayerCover.style.display = 'none';
-                return;
-            }
-            
             // 只在缩略图改变时更新
             if (thumbnailUrl !== this.lastThumbnailUrl) {
                 this.lastThumbnailUrl = thumbnailUrl;
-                
-                // 初始化失败URL集合
-                if (!this._failedCoverUrls) this._failedCoverUrls = new Set();
-                
-                // 为YouTube视频生成多个质量级别的URL备选方案
-                const getYouTubeFallbackUrls = (url) => {
-                    if (url.includes('img.youtube.com')) {
-                        const baseUrl = url.split('/').slice(0, -1).join('/');
-                        return [
-                            url,
-                            baseUrl + '/sddefault.jpg',
-                            baseUrl + '/mqdefault.jpg',
-                            baseUrl + '/default.jpg'
-                        ];
-                    }
-                    return [url];
-                };
-                
-                const urls = getYouTubeFallbackUrls(thumbnailUrl);
-                const self = this;
-                
+
+                // 使用ThumbnailManager处理缩略图降级
                 if (this.elements.miniPlayerCover) {
-                    this.elements.miniPlayerCover.crossOrigin = 'anonymous';
-                    this.elements.miniPlayerCover.src = thumbnailUrl;
                     this.elements.miniPlayerCover.style.display = 'block';
-                    this.elements.miniPlayerCover.onerror = function() {
-                        const currentIndex = urls.indexOf(this.src);
-                        if (currentIndex < urls.length - 1) {
-                            this.src = urls[currentIndex + 1];
-                        } else {
-                            this.style.display = 'none';
-                            self._failedCoverUrls.add(thumbnailUrl);  // 标记为失败
-                        }
-                    };
+                    this.thumbnailManager.setupFallback(
+                        this.elements.miniPlayerCover,
+                        thumbnailUrl,
+                        '🎵'
+                    );
                 }
+
                 if (this.elements.fullPlayerCover) {
-                    this.elements.fullPlayerCover.crossOrigin = 'anonymous';
-                    this.elements.fullPlayerCover.src = thumbnailUrl;
                     this.elements.fullPlayerCover.style.display = 'block';
-                    this.elements.fullPlayerCover.onerror = function() {
-                        const currentIndex = urls.indexOf(this.src);
-                        if (currentIndex < urls.length - 1) {
-                            this.src = urls[currentIndex + 1];
-                        } else {
-                            this.style.display = 'none';
-                            self._failedCoverUrls.add(thumbnailUrl);  // 标记为失败
-                        }
-                    };
+                    this.thumbnailManager.setupFallback(
+                        this.elements.fullPlayerCover,
+                        thumbnailUrl,
+                        '🎵'
+                    );
                 }
             }
         } else {
