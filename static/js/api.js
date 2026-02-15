@@ -199,6 +199,12 @@ export class MusicAPI {
     async getPlaybackHistoryMerged() {
         return this.get('/playback_history_merged');
     }
+
+    // KTV功能：刷新视频URL（当视频直链过期时）
+    async refreshVideoUrl() {
+        const response = await fetch('/refresh_video_url', { method: 'POST' });
+        return response.json();
+    }
 }
 
 // 导出单例

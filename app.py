@@ -837,6 +837,249 @@ async def play(request: Request):
             status_code=500
         )
 
+@app.post("/refresh_video_url")
+async def refresh_video_url():
+    """重新获取当前播放歌曲的视频直链（当直链过期时调用）"""
+    try:
+        current_song = PLAYER.current_meta
+        if not current_song or current_song.get("type") != "youtube":
+            return JSONResponse(
+                {"status": "ERROR", "error": "当前不是YouTube歌曲"},
+                status_code=400
+            )
+
+        stream_url = current_song.get("url")
+        if not stream_url:
+            return JSONResponse(
+                {"status": "ERROR", "error": "无法获取歌曲URL"},
+                status_code=400
+            )
+
+        # 获取yt-dlp路径（与StreamSong.play()相同的逻辑）
+        import subprocess
+        import os
+        if getattr(sys, 'frozen', False):
+            app_dir = os.path.dirname(sys.executable)
+        else:
+            app_dir = os.path.dirname(os.path.abspath(__file__))
+
+        bin_yt_dlp = os.path.join(app_dir, "bin", "yt-dlp.exe")
+        yt_dlp_exe = bin_yt_dlp if os.path.exists(bin_yt_dlp) else "yt-dlp"
+
+        # 重新获取视频直链
+        try:
+            video_cmd = [yt_dlp_exe, "-f", "bestvideo[height<=720][ext=mp4]", "-g", stream_url]
+            logger.info(f"[KTV] 刷新视频URL: {stream_url}")
+            video_result = subprocess.run(
+                video_cmd,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if video_result.returncode == 0:
+                video_urls = video_result.stdout.strip().split("\n")
+                if video_urls and video_urls[0]:
+                    new_video_url = video_urls[0].strip()
+
+                    # 更新current_meta中的video_url
+                    PLAYER.current_meta["video_url"] = new_video_url
+                    logger.info(f"[KTV] 视频URL已刷新: {new_video_url[:100]}...")
+
+                    return {
+                        "status": "OK",
+                        "video_url": new_video_url
+                    }
+
+            logger.warning(f"[KTV] 获取视频URL失败 (code={video_result.returncode})")
+            return JSONResponse(
+                {"status": "ERROR", "error": "获取视频URL失败"},
+                status_code=500
+            )
+
+        except Exception as e:
+            logger.error(f"[KTV] 刷新视频URL异常: {e}")
+            return JSONResponse(
+                {"status": "ERROR", "error": str(e)},
+                status_code=500
+            )
+
+    except Exception as e:
+        logger.error(f"[KTV] refresh_video_url 异常: {e}")
+        return JSONResponse(
+            {"status": "ERROR", "error": str(e)},
+            status_code=500
+        )
+
+@app.get("/video_proxy")
+async def video_proxy(url: str, request: Request):
+    """代理YouTube视频流，绕过CORS限制"""
+    logger.info(f"[KTV] 📥 代理请求: {url[:200]}...")
+
+    try:
+        import httpx
+        import re
+        from urllib.parse import urljoin, quote
+        from fastapi.responses import Response
+
+        # 设置请求头，伪装成正常的视频请求
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': '*/*',
+            'Accept-Encoding': 'identity',
+        }
+
+        # 🔑 关键修复：转发Range头（HLS需要分段请求）
+        if 'range' in request.headers:
+            headers['Range'] = request.headers['range']
+            logger.info(f"[KTV] 📍 转发Range请求: {request.headers['range']}")
+
+        # 使用httpx获取内容
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            response = await client.get(url, headers=headers)
+
+            if response.status_code != 200 and response.status_code != 206:
+                logger.error(f"[KTV] 视频代理请求失败: {response.status_code}")
+                return JSONResponse(
+                    {"status": "ERROR", "error": f"视频请求失败: {response.status_code}"},
+                    status_code=response.status_code
+                )
+
+            content_type = response.headers.get('content-type', '')
+
+            # 检测是否为HLS清单文件（多种检测方式）
+            is_manifest = (
+                'mpegurl' in content_type or
+                '.m3u8' in url or
+                'playlist' in url or
+                '/manifest/' in url
+            )
+
+            if is_manifest:
+                logger.info(f"[KTV] ✅ 检测到HLS清单文件")
+                logger.info(f"[KTV]   URL: {url[:150]}...")
+                logger.info(f"[KTV]   Content-Type: {content_type}")
+
+                content = response.text
+
+                # 显示原始清单内容（前800字符用于调试）
+                logger.info(f"[KTV] 📄 原始清单内容（前800字符）:\n{content[:800]}\n")
+
+                # 提取基础URL（用于拼接相对路径）
+                base_url = url.rsplit('/', 1)[0] + '/'
+
+                # 逐行处理清单内容
+                lines = content.split('\n')
+                new_lines = []
+                url_replace_count = 0
+
+                for line in lines:
+                    stripped_line = line.strip()
+
+                    # 处理包含URI的HLS标签（如 #EXT-X-MAP:URI="..."）
+                    if 'URI="' in line:
+                        # 使用正则提取并替换URI值
+                        def replace_uri(match):
+                            nonlocal url_replace_count
+                            original_url = match.group(1)
+                            # 如果是相对路径，转换为绝对路径
+                            if not original_url.startswith('http'):
+                                original_url = urljoin(base_url, original_url)
+                            # 编码URL
+                            encoded_url = quote(original_url, safe='')
+                            proxy_url = f"/video_proxy?url={encoded_url}"
+                            url_replace_count += 1
+
+                            if url_replace_count <= 3:
+                                logger.info(f"[KTV] 🔄 替换标签内URL #{url_replace_count}:")
+                                logger.info(f"[KTV]   原始: {original_url[:120]}...")
+                                logger.info(f"[KTV]   代理: {proxy_url[:120]}...")
+
+                            return f'URI="{proxy_url}"'
+
+                        # 替换所有 URI="..." 模式
+                        modified_line = re.sub(r'URI="([^"]+)"', replace_uri, line)
+                        new_lines.append(modified_line)
+
+                    # 如果这行不是注释且不为空，认为是URL
+                    elif stripped_line and not stripped_line.startswith('#'):
+                        original_url = stripped_line
+                        # 如果是相对路径，转换为绝对路径
+                        if not original_url.startswith('http'):
+                            original_url = urljoin(base_url, original_url)
+                        # ⚠️ 关键修复：使用quote()正确编码URL
+                        encoded_url = quote(original_url, safe='')
+                        proxy_line = f"/video_proxy?url={encoded_url}"
+                        new_lines.append(proxy_line)
+                        url_replace_count += 1
+
+                        if url_replace_count <= 3:  # 只显示前3个URL的详细信息
+                            logger.info(f"[KTV] 🔄 替换URL #{url_replace_count}:")
+                            logger.info(f"[KTV]   原始: {original_url[:120]}...")
+                            logger.info(f"[KTV]   代理: {proxy_line[:120]}...")
+                    else:
+                        # 保持原样（注释、空行、标签）
+                        new_lines.append(line)
+
+                content = '\n'.join(new_lines)
+
+                logger.info(f"[KTV] ✅ URL替换完成，共替换 {url_replace_count} 个URL")
+                logger.info(f"[KTV] 📄 修改后清单内容（前800字符）:\n{content[:800]}\n")
+
+                # 设置响应头
+                return Response(
+                    content=content,
+                    media_type='application/vnd.apple.mpegurl',
+                    headers={
+                        'Access-Control-Allow-Origin': '*',
+                        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+                        'Access-Control-Allow-Headers': 'Range',
+                        'Cache-Control': 'no-cache',
+                    }
+                )
+            else:
+                # 非清单文件，直接返回内容
+                logger.info(f"[KTV] ⬇️ 代理视频片段/数据: {len(response.content)} bytes, 状态码: {response.status_code}")
+                logger.info(f"[KTV]   URL: {url[:150]}...")
+                logger.info(f"[KTV]   Content-Type: {content_type}")
+
+                # 设置响应头
+                response_headers = {
+                    'Content-Type': content_type or 'video/mp2t',
+                    'Accept-Ranges': 'bytes',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Range',
+                }
+
+                # 转发Content-Length
+                content_length = response.headers.get('content-length')
+                if content_length:
+                    response_headers['Content-Length'] = content_length
+
+                # 🔑 关键：转发Content-Range（用于206 Partial Content）
+                content_range = response.headers.get('content-range')
+                if content_range:
+                    response_headers['Content-Range'] = content_range
+                    logger.info(f"[KTV] 📍 转发Content-Range: {content_range}")
+
+                # 返回响应，保持原始状态码（200或206）
+                return Response(
+                    content=response.content,
+                    status_code=response.status_code,
+                    media_type=content_type or 'video/mp2t',
+                    headers=response_headers
+                )
+
+    except Exception as e:
+        logger.error(f"[KTV] 视频代理异常: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return JSONResponse(
+            {"status": "ERROR", "error": str(e)},
+            status_code=500
+        )
+
 @app.post("/play_song")
 async def play_song(request: Request):
     """播放指定歌曲（别名）"""

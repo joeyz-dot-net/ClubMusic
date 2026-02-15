@@ -211,7 +211,8 @@ class StreamSong(Song):
         self.stream_url = stream_url
         self.stream_type = stream_type
         self.video_id = self._extract_video_id(stream_url)
-        
+        self.video_url = None  # KTV功能：视频URL，在play()时获取
+
         # 如果没有提供thumbnail_url，会自动计算高质量缩略图
         if not thumbnail_url:
             if stream_type == "youtube" and self.video_id:
@@ -396,6 +397,38 @@ class StreamSong(Song):
                     logger.warning(f"   ⚠️ yt-dlp 获取直链异常: {type(e).__name__}: {e}")
                     logger.warning(f"   ⚠️ 将使用原始 URL: {self.stream_url}")
 
+            # 获取视频流（仅YouTube，用于KTV功能）
+            if "youtube.com" in self.stream_url or "youtu.be" in self.stream_url:
+                try:
+                    logger.info(f"   📹 获取视频流URL（KTV功能）...")
+                    # 使用 bestvideo 获取720p以下的MP4视频（适合网页播放）
+                    video_cmd = [yt_dlp_exe, "-f", "bestvideo[height<=720][ext=mp4]", "-g", self.stream_url]
+                    video_result = subprocess.run(
+                        video_cmd,
+                        capture_output=True,
+                        text=True,
+                        timeout=30
+                    )
+
+                    if video_result.returncode == 0:
+                        video_urls = video_result.stdout.strip().split("\n")
+                        if video_urls and video_urls[0]:
+                            self.video_url = video_urls[0].strip()
+                            logger.info(f"   ✅ 视频流URL: {self.video_url[:100]}...")
+                        else:
+                            logger.warning(f"   ⚠️ 视频流URL为空")
+                            self.video_url = None
+                    else:
+                        logger.warning(f"   ⚠️ 获取视频流失败 (code={video_result.returncode})")
+                        logger.warning(f"   ⚠️ stderr: {video_result.stderr[:200]}")
+                        self.video_url = None
+                except subprocess.TimeoutExpired:
+                    logger.error(f"   ❌ 获取视频流超时（30秒）")
+                    self.video_url = None
+                except Exception as e:
+                    logger.warning(f"   ⚠️ 获取视频流异常: {type(e).__name__}: {e}")
+                    self.video_url = None
+
             logger.info(f"📤 调用 mpv loadfile 播放网络歌曲...")
             logger.info(f"   📌 actual_url 长度: {len(actual_url)} 字符")
             logger.info(f"   📌 actual_url 前缀: {actual_url[:50]}..." if len(actual_url) > 50 else f"   📌 actual_url: {actual_url}")
@@ -425,6 +458,7 @@ class StreamSong(Song):
                 "stream_type": self.stream_type,
                 "video_id": self.video_id,
                 "thumbnail_url": self.get_thumbnail_url(),
+                "video_url": getattr(self, 'video_url', None),  # KTV功能：视频流URL
             }
         )
         return data

@@ -84,7 +84,15 @@
 			<!-- Album Art -->
 			<div class="full-player-artwork">
 				<div class="full-player-artwork-container">
+					<!-- KTV YouTube iframe 播放器 -->
+					<div id="fullPlayerVideoContainer" style="display:none; width:100%; height:100%; background:#000;">
+						<div id="fullPlayerYouTube"></div>
+					</div>
+
+					<!-- 封面图片（音乐模式） -->
 					<img id="fullPlayerCover" src="" alt="专辑封面" onerror="this.style.display='none';" loading="eager" decoding="async" />
+
+					<!-- 占位符 -->
 					<div class="full-player-artwork-placeholder" id="fullPlayerPlaceholder">🎵</div>
 				</div>
 			</div>
@@ -306,6 +314,8 @@
 		</div>
 	</div>
 
+	<!-- YouTube IFrame Player API -->
+	<script src="https://www.youtube.com/iframe_api"></script>
 
 	<script type="module" src="/static/js/main.js?v=18"></script>
 

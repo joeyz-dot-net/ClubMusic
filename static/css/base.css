@@ -1779,6 +1779,32 @@ button:active { transform: scale(0.98); }
     opacity: 0.3;
 }
 
+/* KTV YouTube iframe 播放器样式 */
+#fullPlayerVideoContainer {
+    width: 100%;
+    height: 100%;
+    background: #000;
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+#fullPlayerYouTube {
+    width: 100%;
+    height: 100%;
+}
+
+/* 视频模式下隐藏封面和占位符 */
+.full-player-artwork-container.video-mode img,
+.full-player-artwork-container.video-mode .full-player-artwork-placeholder {
+    display: none !important;
+}
+
+.full-player-artwork-container.video-mode #fullPlayerVideoContainer {
+    display: block !important;
+}
+
 .full-player-info {
     padding: 24px 20px 16px;
     text-align: center;

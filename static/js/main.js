@@ -15,6 +15,7 @@ import { localFiles } from './local.js';
 import { settingsManager } from './settingsManager.js';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
+import { ktvSync } from './ktv.js';
 
 // ==========================================
 // 应用初始化
@@ -672,6 +673,11 @@ class MusicPlayerApp {
         }
         if (this.elements.fullPlayerPlaylist) {
             this.elements.fullPlayerPlaylist.textContent = playlistName;
+        }
+
+        // KTV视频同步 ���在更新完UI后调用
+        if (ktvSync) {
+            ktvSync.updateStatus(status);
         }
 
         // 更新进度信息（支持两种字段名）
