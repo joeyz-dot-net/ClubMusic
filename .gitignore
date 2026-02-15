@@ -38,3 +38,5 @@ yt-dlp.exe
 ffmpeg.exe
 
 bin/
+
+tmpclaude-*-cwd
