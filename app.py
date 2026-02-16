@@ -1467,7 +1467,8 @@ async def search_song(request: Request):
         
         data = await request.json()
         query = data.get("query", "").strip()
-        
+        max_results = data.get("max_results", PLAYER.youtube_search_max_results)
+
         if not query:
             return JSONResponse(
                 {"status": "ERROR", "error": "搜索词不能为空"},
@@ -1485,7 +1486,7 @@ async def search_song(request: Request):
             yt_start = time_module.time()
             try:
                 # 先尝试作为播放列表处理
-                playlist_result = StreamSong.extract_playlist(query, max_results=PLAYER.youtube_search_max_results)
+                playlist_result = StreamSong.extract_playlist(query, max_results=PLAYER.youtube_url_extra_max)
                 if playlist_result.get("status") == "OK":
                     youtube_results = playlist_result.get("entries", [])
                     # 如果播放列表为空，可能是单个视频，尝试作为视频处理
@@ -1510,7 +1511,7 @@ async def search_song(request: Request):
             # YouTube 关键词搜索
             yt_start = time_module.time()
             try:
-                yt_search_result = StreamSong.search(query, max_results=PLAYER.youtube_search_max_results)
+                yt_search_result = StreamSong.search(query, max_results=max_results)
                 if yt_search_result.get("status") == "OK":
                     youtube_results = yt_search_result.get("results", [])
                 logger.info(f"[搜索性能] YouTube 搜索耗时: {time_module.time() - yt_start:.2f}秒，结果数: {len(youtube_results)}")
@@ -1530,6 +1531,13 @@ async def search_song(request: Request):
             {"status": "ERROR", "error": str(e)},
             status_code=500
         )
+
+@app.get("/youtube_search_config")
+async def get_youtube_search_config():
+    """获取YouTube搜索配置"""
+    return {
+        "max_results": PLAYER.youtube_search_max_results
+    }
 
 @app.post("/search_youtube")
 async def search_youtube(request: Request):
@@ -2548,7 +2556,7 @@ async def youtube_extract_playlist(request: Request):
             )
         
         # 使用StreamSong提取播放列表
-        videos = StreamSong.extract_playlist(url, max_results=PLAYER.youtube_search_max_results)
+        videos = StreamSong.extract_playlist(url, max_results=PLAYER.youtube_url_extra_max)
         return {
             "status": "OK",
             "videos": videos

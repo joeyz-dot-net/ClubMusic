@@ -175,14 +175,22 @@ export class MusicAPI {
     }
 
     // 搜索 API
-    async searchSong(query) {
-        return this.post('/search_song', { query });
+    async searchSong(query, maxResults = null) {
+        const data = { query };
+        if (maxResults !== null) {
+            data.max_results = maxResults;
+        }
+        return this.post('/search_song', data);
     }
 
     async searchYoutube(query) {
         const formData = new FormData();
         formData.append('query', query);
         return this.postForm('/search_youtube', formData);
+    }
+
+    async getYoutubeSearchConfig() {
+        return this.get('/youtube_search_config');
     }
 
     // 播放历史 API

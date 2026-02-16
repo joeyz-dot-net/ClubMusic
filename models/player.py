@@ -39,6 +39,7 @@ class MusicPlayer:
         "MPV_CMD": r'bin\mpv.exe --input-ipc-server=\\.\\pipe\\mpv-pipe --idle=yes --force-window=no --no-video',
         "LOCAL_SEARCH_MAX_RESULTS": "20",
         "YOUTUBE_SEARCH_MAX_RESULTS": "20",
+        "YOUTUBE_URL_EXTRA_MAX": "50",
         "LOCAL_VOLUME": "50",
         "PLAYBACK_HISTORY_MAX": "9999",
     }
@@ -160,6 +161,7 @@ class MusicPlayer:
         data_dir=".",
         local_search_max_results=20,
         youtube_search_max_results=20,
+        youtube_url_extra_max=50,
         playback_history_max=9999,
     ):
         """
@@ -175,6 +177,7 @@ class MusicPlayer:
           data_dir: 数据文件存储目录
           local_search_max_results: 本地搜索最大结果数
           youtube_search_max_results: YouTube搜索最大结果数
+          youtube_url_extra_max: YouTube URL提取最大结果数
         """
         # 配置属性
         self.music_dir = self._normalize_music_dir(music_dir)
@@ -184,6 +187,7 @@ class MusicPlayer:
         self.debug = debug
         self.local_search_max_results = int(local_search_max_results)
         self.youtube_search_max_results = int(youtube_search_max_results)
+        self.youtube_url_extra_max = int(youtube_url_extra_max)
         # 使用类方法避免实例绑定问题
         self.mpv_cmd = mpv_cmd or MusicPlayer._get_default_mpv_cmd()
         # 规范化 MPV 命令中的相对路径
@@ -412,11 +416,13 @@ class MusicPlayer:
         
         local_search_max = cfg.get("LOCAL_SEARCH_MAX_RESULTS", cls.DEFAULT_CONFIG["LOCAL_SEARCH_MAX_RESULTS"])
         youtube_search_max = cfg.get("YOUTUBE_SEARCH_MAX_RESULTS", cls.DEFAULT_CONFIG["YOUTUBE_SEARCH_MAX_RESULTS"])
+        youtube_url_extra_max = cfg.get("YOUTUBE_URL_EXTRA_MAX", cls.DEFAULT_CONFIG["YOUTUBE_URL_EXTRA_MAX"])
         playback_history_max = cfg.get("PLAYBACK_HISTORY_MAX", cls.DEFAULT_CONFIG.get("PLAYBACK_HISTORY_MAX", 9999))
         logger.info(f"  LOCAL_SEARCH_MAX_RESULTS: {local_search_max}")
         logger.info(f"  YOUTUBE_SEARCH_MAX_RESULTS: {youtube_search_max}")
+        logger.info(f"  YOUTUBE_URL_EXTRA_MAX: {youtube_url_extra_max}")
         logger.info(f"===== 配置加载完成 =====\n")
-        
+
         player = cls(
             music_dir=music_dir,
             allowed_extensions=allowed_ext,
@@ -427,6 +433,7 @@ class MusicPlayer:
             data_dir=data_dir,
             local_search_max_results=local_search_max,
             youtube_search_max_results=youtube_search_max,
+            youtube_url_extra_max=youtube_url_extra_max,
             playback_history_max=playback_history_max,
         )
         

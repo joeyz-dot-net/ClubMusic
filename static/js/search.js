@@ -22,7 +22,33 @@ export class SearchManager {
             youtube: [],
             history: []
         };
+        // YouTube搜索加载状态追踪
+        this.youtubeLoadState = {
+            query: '',               // 当前搜索词
+            displayedCount: 0,       // 已显示数量
+            totalLoaded: 0,          // 已加载数量
+            hasMore: true,           // 是否可能有更多结果
+            isLoading: false,        // 是否正在加载
+            maxResultsStep: 20,      // 每次加载增量
+            maxResultsLimit: 100     // 加载全部的最大值
+        };
         this.loadHistory();
+
+        // 异步加载YouTube搜索配置
+        this.loadYoutubeSearchConfig();
+    }
+
+    // 加载YouTube搜索配置
+    async loadYoutubeSearchConfig() {
+        try {
+            const config = await api.getYoutubeSearchConfig();
+            this.youtubeLoadState.maxResultsStep = config.page_size || 20;
+            this.youtubeLoadState.maxResultsLimit = config.max_results || 100;
+            console.log('[YouTube搜索配置] 加载成功:', config);
+        } catch (error) {
+            console.warn('[YouTube搜索配置] 加载失败，使用默认值:', error);
+            // 保持默认值
+        }
     }
 
     // 初始化搜索UI
@@ -299,11 +325,11 @@ export class SearchManager {
                     : (type === 'local'
                         ? (song.url || '未知位置')
                         : (song.duration ? formatTime(song.duration) : '未知时长'));
-                
+
                 const icon = isDirectory
                     ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>'
                     : '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>';
-                
+
                 return buildTrackItemHTML({
                     song,
                     type,
@@ -313,6 +339,35 @@ export class SearchManager {
                     isCover: song.is_directory || song.type === 'directory' // 标记是目录
                 });
             }).join('');
+        };
+
+        // 为YouTube标签页构建带加载按钮的HTML
+        const buildYoutubePanel = () => {
+            const listHTML = buildList(youtubeResults, 'youtube');
+
+            // 只在有结果的情况下添加加载按钮
+            if (youtubeResults && youtubeResults.length > 0) {
+                return listHTML + `
+                    <div class="search-load-more-container" id="youtubeLoadMoreContainer">
+                        <button class="search-load-more-btn" id="youtubeLoadMoreBtn">
+                            <span class="icon">⬇️</span>
+                            <span class="label">加载更多 (20)</span>
+                        </button>
+                        <button class="search-load-all-btn" id="youtubeLoadAllBtn">
+                            <span class="icon">📥</span>
+                            <span class="label">加载全部</span>
+                        </button>
+                    </div>
+                    <div class="search-load-status" id="youtubeLoadStatus" style="display:none;">
+                        <span class="status-text">正在加载...</span>
+                    </div>
+                    <div class="search-no-more" id="youtubeNoMore" style="display:none;">
+                        <span class="icon">✓</span>
+                        <span class="text">已加载全部结果</span>
+                    </div>
+                `;
+            }
+            return listHTML;
         };
 
             // 选择默认标签：优先本地，其次网络，其次播放历史
@@ -329,7 +384,7 @@ export class SearchManager {
                     ${buildList(localResults, 'local')}
                 </div>
                 <div class="search-results-panel ${defaultTab === 'youtube' ? 'active' : ''}" data-panel="youtube">
-                    ${buildList(youtubeResults, 'youtube')}
+                    ${buildYoutubePanel()}
                 </div>
                     <div class="search-results-panel ${defaultTab === 'history' ? 'active' : ''}" data-panel="history">
                         ${buildList(historyResults, 'history')}
@@ -355,11 +410,34 @@ export class SearchManager {
                 e.stopPropagation();
                 const item = e.target.closest('.search-result-item');
                 const isDirectory = item.getAttribute('data-directory') === 'true' || item.getAttribute('data-type') === 'directory';
-                
+
                 // 显示操作菜单
                 this.showSearchActionMenu(e.target, item, isDirectory);
             });
         });
+
+        // 初始化YouTube加载状态
+        if (youtubeResults && youtubeResults.length > 0) {
+            this.youtubeLoadState.query = this.lastQuery;
+            this.youtubeLoadState.displayedCount = youtubeResults.length;
+            this.youtubeLoadState.totalLoaded = youtubeResults.length;
+            this.youtubeLoadState.hasMore = youtubeResults.length >= this.youtubeLoadState.maxResultsStep;
+            this.youtubeLoadState.isLoading = false;
+        }
+
+        // 绑定YouTube加载按钮事件
+        const loadMoreBtn = document.getElementById('youtubeLoadMoreBtn');
+        const loadAllBtn = document.getElementById('youtubeLoadAllBtn');
+
+        if (loadMoreBtn) {
+            loadMoreBtn.addEventListener('click', () => this.loadMoreYoutubeResults(false));
+        }
+
+        if (loadAllBtn) {
+            loadAllBtn.addEventListener('click', () => this.loadMoreYoutubeResults(true));
+        }
+
+        this.updateYoutubeLoadUI();
     }
     
     /**
@@ -955,6 +1033,134 @@ export class SearchManager {
     removeFromHistory(query) {
         this.searchHistory = this.searchHistory.filter(item => item !== query);
         this.saveHistory();
+    }
+
+    /**
+     * 加载更多YouTube搜索结果
+     * @param {boolean} loadAll - 是否加载全部
+     */
+    async loadMoreYoutubeResults(loadAll = false) {
+        const state = this.youtubeLoadState;
+
+        // 防重复加载
+        if (state.isLoading || !state.hasMore) return;
+
+        // 计算新的max_results
+        const newMaxResults = loadAll
+            ? state.maxResultsLimit
+            : state.totalLoaded + state.maxResultsStep;
+
+        if (newMaxResults <= state.totalLoaded) {
+            state.hasMore = false;
+            this.updateYoutubeLoadUI();
+            return;
+        }
+
+        try {
+            state.isLoading = true;
+            this.updateYoutubeLoadUI();
+
+            // 调用API
+            const result = await api.searchSong(state.query, newMaxResults);
+
+            if (result.status !== 'OK') {
+                throw new Error(result.error || '加载失败');
+            }
+
+            const newResults = result.youtube || [];
+
+            // 过滤出新结果
+            const existingUrls = new Set(
+                this.currentSearchResults.youtube.map(item => item.url)
+            );
+            const freshResults = newResults.filter(item => !existingUrls.has(item.url));
+
+            if (freshResults.length === 0) {
+                state.hasMore = false;
+                Toast.info('已加载全部搜索结果');
+            } else {
+                // 追加新结果
+                this.currentSearchResults.youtube.push(...freshResults);
+                state.totalLoaded = newResults.length;
+                state.displayedCount = this.currentSearchResults.youtube.length;
+
+                if (newResults.length < newMaxResults) {
+                    state.hasMore = false;
+                }
+
+                this.appendYoutubeResults(freshResults);
+                Toast.success(`已加载 ${freshResults.length} 个新结果`);
+            }
+
+        } catch (error) {
+            console.error('[加载更多] 失败:', error);
+            Toast.error('加载失败: ' + error.message);
+        } finally {
+            state.isLoading = false;
+            this.updateYoutubeLoadUI();
+        }
+    }
+
+    /**
+     * 追加YouTube搜索结果到列表
+     */
+    appendYoutubeResults(newResults) {
+        const youtubePanel = document.querySelector('[data-panel="youtube"]');
+        if (!youtubePanel) return;
+
+        const loadMoreContainer = youtubePanel.querySelector('.search-load-more-container');
+
+        const newHTML = newResults.map(song =>
+            buildTrackItemHTML({
+                song,
+                type: 'youtube',
+                metaText: song.duration ? formatTime(song.duration) : '未知时长',
+                actionButtonClass: 'track-menu-btn search-result-add',
+                actionButtonIcon: '<svg class="icon icon-plus"><use xlink:href="#icon-plus"></use></svg>'
+            })
+        ).join('');
+
+        if (loadMoreContainer) {
+            loadMoreContainer.insertAdjacentHTML('beforebegin', newHTML);
+        }
+
+        // 重新绑定事件
+        this.bindSearchResultEvents(youtubePanel);
+    }
+
+    /**
+     * 更新YouTube加载按钮UI状态
+     */
+    updateYoutubeLoadUI() {
+        const state = this.youtubeLoadState;
+        const container = document.getElementById('youtubeLoadMoreContainer');
+        const statusEl = document.getElementById('youtubeLoadStatus');
+        const noMoreEl = document.getElementById('youtubeNoMore');
+
+        if (!container) return;
+
+        if (state.isLoading) {
+            container.style.display = 'none';
+            if (statusEl) statusEl.style.display = 'flex';
+            if (noMoreEl) noMoreEl.style.display = 'none';
+        } else if (!state.hasMore) {
+            container.style.display = 'none';
+            if (statusEl) statusEl.style.display = 'none';
+            if (noMoreEl) noMoreEl.style.display = 'flex';
+        } else {
+            container.style.display = 'flex';
+            if (statusEl) statusEl.style.display = 'none';
+            if (noMoreEl) noMoreEl.style.display = 'none';
+
+            // 动态更新"加载更多"按钮的文本，显示实际的page_size值
+            const loadMoreBtn = document.getElementById('youtubeLoadMoreBtn');
+            if (loadMoreBtn) {
+                const label = loadMoreBtn.querySelector('.label');
+                if (label) {
+                    label.textContent = `加载更多 (${state.maxResultsStep})`;
+                }
+            }
+        }
     }
 }
 

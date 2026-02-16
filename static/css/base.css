@@ -2672,6 +2672,112 @@ button:active { transform: scale(0.98); }
     background: rgba(0, 0, 0, 0.08);
 }
 
+/* ====== YouTube搜索加载更多按钮样式 ====== */
+
+/* 加载更多按钮容器 */
+.search-load-more-container {
+    display: flex;
+    gap: 12px;
+    padding: 16px;
+    justify-content: center;
+    align-items: center;
+}
+
+/* 加载按钮通用样式 */
+.search-load-more-btn,
+.search-load-all-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border: 1px solid;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: transparent;
+}
+
+.search-load-more-btn:hover,
+.search-load-all-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.search-load-more-btn:active,
+.search-load-all-btn:active {
+    transform: translateY(0);
+}
+
+.search-load-more-btn .icon,
+.search-load-all-btn .icon {
+    font-size: 16px;
+}
+
+/* 加载状态提示 */
+.search-load-status {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    color: #999;
+    font-size: 14px;
+}
+
+.search-load-status .status-text::before {
+    content: '⏳';
+    animation: rotate 1s linear infinite;
+    margin-right: 8px;
+}
+
+@keyframes rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* 无更多结果提示 */
+.search-no-more {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    padding: 20px;
+    color: #666;
+    font-size: 14px;
+}
+
+.search-no-more .icon {
+    color: #4caf50;
+    font-size: 16px;
+}
+
+/* 深色主题 */
+[data-theme="dark"] .search-load-more-btn,
+[data-theme="dark"] .search-load-all-btn {
+    border-color: #444;
+    color: #fff;
+}
+
+[data-theme="dark"] .search-load-more-btn:hover,
+[data-theme="dark"] .search-load-all-btn:hover {
+    border-color: #666;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* 浅色主题 */
+[data-theme="light"] .search-load-more-btn,
+[data-theme="light"] .search-load-all-btn {
+    border-color: #ddd;
+    color: #333;
+}
+
+[data-theme="light"] .search-load-more-btn:hover,
+[data-theme="light"] .search-load-all-btn:hover {
+    border-color: #999;
+    background: rgba(0, 0, 0, 0.05);
+}
+
 [data-theme="light"] .search-action-menu-item:active {
     background: rgba(0, 0, 0, 0.12);
 }
