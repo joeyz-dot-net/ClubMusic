@@ -159,7 +159,7 @@ class MusicPlayer:
         mpv_cmd=None,
         data_dir=".",
         local_search_max_results=20,
-        youtube_search_max_results=10,
+        youtube_search_max_results=20,
         playback_history_max=9999,
     ):
         """

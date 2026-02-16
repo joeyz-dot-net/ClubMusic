@@ -1485,7 +1485,7 @@ async def search_song(request: Request):
             yt_start = time_module.time()
             try:
                 # 先尝试作为播放列表处理
-                playlist_result = StreamSong.extract_playlist(query)
+                playlist_result = StreamSong.extract_playlist(query, max_results=PLAYER.youtube_search_max_results)
                 if playlist_result.get("status") == "OK":
                     youtube_results = playlist_result.get("entries", [])
                     # 如果播放列表为空，可能是单个视频，尝试作为视频处理
@@ -2548,7 +2548,7 @@ async def youtube_extract_playlist(request: Request):
             )
         
         # 使用StreamSong提取播放列表
-        videos = StreamSong.extract_playlist(url)
+        videos = StreamSong.extract_playlist(url, max_results=PLAYER.youtube_search_max_results)
         return {
             "status": "OK",
             "videos": videos
