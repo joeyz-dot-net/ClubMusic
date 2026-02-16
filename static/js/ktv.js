@@ -35,37 +35,41 @@ export class KTVSync {
      */
     initYouTubeAPI() {
         // YouTube API 加载完成时会调用全局函数 onYouTubeIframeAPIReady
-        window.onYouTubeIframeAPIReady = () => {
+        window.onYouTubeIframeAPIReady = async () => {
             console.log('[KTV] YouTube IFrame API 已加载');
-            this.createPlayer();
+            await this.createPlayer();
         };
 
         // 如果 API 已经加载（热重载情况）
         if (window.YT && window.YT.Player) {
             console.log('[KTV] YouTube API 已存在，直接创建播放器');
-            this.createPlayer();
+            this.createPlayer();  // 不需要 await，因为在构造函数中
         }
     }
 
     /**
      * 创建 YouTube 播放器实例
      */
-    createPlayer() {
+    async createPlayer() {
         if (this.player) {
             console.log('[KTV] 播放器已存在，跳过创建');
             return;
         }
 
         try {
+            // 从服务器读取控件配置
+            const controlsEnabled = await this.getYouTubeControlsSetting();
+            console.log(`[KTV] 创建播放器，控件配置: ${controlsEnabled ? '启用' : '禁用'}`);
+
             this.player = new YT.Player('fullPlayerYouTube', {
                 height: '100%',
                 width: '100%',
                 videoId: '',  // 初始为空，后续通过 loadVideoById 加载
                 playerVars: {
                     autoplay: 0,
-                    controls: 0,  // 隐藏控件
-                    disablekb: 1,  // 禁用键盘控制
-                    fs: 0,  // 禁用全屏按钮
+                    controls: controlsEnabled ? 1 : 0,  // 根据配置显示/隐藏 YouTube 控件
+                    disablekb: controlsEnabled ? 0 : 1,  // 根据配置启用/禁用键盘控制
+                    fs: 1,  // 启用全屏按钮
                     modestbranding: 1,  // 隐藏 YouTube logo
                     rel: 0,  // 不显示相关视频
                     showinfo: 0,  // 不显示视频信息
@@ -135,6 +139,110 @@ export class KTVSync {
         } else {
             this.disableVideoMode();
         }
+    }
+
+    /**
+     * 更新 YouTube 控件可见性
+     * @param {boolean} enabled - 是否启用控件
+     */
+    async updateControlsVisibility(enabled) {
+        if (!this.player) {
+            console.log('[KTV] 播放器未初始化，无法更新控件');
+            return;
+        }
+
+        try {
+            console.log(`[KTV] 准备${enabled ? '启用' : '禁用'}YouTube控件，需要重建播放器`);
+
+            // 保存当前播放状态
+            const wasPlaying = this.isVideoMode;
+            const currentVideoId = this.currentVideoId;
+            let currentTime = 0;
+            let wasPaused = true;
+
+            if (this.playerReady && currentVideoId) {
+                try {
+                    currentTime = this.player.getCurrentTime() || 0;
+                    const playerState = this.player.getPlayerState();
+                    wasPaused = playerState !== YT.PlayerState.PLAYING;
+                } catch (e) {
+                    console.warn('[KTV] 无法获取播放状态:', e);
+                }
+            }
+
+            // 销毁旧播放器
+            if (this.player && typeof this.player.destroy === 'function') {
+                try {
+                    this.player.destroy();
+                    console.log('[KTV] 旧播放器已销毁');
+                } catch (e) {
+                    console.warn('[KTV] 销毁播放器失败:', e);
+                }
+            }
+
+            // 重置状态
+            this.player = null;
+            this.playerReady = false;
+            this.currentVideoId = null;
+
+            // 重新创建播放器（会自动读取新配置）
+            await this.createPlayer();
+
+            // 如果之前在播放视频，等待播放器就绪后恢复
+            if (wasPlaying && currentVideoId) {
+                console.log(`[KTV] 等待播放器就绪后恢复视频: ${currentVideoId}, 时间: ${currentTime.toFixed(2)}s`);
+
+                // 等待播放器就绪
+                const waitForReady = setInterval(() => {
+                    if (this.playerReady) {
+                        clearInterval(waitForReady);
+
+                        // 恢复视频
+                        try {
+                            this.currentVideoId = currentVideoId;
+                            this.player.cueVideoById({
+                                videoId: currentVideoId,
+                                startSeconds: currentTime
+                            });
+
+                            if (!wasPaused) {
+                                setTimeout(() => {
+                                    this.player.playVideo();
+                                }, 500);
+                            }
+
+                            console.log('[KTV] 视频已恢复');
+                        } catch (e) {
+                            console.error('[KTV] 恢复视频失败:', e);
+                        }
+                    }
+                }, 100);
+
+                // 10秒超时
+                setTimeout(() => clearInterval(waitForReady), 10000);
+            }
+
+            console.log(`[KTV] YouTube控件已${enabled ? '启用' : '禁用'}`);
+        } catch (error) {
+            console.error('[KTV] 更新控件失败:', error);
+        }
+    }
+
+    /**
+     * 从服务器读取 YouTube 控件配置
+     * @returns {Promise<boolean>} 是否启用YouTube控件
+     */
+    async getYouTubeControlsSetting() {
+        try {
+            const response = await fetch('/ui-config');
+            const result = await response.json();
+            if (result.status === 'OK') {
+                return result.data.youtube_controls !== false;
+            }
+        } catch (error) {
+            console.error('[KTV] 读取配置失败:', error);
+        }
+        return true;  // 默认启用
     }
 
     /**

@@ -2742,6 +2742,105 @@ async def get_settings_schema():
 
 
 # ============================================
+# API 路由：UI 配置（服务器端 settings.ini）
+# ============================================
+
+@app.get("/ui-config")
+async def get_ui_config():
+    """获取 UI 配置（从 settings.ini）"""
+    try:
+        import configparser
+        from pathlib import Path
+
+        config = configparser.ConfigParser()
+        config_file = Path("settings.ini")
+
+        # 默认配置
+        default_config = {
+            "youtube_controls": True,
+            "expand_button": True
+        }
+
+        if config_file.exists():
+            config.read(config_file, encoding="utf-8")
+
+            if config.has_section('ui'):
+                # 读取配置，转换为布尔值
+                youtube_controls = config.getboolean('ui', 'youtube_controls', fallback=True)
+                expand_button = config.getboolean('ui', 'expand_button', fallback=True)
+
+                return {
+                    "status": "OK",
+                    "data": {
+                        "youtube_controls": youtube_controls,
+                        "expand_button": expand_button
+                    }
+                }
+
+        # 如果没有 [ui] section，返回默认值
+        return {
+            "status": "OK",
+            "data": default_config
+        }
+
+    except Exception as e:
+        logger.error(f"[UI配置] 读取失败: {e}")
+        return JSONResponse(
+            {"status": "ERROR", "error": str(e)},
+            status_code=500
+        )
+
+
+@app.post("/ui-config")
+async def update_ui_config(request: Request):
+    """更新 UI 配置（写入 settings.ini）"""
+    try:
+        import configparser
+        from pathlib import Path
+
+        data = await request.json()
+        youtube_controls = data.get("youtube_controls", True)
+        expand_button = data.get("expand_button", True)
+
+        config = configparser.ConfigParser()
+        config_file = Path("settings.ini")
+
+        # 读取现有配置
+        if config_file.exists():
+            config.read(config_file, encoding="utf-8")
+
+        # 确保 [ui] section 存在
+        if not config.has_section('ui'):
+            config.add_section('ui')
+
+        # 更新配置
+        config.set('ui', 'youtube_controls', str(youtube_controls).lower())
+        config.set('ui', 'expand_button', str(expand_button).lower())
+
+        # 写入文件
+        with open(config_file, 'w', encoding='utf-8') as f:
+            config.write(f)
+
+        logger.info(f"[UI配置] 已更新: YouTube控件={youtube_controls}, 放大按钮={expand_button}")
+
+        return {
+            "status": "OK",
+            "message": "UI配置已保存到 settings.ini",
+            "data": {
+                "youtube_controls": youtube_controls,
+                "expand_button": expand_button
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"[UI配置] 保存失败: {e}")
+        return JSONResponse(
+            {"status": "ERROR", "error": str(e)},
+            status_code=500
+        )
+
+
+# ============================================
 # 错误处理
 # ============================================
 

@@ -1702,7 +1702,7 @@ button:active { transform: scale(0.98); }
 
 .full-player-content {
     width: 100%;
-    min-height: 100%;
+    /* min-height: 100%; */
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -1769,6 +1769,77 @@ button:active { transform: scale(0.98); }
     filter: brightness(1.05);
 }
 
+/* 放大播放器样式 */
+.full-player-artwork-container.expanded {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+    max-width: 100vw;
+    max-height: 100vh;
+    box-shadow: none;
+    transition: all 0.3s ease;
+}
+
+/* 展开时移除hover缩放效果 */
+.full-player-artwork-container.expanded:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+/* 展开时图片保持原样 */
+.full-player-artwork-container.expanded:hover img {
+    filter: brightness(1);
+}
+
+/* 放大按钮的激活状态样式 */
+.full-player-expand.active {
+    color: rgba(74, 158, 255, 0.8);
+}
+
+/* 展开状态下隐藏其他UI元素 */
+.full-player.artwork-expanded .full-player-info,
+.full-player.artwork-expanded .full-player-progress-section,
+.full-player.artwork-expanded .full-player-volume {
+    opacity: 0;
+    transform: translateY(10px);
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* 展开状态下隐藏控制栏中除放大按钮外的其他按钮 */
+.full-player.artwork-expanded .full-player-controls .full-player-control-btn:not(.full-player-expand) {
+    opacity: 0;
+    transform: translateY(10px);
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* 展开状态下的content布局 */
+.full-player.artwork-expanded .full-player-content {
+    padding: 0;
+}
+
+/* 展开状态下的artwork区域 */
+.full-player.artwork-expanded .full-player-artwork {
+    padding: 0;
+    height: 75vh;
+}
+
+/* 隐藏放大按钮（通过配置控制） */
+.full-player-expand.hidden {
+    display: none !important;
+}
+
+/* 隐藏 YouTube 控件（通过配置控制） */
+#fullPlayerYouTube.youtube-controls-hidden {
+    pointer-events: none;
+}
+
+/* YouTube iframe 禁用交互时的样式 */
+#fullPlayerYouTube.youtube-controls-hidden iframe {
+    pointer-events: none;
+}
+
 .full-player-artwork-placeholder {
     width: 100%;
     height: 100%;
@@ -1803,6 +1874,46 @@ button:active { transform: scale(0.98); }
 
 .full-player-artwork-container.video-mode #fullPlayerVideoContainer {
     display: block !important;
+}
+
+/* 全屏模式样式 - 确保视频容器充满整个屏幕 */
+.full-player:fullscreen,
+.full-player:-webkit-full-screen,
+.full-player:-moz-full-screen,
+.full-player:-ms-fullscreen {
+    width: 100vw;
+    height: 100vh;
+}
+
+.full-player:fullscreen .full-player-content,
+.full-player:-webkit-full-screen .full-player-content,
+.full-player:-moz-full-screen .full-player-content,
+.full-player:-ms-fullscreen .full-player-content {
+    height: 50vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.full-player:fullscreen .full-player-artwork,
+.full-player:-webkit-full-screen .full-player-artwork,
+.full-player:-moz-full-screen .full-player-artwork,
+.full-player:-ms-fullscreen .full-player-artwork {
+    flex: 1;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.full-player:fullscreen .full-player-artwork-container,
+.full-player:-webkit-full-screen .full-player-artwork-container,
+.full-player:-moz-full-screen .full-player-artwork-container,
+.full-player:-ms-fullscreen .full-player-artwork-container {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 0;
 }
 
 .full-player-info {

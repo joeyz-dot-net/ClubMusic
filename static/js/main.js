@@ -39,6 +39,9 @@ class MusicPlayerApp {
         // 初始化缩略图管理器 - 用于处理YouTube缩略图降级
         this.thumbnailManager = new ThumbnailManager();
 
+        // 放大视图状态
+        this.isArtworkExpanded = false;
+
         // ✅ playlistManager 会在 constructor 中自动从 localStorage 恢复选择歌单
     }
 
@@ -70,7 +73,10 @@ class MusicPlayerApp {
             
             // 5.5 初始化设置管理器（绑定关闭按钮等事件）
             await settingsManager.init();
-            
+
+            // 应用全屏控件设置
+            await settingsManager.applyFullscreenControls();
+
             // 6. 绑定事件监听器
             this.bindEventListeners();
             
@@ -124,10 +130,10 @@ class MusicPlayerApp {
             fullPlayerProgressThumb: document.getElementById('fullPlayerProgressThumb'),
             fullPlayerCurrentTime: document.getElementById('fullPlayerCurrentTime'),
             fullPlayerDuration: document.getElementById('fullPlayerDuration'),
-            fullPlayerShuffle: document.getElementById('fullPlayerShuffle'),
+            fullPlayerExpand: document.getElementById('fullPlayerExpand'),
             fullPlayerRepeat: document.getElementById('fullPlayerRepeat'),
             fullPlayerVolumeSlider: document.getElementById('fullPlayerVolumeSlider'),
-            
+
             // 音量控制已移至 fullPlayerVolumeSlider
             
             // 播放进度
@@ -533,14 +539,11 @@ class MusicPlayerApp {
                 player.cycleLoop();
             });
         }
-        
-        // 随机播放按钮（暂时禁用或隐藏）
-        if (this.elements.fullPlayerShuffle) {
-            this.elements.fullPlayerShuffle.style.opacity = '0.3';
-            this.elements.fullPlayerShuffle.style.cursor = 'not-allowed';
-            this.elements.fullPlayerShuffle.addEventListener('click', (e) => {
-                e.preventDefault();
-                console.log('随机播放功能尚未实现');
+
+        // 放大视图按钮
+        if (this.elements.fullPlayerExpand) {
+            this.elements.fullPlayerExpand.addEventListener('click', () => {
+                this.toggleArtworkExpand();
             });
         }
 
@@ -1649,6 +1652,47 @@ class MusicPlayerApp {
         
         // 初始化调试面板
         this.initDebugPanel();
+    }
+
+    /**
+     * 切换视频容器展开/收缩状态
+     */
+    toggleArtworkExpand() {
+        this.isArtworkExpanded = !this.isArtworkExpanded;
+
+        const artworkContainer = this.elements.fullPlayerCover?.parentElement;
+        const expandBtn = this.elements.fullPlayerExpand;
+        const fullPlayer = this.elements.fullPlayer;
+
+        if (this.isArtworkExpanded) {
+            // 启用展开模式
+            if (artworkContainer) {
+                artworkContainer.classList.add('expanded');
+            }
+            if (expandBtn) {
+                expandBtn.classList.add('active');
+                expandBtn.title = '恢复原始大小';
+            }
+            if (fullPlayer) {
+                fullPlayer.classList.add('artwork-expanded');
+            }
+
+            console.log('[UI] 视频容器已展开到全屏');
+        } else {
+            // 恢复原始大小
+            if (artworkContainer) {
+                artworkContainer.classList.remove('expanded');
+            }
+            if (expandBtn) {
+                expandBtn.classList.remove('active');
+                expandBtn.title = '放大视图';
+            }
+            if (fullPlayer) {
+                fullPlayer.classList.remove('artwork-expanded');
+            }
+
+            console.log('[UI] 视频容器已恢复原始大小');
+        }
     }
 
     // 初始化调试面板

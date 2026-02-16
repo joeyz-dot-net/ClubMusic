@@ -14,7 +14,13 @@ export const settingsManager = {
         'theme': 'auto',
         'language': 'auto'
     },
-    
+
+    // UI 配置（从服务器读取）
+    uiConfig: {
+        youtube_controls: true,
+        expand_button: true
+    },
+
     // 用于存储 player 实例引用
     player: null,
     schema: {},
@@ -49,7 +55,10 @@ export const settingsManager = {
             
             // 加载 schema
             await this.loadSchema();
-            
+
+            // 加载 UI 配置（从服务器）
+            await this.loadUIConfig();
+
             // 应用主题
             this.applyTheme();
             
@@ -126,7 +135,7 @@ export const settingsManager = {
         try {
             const response = await fetch('/settings/schema');
             const result = await response.json();
-            
+
             if (result.status === 'OK') {
                 this.schema = result.schema;
                 console.log('[设置] Schema已加载');
@@ -135,7 +144,56 @@ export const settingsManager = {
             console.error('[设置] Schema加载失败:', error);
         }
     },
-    
+
+    /**
+     * 从服务器加载 UI 配置
+     */
+    async loadUIConfig() {
+        try {
+            const response = await fetch('/ui-config');
+            const result = await response.json();
+
+            if (result.status === 'OK') {
+                this.uiConfig = result.data;
+                console.log('[设置] UI配置已加载:', this.uiConfig);
+                return this.uiConfig;
+            }
+        } catch (error) {
+            console.error('[设置] UI配置加载失败:', error);
+            // 使用默认值
+            return this.uiConfig;
+        }
+    },
+
+    /**
+     * 保存 UI 配置到服务器
+     */
+    async saveUIConfig(config) {
+        try {
+            const response = await fetch('/ui-config', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(config)
+            });
+
+            const result = await response.json();
+
+            if (result.status === 'OK') {
+                this.uiConfig = result.data;
+                console.log('[设置] UI配置已保存:', this.uiConfig);
+                return true;
+            } else {
+                console.error('[设置] UI配置保存失败:', result.error);
+                return false;
+            }
+        } catch (error) {
+            console.error('[设置] UI配置保存失败:', error);
+            return false;
+        }
+    },
+
     /**
      * 更新UI - 将设置值同步到表单
      */
@@ -166,6 +224,18 @@ export const settingsManager = {
                     btn.classList.remove('active');
                 }
             });
+        }
+
+        // UI 配置 - YouTube控件开关
+        const youtubeControlsToggle = document.getElementById('youtubeControlsToggle');
+        if (youtubeControlsToggle) {
+            youtubeControlsToggle.checked = this.uiConfig.youtube_controls;
+        }
+
+        // UI 配置 - 放大按钮开关
+        const expandButtonToggle = document.getElementById('expandButtonToggle');
+        if (expandButtonToggle) {
+            expandButtonToggle.checked = this.uiConfig.expand_button;
         }
     },
     
@@ -204,7 +274,35 @@ export const settingsManager = {
                 });
             });
         }
-        
+
+        // YouTube控件开关
+        const youtubeControlsToggle = document.getElementById('youtubeControlsToggle');
+        if (youtubeControlsToggle) {
+            youtubeControlsToggle.addEventListener('change', async (e) => {
+                const enabled = e.target.checked;
+                const config = { ...this.uiConfig, youtube_controls: enabled };
+                const success = await this.saveUIConfig(config);
+                if (success) {
+                    await this.applyFullscreenControls();
+                    console.log(`[设置] YouTube控件：${enabled ? '启用' : '禁用'}`);
+                }
+            });
+        }
+
+        // 放大按钮开关
+        const expandButtonToggle = document.getElementById('expandButtonToggle');
+        if (expandButtonToggle) {
+            expandButtonToggle.addEventListener('change', async (e) => {
+                const enabled = e.target.checked;
+                const config = { ...this.uiConfig, expand_button: enabled };
+                const success = await this.saveUIConfig(config);
+                if (success) {
+                    await this.applyFullscreenControls();
+                    console.log(`[设置] 放大按钮：${enabled ? '显示' : '隐藏'}`);
+                }
+            });
+        }
+
         // 关闭按钮 - 使用 settingsManager 对象引用，确保调用最新的方法（兼容 main.js 的重写）
         const closeBtn = document.getElementById('settingsCloseBtn');
         if (closeBtn) {
@@ -311,7 +409,35 @@ export const settingsManager = {
         // 更新设置页面的文本内容
         this.updateSettingsUIText(language);
     },
-    
+
+    /**
+     * 应用全屏控件设置
+     */
+    async applyFullscreenControls() {
+        const youtubeEnabled = this.uiConfig.youtube_controls;
+        const expandEnabled = this.uiConfig.expand_button;
+
+        // 通知 ktvSync 更新 YouTube 控件
+        // 注意：如果播放器还未创建，会跳过更新（播放器创建时会自动读取配置）
+        if (window.ktvSync && window.ktvSync.player) {
+            await window.ktvSync.updateControlsVisibility(youtubeEnabled);
+        } else {
+            console.log('[设置] YouTube 播放器未创建，跳过控件更新（创建时将自动读取配置）');
+        }
+
+        // 更新放大按钮显示
+        const expandBtn = document.getElementById('fullPlayerExpand');
+        if (expandBtn) {
+            if (expandEnabled) {
+                expandBtn.classList.remove('hidden');
+            } else {
+                expandBtn.classList.add('hidden');
+            }
+        }
+
+        console.log(`[设置] 全屏控件已更新：YouTube=${youtubeEnabled}, 放大按钮=${expandEnabled}`);
+    },
+
     /**
      * 更新设置页面的 UI 文本
      */
