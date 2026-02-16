@@ -191,6 +191,28 @@ export class PlaylistManager {
         return this.currentPlaylistName;
     }
 
+    // 获取当前歌单图标
+    getCurrentPlaylistIcon() {
+        const selectedId = this.selectedPlaylistId;
+
+        // 默认歌单使用星星图标
+        if (selectedId === 'default') {
+            return '⭐';
+        }
+
+        // 查找当前歌单在列表中的索引
+        const index = this.playlists.findIndex(p => p.id === selectedId);
+
+        // 如果未找到，返回默认图标
+        if (index === -1) {
+            return '📋';
+        }
+
+        // 使用与 playlists-management.js 相同的图标数组
+        const icons = ['🎵', '🎧', '🎸', '🎹', '🎤', '🎼', '🎺', '🥁'];
+        return icons[index % icons.length];
+    }
+
     // 获取所有歌单
     getAll() {
         return this.playlists;

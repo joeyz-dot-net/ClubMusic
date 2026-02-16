@@ -2634,6 +2634,10 @@ button:active { transform: scale(0.98); }
 .search-action-menu-item .label {
     flex: 1;
     font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 280px;
 }
 
 /* 浅色主题 */
