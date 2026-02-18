@@ -177,6 +177,12 @@ button:hover { background: var(--button-hover-bg); border-color: var(--button-ho
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 }
 
+.playlist-item.selected {
+    background: rgba(102, 126, 234, 0.22);
+    border-color: rgba(102, 126, 234, 0.6);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15), 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
 .playlist-icon {
     color: #fff;
     box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08), 0 8px 18px rgba(0,0,0,0.35);

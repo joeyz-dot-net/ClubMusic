@@ -105,7 +105,8 @@ export class PlaylistsManagement {
 
         playlists.forEach((playlist, index) => {
             const item = document.createElement('div');
-            item.className = 'playlist-item';
+            const isSelected = playlist.id === playlistManager.selectedPlaylistId;
+            item.className = 'playlist-item' + (isSelected ? ' selected' : '');
             
             // 为不同歌单生成不同的渐变色
             const gradients = [

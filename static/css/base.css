@@ -1058,6 +1058,12 @@ button:active { transform: scale(0.98); }
     transform: translateY(-2px);
 }
 
+.playlist-item.selected {
+    background: rgba(102, 126, 234, 0.18);
+    border: 1.5px solid rgba(102, 126, 234, 0.5);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
 .playlist-item:active {
     background: rgba(255, 255, 255, 0.18);
     transform: translateY(0);
