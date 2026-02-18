@@ -764,6 +764,12 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
 
         infoSection.appendChild(playlistTitle);
         infoSection.appendChild(songCount);
+
+        const defaultIcon = playlistManager.getCurrentPlaylistIcon();
+        const defaultIconEl = document.createElement('div');
+        defaultIconEl.style.cssText = `font-size: 28px; line-height: 1; flex-shrink: 0;`;
+        defaultIconEl.textContent = defaultIcon;
+        headerContainer.appendChild(defaultIconEl);
         headerContainer.appendChild(infoSection);
 
         // 历史按钮
@@ -1050,6 +1056,11 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
         buttonGroup.appendChild(returnBtn);
         buttonGroup.appendChild(addAllBtn);
         buttonGroup.appendChild(clearBtn);
+        const customIcon = playlistManager.getCurrentPlaylistIcon();
+        const customIconEl = document.createElement('div');
+        customIconEl.style.cssText = `font-size: 28px; line-height: 1; flex-shrink: 0;`;
+        customIconEl.textContent = customIcon;
+        headerContainer.appendChild(customIconEl);
         headerContainer.appendChild(infoSection);
         headerContainer.appendChild(buttonGroup);
         container.appendChild(headerContainer);
