@@ -956,59 +956,18 @@ class MusicPlayerApp {
         }
     }
 
-    // 动态更新队列按钮图标
+    // 更新队列按钮图标（始终显示固定的正在播放图标）
     updateQueueNavIcon() {
         const queueNavIcon = document.querySelector('[data-tab="playlists"] .nav-icon');
         if (!queueNavIcon) return;
-        
-        // 获取当前歌单信息
-        const playlists = playlistManager.playlists || [];
-        
-        // 图标数组（与歌单管理页面保持一致）
-        const icons = ['🎵', '🎧', '🎸', '🎹', '🎤', '🎼', '🎺', '🥁'];
-        
-        // 渐变色数组（与歌单列表保持一致）
-        const gradients = [
-            'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-            'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-            'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-            'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-            'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',
-            'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
-            'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)'
-        ];
-        
-        let icon;
-        let gradient;
-        let playlistIndex = -1;
-        
-        if (this.currentPlaylistId === 'default') {
-            // 默认歌单使用星星图标和第一个渐变色
-            icon = '⭐';
-            gradient = gradients[0];
-        } else {
-            // 【修正】使用forEach的index，与歌单管理页面逻辑完全一致
-            playlists.forEach((playlist, index) => {
-                if (playlist.id === this.currentPlaylistId) {
-                    playlistIndex = index;
-                }
-            });
-            icon = playlistIndex >= 0 ? icons[playlistIndex % icons.length] : '🎵';
-            gradient = playlistIndex >= 0 ? gradients[playlistIndex % gradients.length] : gradients[0];
-        }
-        
-        // 更新图标和背景
-        queueNavIcon.textContent = icon;
-        queueNavIcon.style.background = gradient;
-        queueNavIcon.style.borderRadius = '12px';
-        queueNavIcon.style.padding = '8px';
-        queueNavIcon.style.display = 'flex';
-        queueNavIcon.style.alignItems = 'center';
-        queueNavIcon.style.justifyContent = 'center';
-        
-        const currentPlaylist = playlists.find(p => p.id === this.currentPlaylistId);
-        console.log(`[队列图标] 已更新为: ${icon} (歌单: ${currentPlaylist?.name || '未知'}, 索引: ${playlistIndex >= 0 ? playlistIndex : 'N/A'})`);  
+
+        queueNavIcon.textContent = '🎵';
+        queueNavIcon.style.background = '';
+        queueNavIcon.style.borderRadius = '';
+        queueNavIcon.style.padding = '';
+        queueNavIcon.style.display = '';
+        queueNavIcon.style.alignItems = '';
+        queueNavIcon.style.justifyContent = '';
     }
 
     // 播放/暂停
@@ -1149,6 +1108,7 @@ class MusicPlayerApp {
         
         // 标签页内容映射
         const tabContents = {
+            'playlists': this.elements.playlist,
             'local': this.elements.tree,
             'search': null    // 模态框
         };
@@ -1229,15 +1189,12 @@ class MusicPlayerApp {
             
             // 显示对应的内容
             if (tabName === 'playlists') {
-                // ✅ 队列 - 直接打开歌单管理模态框
-                if (playlistsModal) {
-                    playlistsModal.style.display = 'block';
-                    currentModal = playlistsModal;
+                // 显示当前播放队列
+                if (this.elements.playlist) {
+                    this.elements.playlist.style.display = 'block';
                     setTimeout(() => {
-                        playlistsModal.classList.add('modal-visible');
-                        updateModalZIndex();
+                        this.elements.playlist.classList.add('tab-visible');
                     }, 10);
-                    playlistsManagement.show();
                 }
             } else if (tabName === 'local') {
                 // 本地歌曲
@@ -1285,24 +1242,10 @@ class MusicPlayerApp {
             if (currentTab === tabName) {
                 console.log('ℹ️ 已在当前栏目:', tabName);
                 
-                // 特殊处理：playlists 栏目被点击时，打开歌单管理模态框
+                // 特殊处理：playlists 栏目再次点击时，刷新页面
                 if (tabName === 'playlists') {
-                    console.log('点击队列按钮，显示歌单管理页面');
-                    // 隐藏播放列表容器
-                    if (this.elements.playlist) {
-                        this.elements.playlist.classList.remove('tab-visible');
-                        this.elements.playlist.style.display = 'none';
-                    }
-                    // 显示歌单管理模态框
-                    if (playlistsModal) {
-                        playlistsModal.style.display = 'block';
-                        currentModal = playlistsModal;
-                        setTimeout(() => {
-                            playlistsModal.classList.add('modal-visible');
-                            updateModalZIndex();
-                        }, 10);
-                        playlistsManagement.show();
-                    }
+                    console.log('点击队列按钮，刷新页面');
+                    location.reload();
                     return;
                 }
                 
