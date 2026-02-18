@@ -1530,6 +1530,18 @@ class MusicPlayerApp {
             }
         }
 
+        // 歌単 sticky header 点击打开歌单模态框
+        document.addEventListener('open-playlists-modal', () => {
+            if (playlistsModal) {
+                playlistsModal.style.display = 'block';
+                setTimeout(() => {
+                    playlistsModal.classList.add('modal-visible');
+                    updateModalZIndex();
+                }, 10);
+                playlistsManagement.show();
+            }
+        });
+
         // 调试模态框关闭 - 支持点击背景和关闭按钮
         const debugModal = modals.debug;
         if (debugModal) {

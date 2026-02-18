@@ -769,8 +769,15 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
         const defaultIconEl = document.createElement('div');
         defaultIconEl.style.cssText = `font-size: 28px; line-height: 1; flex-shrink: 0;`;
         defaultIconEl.textContent = defaultIcon;
-        headerContainer.appendChild(defaultIconEl);
-        headerContainer.appendChild(infoSection);
+
+        const defaultLeftSection = document.createElement('div');
+        defaultLeftSection.style.cssText = `display: flex; align-items: center; gap: 10px; flex: 1; cursor: pointer;`;
+        defaultLeftSection.appendChild(defaultIconEl);
+        defaultLeftSection.appendChild(infoSection);
+        defaultLeftSection.addEventListener('click', () => {
+            document.dispatchEvent(new CustomEvent('open-playlists-modal'));
+        });
+        headerContainer.appendChild(defaultLeftSection);
 
         // 历史按钮
         const historyBtn = document.createElement('button');
@@ -1060,8 +1067,15 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
         const customIconEl = document.createElement('div');
         customIconEl.style.cssText = `font-size: 28px; line-height: 1; flex-shrink: 0;`;
         customIconEl.textContent = customIcon;
-        headerContainer.appendChild(customIconEl);
-        headerContainer.appendChild(infoSection);
+
+        const customLeftSection = document.createElement('div');
+        customLeftSection.style.cssText = `display: flex; align-items: center; gap: 10px; flex: 1; cursor: pointer;`;
+        customLeftSection.appendChild(customIconEl);
+        customLeftSection.appendChild(infoSection);
+        customLeftSection.addEventListener('click', () => {
+            document.dispatchEvent(new CustomEvent('open-playlists-modal'));
+        });
+        headerContainer.appendChild(customLeftSection);
         headerContainer.appendChild(buttonGroup);
         container.appendChild(headerContainer);
     }
