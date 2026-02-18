@@ -1242,10 +1242,9 @@ class MusicPlayerApp {
             if (currentTab === tabName) {
                 console.log('ℹ️ 已在当前栏目:', tabName);
                 
-                // 特殊处理：playlists 栏目再次点击时，刷新页面
+                // playlists 栏目：任何时候点击都切换到正在播放队列
                 if (tabName === 'playlists') {
-                    console.log('点击队列按钮，刷新页面');
-                    location.reload();
+                    showTab('playlists');
                     return;
                 }
                 
@@ -1298,6 +1297,11 @@ class MusicPlayerApp {
             
             item.addEventListener('click', () => {
                 console.log('🖱️ 点击导航项:', tabName);
+                if (tabName === 'playlists') {
+                    this.switchSelectedPlaylist('default');
+                    navigateTo('playlists');
+                    return;
+                }
                 navigateTo(tabName);
             });
         });
