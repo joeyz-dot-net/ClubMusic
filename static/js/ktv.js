@@ -17,6 +17,7 @@ export class KTVSync {
         this.isVideoMode = false;
         this.playerReady = false;
         this.isSyncing = false;  // 防止同步循环
+        this._failedVideoId = null;  // 记录播放失败的视频ID，避免无限重试
 
         // 性能监控指标
         this.metrics = {
@@ -118,8 +119,10 @@ export class KTVSync {
         console.error('[KTV] YouTube 播放器错误:', event.data);
         // 错误码: 2=无效ID, 5=HTML5播放器错误, 100=视频不存在, 101/150=不允许嵌入
         if (event.data === 100 || event.data === 101 || event.data === 150) {
-            console.error('[KTV] 视频无法播放，降级为音乐模式');
-            this.disableVideoMode();
+            console.error('[KTV] 视频无法播放，自动跳过下一首');
+            this._failedVideoId = this.currentVideoId;  // 记住失败的ID，防止重试
+            this.disableVideoMode();  // 立即清理视频模式状态
+            fetch('/next', { method: 'POST' }).catch(e => console.error('[KTV] 自动跳过失败:', e));
         }
     }
 
@@ -253,6 +256,13 @@ export class KTVSync {
             console.log('[KTV] 播放器未就绪，等待...');
             return;
         }
+
+        // 该视频之前加载失败，跳过避免无限重试；新歌曲加载时自动解除
+        if (videoId === this._failedVideoId) {
+            return;
+        }
+        // 不同视频加载时清除失败记录
+        this._failedVideoId = null;
 
         // 如果视频ID改变，加载新视频
         if (videoId !== this.currentVideoId) {

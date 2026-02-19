@@ -253,7 +253,6 @@ class MusicPlayerApp {
         });
 
         // 手动切歌时设置标志，避免重复的 loadCurrent() 网络请求
-        player.on('next', () => { this._skipNextLoadCurrent = true; });
         player.on('prev', () => { this._skipNextLoadCurrent = true; });
 
         // 监听暂停事件
