@@ -36,6 +36,7 @@ class MusicPlayerApp {
         this.lastThumbnailUrl = null;  // 缩略图URL追踪
         this.lastPitchShift = null;   // 音调追踪，防止重复 UI 更新
         this._autoNextTriggered = false;  // 自动播放下一首的标记
+        this._skipNextLoadCurrent = false;  // 手动切歌时跳过 loadCurrent() 网络请求
 
         // 初始化缩略图管理器 - 用于处理YouTube缩略图降级
         this.thumbnailManager = new ThumbnailManager();
@@ -229,11 +230,17 @@ class MusicPlayerApp {
             const currentUrl = status?.current_meta?.url || status?.current_meta?.rel || null;
             if (currentUrl !== this._lastRenderedSongUrl) {
                 this._lastRenderedSongUrl = currentUrl;
-                // 【步骤1】重新加载最新的播放列表数据（自动播放后会删除已播放的歌曲）
-                await playlistManager.loadCurrent();
-                // 【步骤2】重新渲染列表，显示最新数据
-                this.renderPlaylist();
-                console.log('[歌曲变化] ✓ 已刷新播放列表数据');
+                if (this._skipNextLoadCurrent) {
+                    // 由 next/prev 直接触发：跳过 loadCurrent() 请求，直接重渲染
+                    this._skipNextLoadCurrent = false;
+                    this.renderPlaylist();
+                    console.log('[歌曲变化] ✓ 手动切歌，直接重渲染（跳过 loadCurrent）');
+                } else {
+                    // 由轮询发现的变化（自动续播等）：需要重新加载列表数据
+                    await playlistManager.loadCurrent();
+                    this.renderPlaylist();
+                    console.log('[歌曲变化] ✓ 已刷新播放列表数据');
+                }
             }
         });
 
@@ -244,6 +251,10 @@ class MusicPlayerApp {
                 Toast.success(`正在播放: ${title}`);
             }
         });
+
+        // 手动切歌时设置标志，避免重复的 loadCurrent() 网络请求
+        player.on('next', () => { this._skipNextLoadCurrent = true; });
+        player.on('prev', () => { this._skipNextLoadCurrent = true; });
 
         // 监听暂停事件
         player.on('pause', () => {

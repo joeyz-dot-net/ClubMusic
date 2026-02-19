@@ -60,13 +60,27 @@ export class Player {
 
     async next() {
         const result = await api.next();
-        this.emit('next');
+        // 利用响应中的 current_meta 立即更新 UI，无需等待下次 1000ms 轮询
+        if (result?.status === 'OK' && result?.current && this.status) {
+            this.updateStatus({
+                ...this.status,
+                current_meta: result.current,
+            });
+        }
+        this.emit('next', result);
         return result;
     }
 
     async prev() {
         const result = await api.prev();
-        this.emit('prev');
+        // 利用响应中的 current_meta 立即更新 UI，无需等待下次 1000ms 轮询
+        if (result?.status === 'OK' && result?.current && this.status) {
+            this.updateStatus({
+                ...this.status,
+                current_meta: result.current,
+            });
+        }
+        this.emit('prev', result);
         return result;
     }
 

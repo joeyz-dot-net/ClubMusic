@@ -702,6 +702,16 @@ class MusicPlayer:
                                             self.handle_playback_end()
                                         except Exception as e:
                                             logger.error(f"[事件监听] ✗ 处理播放结束失败: {e}")
+                                    elif reason == "error":
+                                        # 播放出错，主动失效当前歌曲的缓存 URL，避免下次重复使用损坏的直链
+                                        try:
+                                            from models.url_cache import url_cache
+                                            video_id = self.current_meta.get("video_id")
+                                            if video_id:
+                                                url_cache.invalidate(video_id)
+                                                logger.info(f"[事件监听] 播放出错，已失效缓存: {video_id}")
+                                        except Exception as e:
+                                            logger.debug(f"[事件监听] 缓存失效异常（无害）: {e}")
                                     
                             except json.JSONDecodeError:
                                 # 跳过不是有效 JSON 的行（例如不相关的输出）
@@ -817,6 +827,8 @@ class MusicPlayer:
                     self.current_index = 0  # 重置为第一首
                     self._last_play_time = time.time()
                     logger.info(f"[自动播放] ✅ 自动播放成功: {title}")
+                    # 预获取下一曲直链
+                    self._prefetch_next_song_url()
                 else:
                     logger.error(f"[自动播放] ❌ 播放失败: {title}")
             else:
@@ -1984,6 +1996,9 @@ class MusicPlayer:
                     target=_fetch_media_title, daemon=True, name="FetchMediaTitle"
                 ).start()
 
+            # 播放成功后，后台预获取下一曲直链（仅 YouTube 歌曲受益）
+            self._prefetch_next_song_url()
+
             return True
         except Exception as e:
             logger.error(f"play() failed: {e}")
@@ -1991,6 +2006,65 @@ class MusicPlayer:
 
             traceback.print_exc()
             return False
+
+    def _prefetch_next_song_url(self):
+        """后台守护线程：预获取播放列表中下一曲的 YouTube 直链并写入缓存。
+        在当前曲开始播放后立即触发，使下次切歌能直接命中缓存。
+        幂等：由 url_cache.prefetch() 内部保证不重复提交同一 video_id。
+        """
+        def _do():
+            try:
+                import app as _app
+                playlist = _app.PLAYLISTS_MANAGER.get_playlist(_app.DEFAULT_PLAYLIST_ID)
+                if not playlist or not playlist.songs:
+                    return
+
+                songs = playlist.songs
+                # 下一首：当前 index+1，超出则回到 0（循环头部）
+                current_idx = self.current_index if self.current_index >= 0 else 0
+                next_idx = current_idx + 1
+                if next_idx >= len(songs):
+                    next_idx = 0
+                if next_idx >= len(songs):
+                    return
+
+                next_song = songs[next_idx]
+                if isinstance(next_song, dict):
+                    url = next_song.get("url", "")
+                    song_type = next_song.get("type", "local")
+                else:
+                    url = str(next_song)
+                    song_type = "local"
+
+                # 只对 YouTube 歌曲预获取
+                if not url or (song_type == "local" and not url.startswith("http")):
+                    return
+
+                from models.song import StreamSong
+                from models.url_cache import url_cache
+
+                tmp = StreamSong(stream_url=url, title="prefetch")
+                if not tmp.video_id:
+                    return
+
+                # 确定 yt-dlp 路径
+                if getattr(__import__('sys'), 'frozen', False):
+                    import sys as _sys
+                    app_dir = os.path.dirname(_sys.executable)
+                else:
+                    app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                yt_dlp_exe = os.path.join(app_dir, "bin", "yt-dlp.exe")
+                if not os.path.exists(yt_dlp_exe):
+                    yt_dlp_exe = "yt-dlp"
+
+                logger.info(f"[预获取] 当前曲已开始，预获取下一曲: {url[:60]}")
+                url_cache.prefetch(tmp.video_id, url, yt_dlp_exe)
+
+            except Exception as e:
+                logger.debug(f"[预获取] 异常（无害）: {e}")
+
+        import threading
+        threading.Thread(target=_do, daemon=True, name="PrefetchNextURL").start()
 
     def handle_track_end(
         self,

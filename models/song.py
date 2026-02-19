@@ -338,96 +338,83 @@ class StreamSong(Song):
             logger.debug("设置 mpv 属性: ytdl-format=bestaudio")
             mpv_command_func(["set_property", "ytdl-format", "bestaudio"])
 
-            # 对于 YouTube URL，优先使用 yt-dlp 获取直链
+            # 对于 YouTube URL，优先使用 yt-dlp 获取直链（先查缓存，缓存未命中则并行获取）
             actual_url = self.stream_url
             if "youtube.com" in self.stream_url or "youtu.be" in self.stream_url:
                 import subprocess
+                import concurrent.futures as _cf
+                import time as _time
+                from models.url_cache import url_cache, _run_ytdlp
+
                 logger.info(f"🎬 检测到 YouTube URL，尝试通过 yt-dlp 获取直链...")
-                
+
                 # 获取主程序目录（支持 PyInstaller 打包后的 exe）
                 if getattr(sys, 'frozen', False):
-                    # 打包后的 exe：使用 exe 文件所在目录作为主程序目录
                     app_dir = os.path.dirname(sys.executable)
                 else:
-                    # 开发环境：从 models/song.py 推导到主程序目录
                     app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                
-                # 使用主程序目录下的 bin 子目录
+
                 bin_yt_dlp = os.path.join(app_dir, "bin", "yt-dlp.exe")
-                
                 if os.path.exists(bin_yt_dlp):
                     yt_dlp_exe = bin_yt_dlp
                     logger.info(f"   📦 使用 yt-dlp: {bin_yt_dlp}")
                 else:
                     logger.info(f"   📦 yt-dlp.exe 不在 bin 目录，使用系统 PATH")
                     yt_dlp_exe = "yt-dlp"
-                
-                try:
-                    import time as _time
+
+                # 1. 优先查询缓存
+                cached = url_cache.get(self.video_id) if self.video_id else None
+                if cached:
+                    actual_url = cached["audio_url"]
+                    self.video_url = cached.get("video_url")
+                    logger.info(f"   ✅ [缓存命中] 直接使用缓存直链，跳过 yt-dlp 调用")
+                else:
+                    # 2. 缓存未命中：并行获取音频 + 视频直链
+                    logger.info(f"   ⏳ [缓存未命中] 并行获取音频+视频直链...")
                     start_time = _time.time()
-                    # 使用 -f bestaudio 确保只获取音频流，避免获取到视频流
-                    cmd = [yt_dlp_exe, "-f", "bestaudio", "-g", self.stream_url]
-                    logger.info(f"   ⏳ 运行命令: {' '.join(cmd)}")
-                    logger.info(f"   ⏳ 开始获取直链...")
-                    result = subprocess.run(
-                        cmd,
-                        capture_output=True,
-                        text=True,
-                        timeout=30
-                    )
-                    elapsed = _time.time() - start_time
-                    logger.info(f"   ⏱️ yt-dlp 执行耗时: {elapsed:.2f}秒")
-                    
-                    if result.returncode == 0:
-                        direct_urls = result.stdout.strip().split("\n")
-                        logger.info(f"   📋 yt-dlp 返回 {len(direct_urls)} 个URL")
-                        for i, u in enumerate(direct_urls):
-                            logger.info(f"      URL[{i}]: {u[:80]}..." if len(u) > 80 else f"      URL[{i}]: {u}")
-                        if direct_urls and direct_urls[0]:
-                            # 使用第一个 URL（bestaudio 模式下只返回一个音频流）
-                            actual_url = direct_urls[0].strip()
-                            logger.info(f"   ✅ 使用音频直链: {actual_url[:100]}..." if len(actual_url) > 100 else f"   ✅ 使用音频直链: {actual_url}")
-                    else:
-                        logger.warning(f"   ⚠️ yt-dlp 失败 (code={result.returncode})")
-                        logger.warning(f"   ⚠️ stderr: {result.stderr[:500]}")
-                        logger.warning(f"   ⚠️ stdout: {result.stdout[:500]}")
-                except subprocess.TimeoutExpired:
-                    logger.error(f"   ❌ yt-dlp 超时（30秒）")
-                except Exception as e:
-                    logger.warning(f"   ⚠️ yt-dlp 获取直链异常: {type(e).__name__}: {e}")
-                    logger.warning(f"   ⚠️ 将使用原始 URL: {self.stream_url}")
+                    try:
+                        with _cf.ThreadPoolExecutor(max_workers=2) as executor:
+                            audio_fut = executor.submit(
+                                _run_ytdlp, yt_dlp_exe,
+                                ["-f", "bestaudio", "-g", self.stream_url]
+                            )
+                            video_fut = executor.submit(
+                                _run_ytdlp, yt_dlp_exe,
+                                ["-f", "bestvideo[height<=720][ext=mp4]", "-g", self.stream_url]
+                            )
+                            try:
+                                audio_urls = audio_fut.result(timeout=35)
+                            except Exception as e:
+                                logger.warning(f"   ⚠️ 音频直链获取失败: {e}")
+                                audio_urls = []
+                            try:
+                                video_urls = video_fut.result(timeout=35)
+                            except Exception as e:
+                                logger.warning(f"   ⚠️ 视频直链获取失败: {e}")
+                                video_urls = []
 
-            # 获取视频流（仅YouTube，用于KTV功能）
-            if "youtube.com" in self.stream_url or "youtu.be" in self.stream_url:
-                try:
-                    logger.info(f"   📹 获取视频流URL（KTV功能）...")
-                    # 使用 bestvideo 获取720p以下的MP4视频（适合网页播放）
-                    video_cmd = [yt_dlp_exe, "-f", "bestvideo[height<=720][ext=mp4]", "-g", self.stream_url]
-                    video_result = subprocess.run(
-                        video_cmd,
-                        capture_output=True,
-                        text=True,
-                        timeout=30
-                    )
+                        elapsed = _time.time() - start_time
+                        logger.info(f"   ⏱️ 并行获取耗时: {elapsed:.2f}秒（原串行约需 2x 时间）")
 
-                    if video_result.returncode == 0:
-                        video_urls = video_result.stdout.strip().split("\n")
-                        if video_urls and video_urls[0]:
-                            self.video_url = video_urls[0].strip()
-                            logger.info(f"   ✅ 视频流URL: {self.video_url[:100]}...")
+                        if audio_urls:
+                            actual_url = audio_urls[0]
+                            logger.info(f"   ✅ 音频直链: {actual_url[:100]}...")
                         else:
-                            logger.warning(f"   ⚠️ 视频流URL为空")
-                            self.video_url = None
-                    else:
-                        logger.warning(f"   ⚠️ 获取视频流失败 (code={video_result.returncode})")
-                        logger.warning(f"   ⚠️ stderr: {video_result.stderr[:200]}")
-                        self.video_url = None
-                except subprocess.TimeoutExpired:
-                    logger.error(f"   ❌ 获取视频流超时（30秒）")
-                    self.video_url = None
-                except Exception as e:
-                    logger.warning(f"   ⚠️ 获取视频流异常: {type(e).__name__}: {e}")
-                    self.video_url = None
+                            logger.warning(f"   ⚠️ 未获取到音频直链，使用原始 URL")
+
+                        self.video_url = video_urls[0] if video_urls else None
+                        if self.video_url:
+                            logger.info(f"   ✅ 视频直链: {self.video_url[:100]}...")
+                        else:
+                            logger.info(f"   ℹ️ 未获取到视频直链（KTV 功能不可用）")
+
+                        # 3. 写入缓存（仅当成功获取到音频直链时）
+                        if self.video_id and actual_url != self.stream_url:
+                            url_cache.set(self.video_id, actual_url, self.video_url)
+
+                    except Exception as e:
+                        logger.warning(f"   ⚠️ 并行获取直链异常: {type(e).__name__}: {e}")
+                        logger.warning(f"   ⚠️ 将使用原始 URL: {self.stream_url}")
 
             logger.info(f"📤 调用 mpv loadfile 播放网络歌曲...")
             logger.info(f"   📌 actual_url 长度: {len(actual_url)} 字符")

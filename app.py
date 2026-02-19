@@ -193,6 +193,48 @@ def detect_browser_and_apply_config(request: Request) -> dict:
 
 
 # ============================================
+# 初始化 settings.ini（如不存在则创建默认配置）
+# ============================================
+
+def _init_default_settings_ini():
+    """确保 settings.ini 包含所有需要的默认节，只补充缺失部分，不覆盖已有内容。"""
+    import configparser
+    from pathlib import Path
+
+    config_file = Path("settings.ini")
+    config = configparser.ConfigParser()
+
+    if config_file.exists():
+        config.read(config_file, encoding="utf-8")
+
+    changed = False
+
+    # 补充 [ui] 节
+    if not config.has_section('ui'):
+        config.add_section('ui')
+        config.set('ui', 'youtube_controls', 'true')
+        config.set('ui', 'expand_button', 'true')
+        changed = True
+
+    # 补充 [cache] 节或其中缺失的键
+    if not config.has_section('cache'):
+        config.add_section('cache')
+        config.set('cache', 'url_cache_enabled', 'true')
+        changed = True
+    elif not config.has_option('cache', 'url_cache_enabled'):
+        config.set('cache', 'url_cache_enabled', 'true')
+        changed = True
+
+    if changed:
+        try:
+            with open(config_file, 'w', encoding='utf-8') as f:
+                config.write(f)
+            logger.info("[配置] settings.ini 已补充默认配置节")
+        except Exception as e:
+            logger.warning(f"[配置] 更新 settings.ini 失败（无害）: {e}")
+
+
+# ============================================
 # 定义应用生命周期处理
 # ============================================
 
@@ -201,6 +243,10 @@ async def lifespan(app: FastAPI):
     """应用生命周期管理（启动和关闭事件）"""
     # 启动事件
     logger.info("应用启动完成")
+
+    # 如果 settings.ini 不存在，创建带默认值的配置文件
+    _init_default_settings_ini()
+
     auto_fill_and_play_if_idle()
     
     yield  # 应用运行期间
@@ -895,6 +941,13 @@ async def refresh_video_url():
         bin_yt_dlp = os.path.join(app_dir, "bin", "yt-dlp.exe")
         yt_dlp_exe = bin_yt_dlp if os.path.exists(bin_yt_dlp) else "yt-dlp"
 
+        # 失效缓存中的旧直链（强制重新获取）
+        video_id = current_song.get("video_id")
+        if video_id:
+            from models.url_cache import url_cache
+            url_cache.invalidate(video_id)
+            logger.info(f"[KTV] 已失效旧缓存: {video_id}")
+
         # 重新获取视频直链
         try:
             video_cmd = [yt_dlp_exe, "-f", "bestvideo[height<=720][ext=mp4]", "-g", stream_url]
@@ -914,6 +967,13 @@ async def refresh_video_url():
                     # 更新current_meta中的video_url
                     PLAYER.current_meta["video_url"] = new_video_url
                     logger.info(f"[KTV] 视频URL已刷新: {new_video_url[:100]}...")
+
+                    # 更新缓存中的视频直链（保留已有的音频直链）
+                    if video_id:
+                        existing = url_cache.get(video_id)
+                        audio_url = existing["audio_url"] if existing else current_song.get("url", "")
+                        if audio_url:
+                            url_cache.set(video_id, audio_url, new_video_url)
 
                     return {
                         "status": "OK",
@@ -2793,24 +2853,25 @@ async def get_ui_config():
         # 默认配置
         default_config = {
             "youtube_controls": True,
-            "expand_button": True
+            "expand_button": True,
+            "url_cache_enabled": True,
         }
 
         if config_file.exists():
             config.read(config_file, encoding="utf-8")
 
-            if config.has_section('ui'):
-                # 读取配置，转换为布尔值
-                youtube_controls = config.getboolean('ui', 'youtube_controls', fallback=True)
-                expand_button = config.getboolean('ui', 'expand_button', fallback=True)
+            youtube_controls = config.getboolean('ui', 'youtube_controls', fallback=True)
+            expand_button = config.getboolean('ui', 'expand_button', fallback=True)
+            url_cache_enabled = config.getboolean('cache', 'url_cache_enabled', fallback=True)
 
-                return {
-                    "status": "OK",
-                    "data": {
-                        "youtube_controls": youtube_controls,
-                        "expand_button": expand_button
-                    }
+            return {
+                "status": "OK",
+                "data": {
+                    "youtube_controls": youtube_controls,
+                    "expand_button": expand_button,
+                    "url_cache_enabled": url_cache_enabled,
                 }
+            }
 
         # 如果没有 [ui] section，返回默认值
         return {
@@ -2836,6 +2897,7 @@ async def update_ui_config(request: Request):
         data = await request.json()
         youtube_controls = data.get("youtube_controls", True)
         expand_button = data.get("expand_button", True)
+        url_cache_enabled = data.get("url_cache_enabled", True)
 
         config = configparser.ConfigParser()
         config_file = Path("settings.ini")
@@ -2848,22 +2910,35 @@ async def update_ui_config(request: Request):
         if not config.has_section('ui'):
             config.add_section('ui')
 
+        # 确保 [cache] section 存在
+        if not config.has_section('cache'):
+            config.add_section('cache')
+
         # 更新配置
         config.set('ui', 'youtube_controls', str(youtube_controls).lower())
         config.set('ui', 'expand_button', str(expand_button).lower())
+        config.set('cache', 'url_cache_enabled', str(url_cache_enabled).lower())
 
         # 写入文件
         with open(config_file, 'w', encoding='utf-8') as f:
             config.write(f)
 
-        logger.info(f"[UI配置] 已更新: YouTube控件={youtube_controls}, 放大按钮={expand_button}")
+        # 通知缓存模块重新加载配置（关闭时立即清空内存缓存）
+        try:
+            from models.url_cache import url_cache as _url_cache
+            _url_cache.reload_config()
+        except Exception as e:
+            logger.warning(f"[UI配置] 重载缓存配置失败（无害）: {e}")
+
+        logger.info(f"[UI配置] 已更新: YouTube控件={youtube_controls}, 放大按钮={expand_button}, URL缓存={url_cache_enabled}")
 
         return {
             "status": "OK",
             "message": "UI配置已保存到 settings.ini",
             "data": {
                 "youtube_controls": youtube_controls,
-                "expand_button": expand_button
+                "expand_button": expand_button,
+                "url_cache_enabled": url_cache_enabled,
             }
         }
 
