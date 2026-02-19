@@ -213,6 +213,7 @@ class MusicPlayer:
         self.current_index = -1
         self.current_meta = {}
         self.loop_mode = 0  # 0=不循环, 1=单曲循环, 2=全部循环
+        self.pitch_shift = 0  # 音调偏移（-6 到 +6 个半音），0=原调
         self._last_play_time = 0
         self._prev_index = None
         self._prev_meta = None
@@ -1235,6 +1236,32 @@ class MusicPlayer:
         """
         self.loop_mode = (self.loop_mode + 1) % 3
         return self.loop_mode
+
+    def set_pitch_shift(self, semitones: int) -> bool:
+        """设置音调偏移（KTV升降调），范围 -6 到 +6 个半音。
+
+        使用 MPV rubberband 滤镜实现变调（不改变速度）。
+        命名标签 @pitchshift 保证每次 af add 覆盖旧值。
+
+        参数:
+            semitones: 半音偏移量（-6 到 +6）
+        返回:
+            bool: 命令是否发送成功
+        """
+        semitones = max(-6, min(6, int(semitones)))
+        self.pitch_shift = semitones
+        if semitones == 0:
+            logger.info("[音调] 恢复原调，移除 pitchshift 滤镜")
+            return self.mpv_command(["af", "remove", "@pitchshift"])
+        else:
+            pitch_scale = 2 ** (semitones / 12)
+            filter_str = f"@pitchshift:rubberband=pitch-scale={pitch_scale:.6f}"
+            logger.info(f"[音调] {semitones:+d} 半音，pitch-scale={pitch_scale:.4f}")
+            return self.mpv_command(["af", "add", filter_str])
+
+    def reset_pitch_shift(self) -> bool:
+        """重置音调为原调（0 半音），换歌时调用。"""
+        return self.set_pitch_shift(0)
 
     def get_pause_state(self) -> bool:
         """获取暂停状态

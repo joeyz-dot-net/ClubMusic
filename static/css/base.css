@@ -1804,8 +1804,7 @@ button:active { transform: scale(0.98); }
 
 /* 展开状态下隐藏其他UI元素 */
 .full-player.artwork-expanded .full-player-info,
-.full-player.artwork-expanded .full-player-progress-section,
-.full-player.artwork-expanded .full-player-volume {
+.full-player.artwork-expanded .full-player-progress-section {
     opacity: 0;
     transform: translateY(10px);
     pointer-events: none;
@@ -1818,6 +1817,14 @@ button:active { transform: scale(0.98); }
     transform: translateY(10px);
     pointer-events: none;
     transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* 展开状态下同时隐藏音量条、音调文字 */
+.full-player.artwork-expanded .full-player-volume,
+.full-player.artwork-expanded .full-player-controls .full-player-pitch-display {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
 }
 
 /* 展开状态下的content布局 */
@@ -2009,6 +2016,24 @@ button:active { transform: scale(0.98); }
     padding: 24px 20px;
 }
 
+.full-player-volume {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 0 24px 24px;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.full-player-volume svg {
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+}
+
+.full-player-volume:hover svg {
+    opacity: 1;
+}
+
 .full-player-control-btn {
     background: transparent;
     border: none;
@@ -2029,32 +2054,46 @@ button:active { transform: scale(0.98); }
     transform: scale(0.95);
 }
 
+/* KTV 升降调控件 */
+.full-player-pitch-control {
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+
+.full-player-pitch-display {
+    min-width: 20px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    user-select: none;
+    transition: color 0.2s ease;
+}
+
+.full-player-pitch-btn {
+    padding: 6px !important;
+}
+
+.full-player-pitch-display.pitch-active {
+    color: var(--accent-color, #1db954);
+}
+
+.full-player-pitch-btn:disabled {
+    opacity: 0.2 !important;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
 .full-player-play-pause {
     width: 72px;
     height: 72px;
 }
 
-.full-player-volume {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 0 24px 24px;
-    max-width: 400px;
-    margin: 0 auto;
-}
-
-.full-player-volume svg {
-    opacity: 0.6;
-    transition: opacity 0.2s ease;
-}
-
-.full-player-volume:hover svg {
-    opacity: 1;
-}
-
 .full-player-volume-slider {
     flex: 1;
     position: relative;
+    min-width: 0;
 }
 
 .full-player-volume-slider input[type="range"] {

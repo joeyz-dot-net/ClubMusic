@@ -110,6 +110,10 @@ export class MusicAPI {
         return this.post('/loop', {});
     }
 
+    async setPitch(semitones) {
+        return this.post('/pitch', { semitones });
+    }
+
     async getVolume() {
         return this.post('/volume', {});
     }

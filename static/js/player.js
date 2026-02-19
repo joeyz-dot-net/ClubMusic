@@ -116,6 +116,26 @@ export class Player {
         return result;
     }
 
+    // 音调控制（KTV升降调）
+    async setPitch(semitones) {
+        const result = await api.setPitch(semitones);
+        const pitchShift = result.pitch_shift !== undefined ? result.pitch_shift : semitones;
+        this.emit('pitchChange', pitchShift);
+        return result;
+    }
+
+    async pitchUp() {
+        const current = this.status?.pitch_shift ?? 0;
+        if (current >= 6) return;
+        return this.setPitch(current + 1);
+    }
+
+    async pitchDown() {
+        const current = this.status?.pitch_shift ?? 0;
+        if (current <= -6) return;
+        return this.setPitch(current - 1);
+    }
+
     // 状态轮询
     startPolling(interval = 5000) {
         if (this.pollInterval) return;

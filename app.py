@@ -833,7 +833,8 @@ async def play(request: Request):
             save_to_history=True,
             mpv_cmd=PLAYER.mpv_cmd
         )
-        
+        PLAYER.reset_pitch_shift()
+
         # 【状态改变显示】显示正在播放的歌曲信息
         logger.info(
             f"▶️ [播放状态改变] 正在播放: {title} (类型: {song_type})"
@@ -1345,6 +1346,7 @@ async def get_status():
             "current_playlist_id": CURRENT_PLAYLIST_ID,
             "current_playlist_name": playlist.name if playlist else "--",
             "loop_mode": PLAYER.loop_mode,
+            "pitch_shift": PLAYER.pitch_shift,
             "mpv_state": mpv_state
         }
     except Exception as e:
@@ -1358,6 +1360,7 @@ async def get_status():
                 "current_playlist_id": DEFAULT_PLAYLIST_ID,
                 "current_playlist_name": "--",
                 "loop_mode": 0,
+                "pitch_shift": 0,
                 "mpv_state": {
                     "paused": True,
                     "time_pos": 0,
@@ -1448,6 +1451,30 @@ async def set_loop_mode():
             "status": "OK",
             "loop_mode": PLAYER.loop_mode
         }
+    except Exception as e:
+        return JSONResponse(
+            {"status": "ERROR", "error": str(e)},
+            status_code=500
+        )
+
+@app.post("/pitch")
+async def set_pitch_shift(request: Request):
+    """设置音调偏移（KTV升降调，-6 到 +6 个半音）"""
+    try:
+        data = await request.json()
+        semitones = max(-6, min(6, int(data.get("semitones", 0))))
+        PLAYER.set_pitch_shift(semitones)
+        direction = "升" if semitones > 0 else ("降" if semitones < 0 else "原")
+        logger.info(f"[播放状态改变] {direction}调: {semitones:+d} 半音")
+        return {
+            "status": "OK",
+            "pitch_shift": PLAYER.pitch_shift
+        }
+    except (ValueError, TypeError) as e:
+        return JSONResponse(
+            {"status": "ERROR", "error": f"无效的半音值: {e}"},
+            status_code=400
+        )
     except Exception as e:
         return JSONResponse(
             {"status": "ERROR", "error": str(e)},

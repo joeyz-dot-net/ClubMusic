@@ -34,6 +34,7 @@ class MusicPlayerApp {
         this.lastPlaybackStatus = null;  // 播放状态
         this.lastUILoopMode = null;  // UI更新中的循环模式跟踪，防止重复日志
         this.lastThumbnailUrl = null;  // 缩略图URL追踪
+        this.lastPitchShift = null;   // 音调追踪，防止重复 UI 更新
         this._autoNextTriggered = false;  // 自动播放下一首的标记
 
         // 初始化缩略图管理器 - 用于处理YouTube缩略图降级
@@ -131,7 +132,9 @@ class MusicPlayerApp {
             fullPlayerCurrentTime: document.getElementById('fullPlayerCurrentTime'),
             fullPlayerDuration: document.getElementById('fullPlayerDuration'),
             fullPlayerExpand: document.getElementById('fullPlayerExpand'),
-            fullPlayerRepeat: document.getElementById('fullPlayerRepeat'),
+            fullPlayerPitchDown: document.getElementById('fullPlayerPitchDown'),
+            fullPlayerPitchDisplay: document.getElementById('fullPlayerPitchDisplay'),
+            fullPlayerPitchUp: document.getElementById('fullPlayerPitchUp'),
             fullPlayerVolumeSlider: document.getElementById('fullPlayerVolumeSlider'),
 
             // 音量控制已移至 fullPlayerVolumeSlider
@@ -214,7 +217,13 @@ class MusicPlayerApp {
             
             this.lastPlayStatus = status;
             this.updatePlayerUI(status);
-            
+
+            // 同步音调状态（页面刷新后恢复，或换歌后自动重置为 0）
+            if (status?.pitch_shift !== undefined && status.pitch_shift !== this.lastPitchShift) {
+                this.lastPitchShift = status.pitch_shift;
+                this.updatePitchUI(status.pitch_shift);
+            }
+
             // ✅【关键修复】歌曲变化时：先刷新播放列表数据，再重新渲染
             // 这样才能显示后端删除当前歌曲后的最新列表
             const currentUrl = status?.current_meta?.url || status?.current_meta?.rel || null;
@@ -249,6 +258,11 @@ class MusicPlayerApp {
         player.on('loopChange', (loopMode) => {
             this.updateLoopButtonUI(loopMode);
         });
+
+        // 监听音调变化
+        player.on('pitchChange', (pitchShift) => {
+            this.updatePitchUI(pitchShift);
+        });
     }
 
     // 更新循环按钮的视觉状态
@@ -256,7 +270,6 @@ class MusicPlayerApp {
         const buttons = [
             this.elements.loopBtn,
             this.elements.nowPlayingRepeatBtn,
-            this.elements.fullPlayerRepeat
         ];
 
         // 循环模式: 0=不循环, 1=单曲循环, 2=全部循环
@@ -296,6 +309,25 @@ class MusicPlayerApp {
                 btn.title = `循环模式: ${loopModeText[loopMode]}`;
             }
         });
+    }
+
+    // 更新升降调控件的视觉状态
+    updatePitchUI(pitchShift) {
+        const display = this.elements.fullPlayerPitchDisplay;
+        if (!display) return;
+        if (pitchShift === 0) {
+            display.textContent = '0';
+            display.classList.remove('pitch-active');
+        } else {
+            display.textContent = pitchShift > 0 ? `+${pitchShift}` : `${pitchShift}`;
+            display.classList.add('pitch-active');
+        }
+        if (this.elements.fullPlayerPitchUp) {
+            this.elements.fullPlayerPitchUp.disabled = pitchShift >= 6;
+        }
+        if (this.elements.fullPlayerPitchDown) {
+            this.elements.fullPlayerPitchDown.disabled = pitchShift <= -6;
+        }
     }
 
     // 初始化音量控制
@@ -534,9 +566,14 @@ class MusicPlayerApp {
                 player.cycleLoop();
             });
         }
-        if (this.elements.fullPlayerRepeat) {
-            this.elements.fullPlayerRepeat.addEventListener('click', () => {
-                player.cycleLoop();
+        if (this.elements.fullPlayerPitchDown) {
+            this.elements.fullPlayerPitchDown.addEventListener('click', () => {
+                player.pitchDown();
+            });
+        }
+        if (this.elements.fullPlayerPitchUp) {
+            this.elements.fullPlayerPitchUp.addEventListener('click', () => {
+                player.pitchUp();
             });
         }
 
