@@ -2082,6 +2082,7 @@ button:active { transform: scale(0.98); }
 
 .full-player-pitch-btn {
     padding: 6px !important;
+    font-size: 18px;
 }
 
 .full-player-pitch-display.pitch-active {
