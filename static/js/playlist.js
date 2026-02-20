@@ -500,6 +500,369 @@ function getThemeColors(theme) {
     }
 }
 
+// 播放列表顶部工具栏渲染（独立于列表容器，支持 sticky 定位）
+export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName, selectedPlaylistId, container, onPlay, currentMeta }) {
+    if (!toolbarContainer) return;
+    toolbarContainer.innerHTML = '';
+
+    if (selectedPlaylistId === 'default') {
+        const appTheme = getCurrentAppTheme();
+        const colors = getThemeColors(appTheme);
+
+        const headerContainer = document.createElement('div');
+        const isLightTheme = appTheme === 'light';
+        const headerBg = isLightTheme
+            ? 'rgba(255, 255, 255, 0.7)'
+            : 'rgba(26, 26, 26, 0.6)';
+        const headerBorder = isLightTheme
+            ? 'rgba(224, 224, 224, 0.5)'
+            : 'rgba(51, 51, 51, 0.5)';
+
+        headerContainer.style.cssText = `
+            background: ${headerBg};
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid ${headerBorder};
+            border-radius: 12px;
+            padding: 14px 16px;
+            box-shadow: 0 4px 16px ${colors.shadow};
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        `;
+
+        const infoSection = document.createElement('div');
+        infoSection.style.cssText = `
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex: 1;
+        `;
+
+        const playlistTitle = document.createElement('div');
+        playlistTitle.style.cssText = `
+            font-size: 16px;
+            font-weight: 700;
+            color: ${colors.textColor};
+            letter-spacing: 0.5px;
+            line-height: 1.2;
+        `;
+        playlistTitle.textContent = playlistName;
+
+        const songCount = document.createElement('div');
+        songCount.style.cssText = `
+            font-size: 12px;
+            color: ${colors.secondaryText};
+            font-weight: 500;
+        `;
+        songCount.textContent = `📊 ${playlist.length} 首歌曲`;
+
+        infoSection.appendChild(playlistTitle);
+        infoSection.appendChild(songCount);
+
+        const defaultIcon = playlistManager.getCurrentPlaylistIcon();
+        const defaultIconEl = document.createElement('div');
+        defaultIconEl.style.cssText = `font-size: 28px; line-height: 1; flex-shrink: 0;`;
+        defaultIconEl.textContent = defaultIcon;
+
+        const defaultLeftSection = document.createElement('div');
+        defaultLeftSection.style.cssText = `display: flex; align-items: center; gap: 10px; flex: 1; cursor: pointer;`;
+        defaultLeftSection.appendChild(defaultIconEl);
+        defaultLeftSection.appendChild(infoSection);
+        defaultLeftSection.addEventListener('click', () => {
+            document.dispatchEvent(new CustomEvent('open-playlists-modal'));
+        });
+        headerContainer.appendChild(defaultLeftSection);
+
+        // 历史按钮
+        const historyBtn = document.createElement('button');
+        historyBtn.style.cssText = `
+            background: ${colors.buttonBg};
+            border: 1.5px solid ${colors.buttonBorder};
+            color: ${colors.buttonText};
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        `;
+        historyBtn.innerHTML = '📜';
+        historyBtn.title = '播放历史';
+        historyBtn.addEventListener('mouseover', () => {
+            historyBtn.style.background = colors.buttonHover;
+            historyBtn.style.transform = 'scale(1.1)';
+            historyBtn.style.boxShadow = `0 4px 12px ${colors.shadow}`;
+        });
+        historyBtn.addEventListener('mouseout', () => {
+            historyBtn.style.background = colors.buttonBg;
+            historyBtn.style.transform = 'scale(1)';
+            historyBtn.style.boxShadow = 'none';
+        });
+        historyBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await showPlaybackHistory();
+        });
+
+        // 清空按钮
+        const clearBtn = document.createElement('button');
+        clearBtn.style.cssText = `
+            background: ${colors.buttonBg};
+            border: 1.5px solid ${colors.buttonBorder};
+            color: ${colors.buttonText};
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        `;
+        clearBtn.innerHTML = '🗑️';
+        clearBtn.title = '清空播放队列';
+        clearBtn.addEventListener('mouseover', () => {
+            clearBtn.style.background = colors.buttonHover;
+            clearBtn.style.transform = 'scale(1.1)';
+            clearBtn.style.boxShadow = `0 4px 12px ${colors.shadow}`;
+        });
+        clearBtn.addEventListener('mouseout', () => {
+            clearBtn.style.background = colors.buttonBg;
+            clearBtn.style.transform = 'scale(1)';
+            clearBtn.style.boxShadow = 'none';
+        });
+        clearBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (confirm('确定要清空队列吗？')) {
+                try {
+                    await api.post('/playlist_clear', {});
+                    Toast.success('✅ 队列已清空');
+                    await playlistManager.loadCurrent();
+                    renderPlaylistUI({ container, onPlay, currentMeta });
+                } catch (err) {
+                    console.error('清空队列失败:', err);
+                    Toast.error('清空失败: ' + (err.message || err));
+                }
+            }
+        });
+
+        headerContainer.appendChild(historyBtn);
+        headerContainer.appendChild(clearBtn);
+        toolbarContainer.appendChild(headerContainer);
+    }
+
+    if (selectedPlaylistId !== 'default') {
+        const appTheme = getCurrentAppTheme();
+        const colors = getThemeColors(appTheme);
+
+        const hasYoutube = playlist.some(song => {
+            const isYoutube = song.type === 'youtube' || song.type === 'stream';
+            const isUrl = song.url && (song.url.startsWith('http') || song.url.startsWith('youtu'));
+            return isYoutube || isUrl;
+        });
+
+        const headerContainer = document.createElement('div');
+        const isLightTheme = appTheme === 'light';
+        const headerBg = isLightTheme
+            ? 'rgba(255, 255, 255, 0.7)'
+            : 'rgba(26, 26, 26, 0.6)';
+        const headerBorder = isLightTheme
+            ? 'rgba(224, 224, 224, 0.5)'
+            : 'rgba(51, 51, 51, 0.5)';
+
+        headerContainer.style.cssText = `
+            background: ${headerBg};
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid ${headerBorder};
+            border-radius: 12px;
+            padding: 14px 16px;
+            box-shadow: 0 4px 16px ${colors.shadow};
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        `;
+
+        const infoSection = document.createElement('div');
+        infoSection.style.cssText = `
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex: 1;
+        `;
+
+        const playlistTitle = document.createElement('div');
+        playlistTitle.style.cssText = `
+            font-size: 16px;
+            font-weight: 700;
+            color: ${colors.textColor};
+            letter-spacing: 0.5px;
+            line-height: 1.2;
+        `;
+        playlistTitle.textContent = playlistName;
+
+        const songCount = document.createElement('div');
+        songCount.style.cssText = `
+            font-size: 12px;
+            color: ${colors.secondaryText};
+            font-weight: 500;
+        `;
+        songCount.textContent = `📊 ${playlist.length} 首歌曲`;
+
+        infoSection.appendChild(playlistTitle);
+        infoSection.appendChild(songCount);
+
+        const buttonGroup = document.createElement('div');
+        buttonGroup.style.cssText = `
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-shrink: 0;
+        `;
+
+        const returnBtn = document.createElement('button');
+        returnBtn.style.cssText = `
+            background: ${colors.buttonBg};
+            border: 1.5px solid ${colors.buttonBorder};
+            color: ${colors.buttonText};
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            flex-shrink: 0;
+        `;
+        returnBtn.innerHTML = '←';
+        returnBtn.title = '返回到队列（默认歌单）';
+        returnBtn.addEventListener('mouseover', () => {
+            returnBtn.style.background = colors.buttonHover;
+            returnBtn.style.transform = 'scale(1.1) translateX(-2px)';
+            returnBtn.style.boxShadow = `0 4px 12px ${colors.shadow}`;
+        });
+        returnBtn.addEventListener('mouseout', () => {
+            returnBtn.style.background = colors.buttonBg;
+            returnBtn.style.transform = 'scale(1)';
+            returnBtn.style.boxShadow = 'none';
+        });
+        returnBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            playlistManager.setSelectedPlaylist('default');
+            await playlistManager.loadCurrent();
+            renderPlaylistUI({ container, onPlay, currentMeta });
+            console.log('[歌单切换] 已返回默认歌单（队列）');
+            Toast.success('✅ 已返回队列');
+        });
+
+        const addAllBtn = document.createElement('button');
+        addAllBtn.style.cssText = `
+            background: ${colors.buttonBg};
+            border: 1.5px solid ${colors.buttonBorder};
+            color: ${colors.buttonText};
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            flex-shrink: 0;
+        `;
+        addAllBtn.innerHTML = '➕';
+        addAllBtn.title = '添加全部歌曲到队列';
+        addAllBtn.addEventListener('mouseover', () => {
+            addAllBtn.style.background = colors.buttonHover;
+            addAllBtn.style.transform = 'scale(1.1) rotate(90deg)';
+            addAllBtn.style.boxShadow = `0 4px 12px ${colors.shadow}`;
+        });
+        addAllBtn.addEventListener('mouseout', () => {
+            addAllBtn.style.background = colors.buttonBg;
+            addAllBtn.style.transform = 'scale(1) rotate(0deg)';
+            addAllBtn.style.boxShadow = 'none';
+        });
+        addAllBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await addAllSongsToDefault(playlist, selectedPlaylistId);
+        });
+
+        const clearBtn = document.createElement('button');
+        clearBtn.style.cssText = `
+            background: ${colors.buttonBg};
+            border: 1.5px solid ${colors.buttonBorder};
+            color: ${colors.buttonText};
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        `;
+        clearBtn.innerHTML = '🗑️';
+        clearBtn.title = '清空歌单';
+        clearBtn.addEventListener('mouseover', () => {
+            clearBtn.style.background = colors.buttonHover;
+            clearBtn.style.transform = 'translateY(-1px)';
+        });
+        clearBtn.addEventListener('mouseout', () => {
+            clearBtn.style.background = colors.buttonBg;
+            clearBtn.style.transform = 'translateY(0)';
+        });
+        clearBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (confirm(`确定要清空歌单「${playlistName}」吗？`)) {
+                try {
+                    await api.delete(`/playlists/${selectedPlaylistId}`);
+                    Toast.success('❌ 歌单已删除');
+                    playlistManager.setSelectedPlaylist('default');
+                    await playlistManager.loadAll();
+                    await playlistManager.loadCurrent();
+                    renderPlaylistUI({ container, onPlay, currentMeta });
+                } catch (err) {
+                    console.error('清空歌单失败:', err);
+                    Toast.error('清空失败: ' + (err.message || err));
+                }
+            }
+        });
+
+        buttonGroup.appendChild(returnBtn);
+        buttonGroup.appendChild(addAllBtn);
+        buttonGroup.appendChild(clearBtn);
+
+        const customIcon = playlistManager.getCurrentPlaylistIcon();
+        const customIconEl = document.createElement('div');
+        customIconEl.style.cssText = `font-size: 28px; line-height: 1; flex-shrink: 0;`;
+        customIconEl.textContent = customIcon;
+
+        const customLeftSection = document.createElement('div');
+        customLeftSection.style.cssText = `display: flex; align-items: center; gap: 10px; flex: 1; cursor: pointer;`;
+        customLeftSection.appendChild(customIconEl);
+        customLeftSection.appendChild(infoSection);
+        customLeftSection.addEventListener('click', () => {
+            document.dispatchEvent(new CustomEvent('open-playlists-modal'));
+        });
+        headerContainer.appendChild(customLeftSection);
+        headerContainer.appendChild(buttonGroup);
+        toolbarContainer.appendChild(headerContainer);
+    }
+}
+
 // UI 渲染：当前播放列表
 export function renderPlaylistUI({ container, onPlay, currentMeta }) {
     if (!container) return;
@@ -528,8 +891,9 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
         }
     }
 
-  
+
     container.innerHTML = '';
+    renderPlaylistToolbar({ toolbarContainer: document.getElementById('playlistToolbar'), playlist, playlistName, selectedPlaylistId, container, onPlay, currentMeta });
 
     if (!playlist || playlist.length === 0) {
         // 播放列表为空时，显示空状态提示和历史按钮
@@ -702,382 +1066,6 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
         emptyContainer.appendChild(historyBtn);
         container.appendChild(emptyContainer);
         return;
-    }
-
-    // ✅ 为默认歌单也添加标题栏（适配应用当前主题，液态玻璃效果）
-    if (selectedPlaylistId === 'default') {
-        const appTheme = getCurrentAppTheme();
-        const colors = getThemeColors(appTheme);
-
-        const headerContainer = document.createElement('div');
-        const isLightTheme = appTheme === 'light';
-        const headerBg = isLightTheme 
-            ? 'rgba(255, 255, 255, 0.7)'
-            : 'rgba(26, 26, 26, 0.6)';
-        const headerBorder = isLightTheme
-            ? 'rgba(224, 224, 224, 0.5)'
-            : 'rgba(51, 51, 51, 0.5)';
-        
-        headerContainer.style.cssText = `
-            background: ${headerBg};
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border: 1px solid ${headerBorder};
-            border-radius: 12px;
-            padding: 14px 16px;
-            margin-bottom: 16px;
-            box-shadow: 0 4px 16px ${colors.shadow};
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        `;
-
-        const infoSection = document.createElement('div');
-        infoSection.style.cssText = `
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            flex: 1;
-        `;
-
-        const playlistTitle = document.createElement('div');
-        playlistTitle.style.cssText = `
-            font-size: 16px;
-            font-weight: 700;
-            color: ${colors.textColor};
-            letter-spacing: 0.5px;
-            line-height: 1.2;
-        `;
-        playlistTitle.textContent = playlistName;
-
-        const songCount = document.createElement('div');
-        songCount.style.cssText = `
-            font-size: 12px;
-            color: ${colors.secondaryText};
-            font-weight: 500;
-        `;
-        songCount.textContent = `📊 ${playlist.length} 首歌曲`;
-
-        infoSection.appendChild(playlistTitle);
-        infoSection.appendChild(songCount);
-
-        const defaultIcon = playlistManager.getCurrentPlaylistIcon();
-        const defaultIconEl = document.createElement('div');
-        defaultIconEl.style.cssText = `font-size: 28px; line-height: 1; flex-shrink: 0;`;
-        defaultIconEl.textContent = defaultIcon;
-
-        const defaultLeftSection = document.createElement('div');
-        defaultLeftSection.style.cssText = `display: flex; align-items: center; gap: 10px; flex: 1; cursor: pointer;`;
-        defaultLeftSection.appendChild(defaultIconEl);
-        defaultLeftSection.appendChild(infoSection);
-        defaultLeftSection.addEventListener('click', () => {
-            document.dispatchEvent(new CustomEvent('open-playlists-modal'));
-        });
-        headerContainer.appendChild(defaultLeftSection);
-
-        // 历史按钮
-        const historyBtn = document.createElement('button');
-        historyBtn.style.cssText = `
-            background: ${colors.buttonBg};
-            border: 1.5px solid ${colors.buttonBorder};
-            color: ${colors.buttonText};
-            width: 40px;
-            height: 40px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 18px;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        `;
-        historyBtn.innerHTML = '📜';
-        historyBtn.title = '播放历史';
-        historyBtn.addEventListener('mouseover', () => {
-            historyBtn.style.background = colors.buttonHover;
-            historyBtn.style.transform = 'scale(1.1)';
-            historyBtn.style.boxShadow = `0 4px 12px ${colors.shadow}`;
-        });
-        historyBtn.addEventListener('mouseout', () => {
-            historyBtn.style.background = colors.buttonBg;
-            historyBtn.style.transform = 'scale(1)';
-            historyBtn.style.boxShadow = 'none';
-        });
-        historyBtn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            await showPlaybackHistory();
-        });
-
-        // 清空按钮
-        const clearBtn = document.createElement('button');
-        clearBtn.style.cssText = `
-            background: ${colors.buttonBg};
-            border: 1.5px solid ${colors.buttonBorder};
-            color: ${colors.buttonText};
-            width: 40px;
-            height: 40px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 18px;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        `;
-        clearBtn.innerHTML = '🗑️';
-        clearBtn.title = '清空播放队列';
-        clearBtn.addEventListener('mouseover', () => {
-            clearBtn.style.background = colors.buttonHover;
-            clearBtn.style.transform = 'scale(1.1)';
-            clearBtn.style.boxShadow = `0 4px 12px ${colors.shadow}`;
-        });
-        clearBtn.addEventListener('mouseout', () => {
-            clearBtn.style.background = colors.buttonBg;
-            clearBtn.style.transform = 'scale(1)';
-            clearBtn.style.boxShadow = 'none';
-        });
-        clearBtn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            if (confirm('确定要清空队列吗？')) {
-                try {
-                    await api.post('/playlist_clear', {});
-                    Toast.success('✅ 队列已清空');
-                    await playlistManager.loadCurrent();
-                    renderPlaylistUI({ container, onPlay, currentMeta });
-                } catch (err) {
-                    console.error('清空队列失败:', err);
-                    Toast.error('清空失败: ' + (err.message || err));
-                }
-            }
-        });
-
-        headerContainer.appendChild(historyBtn);
-        headerContainer.appendChild(clearBtn);
-        container.appendChild(headerContainer);
-    }
-
-    // ✅ 非默认歌单时，在顶部添加标题栏 + 操作按钮（适配应用主题）
-    if (selectedPlaylistId !== 'default') {
-        // 获取应用当前主题（浅色/深色）
-        const appTheme = getCurrentAppTheme();
-        const colors = getThemeColors(appTheme);
-
-        // 判断歌单是否包含YouTube歌曲（作为视觉区分标记）
-        const hasYoutube = playlist.some(song => {
-            const isYoutube = song.type === 'youtube' || song.type === 'stream';
-            const isUrl = song.url && (song.url.startsWith('http') || song.url.startsWith('youtu'));
-            return isYoutube || isUrl;
-        });
-
-        // 创建整体头部容器 - 单行布局，左右分布，使用应用主题颜色，液态玻璃效果
-        const headerContainer = document.createElement('div');
-        const isLightTheme = appTheme === 'light';
-        const headerBg = isLightTheme 
-            ? 'rgba(255, 255, 255, 0.7)'
-            : 'rgba(26, 26, 26, 0.6)';
-        const headerBorder = isLightTheme
-            ? 'rgba(224, 224, 224, 0.5)'
-            : 'rgba(51, 51, 51, 0.5)';
-        
-        headerContainer.style.cssText = `
-            background: ${headerBg};
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border: 1px solid ${headerBorder};
-            border-radius: 12px;
-            padding: 14px 16px;
-            margin-bottom: 16px;
-            box-shadow: 0 4px 16px ${colors.shadow};
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        `;
-
-        // 左侧：歌单信息（竖排）
-        const infoSection = document.createElement('div');
-        infoSection.style.cssText = `
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            flex: 1;
-        `;
-
-        const playlistTitle = document.createElement('div');
-        playlistTitle.style.cssText = `
-            font-size: 16px;
-            font-weight: 700;
-            color: ${colors.textColor};
-            letter-spacing: 0.5px;
-            line-height: 1.2;
-        `;
-        playlistTitle.textContent = playlistName;
-
-        const songCount = document.createElement('div');
-        songCount.style.cssText = `
-            font-size: 12px;
-            color: ${colors.secondaryText};
-            font-weight: 500;
-        `;
-        songCount.textContent = `📊 ${playlist.length} 首歌曲`;
-
-        infoSection.appendChild(playlistTitle);
-        infoSection.appendChild(songCount);
-
-        // 右侧：操作按钮组（两个按钮并排，尽量紧凑）
-        const buttonGroup = document.createElement('div');
-        buttonGroup.style.cssText = `
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            flex-shrink: 0;
-        `;
-
-        // 返回按钮
-        const returnBtn = document.createElement('button');
-        returnBtn.style.cssText = `
-            background: ${colors.buttonBg};
-            border: 1.5px solid ${colors.buttonBorder};
-            color: ${colors.buttonText};
-            width: 40px;
-            height: 40px;
-            border-radius: 8px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            flex-shrink: 0;
-        `;
-        returnBtn.innerHTML = '←';
-        returnBtn.title = '返回到队列（默认歌单）';
-        returnBtn.addEventListener('mouseover', () => {
-            returnBtn.style.background = colors.buttonHover;
-            returnBtn.style.transform = 'scale(1.1) translateX(-2px)';
-            returnBtn.style.boxShadow = `0 4px 12px ${colors.shadow}`;
-        });
-        returnBtn.addEventListener('mouseout', () => {
-            returnBtn.style.background = colors.buttonBg;
-            returnBtn.style.transform = 'scale(1)';
-            returnBtn.style.boxShadow = 'none';
-        });
-        returnBtn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            playlistManager.setSelectedPlaylist('default');
-            await playlistManager.loadCurrent();
-            renderPlaylistUI({ container, onPlay, currentMeta });
-            console.log('[歌单切换] 已返回默认歌单（队列）');
-            Toast.success('✅ 已返回队列');
-        });
-
-        // 添加全部到队列按钮
-        const addAllBtn = document.createElement('button');
-        addAllBtn.style.cssText = `
-            background: ${colors.buttonBg};
-            border: 1.5px solid ${colors.buttonBorder};
-            color: ${colors.buttonText};
-            width: 40px;
-            height: 40px;
-            border-radius: 8px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            flex-shrink: 0;
-        `;
-        addAllBtn.innerHTML = '➕';
-        addAllBtn.title = '添加全部歌曲到队列';
-        addAllBtn.addEventListener('mouseover', () => {
-            addAllBtn.style.background = colors.buttonHover;
-            addAllBtn.style.transform = 'scale(1.1) rotate(90deg)';
-            addAllBtn.style.boxShadow = `0 4px 12px ${colors.shadow}`;
-        });
-        addAllBtn.addEventListener('mouseout', () => {
-            addAllBtn.style.background = colors.buttonBg;
-            addAllBtn.style.transform = 'scale(1) rotate(0deg)';
-            addAllBtn.style.boxShadow = 'none';
-        });
-        addAllBtn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            await addAllSongsToDefault(playlist, selectedPlaylistId);
-        });
-
-        // 清空按钮
-        const clearBtn = document.createElement('button');
-        clearBtn.style.cssText = `
-            background: ${colors.buttonBg};
-            border: 1.5px solid ${colors.buttonBorder};
-            color: ${colors.buttonText};
-            width: 40px;
-            height: 40px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 18px;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        `;
-        clearBtn.innerHTML = '🗑️';
-        clearBtn.title = '清空歌单';
-        clearBtn.addEventListener('mouseover', () => {
-            clearBtn.style.background = colors.buttonHover;
-            clearBtn.style.transform = 'translateY(-1px)';
-        });
-        clearBtn.addEventListener('mouseout', () => {
-            clearBtn.style.background = colors.buttonBg;
-            clearBtn.style.transform = 'translateY(0)';
-        });
-        clearBtn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            if (confirm(`确定要清空歌单「${playlistName}」吗？`)) {
-                try {
-                    // 清空指定歌单
-                    await api.delete(`/playlists/${selectedPlaylistId}`);
-                    Toast.success('❌ 歌单已删除');
-                    // 返回默认歌单
-                    playlistManager.setSelectedPlaylist('default');
-                    await playlistManager.loadAll();
-                    await playlistManager.loadCurrent();
-                    renderPlaylistUI({ container, onPlay, currentMeta });
-                } catch (err) {
-                    console.error('清空歌单失败:', err);
-                    Toast.error('清空失败: ' + (err.message || err));
-                }
-            }
-        });
-
-        buttonGroup.appendChild(returnBtn);
-        buttonGroup.appendChild(addAllBtn);
-        buttonGroup.appendChild(clearBtn);
-        const customIcon = playlistManager.getCurrentPlaylistIcon();
-        const customIconEl = document.createElement('div');
-        customIconEl.style.cssText = `font-size: 28px; line-height: 1; flex-shrink: 0;`;
-        customIconEl.textContent = customIcon;
-
-        const customLeftSection = document.createElement('div');
-        customLeftSection.style.cssText = `display: flex; align-items: center; gap: 10px; flex: 1; cursor: pointer;`;
-        customLeftSection.appendChild(customIconEl);
-        customLeftSection.appendChild(infoSection);
-        customLeftSection.addEventListener('click', () => {
-            document.dispatchEvent(new CustomEvent('open-playlists-modal'));
-        });
-        headerContainer.appendChild(customLeftSection);
-        headerContainer.appendChild(buttonGroup);
-        container.appendChild(headerContainer);
     }
 
     // 获取当前播放歌曲的URL（用于匹配）

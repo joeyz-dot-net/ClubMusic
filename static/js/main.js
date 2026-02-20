@@ -146,6 +146,7 @@ class MusicPlayerApp {
             playerProgressThumb: document.getElementById('playerProgressThumb'),
             
             // 播放列表
+            playlistToolbar: document.getElementById('playlistToolbar'),
             playListContainer: document.getElementById('playListContainer'),
             playerBar: document.getElementById('playerBar'),
             footerExpandBtn: document.getElementById('footerExpandBtn'),

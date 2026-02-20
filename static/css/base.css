@@ -1695,6 +1695,13 @@ button:active { transform: scale(0.98); }
     padding: 16px;
 }
 
+/* 播放列表顶部工具栏（独立于列表容器） */
+.playlist-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
 /* Mini Player 代码已移除 */
 
 /* Full Screen Player */
