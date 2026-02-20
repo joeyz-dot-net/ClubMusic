@@ -1327,6 +1327,15 @@ button:active { transform: scale(0.98); }
     outline: none;
 }
 
+/* 搜索伴奏模式开关行 */
+.search-modal-filter {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
 .search-modal-body {
     flex: 1;
     overflow-y: auto;

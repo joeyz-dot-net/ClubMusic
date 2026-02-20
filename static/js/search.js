@@ -32,6 +32,7 @@ export class SearchManager {
             maxResultsStep: 20,      // 每次加载增量
             maxResultsLimit: 100     // 加载全部的最大值
         };
+        this.karaokeMode = false;  // 伴奏模式开关
         this.loadHistory();
 
         // 异步加载YouTube搜索配置
@@ -63,7 +64,20 @@ export class SearchManager {
         const searchModalHistory = document.getElementById('searchModalHistory');
         const searchModalHistoryList = document.getElementById('searchModalHistoryList');
         const searchModalHistoryClear = document.getElementById('searchModalHistoryClear');
-        
+
+        // 伴奏模式开关
+        const karaokeModeToggle = document.getElementById('karaokeModeToggle');
+        if (karaokeModeToggle) {
+            karaokeModeToggle.addEventListener('change', () => {
+                this.karaokeMode = karaokeModeToggle.checked;
+                const input = document.getElementById('searchModalInput');
+                if (input && input.value.trim()) {
+                    this.lastQuery = '';  // 绕过重复搜索检查，强制重新搜索
+                    this.performSearch(input.value.trim());
+                }
+            });
+        }
+
         if (searchModalBack && searchModal) {
             const closeAndRefresh = async () => {
                 console.log('🔍 搜索关闭');
@@ -245,8 +259,9 @@ export class SearchManager {
             // 显示全屏加载动画
             searchLoading.show('🔍 正在搜索...');
             
-            // 调用搜索API
-            const result = await this.search(query);
+            // 调用搜索API（伴奏模式时追加"伴奏"关键词）
+            const actualQuery = this.karaokeMode ? `${query} 伴奏` : query;
+            const result = await this.search(actualQuery);
             
             if (!result || result.status !== 'OK') {
                 throw new Error(result?.error || '搜索失败');
