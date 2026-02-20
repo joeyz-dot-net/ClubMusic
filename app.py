@@ -16,7 +16,7 @@ from urllib.parse import unquote
 
 logger = logging.getLogger(__name__)
 
-from fastapi import FastAPI, Request, File, UploadFile, HTTPException
+from fastapi import FastAPI, Request, File, UploadFile, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse, StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
@@ -102,7 +102,84 @@ def _init_default_playlist():
 # 确保默认歌单存在
 _init_default_playlist()
 
-# ==================== 浏览器检测函数 ====================
+# ==================== 并发保护 ====================
+# 复用 PLAYER 内已有的 RLock，作为全局播放锁
+# 原因：handle_playback_end（后台线程）和 FastAPI 端点共用同一把锁
+# RLock 支持同线程重入，避免 handle_playback_end -> PLAYER.play() 路径的死锁
+_player_lock: threading.RLock = PLAYER._lock
+
+# 事件循环引用（供后台线程跨线程触发 WebSocket 广播）
+_main_loop = None
+
+# ==================== WebSocket 连接管理 ====================
+
+class ConnectionManager:
+    """管理所有活跃的 WebSocket 客户端连接"""
+
+    def __init__(self):
+        self.active_connections: set = set()
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.add(websocket)
+        logger.info(f"[WS] 客户端连接，当前连接数: {len(self.active_connections)}")
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.discard(websocket)
+        logger.info(f"[WS] 客户端断开，当前连接数: {len(self.active_connections)}")
+
+    async def broadcast(self, message: dict):
+        """广播消息给所有连接的客户端，自动清理失效连接"""
+        dead = set()
+        for conn in self.active_connections:
+            try:
+                await conn.send_json(message)
+            except Exception:
+                dead.add(conn)
+        self.active_connections -= dead
+
+ws_manager = ConnectionManager()
+
+
+def _build_state_message() -> dict:
+    """构建要广播的状态消息（同步函数，可在任意线程调用）"""
+    try:
+        mpv_state = {
+            "paused": mpv_get("pause"),
+            "time_pos": mpv_get("time-pos"),
+            "duration": mpv_get("duration"),
+            "volume": mpv_get("volume"),
+        }
+    except Exception:
+        mpv_state = {"paused": True, "time_pos": 0, "duration": 0, "volume": 50}
+    return {
+        "type": "state_update",
+        "current_meta": dict(PLAYER.current_meta) if PLAYER.current_meta else {},
+        "mpv_state": mpv_state,
+        "loop_mode": PLAYER.loop_mode,
+        "pitch_shift": PLAYER.pitch_shift,
+        "current_playlist_id": CURRENT_PLAYLIST_ID,
+        "playlist_updated": True,
+        "ts": time.time(),
+    }
+
+
+async def _broadcast_state():
+    """广播当前状态给所有 WebSocket 客户端（必须在锁外调用）"""
+    if ws_manager.active_connections:
+        await ws_manager.broadcast(_build_state_message())
+
+
+def _broadcast_from_thread():
+    """从后台线程安全地触发 WebSocket 广播（线程安全入口）"""
+    if _main_loop is None or not ws_manager.active_connections:
+        return
+    try:
+        asyncio.run_coroutine_threadsafe(_broadcast_state(), _main_loop)
+    except Exception as e:
+        logger.debug(f"[WS] 跨线程广播失败: {e}")
+
+
 def detect_browser(user_agent: str) -> str:
     """
     从 User-Agent 字符串检测浏览器类型
@@ -257,6 +334,8 @@ def _init_default_settings_ini():
 async def lifespan(app: FastAPI):
     """应用生命周期管理（启动和关闭事件）"""
     # 启动事件
+    global _main_loop
+    _main_loop = asyncio.get_event_loop()
     logger.info("应用启动完成")
 
     # 如果 settings.ini 不存在，创建带默认值的配置文件
@@ -845,6 +924,26 @@ async def get_file_tree():
     }
 
 # ============================================
+# WebSocket 端点
+# ============================================
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket 连接端点 - 接收客户端连接并推送播放状态"""
+    await ws_manager.connect(websocket)
+    try:
+        # 新客户端连接后立即推送一次当前状态
+        await websocket.send_json(_build_state_message())
+        while True:
+            # 接收心跳消息（客户端每 20 秒发送 "ping"，忽略内容）
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
+    except Exception as e:
+        logger.debug(f"[WS] 连接异常: {e}")
+        ws_manager.disconnect(websocket)
+
+# ============================================
 # API 路由：播放控制
 # ============================================
 
@@ -888,35 +987,37 @@ async def play(request: Request):
         # ✅【核心修改】播放逻辑：直接播放指定歌曲，不添加到队列
         # 如果用户想"添加到队列下一曲"，应该使用 /playlist_add 端点
         # 这样确保：1. 不打断当前播放  2. 新歌曲在下一曲位置  3. 前后台数据同步
-        PLAYER.play(
-            song,
-            mpv_command_func=PLAYER.mpv_command,
-            mpv_pipe_exists_func=PLAYER.mpv_pipe_exists,
-            ensure_mpv_func=PLAYER.ensure_mpv,
-            add_to_history_func=PLAYBACK_HISTORY.add_to_history,
-            save_to_history=True,
-            mpv_cmd=PLAYER.mpv_cmd
-        )
-        PLAYER.reset_pitch_shift()
+        with _player_lock:
+            PLAYER.play(
+                song,
+                mpv_command_func=PLAYER.mpv_command,
+                mpv_pipe_exists_func=PLAYER.mpv_pipe_exists,
+                ensure_mpv_func=PLAYER.ensure_mpv,
+                add_to_history_func=PLAYBACK_HISTORY.add_to_history,
+                save_to_history=True,
+                mpv_cmd=PLAYER.mpv_cmd
+            )
+            PLAYER.reset_pitch_shift()
 
-        # 【状态改变显示】显示正在播放的歌曲信息
-        logger.info(
-            f"▶️ [播放状态改变] 正在播放: {title} (类型: {song_type})"
-        )
-        
-        # 更新 PLAYER.current_index：查找当前播放歌曲在列表中的索引
-        try:
-            playlist = PLAYLISTS_MANAGER.get_playlist(CURRENT_PLAYLIST_ID)
-            if playlist:
-                for idx, song_item in enumerate(playlist.songs):
-                    song_item_url = song_item.get("url") if isinstance(song_item, dict) else str(song_item)
-                    if song_item_url == url:
-                        PLAYER.current_index = idx
-                        logger.info(f"[播放] ✓ 已更新 current_index = {idx}, 歌曲: {title}")
-                        break
-        except Exception as e:
-            logger.warning(f"[播放] 更新 current_index 失败: {e}")
-        
+            # 【状态改变显示】显示正在播放的歌曲信息
+            logger.info(
+                f"▶️ [播放状态改变] 正在播放: {title} (类型: {song_type})"
+            )
+
+            # 更新 PLAYER.current_index：查找当前播放歌曲在列表中的索引
+            try:
+                playlist = PLAYLISTS_MANAGER.get_playlist(CURRENT_PLAYLIST_ID)
+                if playlist:
+                    for idx, song_item in enumerate(playlist.songs):
+                        song_item_url = song_item.get("url") if isinstance(song_item, dict) else str(song_item)
+                        if song_item_url == url:
+                            PLAYER.current_index = idx
+                            logger.info(f"[播放] ✓ 已更新 current_index = {idx}, 歌曲: {title}")
+                            break
+            except Exception as e:
+                logger.warning(f"[播放] 更新 current_index 失败: {e}")
+
+        await _broadcast_state()
         return {
             "status": "OK",
             "message": "播放成功",
@@ -1196,93 +1297,95 @@ async def play_song(request: Request):
 async def next_track():
     """播放下一首（删除当前曲并播放队首）"""
     try:
-        playlist = PLAYLISTS_MANAGER.get_playlist(DEFAULT_PLAYLIST_ID)
-        songs = playlist.songs if playlist else []
+        with _player_lock:
+            playlist = PLAYLISTS_MANAGER.get_playlist(DEFAULT_PLAYLIST_ID)
+            songs = playlist.songs if playlist else []
 
-        if not songs:
-            logger.info("[/next] 当前队列为空，无法切换")
-            return {"status": "EMPTY", "message": "队列为空"}
+            if not songs:
+                logger.info("[/next] 当前队列为空，无法切换")
+                return {"status": "EMPTY", "message": "队列为空"}
 
-        # 1. 通过URL匹配找到当前播放的歌曲并删除（与 handle_playback_end 相同逻辑）
-        current_playing_url = (
-            PLAYER.current_meta.get("url")
-            or PLAYER.current_meta.get("rel")
-            or PLAYER.current_meta.get("raw_url")
-        )
-        removed_index = -1
-        if current_playing_url:
-            for idx, song_data in enumerate(songs):
-                song_url = song_data.get("url") if isinstance(song_data, dict) else str(song_data)
-                if song_url == current_playing_url:
-                    removed_index = idx
-                    break
+            # 1. 通过URL匹配找到当前播放的歌曲并删除（与 handle_playback_end 相同逻辑）
+            current_playing_url = (
+                PLAYER.current_meta.get("url")
+                or PLAYER.current_meta.get("rel")
+                or PLAYER.current_meta.get("raw_url")
+            )
+            removed_index = -1
+            if current_playing_url:
+                for idx, song_data in enumerate(songs):
+                    song_url = song_data.get("url") if isinstance(song_data, dict) else str(song_data)
+                    if song_url == current_playing_url:
+                        removed_index = idx
+                        break
 
-        if removed_index >= 0:
-            removed_song = songs.pop(removed_index)
-            playlist.updated_at = time.time()
-            song_title = removed_song.get("title") if isinstance(removed_song, dict) else str(removed_song)
-            logger.info(f"[/next] 已删除当前曲 (索引{removed_index}): {song_title}")
-        else:
-            logger.warning(f"[/next] 未找到当前曲 ({current_playing_url})，删除列表第一首")
-            removed_song = songs.pop(0)
-            playlist.updated_at = time.time()
-            song_title = removed_song.get("title") if isinstance(removed_song, dict) else str(removed_song)
-            logger.info(f"[/next] 已删除第一首: {song_title}")
+            if removed_index >= 0:
+                removed_song = songs.pop(removed_index)
+                playlist.updated_at = time.time()
+                song_title = removed_song.get("title") if isinstance(removed_song, dict) else str(removed_song)
+                logger.info(f"[/next] 已删除当前曲 (索引{removed_index}): {song_title}")
+            else:
+                logger.warning(f"[/next] 未找到当前曲 ({current_playing_url})，删除列表第一首")
+                removed_song = songs.pop(0)
+                playlist.updated_at = time.time()
+                song_title = removed_song.get("title") if isinstance(removed_song, dict) else str(removed_song)
+                logger.info(f"[/next] 已删除第一首: {song_title}")
 
-        PLAYLISTS_MANAGER.save()
+            PLAYLISTS_MANAGER.save()
 
-        # 2. 播放新的队首
-        if not songs:
-            logger.info("[/next] 删除后队列已空，停止播放")
-            PLAYER.current_meta = {}
-            PLAYER.current_index = -1
-            return {"status": "EMPTY", "message": "队列已空"}
+            # 2. 播放新的队首
+            if not songs:
+                logger.info("[/next] 删除后队列已空，停止播放")
+                PLAYER.current_meta = {}
+                PLAYER.current_index = -1
+                return {"status": "EMPTY", "message": "队列已空"}
 
-        next_song_data = songs[0]
-        if isinstance(next_song_data, dict):
-            url = next_song_data.get("url", "")
-            title = next_song_data.get("title", url)
-            song_type = next_song_data.get("type", "local")
-            duration = next_song_data.get("duration", 0)
-        else:
-            url = str(next_song_data)
-            title = os.path.basename(url)
-            song_type = "local"
-            duration = 0
+            next_song_data = songs[0]
+            if isinstance(next_song_data, dict):
+                url = next_song_data.get("url", "")
+                title = next_song_data.get("title", url)
+                song_type = next_song_data.get("type", "local")
+                duration = next_song_data.get("duration", 0)
+            else:
+                url = str(next_song_data)
+                title = os.path.basename(url)
+                song_type = "local"
+                duration = 0
 
-        if not url:
-            logger.error(f"[/next] 队首歌曲数据不完整: {next_song_data}")
-            return JSONResponse(
-                {"status": "ERROR", "error": "歌曲信息不完整"},
-                status_code=400
+            if not url:
+                logger.error(f"[/next] 队首歌曲数据不完整: {next_song_data}")
+                return JSONResponse(
+                    {"status": "ERROR", "error": "歌曲信息不完整"},
+                    status_code=400
+                )
+
+            if song_type == "youtube" or url.startswith("http"):
+                song = StreamSong(stream_url=url, title=title or url, duration=duration)
+                logger.info(f"[/next] 播放YouTube: {title}")
+            else:
+                song = LocalSong(file_path=url, title=title)
+                logger.info(f"[/next] 播放本地文件: {title}")
+
+            success = PLAYER.play(
+                song,
+                mpv_command_func=PLAYER.mpv_command,
+                mpv_pipe_exists_func=PLAYER.mpv_pipe_exists,
+                ensure_mpv_func=PLAYER.ensure_mpv,
+                add_to_history_func=PLAYBACK_HISTORY.add_to_history,
+                save_to_history=True
             )
 
-        if song_type == "youtube" or url.startswith("http"):
-            song = StreamSong(stream_url=url, title=title or url, duration=duration)
-            logger.info(f"[/next] 播放YouTube: {title}")
-        else:
-            song = LocalSong(file_path=url, title=title)
-            logger.info(f"[/next] 播放本地文件: {title}")
+            if not success:
+                logger.error(f"[/next] 播放失败: {title}")
+                return JSONResponse(
+                    {"status": "ERROR", "error": "播放失败"},
+                    status_code=500
+                )
 
-        success = PLAYER.play(
-            song,
-            mpv_command_func=PLAYER.mpv_command,
-            mpv_pipe_exists_func=PLAYER.mpv_pipe_exists,
-            ensure_mpv_func=PLAYER.ensure_mpv,
-            add_to_history_func=PLAYBACK_HISTORY.add_to_history,
-            save_to_history=True
-        )
+            PLAYER.current_index = 0
+            logger.info(f"[/next] ✓ 已切换到下一首: {title}")
 
-        if not success:
-            logger.error(f"[/next] 播放失败: {title}")
-            return JSONResponse(
-                {"status": "ERROR", "error": "播放失败"},
-                status_code=500
-            )
-
-        PLAYER.current_index = 0
-        logger.info(f"[/next] ✓ 已切换到下一首: {title}")
-
+        await _broadcast_state()
         return {
             "status": "OK",
             "current": PLAYER.current_meta,
@@ -1301,75 +1404,77 @@ async def next_track():
 async def prev_track():
     """播放上一首"""
     try:
-        playlist = PLAYLISTS_MANAGER.get_playlist(CURRENT_PLAYLIST_ID)
-        songs = playlist.songs if playlist else []
+        with _player_lock:
+            playlist = PLAYLISTS_MANAGER.get_playlist(CURRENT_PLAYLIST_ID)
+            songs = playlist.songs if playlist else []
 
-        if not songs:
-            logger.error("[ERROR] /prev: 当前歌单为空")
-            return JSONResponse(
-                {"status": "ERROR", "error": "当前歌单为空"},
-                status_code=400
+            if not songs:
+                logger.error("[ERROR] /prev: 当前歌单为空")
+                return JSONResponse(
+                    {"status": "ERROR", "error": "当前歌单为空"},
+                    status_code=400
+                )
+
+            # 确定上一首的索引（支持循环播放）
+            current_idx = PLAYER.current_index if PLAYER.current_index >= 0 else 0
+            prev_idx = current_idx - 1 if current_idx > 0 else len(songs) - 1
+
+            # 循环播放：如果在第一首，则回到最后一首
+            if prev_idx < 0 or current_idx == 0:
+                prev_idx = len(songs) - 1
+
+            logger.info(f"[上一首] 从索引 {current_idx} 跳到 {prev_idx}，总歌曲数：{len(songs)}")
+
+            # 获取上一首歌曲
+            song_data = songs[prev_idx]
+
+            # 处理歌曲数据（可能是dict或字符串路径）
+            if isinstance(song_data, dict):
+                url = song_data.get("url", "")
+                title = song_data.get("title", url)
+                song_type = song_data.get("type", "local")
+                duration = song_data.get("duration", 0)
+            else:
+                url = str(song_data)
+                title = os.path.basename(url)
+                song_type = "local"
+                duration = 0
+
+            if not url:
+                logger.error(f"[ERROR] /prev: 歌曲数据不完整: {song_data}")
+                return JSONResponse(
+                    {"status": "ERROR", "error": "歌曲信息不完整"},
+                    status_code=400
+                )
+
+            # 构造Song对象并播放
+            if song_type == "youtube" or url.startswith("http"):
+                song = StreamSong(stream_url=url, title=title or url, duration=duration)
+                logger.info(f"[上一首] 播放YouTube: {title}")
+            else:
+                song = LocalSong(file_path=url, title=title)
+                logger.info(f"[上一首] 播放本地文件: {title}")
+
+            success = PLAYER.play(
+                song,
+                mpv_command_func=PLAYER.mpv_command,
+                mpv_pipe_exists_func=PLAYER.mpv_pipe_exists,
+                ensure_mpv_func=PLAYER.ensure_mpv,
+                add_to_history_func=PLAYBACK_HISTORY.add_to_history,
+                save_to_history=True
             )
 
-        # 确定上一首的索引（支持循环播放）
-        current_idx = PLAYER.current_index if PLAYER.current_index >= 0 else 0
-        prev_idx = current_idx - 1 if current_idx > 0 else len(songs) - 1
-        
-        # 循环播放：如果在第一首，则回到最后一首
-        if prev_idx < 0 or current_idx == 0:
-            prev_idx = len(songs) - 1
-        
-        logger.info(f"[上一首] 从索引 {current_idx} 跳到 {prev_idx}，总歌曲数：{len(songs)}")
+            if not success:
+                logger.error(f"[ERROR] /prev: 播放失败")
+                return JSONResponse(
+                    {"status": "ERROR", "error": "播放失败"},
+                    status_code=500
+                )
 
-        # 获取上一首歌曲
-        song_data = songs[prev_idx]
-        
-        # 处理歌曲数据（可能是dict或字符串路径）
-        if isinstance(song_data, dict):
-            url = song_data.get("url", "")
-            title = song_data.get("title", url)
-            song_type = song_data.get("type", "local")
-            duration = song_data.get("duration", 0)
-        else:
-            url = str(song_data)
-            title = os.path.basename(url)
-            song_type = "local"
-            duration = 0
+            PLAYER.current_index = prev_idx
+            logger.info(f"[上一首] ✓ 已切换到上一首: {title}")
 
-        if not url:
-            logger.error(f"[ERROR] /prev: 歌曲数据不完整: {song_data}")
-            return JSONResponse(
-                {"status": "ERROR", "error": "歌曲信息不完整"},
-                status_code=400
-            )
-
-        # 构造Song对象并播放
-        if song_type == "youtube" or url.startswith("http"):
-            song = StreamSong(stream_url=url, title=title or url, duration=duration)
-            logger.info(f"[上一首] 播放YouTube: {title}")
-        else:
-            song = LocalSong(file_path=url, title=title)
-            logger.info(f"[上一首] 播放本地文件: {title}")
-
-        success = PLAYER.play(
-            song,
-            mpv_command_func=PLAYER.mpv_command,
-            mpv_pipe_exists_func=PLAYER.mpv_pipe_exists,
-            ensure_mpv_func=PLAYER.ensure_mpv,
-            add_to_history_func=PLAYBACK_HISTORY.add_to_history,
-            save_to_history=True
-        )
-        
-        if not success:
-            logger.error(f"[ERROR] /prev: 播放失败")
-            return JSONResponse(
-                {"status": "ERROR", "error": "播放失败"},
-                status_code=500
-            )
-        
-        PLAYER.current_index = prev_idx
-        logger.info(f"[上一首] ✓ 已切换到上一首: {title}")
-
+        await _broadcast_state()
         return {
             "status": "OK",
             "current": PLAYER.current_meta,
@@ -1471,9 +1576,10 @@ async def get_status():
 async def pause():
     """暂停/继续播放"""
     try:
-        paused = mpv_get("pause")
-        mpv_command(["set_property", "pause", not paused])
-        
+        with _player_lock:
+            paused = mpv_get("pause")
+            mpv_command(["set_property", "pause", not paused])
+
         # 【状态改变显示】暂停状态改变时显示
         new_paused = not paused
         if PLAYER.current_meta and PLAYER.current_meta.get("url"):
@@ -1482,7 +1588,8 @@ async def pause():
             logger.info(
                 f"[播放状态改变] {status_text} | 歌曲: {title}"
             )
-        
+
+        await _broadcast_state()
         return {
             "status": "OK",
             "paused": not paused
@@ -2287,28 +2394,30 @@ async def remove_song_from_playlist(playlist_id: str, request: Request):
         
         song_to_remove = playlist.songs[index]
         logger.debug(f"准备删除歌曲: {song_to_remove.get('title', 'Unknown') if isinstance(song_to_remove, dict) else song_to_remove}")
-        
-        playlist.songs.pop(index)
-        playlist.updated_at = time.time()
-        PLAYLISTS_MANAGER.save()
-        
-        # ✅ 【修复】仅当删除的是当前播放歌单时，才更新 PLAYER.current_index
-        if playlist_id == DEFAULT_PLAYLIST_ID:
-            logger.info(f"[删除验证] 删除的是默认歌单，检查 PLAYER.current_index 更新")
-            logger.info(f"[删除验证] 删除前 current_index={PLAYER.current_index}, 被删索引={index}, 歌单长度={len(playlist.songs)}")
-            if PLAYER.current_index >= len(playlist.songs):
-                # 如果 current_index 超出范围，调整到最后一首歌（或 -1 如果队列空）
-                PLAYER.current_index = max(-1, len(playlist.songs) - 1)
-                logger.info(f"[删除验证] ✓ 调整 current_index 到 {PLAYER.current_index}（超出范围）")
-            elif index < PLAYER.current_index:
-                # 如果删除的是当前播放歌曲之前的歌曲，将索引左移
-                PLAYER.current_index -= 1
-                logger.info(f"[删除验证] ✓ 调整 current_index 到 {PLAYER.current_index}（删除了前面的歌曲）")
-            # 如果 index > PLAYER.current_index，无需变化
-            logger.info(f"[SUCCESS] 从歌单 {playlist_id} 删除成功，剩余歌曲数: {len(playlist.songs)}, 调整后 current_index={PLAYER.current_index}")
-        else:
-            logger.info(f"[SUCCESS] 从歌单 {playlist_id} 删除成功，剩余歌曲数: {len(playlist.songs)} (非默认歌单，不修改 PLAYER.current_index)")
-        
+
+        with _player_lock:
+            playlist.songs.pop(index)
+            playlist.updated_at = time.time()
+            PLAYLISTS_MANAGER.save()
+
+            # ✅ 【修复】仅当删除的是当前播放歌单时，才更新 PLAYER.current_index
+            if playlist_id == DEFAULT_PLAYLIST_ID:
+                logger.info(f"[删除验证] 删除的是默认歌单，检查 PLAYER.current_index 更新")
+                logger.info(f"[删除验证] 删除前 current_index={PLAYER.current_index}, 被删索引={index}, 歌单长度={len(playlist.songs)}")
+                if PLAYER.current_index >= len(playlist.songs):
+                    # 如果 current_index 超出范围，调整到最后一首歌（或 -1 如果队列空）
+                    PLAYER.current_index = max(-1, len(playlist.songs) - 1)
+                    logger.info(f"[删除验证] ✓ 调整 current_index 到 {PLAYER.current_index}（超出范围）")
+                elif index < PLAYER.current_index:
+                    # 如果删除的是当前播放歌曲之前的歌曲，将索引左移
+                    PLAYER.current_index -= 1
+                    logger.info(f"[删除验证] ✓ 调整 current_index 到 {PLAYER.current_index}（删除了前面的歌曲）")
+                # 如果 index > PLAYER.current_index，无需变化
+                logger.info(f"[SUCCESS] 从歌单 {playlist_id} 删除成功，剩余歌曲数: {len(playlist.songs)}, 调整后 current_index={PLAYER.current_index}")
+            else:
+                logger.info(f"[SUCCESS] 从歌单 {playlist_id} 删除成功，剩余歌曲数: {len(playlist.songs)} (非默认歌单，不修改 PLAYER.current_index)")
+
+        await _broadcast_state()
         return JSONResponse({"status": "OK", "message": "删除成功"})
         
     except Exception as e:
@@ -2488,23 +2597,26 @@ async def playlist_remove(request: Request):
         
         song_to_remove = playlist.songs[index]
         logger.debug(f"准备删除歌曲: {song_to_remove.get('title', 'Unknown') if isinstance(song_to_remove, dict) else song_to_remove}")
-        
-        playlist.songs.pop(index)
-        playlist.updated_at = time.time()
-        PLAYLISTS_MANAGER.save()
-        
-        # ✅ 【修复】删除歌曲后更新 PLAYER.current_index，维护队列不变量
-        logger.info(f"[删除验证] 删除前 current_index={PLAYER.current_index}, 被删索引={index}, 歌单长度={len(playlist.songs)}")
-        if PLAYER.current_index >= len(playlist.songs):
-            # 如果 current_index 超出范围，调整到最后一首歌（或 -1 如果队列空）
-            PLAYER.current_index = max(-1, len(playlist.songs) - 1)
-            logger.info(f"[删除验证] ✓ 调整 current_index 到 {PLAYER.current_index}（超出范围）")
-        elif index < PLAYER.current_index:
-            # 如果删除的是当前播放歌曲之前的歌曲，将索引左移
-            PLAYER.current_index -= 1
-            logger.info(f"[删除验证] ✓ 调整 current_index 到 {PLAYER.current_index}（删除了前面的歌曲）")
-        # 如果 index > PLAYER.current_index，无需变化
-        logger.info(f"[SUCCESS] 删除成功，剩余歌曲数: {len(playlist.songs)}, 调整后 current_index={PLAYER.current_index}")
+
+        with _player_lock:
+            playlist.songs.pop(index)
+            playlist.updated_at = time.time()
+            PLAYLISTS_MANAGER.save()
+
+            # ✅ 【修复】删除歌曲后更新 PLAYER.current_index，维护队列不变量
+            logger.info(f"[删除验证] 删除前 current_index={PLAYER.current_index}, 被删索引={index}, 歌单长度={len(playlist.songs)}")
+            if PLAYER.current_index >= len(playlist.songs):
+                # 如果 current_index 超出范围，调整到最后一首歌（或 -1 如果队列空）
+                PLAYER.current_index = max(-1, len(playlist.songs) - 1)
+                logger.info(f"[删除验证] ✓ 调整 current_index 到 {PLAYER.current_index}（超出范围）")
+            elif index < PLAYER.current_index:
+                # 如果删除的是当前播放歌曲之前的歌曲，将索引左移
+                PLAYER.current_index -= 1
+                logger.info(f"[删除验证] ✓ 调整 current_index 到 {PLAYER.current_index}（删除了前面的歌曲）")
+            # 如果 index > PLAYER.current_index，无需变化
+            logger.info(f"[SUCCESS] 删除成功，剩余歌曲数: {len(playlist.songs)}, 调整后 current_index={PLAYER.current_index}")
+
+        await _broadcast_state()
         return JSONResponse({"status": "OK", "message": "删除成功"})
         
     except Exception as e:
@@ -2520,16 +2632,18 @@ async def playlist_remove(request: Request):
 async def playlist_clear():
     """清空播放队列"""
     try:
-        playlist = PLAYLISTS_MANAGER.get_playlist(CURRENT_PLAYLIST_ID)
-        if playlist:
-            playlist.songs = []
-            playlist.updated_at = time.time()
-            PLAYLISTS_MANAGER.save()
-            
-            # ✅ 【修复】清空队列时重置 PLAYER.current_index
-            PLAYER.current_index = -1
-            logger.info(f"[清空队列] 队列已清空，重置 PLAYER.current_index = -1")
-        
+        with _player_lock:
+            playlist = PLAYLISTS_MANAGER.get_playlist(CURRENT_PLAYLIST_ID)
+            if playlist:
+                playlist.songs = []
+                playlist.updated_at = time.time()
+                PLAYLISTS_MANAGER.save()
+
+                # ✅ 【修复】清空队列时重置 PLAYER.current_index
+                PLAYER.current_index = -1
+                logger.info(f"[清空队列] 队列已清空，重置 PLAYER.current_index = -1")
+
+        await _broadcast_state()
         return JSONResponse({"status": "OK", "message": "清空成功"})
     except Exception as e:
         return JSONResponse(

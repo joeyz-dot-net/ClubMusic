@@ -10,7 +10,14 @@ export class Player {
         this.listeners = new Map();
         this.currentPlayingUrl = null;  // 追踪当前播放的歌曲URL
         this.pollingPaused = false;  // 轮询暂停标志
-        
+
+        // WebSocket 相关
+        this.ws = null;
+        this.wsConnected = false;
+        this.wsReconnectDelay = 1000;
+        this.wsReconnectTimer = null;
+        this.wsHeartbeatInterval = null;
+
         // 注册操作锁回调
         operationLock.onPause(() => {
             this.pollingPaused = true;
@@ -153,14 +160,14 @@ export class Player {
     // 状态轮询
     startPolling(interval = 5000) {
         if (this.pollInterval) return;
-        
+
         this.pollInterval = setInterval(async () => {
             // 检查操作锁：如果有活跃的锁，跳过本次轮询
             if (this.pollingPaused || operationLock.isPollingPaused()) {
                 console.log('[Player] 轮询被操作锁暂停，跳过本次更新');
                 return;
             }
-            
+
             try {
                 const status = await api.getStatus();
                 this.updateStatus(status);
@@ -168,11 +175,14 @@ export class Player {
                 console.error('状态轮询失败:', error);
             }
         }, interval);
-        
+
         // 【关键修复】启动轮询监控防止意外暂停
-        // 如果轮询被暂停但没有活跃的锁，说明有地方没有正确释放锁
-        // 这会导致播放停止，所以需要强制恢复
         this.startPollingMonitor();
+
+        // 建立 WebSocket 连接（首次调用时）
+        if (this.ws === null) {
+            this.connectWebSocket();
+        }
     }
 
     // 【新增】轮询监控：防止轮询被意外暂停
@@ -208,7 +218,130 @@ export class Player {
             clearInterval(this.monitorInterval);
             this.monitorInterval = null;
         }
+        // 清理 WebSocket 资源
+        if (this.wsHeartbeatInterval) {
+            clearInterval(this.wsHeartbeatInterval);
+            this.wsHeartbeatInterval = null;
+        }
+        if (this.wsReconnectTimer) {
+            clearTimeout(this.wsReconnectTimer);
+            this.wsReconnectTimer = null;
+        }
+        if (this.ws) {
+            this.ws.close();
+            this.ws = null;
+        }
     }
+
+    // ==================== WebSocket 实时同步 ====================
+
+    /**
+     * 建立 WebSocket 连接，实现跨客户端实时状态推送
+     */
+    connectWebSocket() {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
+
+        const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${location.host}/ws`;
+        console.log(`[WS] 连接到 ${wsUrl}`);
+
+        try {
+            this.ws = new WebSocket(wsUrl);
+
+            this.ws.onopen = () => {
+                console.log('[WS] 连接成功');
+                this.wsConnected = true;
+                this.wsReconnectDelay = 1000;  // 重置退避时间
+                // WS 连接后降低轮询频率（保留轮询作为进度条更新和 fallback）
+                this._reducePollingForWS();
+                // 启动心跳保活（防止代理/NAT 超时）
+                this.wsHeartbeatInterval = setInterval(() => {
+                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                        this.ws.send('ping');
+                    }
+                }, 20000);
+            };
+
+            this.ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    this._handleWebSocketMessage(msg);
+                } catch (e) {
+                    // 忽略非 JSON 消息（如服务器的 pong 回复）
+                }
+            };
+
+            this.ws.onclose = (event) => {
+                this.wsConnected = false;
+                console.log(`[WS] 连接断开 (code=${event.code})，${this.wsReconnectDelay}ms 后重连`);
+                // 断开后恢复正常轮询频率
+                this._restorePollingForWS();
+                // 清理心跳
+                if (this.wsHeartbeatInterval) {
+                    clearInterval(this.wsHeartbeatInterval);
+                    this.wsHeartbeatInterval = null;
+                }
+                // 指数退避重连（上限 30s）
+                this.wsReconnectTimer = setTimeout(() => {
+                    this.wsReconnectDelay = Math.min(30000, this.wsReconnectDelay * 2);
+                    this.connectWebSocket();
+                }, this.wsReconnectDelay);
+            };
+
+            this.ws.onerror = () => {
+                // onerror 后会触发 onclose，由 onclose 处理重连
+            };
+
+        } catch (e) {
+            console.error('[WS] 创建连接失败:', e);
+        }
+    }
+
+    /**
+     * 处理服务端推送的状态消息
+     */
+    _handleWebSocketMessage(msg) {
+        if (msg.type !== 'state_update') return;
+        console.log('[WS] 收到状态更新');
+
+        // 构造兼容现有 updateStatus() 的状态对象
+        const newStatus = {
+            status: 'OK',
+            current_meta: msg.current_meta,
+            current_playlist_id: msg.current_playlist_id,
+            loop_mode: msg.loop_mode,
+            pitch_shift: msg.pitch_shift,
+            mpv_state: msg.mpv_state,
+        };
+        this.updateStatus(newStatus);
+
+        // 若歌单有变更，触发歌单刷新事件（避免在用户操作期间刷新）
+        if (msg.playlist_updated) {
+            if (!operationLock.hasActiveLocks()) {
+                this.emit('playlistChanged', msg.current_playlist_id);
+            }
+        }
+    }
+
+    /** WS 连接时将轮询降至 5000ms（节省资源，保留进度条刷新） */
+    _reducePollingForWS() {
+        if (this.pollInterval) {
+            clearInterval(this.pollInterval);
+            this.pollInterval = null;
+        }
+        this.startPolling(5000);
+    }
+
+    /** WS 断开时恢复 1000ms 轮询（完整 fallback） */
+    _restorePollingForWS() {
+        if (this.pollInterval) {
+            clearInterval(this.pollInterval);
+            this.pollInterval = null;
+        }
+        this.startPolling(1000);
+    }
+
+    // ==================== 状态管理 ====================
 
     updateStatus(status) {
         const oldStatus = this.status;

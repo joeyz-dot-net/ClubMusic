@@ -1,7 +1,37 @@
 // API 调用封装模块
+
+/**
+ * Leading debounce（先到先得）：
+ * 第一次调用立即执行，窗口期内的后续调用被忽略并返回第一次的 Promise。
+ * @param {Function} fn - 要防抖的异步函数（已绑定 this）
+ * @param {number} waitMs - 防抖窗口（毫秒）
+ */
+function makeLeadingDebounce(fn, waitMs) {
+    let lastCallTime = 0;
+    let lastPromise = null;
+    return function(...args) {
+        const now = Date.now();
+        if (now - lastCallTime >= waitMs) {
+            lastCallTime = now;
+            lastPromise = fn(...args);
+            return lastPromise;
+        }
+        console.log(`[Debounce] 操作在 ${waitMs}ms 内重复，已忽略`);
+        return lastPromise || Promise.resolve({});
+    };
+}
+
 export class MusicAPI {
     constructor(baseURL = '') {
         this.baseURL = baseURL;
+
+        // 防抖包装（先到先得 Leading Debounce）
+        // next/prev/play: 1000ms — 切歌操作耗时较长，1 秒窗口防止堆叠
+        // pause: 500ms — 响应快，但防触摸双击
+        this._debouncedNext  = makeLeadingDebounce(this._rawNext.bind(this),  1000);
+        this._debouncedPrev  = makeLeadingDebounce(this._rawPrev.bind(this),  1000);
+        this._debouncedPlay  = makeLeadingDebounce(this._rawPlay.bind(this),  1000);
+        this._debouncedPause = makeLeadingDebounce(this._rawPause.bind(this), 500);
     }
 
     async get(endpoint) {
@@ -72,26 +102,43 @@ export class MusicAPI {
         return this.get('/status');
     }
 
-    async play(url, title, type = 'local', duration = 0) {
+    // 原始（未防抖）播放方法
+    async _rawPlay(url, title, type = 'local', duration = 0) {
         const formData = new FormData();
         formData.append('url', url);
         formData.append('title', title);
         formData.append('type', type);
         formData.append('duration', duration);
-        
         return this.postForm('/play', formData);
     }
 
-    async pause() {
+    async _rawPause() {
         return this.post('/pause', {});
     }
 
-    async next() {
+    async _rawNext() {
         return this.post('/next', {});
     }
 
-    async prev() {
+    async _rawPrev() {
         return this.post('/prev', {});
+    }
+
+    // 公开 API 使用防抖版本（先到先得）
+    async play(url, title, type = 'local', duration = 0) {
+        return this._debouncedPlay(url, title, type, duration);
+    }
+
+    async pause() {
+        return this._debouncedPause();
+    }
+
+    async next() {
+        return this._debouncedNext();
+    }
+
+    async prev() {
+        return this._debouncedPrev();
     }
 
     async setVolume(value) {

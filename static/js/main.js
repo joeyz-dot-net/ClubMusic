@@ -274,6 +274,18 @@ class MusicPlayerApp {
         player.on('pitchChange', (pitchShift) => {
             this.updatePitchUI(pitchShift);
         });
+
+        // 监听 WebSocket 推送的歌单变更事件
+        // 当其他用户操作（next/prev/删除歌曲）时，所有客户端都会收到此事件
+        player.on('playlistChanged', async () => {
+            console.log('[WS] 歌单已变更，刷新歌单列表');
+            try {
+                await playlistManager.loadCurrent();
+                this.renderPlaylist();
+            } catch (e) {
+                console.warn('[WS] 刷新歌单失败:', e);
+            }
+        });
     }
 
     // 更新循环按钮的视觉状态
