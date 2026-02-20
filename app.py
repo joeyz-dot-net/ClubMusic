@@ -225,6 +225,21 @@ def _init_default_settings_ini():
         config.set('cache', 'url_cache_enabled', 'true')
         changed = True
 
+    # 补充 [backup] 节或其中缺失的键
+    if not config.has_section('backup'):
+        config.add_section('backup')
+        changed = True
+    backup_defaults = {
+        'enabled':        'true',
+        'backup_dir':     'backups',
+        'interval_hours': '6',
+        'keep_days':      '7',
+    }
+    for key, val in backup_defaults.items():
+        if not config.has_option('backup', key):
+            config.set('backup', key, val)
+            changed = True
+
     if changed:
         try:
             with open(config_file, 'w', encoding='utf-8') as f:
@@ -248,7 +263,10 @@ async def lifespan(app: FastAPI):
     _init_default_settings_ini()
 
     auto_fill_and_play_if_idle()
-    
+
+    from models.backup import backup_manager as _backup_manager
+    _backup_manager.start()
+
     yield  # 应用运行期间
     
     # 关闭事件
