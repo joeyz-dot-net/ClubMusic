@@ -7,7 +7,9 @@
 import json
 import time
 import os
+import threading
 from datetime import datetime
+from pathlib import Path
 from typing import List, Dict, Optional
 
 from models.song import StreamSong
@@ -261,6 +263,8 @@ class Playlists:
         self.data_file = data_file
         self._playlists: Dict[str, Playlist] = {}  # 按 ID 索引
         self._order: List[str] = []  # 歌单的显示顺序
+        self._save_timer: Optional[threading.Timer] = None
+        self._save_lock = threading.Lock()
         self.load()
 
     def load(self):
@@ -308,18 +312,36 @@ class Playlists:
                 self._order.insert(0, DEFAULT_PLAYLIST_ID)
             self.save()
 
-    def save(self):
-        """保存歌单数据到文件"""
+    def _do_save(self):
+        """执行实际的原子化磁盘写入（.tmp 写入后原子替换）"""
         try:
             data = {
                 "order": self._order,
                 "playlists": [pl.to_dict() for pl in self.get_all()],
             }
-            with open(self.data_file, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+            path = Path(self.data_file)
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(
+                json.dumps(data, ensure_ascii=False, indent=2),
+                encoding="utf-8"
+            )
+            tmp.replace(path)  # 原子操作，POSIX 和 Windows 均支持
             logger.debug(f"已保存 {len(self._playlists)} 个歌单")
         except Exception as e:
             logger.error(f"保存歌单失败: {e}")
+
+    def _schedule_save(self):
+        """写防抖：500ms 内多次调用只触发一次磁盘写入"""
+        with self._save_lock:
+            if self._save_timer is not None:
+                self._save_timer.cancel()
+            self._save_timer = threading.Timer(0.5, self._do_save)
+            self._save_timer.daemon = True
+            self._save_timer.start()
+
+    def save(self):
+        """保存歌单数据（防抖写入，500ms 内合并多次调用）"""
+        self._schedule_save()
 
     def create_playlist(self, name: str) -> Playlist:
         """创建新歌单
