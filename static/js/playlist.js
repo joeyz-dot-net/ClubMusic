@@ -2,6 +2,7 @@
 import { api } from './api.js';
 import { Toast, loading } from './ui.js';
 import { operationLock } from './operationLock.js';
+import { thumbnailManager } from './utils.js';
 
 export class PlaylistManager {
     constructor() {
@@ -1101,10 +1102,19 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
 
         const cover = document.createElement('div');
         cover.className = 'track-cover';
-        cover.innerHTML = `
-            <img src="${coverUrl}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
-            <div class="track-cover-placeholder">🎵</div>
-        `;
+        const imgEl = document.createElement('img');
+        imgEl.alt = '';
+        const coverPlaceholder = document.createElement('div');
+        coverPlaceholder.className = 'track-cover-placeholder';
+        coverPlaceholder.textContent = '🎵';
+        cover.appendChild(imgEl);
+        cover.appendChild(coverPlaceholder);
+        if (coverUrl) {
+            thumbnailManager.setupFallback(imgEl, coverUrl);
+        } else {
+            imgEl.style.display = 'none';
+            coverPlaceholder.style.display = 'flex';
+        }
 
         // 左侧：cover + type
         const leftContainer = document.createElement('div');
@@ -1583,12 +1593,15 @@ async function showPlaybackHistory() {
                         object-fit: cover;
                     `;
                     
-                    // YouTube 缩略图降级策略
+                    // YouTube 缩略图降级策略（规范化 sddefault.jpg 为 hqdefault.jpg）
                     const getThumbnailFallbacks = (url) => {
                         if (url && url.includes('img.youtube.com/vi/')) {
                             const baseUrl = url.substring(0, url.lastIndexOf('/'));
+                            const normalizedFirst = url.endsWith('/sddefault.jpg')
+                                ? baseUrl + '/hqdefault.jpg'
+                                : url;
                             return [
-                                url,
+                                normalizedFirst,
                                 baseUrl + '/mqdefault.jpg',
                                 baseUrl + '/default.jpg'
                             ];

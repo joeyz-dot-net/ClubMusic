@@ -192,12 +192,13 @@ export class EventEmitter {
 
 /**
  * ThumbnailManager - 缩略图降级与失败缓存管理
- * 
+ *
  * YouTube 缩略图质量选项:
- *   - maxresdefault.jpg (1280x720) - 可能不存在
- *   - sddefault.jpg (640x480) - 推荐默认
- *   - mqdefault.jpg (320x180) - 中等质量
- *   - default.jpg (120x90) - 最低质量，总是存在
+ *   - maxresdefault.jpg (1280x720) - 仅高清视频存在
+ *   - hqdefault.jpg (480x360)     - 推荐默认，几乎所有视频都有
+ *   - sddefault.jpg (640x480)     - 仅旧版 4:3 视频存在，现代 16:9 视频无此文件
+ *   - mqdefault.jpg (320x180)     - 中等质量，可靠性极高
+ *   - default.jpg (120x90)        - 最低质量，总是存在
  */
 export class ThumbnailManager {
     constructor() {
@@ -237,11 +238,15 @@ export class ThumbnailManager {
         // 检查是否是 YouTube 缩略图
         if (url.includes('img.youtube.com/vi/')) {
             const baseUrl = url.substring(0, url.lastIndexOf('/'));
+            // 规范化：sddefault.jpg 仅存在于旧版 4:3 视频，历史数据中大量存在
+            // 将其重定向到 hqdefault.jpg（几乎所有视频都有）以消除 404
+            const normalizedFirst = url.endsWith('/sddefault.jpg')
+                ? baseUrl + '/hqdefault.jpg'
+                : url;
             return [
-                url,
-                baseUrl + '/sddefault.jpg',
-                baseUrl + '/mqdefault.jpg',
-                baseUrl + '/default.jpg'
+                normalizedFirst,            // hqdefault.jpg（或其他原始质量）
+                baseUrl + '/mqdefault.jpg', // 320x180，可靠性极高
+                baseUrl + '/default.jpg'    // 120x90，100% 存在
             ];
         }
 

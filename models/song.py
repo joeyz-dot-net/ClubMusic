@@ -258,14 +258,14 @@ class StreamSong(Song):
     def _get_hq_thumbnail_url(self, video_id: str) -> str:
         """
         获取高质量YouTube缩略图URL
-        使用 sddefault (640x480) - 可靠性更高，避免 404 错误
+        使用 hqdefault (480x360) - 几乎所有视频都有，可靠性极高
         前端会自动处理失败的URL降级到 mqdefault 或 default
         """
         if not video_id:
             return ""
-        # 使用 sddefault (640x480) - 几乎所有视频都有此分辨率
-        # 避免 maxresdefault 的大量 404 错误
-        return f"https://img.youtube.com/vi/{video_id}/sddefault.jpg"
+        # 使用 hqdefault (480x360) - 几乎所有视频都有此分辨率
+        # sddefault 是 4:3 专属缩略图，现代 16:9 视频不生成，大量 404
+        return f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
 
     def is_youtube(self) -> bool:
         """是否为YouTube视频"""
@@ -490,8 +490,8 @@ class StreamSong(Song):
                         if item:
                             video_id = item.get("id", "")
                             duration = item.get("duration", 0)
-                            # 生成缩略图 URL（使用 sddefault 中等质量，前端会降级到 mqdefault/default）
-                            thumbnail_url = f"https://img.youtube.com/vi/{video_id}/sddefault.jpg" if video_id else ""
+                            # 生成缩略图 URL（hqdefault 几乎所有视频都有，sddefault 仅 4:3 视频存在）
+                            thumbnail_url = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg" if video_id else ""
                             
                             results.append(
                                 {
@@ -584,8 +584,8 @@ class StreamSong(Song):
                         title = item.get("title") or "未知标题"
                         duration = item.get("duration", 0)
                         
-                        # 生成缩略图 URL（使用 sddefault 中等质量，前端会降级到 mqdefault/default）
-                        thumbnail_url = f"https://img.youtube.com/vi/{video_id}/sddefault.jpg" if video_id else ""
+                        # 生成缩略图 URL（hqdefault 几乎所有视频都有，sddefault 仅 4:3 视频存在）
+                        thumbnail_url = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg" if video_id else ""
 
                         logger.debug(f"添加视频: {title} - {entry_url}")
 
@@ -649,8 +649,8 @@ class StreamSong(Song):
                     title = result.get("title", "Unknown")
                     duration = result.get("duration", 0)
                     
-                    # 生成缩略图 URL（使用 sddefault 中等质量，前端会降级到 mqdefault/default）
-                    thumbnail_url = f"https://img.youtube.com/vi/{video_id}/sddefault.jpg" if video_id else ""
+                    # 生成缩略图 URL（hqdefault 几乎所有视频都有，sddefault 仅 4:3 视频存在）
+                    thumbnail_url = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg" if video_id else ""
                     
                     # 构建完整的 YouTube URL
                     entry_url = f"https://www.youtube.com/watch?v={video_id}" if video_id else url

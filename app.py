@@ -2007,8 +2007,8 @@ async def add_to_playlist(request: Request):
                 video_id_match = re.search(r'(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})', url)
                 if video_id_match:
                     video_id = video_id_match.group(1)
-                    # 使用 sddefault 避免 404 错误
-                    thumbnail_url = f"https://img.youtube.com/vi/{video_id}/sddefault.jpg"
+                    # 使用 hqdefault (480x360) - 几乎所有视频都有，sddefault 是 4:3 专属会大量 404
+                    thumbnail_url = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
         
         song_obj = Song(
             url=song_data.get("url"),
@@ -2081,8 +2081,8 @@ async def add_song_to_playlist_next(playlist_id: str, request: Request):
             video_id_match = re.search(r'(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})', url)
             if video_id_match:
                 video_id = video_id_match.group(1)
-                # 使用 sddefault 避免 404 错误
-                thumbnail_url = f"https://img.youtube.com/vi/{video_id}/sddefault.jpg"
+                # 使用 hqdefault (480x360) - 几乎所有视频都有，sddefault 是 4:3 专属会大量 404
+                thumbnail_url = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
         
         # 创建歌曲对象
         from models.song import Song
