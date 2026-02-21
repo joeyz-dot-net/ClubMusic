@@ -745,7 +745,7 @@ class MusicPlayer:
         """
         try:
             # 通过模块导入获取全局管理器实例（绕过线程隔离限制）
-            import app
+            import routers.state as app
 
             logger.info("[自动播放] ✓ 检测到歌曲播放结束，开始后端自动播放逻辑")
 
@@ -2022,7 +2022,7 @@ class MusicPlayer:
         """
         def _do():
             try:
-                import app as _app
+                import routers.state as _app
                 playlist = _app.PLAYLISTS_MANAGER.get_playlist(_app.DEFAULT_PLAYLIST_ID)
                 if not playlist or not playlist.songs:
                     return

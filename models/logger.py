@@ -2,6 +2,7 @@
 """日志配置模块 - 为整个应用提供统一的 logger"""
 
 import logging
+import logging.handlers
 import sys
 import os
 import configparser
@@ -79,12 +80,24 @@ class ColoredFormatter(logging.Formatter):
         return f"{level_str} {module_str} {Colors.GRAY}|{Colors.RESET} {message}"
 
 
+class PlainFormatter(logging.Formatter):
+    """无颜色含时间戳的格式化器，用于写入日志文件"""
+
+    def __init__(self):
+        super().__init__(
+            fmt='%(asctime)s [%(levelname)-5s] %(name)s | %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+
+
 # ==================== 日志配置常量 ====================
 
 DEFAULT_LOG_LEVEL = 'INFO'
 DEFAULT_POLLING_SAMPLE_RATE = 0.1
 DEFAULT_FILTERED_PATHS = {'/status', '/volume'}
 DEFAULT_HEARTBEAT_LOG_INTERVAL = 10
+DEFAULT_LOG_FILE = 'logs/app.log'
+DEFAULT_LOG_KEEP_DAYS = 7
 
 
 def load_logging_config():
@@ -94,6 +107,8 @@ def load_logging_config():
         'polling_sample_rate': DEFAULT_POLLING_SAMPLE_RATE,
         'filtered_paths': DEFAULT_FILTERED_PATHS,
         'heartbeat_log_interval': DEFAULT_HEARTBEAT_LOG_INTERVAL,
+        'log_file': DEFAULT_LOG_FILE,
+        'log_keep_days': DEFAULT_LOG_KEEP_DAYS,
     }
     
     try:
@@ -127,6 +142,17 @@ def load_logging_config():
                 if ini.has_option('logging', 'heartbeat_log_interval'):
                     try:
                         config['heartbeat_log_interval'] = float(ini.get('logging', 'heartbeat_log_interval'))
+                    except ValueError:
+                        pass
+
+                # 读取日志文件路径
+                if ini.has_option('logging', 'log_file'):
+                    config['log_file'] = ini.get('logging', 'log_file').strip()
+
+                # 读取日志文件保留天数
+                if ini.has_option('logging', 'log_keep_days'):
+                    try:
+                        config['log_keep_days'] = int(ini.get('logging', 'log_keep_days'))
                     except ValueError:
                         pass
     
@@ -234,7 +260,43 @@ def setup_logging(debug=None):
         sample_rate=_LOGGING_CONFIG['polling_sample_rate']
     ))
     root_logger.addHandler(handler)
-    
+
+    # 文件处理器（每日轮转），仅当 log_file 配置非空时添加
+    log_file = _LOGGING_CONFIG.get('log_file', '').strip()
+    if log_file:
+        try:
+            log_dir = os.path.dirname(log_file)
+            if log_dir:
+                os.makedirs(log_dir, exist_ok=True)
+            keep_days = int(_LOGGING_CONFIG.get('log_keep_days', DEFAULT_LOG_KEEP_DAYS))
+            file_handler = logging.handlers.TimedRotatingFileHandler(
+                log_file,
+                when='midnight',
+                backupCount=keep_days,
+                encoding='utf-8',
+            )
+            file_handler.setLevel(log_level)
+            file_handler.setFormatter(PlainFormatter())
+            file_handler.addFilter(PollingRequestFilter(
+                filtered_paths=_LOGGING_CONFIG['filtered_paths'],
+                sample_rate=_LOGGING_CONFIG['polling_sample_rate']
+            ))
+            root_logger.addHandler(file_handler)
+        except Exception as e:
+            print(f"⚠️ 无法创建日志文件处理器 ({log_file}): {e}")
+
+    # 压制第三方 logger 噪音（WebSocket ping/pong 帧、httpx、yt-dlp）
+    _NOISY_LOGGERS = [
+        "uvicorn.protocols.websockets",
+        "uvicorn.protocols.websockets.wsproto_impl",
+        "wsproto",
+        "httpx",
+        "httpcore",
+        "yt_dlp",
+    ]
+    for name in _NOISY_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
+
     return logger
 
 
