@@ -96,7 +96,7 @@ DEFAULT_LOG_LEVEL = 'INFO'
 DEFAULT_POLLING_SAMPLE_RATE = 0.1
 DEFAULT_FILTERED_PATHS = {'/status', '/volume'}
 DEFAULT_HEARTBEAT_LOG_INTERVAL = 10
-DEFAULT_LOG_FILE = 'logs/app.log'
+DEFAULT_LOG_DIR = 'logs'
 DEFAULT_LOG_KEEP_DAYS = 7
 
 
@@ -107,7 +107,7 @@ def load_logging_config():
         'polling_sample_rate': DEFAULT_POLLING_SAMPLE_RATE,
         'filtered_paths': DEFAULT_FILTERED_PATHS,
         'heartbeat_log_interval': DEFAULT_HEARTBEAT_LOG_INTERVAL,
-        'log_file': DEFAULT_LOG_FILE,
+        'log_dir': DEFAULT_LOG_DIR,
         'log_keep_days': DEFAULT_LOG_KEEP_DAYS,
     }
     
@@ -145,9 +145,9 @@ def load_logging_config():
                     except ValueError:
                         pass
 
-                # 读取日志文件路径
-                if ini.has_option('logging', 'log_file'):
-                    config['log_file'] = ini.get('logging', 'log_file').strip()
+                # 读取日志目录
+                if ini.has_option('logging', 'log_dir'):
+                    config['log_dir'] = ini.get('logging', 'log_dir').strip()
 
                 # 读取日志文件保留天数
                 if ini.has_option('logging', 'log_keep_days'):
@@ -261,8 +261,9 @@ def setup_logging(debug=None):
     ))
     root_logger.addHandler(handler)
 
-    # 文件处理器（每日轮转），仅当 log_file 配置非空时添加
-    log_file = _LOGGING_CONFIG.get('log_file', '').strip()
+    # 从目录配置派生日志文件路径
+    log_dir = _LOGGING_CONFIG.get('log_dir', '').strip()
+    log_file = os.path.join(log_dir, 'app.log') if log_dir else ''
     if log_file:
         try:
             log_dir = os.path.dirname(log_file)
@@ -275,6 +276,11 @@ def setup_logging(debug=None):
                 backupCount=keep_days,
                 encoding='utf-8',
             )
+            # 将默认的 app.log.YYYY-MM-DD 重命名为 app.YYYY-MM-DD.log
+            def _log_namer(default_name):
+                base, date_suffix = default_name.rsplit('.log.', 1)
+                return f"{base}.{date_suffix}.log"
+            file_handler.namer = _log_namer
             file_handler.setLevel(log_level)
             file_handler.setFormatter(PlainFormatter())
             file_handler.addFilter(PollingRequestFilter(
