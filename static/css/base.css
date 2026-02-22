@@ -2102,6 +2102,37 @@ button:active { transform: scale(0.98); }
     transform: none !important;
 }
 
+/* KTV 视频同步偏移控件 */
+.full-player-video-offset-control {
+    display: none;
+    align-items: center;
+    gap: 0;
+}
+
+.full-player-video-offset-control.visible {
+    display: flex;
+}
+
+.full-player-offset-display {
+    min-width: 36px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    user-select: none;
+    transition: color 0.2s ease;
+}
+
+.full-player-offset-btn {
+    padding: 6px !important;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.full-player-offset-display.offset-active {
+    color: var(--accent-color, #1db954);
+}
+
 .full-player-play-pause {
     width: 72px;
     height: 72px;

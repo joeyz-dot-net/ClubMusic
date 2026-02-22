@@ -18,6 +18,8 @@ export class KTVSync {
         this.playerReady = false;
         this.isSyncing = false;  // 防止同步循环
         this._failedVideoId = null;  // 记录播放失败的视频ID，避免无限重试
+        this.videoOffset = 0;  // 视频时间偏移量（秒），正值=视频提前，负值=视频延迟
+        this.loadOffset();
 
         // 性能监控指标
         this.metrics = {
@@ -327,6 +329,36 @@ export class KTVSync {
     }
 
     /**
+     * 从 localStorage 加载视频偏移量
+     */
+    loadOffset() {
+        const saved = localStorage.getItem('ktvVideoOffset');
+        if (saved !== null) this.videoOffset = parseFloat(saved) || 0;
+    }
+
+    /**
+     * 调整视频偏移量
+     * @param {number} delta - 偏移变化量（秒），正值提前，负值延迟
+     * @returns {number} 新的偏移量
+     */
+    adjustOffset(delta) {
+        this.videoOffset = Math.round((this.videoOffset + delta) * 10) / 10;
+        this.videoOffset = Math.max(-5.0, Math.min(5.0, this.videoOffset));
+        localStorage.setItem('ktvVideoOffset', this.videoOffset.toString());
+        return this.videoOffset;
+    }
+
+    /**
+     * 重置视频偏移量为零
+     * @returns {number} 0
+     */
+    resetOffset() {
+        this.videoOffset = 0;
+        localStorage.removeItem('ktvVideoOffset');
+        return 0;
+    }
+
+    /**
      * 同步播放状态（核心同步逻辑）
      */
     syncPlayback(mpvState) {
@@ -335,6 +367,7 @@ export class KTVSync {
         try {
             const serverTime = mpvState.time_pos || 0;
             const isPaused = mpvState.paused !== false;
+            const targetTime = serverTime + this.videoOffset;  // 应用视频偏移量
 
             // 获取当前播放器状态
             const playerState = this.player.getPlayerState();
@@ -354,7 +387,7 @@ export class KTVSync {
             const now = Date.now();
             if (now - this.lastSyncTime > 1000) {
                 const videoTime = this.player.getCurrentTime();
-                const drift = Math.abs(videoTime - serverTime);
+                const drift = Math.abs(videoTime - targetTime);
 
                 // 记录偏差指标
                 this.metrics.driftSum += drift;
@@ -363,9 +396,10 @@ export class KTVSync {
 
                 // 如果偏差超过阈值，校准时间
                 if (drift > this.syncThreshold) {
-                    console.log(`[KTV] 时间偏差 ${drift.toFixed(2)}s，校准到 ${serverTime.toFixed(2)}s`);
+                    const offsetInfo = this.videoOffset !== 0 ? `（偏移 ${this.videoOffset > 0 ? '+' : ''}${this.videoOffset.toFixed(1)}s）` : '';
+                    console.log(`[KTV] 时间偏差 ${drift.toFixed(2)}s，校准到 ${targetTime.toFixed(2)}s${offsetInfo}`);
                     this.isSyncing = true;
-                    this.player.seekTo(serverTime, true);
+                    this.player.seekTo(targetTime, true);
                     this.metrics.syncCount++;
 
                     // 防止快速重复同步

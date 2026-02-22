@@ -81,6 +81,9 @@ class MusicPlayerApp {
 
             // 6. 绑定事件监听器
             this.bindEventListeners();
+
+            // 初始化视频偏移量显示（从 localStorage 恢复）
+            this.updateVideoOffsetUI(ktvSync.videoOffset);
             
             // 7. 恢复播放状态
             await this.restorePlayState();
@@ -136,6 +139,10 @@ class MusicPlayerApp {
             fullPlayerPitchDown: document.getElementById('fullPlayerPitchDown'),
             fullPlayerPitchDisplay: document.getElementById('fullPlayerPitchDisplay'),
             fullPlayerPitchUp: document.getElementById('fullPlayerPitchUp'),
+            fullPlayerOffsetControl: document.getElementById('fullPlayerVideoOffsetControl'),
+            fullPlayerOffsetDown: document.getElementById('fullPlayerOffsetDown'),
+            fullPlayerOffsetDisplay: document.getElementById('fullPlayerOffsetDisplay'),
+            fullPlayerOffsetUp: document.getElementById('fullPlayerOffsetUp'),
             fullPlayerVolumeSlider: document.getElementById('fullPlayerVolumeSlider'),
 
             // 音量控制已移至 fullPlayerVolumeSlider
@@ -224,6 +231,12 @@ class MusicPlayerApp {
             if (status?.pitch_shift !== undefined && status.pitch_shift !== this.lastPitchShift) {
                 this.lastPitchShift = status.pitch_shift;
                 this.updatePitchUI(status.pitch_shift);
+            }
+
+            // 视频偏移控件：仅在 YouTube/KTV 模式下显示
+            const isYouTube = status?.current_meta?.type === 'youtube';
+            if (this.elements.fullPlayerOffsetControl) {
+                this.elements.fullPlayerOffsetControl.classList.toggle('visible', !!isYouTube);
             }
 
             // ✅【关键修复】歌曲变化时：先刷新播放列表数据，再重新渲染
@@ -351,6 +364,16 @@ class MusicPlayerApp {
         if (this.elements.fullPlayerPitchDown) {
             this.elements.fullPlayerPitchDown.disabled = pitchShift <= -6;
         }
+    }
+
+    // 更新视频同步偏移控件的视觉状态
+    updateVideoOffsetUI(offset) {
+        const display = this.elements.fullPlayerOffsetDisplay;
+        if (!display) return;
+        const rounded = Math.round(offset * 10) / 10;
+        display.textContent = rounded === 0 ? '0.0s'
+            : (rounded > 0 ? `+${rounded.toFixed(1)}s` : `${rounded.toFixed(1)}s`);
+        display.classList.toggle('offset-active', rounded !== 0);
     }
 
     // 初始化音量控制
@@ -600,7 +623,18 @@ class MusicPlayerApp {
             });
         }
 
-        // 放大视图按钮
+        if (this.elements.fullPlayerOffsetDown) {
+            this.elements.fullPlayerOffsetDown.addEventListener('click', () => {
+                const newOffset = ktvSync.adjustOffset(-0.1);
+                this.updateVideoOffsetUI(newOffset);
+            });
+        }
+        if (this.elements.fullPlayerOffsetUp) {
+            this.elements.fullPlayerOffsetUp.addEventListener('click', () => {
+                const newOffset = ktvSync.adjustOffset(0.1);
+                this.updateVideoOffsetUI(newOffset);
+            });
+        }
         if (this.elements.fullPlayerExpand) {
             this.elements.fullPlayerExpand.addEventListener('click', () => {
                 this.toggleArtworkExpand();
