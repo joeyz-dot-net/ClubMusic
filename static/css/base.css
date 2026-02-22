@@ -2076,6 +2076,7 @@ button:active { transform: scale(0.98); }
     flex-direction: column;
     align-items: center;
     gap: 2px;
+    min-width: 104px;
 }
 
 /* KTV 升降调控件 */
@@ -2086,9 +2087,9 @@ button:active { transform: scale(0.98); }
 }
 
 .full-player-pitch-display {
-    min-width: 20px;
+    min-width: 36px;
     text-align: center;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
     color: rgba(255, 255, 255, 0.5);
     user-select: none;
@@ -2096,8 +2097,10 @@ button:active { transform: scale(0.98); }
 }
 
 .full-player-pitch-btn {
-    padding: 6px !important;
-    font-size: 18px;
+    width: 32px !important;
+    height: 32px !important;
+    padding: 0 !important;
+    font-size: 16px;
 }
 
 .full-player-pitch-display.pitch-active {
@@ -2124,7 +2127,7 @@ button:active { transform: scale(0.98); }
 .full-player-offset-display {
     min-width: 36px;
     text-align: center;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     color: rgba(255, 255, 255, 0.5);
     user-select: none;
@@ -2132,8 +2135,10 @@ button:active { transform: scale(0.98); }
 }
 
 .full-player-offset-btn {
-    padding: 6px !important;
-    font-size: 14px;
+    width: 32px !important;
+    height: 32px !important;
+    padding: 0 !important;
+    font-size: 16px;
     font-weight: bold;
 }
 
