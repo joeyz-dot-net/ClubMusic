@@ -356,6 +356,40 @@ body.theme-light {
     background: linear-gradient(to bottom, #f5f5f5 0%, #ffffff 100%);
 }
 
+/* 亮色主题 - 音量滑轨双色填充 */
+.full-player-volume-slider input[type="range"] {
+    background: linear-gradient(
+        to right,
+        var(--accent-color) var(--vol-fill, 50%),
+        rgba(0, 0, 0, 0.15) var(--vol-fill, 50%)
+    );
+}
+
+.full-player-volume-slider input[type="range"]::-webkit-slider-runnable-track {
+    background: linear-gradient(
+        to right,
+        var(--accent-color) var(--vol-fill, 50%),
+        rgba(0, 0, 0, 0.15) var(--vol-fill, 50%)
+    );
+}
+
+.full-player-volume-slider input[type="range"]::-webkit-slider-thumb {
+    background: var(--accent-color);
+}
+
+.full-player-volume-slider input[type="range"]::-moz-range-track {
+    background: rgba(0, 0, 0, 0.15);
+}
+
+.full-player-volume-slider input[type="range"]::-moz-range-progress {
+    background: var(--accent-color);
+    border-radius: 3px;
+}
+
+.full-player-volume-slider input[type="range"]::-moz-range-thumb {
+    background: var(--accent-color);
+}
+
 /* 导航栏液态玻璃效果 - 亮色主题 */
 .bottom-nav {
     background: rgba(255, 255, 255, 0.88);

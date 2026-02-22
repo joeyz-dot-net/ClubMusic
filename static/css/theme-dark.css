@@ -537,11 +537,37 @@ button:hover { background: var(--button-hover-bg); border-color: var(--button-ho
     opacity: 1;
 }
 
+/* 深色主题 - 音量滑轨双色填充 */
 .full-player-volume-slider input[type="range"] {
-    background: rgba(255, 255, 255, 0.1);
+    background: linear-gradient(
+        to right,
+        var(--accent-color) var(--vol-fill, 50%),
+        rgba(255, 255, 255, 0.2) var(--vol-fill, 50%)
+    );
+}
+
+.full-player-volume-slider input[type="range"]::-webkit-slider-runnable-track {
+    background: linear-gradient(
+        to right,
+        var(--accent-color) var(--vol-fill, 50%),
+        rgba(255, 255, 255, 0.2) var(--vol-fill, 50%)
+    );
 }
 
 .full-player-volume-slider input[type="range"]::-webkit-slider-thumb {
+    background: #fff;
+}
+
+.full-player-volume-slider input[type="range"]::-moz-range-track {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.full-player-volume-slider input[type="range"]::-moz-range-progress {
+    background: var(--accent-color);
+    border-radius: 3px;
+}
+
+.full-player-volume-slider input[type="range"]::-moz-range-thumb {
     background: #fff;
 }
 

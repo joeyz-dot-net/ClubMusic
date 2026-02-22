@@ -2158,7 +2158,14 @@ button:active { transform: scale(0.98); }
     border-radius: 3px;
     outline: none;
     -webkit-appearance: none;
+    appearance: none;
     cursor: pointer;
+    --vol-fill: 50%;   /* 由 JS 实时更新 */
+}
+
+.full-player-volume-slider input[type="range"]::-webkit-slider-runnable-track {
+    height: 5px;
+    border-radius: 3px;
 }
 
 .full-player-volume-slider input[type="range"]::-webkit-slider-thumb {
@@ -2169,27 +2176,52 @@ button:active { transform: scale(0.98); }
     cursor: pointer;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     transition: transform 0.2s ease;
+    margin-top: -4.5px; /* 垂直居中：-(thumb_height - track_height) / 2 = -(14-5)/2 */
 }
 
 .full-player-volume-slider input[type="range"]::-webkit-slider-thumb:hover {
     transform: scale(1.2);
 }
 
+.full-player-volume-slider input[type="range"]::-moz-range-track {
+    height: 5px;
+    border-radius: 3px;
+    border: none;
+}
+
+.full-player-volume-slider input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s ease;
+}
+
+.full-player-volume-slider input[type="range"]::-moz-range-thumb:hover {
+    transform: scale(1.2);
+}
+
 /* 音量显示 */
 .volume-display {
     position: absolute;
-    right: 0;
-    top: -28px;
-    background: rgba(0, 0, 0, 0.7);
+    left: 50%;
+    top: -32px;
+    transform: translateX(-50%);
+    background: rgba(30, 30, 30, 0.92);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     color: white;
-    padding: 4px 8px;
-    border-radius: 4px;
+    padding: 4px 10px;
+    border-radius: 6px;
     font-size: 12px;
     white-space: nowrap;
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.2s ease;
     z-index: 10;
+    border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .volume-display.show {
@@ -2198,6 +2230,11 @@ button:active { transform: scale(0.98); }
 
 .volume-value {
     font-weight: 600;
+}
+
+/* 覆盖 settings.css 中对气泡内文字颜色的污染 */
+.volume-display .volume-value {
+    color: white;
 }
 
 /* Now Playing Modal */

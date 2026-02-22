@@ -110,6 +110,7 @@ export class VolumeControl {
         
         if (this.slider && this.slider.value !== undefined) {
             this.slider.value = value;
+            this.slider.style.setProperty('--vol-fill', value + '%');
         }
         
         // 同时更新完整播放器的音量显示
@@ -119,21 +120,32 @@ export class VolumeControl {
             if (volumeValue) {
                 volumeValue.textContent = `${Math.round(value)}`;
             }
-            
+
+            // 气泡跟随滑块拇指位置
+            if (this.slider) {
+                const min = parseInt(this.slider.min) || 0;
+                const max = parseInt(this.slider.max) || 100;
+                const thumbWidth = 14;
+                const sliderWidth = this.slider.offsetWidth;
+                const ratio = (Math.round(value) - min) / (max - min);
+                const thumbCenter = ratio * (sliderWidth - thumbWidth) + thumbWidth / 2;
+                fullPlayerDisplay.style.left = thumbCenter + 'px';
+            }
+
             // 显示音量气泡
             fullPlayerDisplay.style.display = 'block';
             fullPlayerDisplay.style.opacity = '1';
-            
+
             // 触发动画
             fullPlayerDisplay.classList.remove('show');
             void fullPlayerDisplay.offsetWidth; // 强制浏览器重排
             fullPlayerDisplay.classList.add('show');
-            
+
             // 清除之前的隐藏定时器
             if (this.hideDisplayTimer) {
                 clearTimeout(this.hideDisplayTimer);
             }
-            
+
             // 3秒后自动隐藏
             this.hideDisplayTimer = setTimeout(() => {
                 if (fullPlayerDisplay) {
