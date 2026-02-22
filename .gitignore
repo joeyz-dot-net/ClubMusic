@@ -20,6 +20,7 @@ dist/
 .idea/
 
 # Logs / runtime
+logs/
 *.log
 
 
@@ -38,5 +39,5 @@ yt-dlp.exe
 ffmpeg.exe
 
 bin/
-
+backups/
 tmpclaude-*-cwd
