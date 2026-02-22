@@ -543,19 +543,50 @@ export class SearchManager {
             menuItem.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const action = menuItem.getAttribute('data-action');
+
+                if (action === 'play-now') {
+                    // 立即播放需要确认，切换菜单内容为确认视图
+                    this.showPlayNowConfirm(menu, songData, isDirectory, button, closeMenu);
+                    return;
+                }
+
                 closeMenu();
 
                 // 等待动画完成后执行操作
                 setTimeout(async () => {
-                    if (action === 'play-now') {
-                        await this.handlePlayNow(songData, isDirectory, button);
-                    } else if (action === 'add-to-queue') {
+                    if (action === 'add-to-queue') {
                         await this.handleAddToQueue(songData, isDirectory, button);
                     } else if (action === 'add-all-to-playlist') {
                         await this.handleAddAllToPlaylist(currentTab);
                     }
                 }, 300);
             });
+        });
+    }
+
+    /**
+     * 立即播放确认视图：在现有菜单内切换为确认界面
+     */
+    showPlayNowConfirm(menu, songData, isDirectory, btn, closeMenu) {
+        const content = menu.querySelector('.search-action-menu-content');
+        content.innerHTML = `
+            <div class="search-action-menu-header">
+                <div class="search-action-menu-title">确认立即播放</div>
+                <button class="search-action-menu-close">✕</button>
+            </div>
+            <div class="search-action-menu-body">
+                <p class="play-now-confirm-msg">立即播放会跳过当前播放歌曲，并缓冲15-30秒才会开始播放</p>
+                <div class="play-now-confirm-buttons">
+                    <button class="search-action-menu-item play-now-cancel">取消</button>
+                    <button class="search-action-menu-item play-now-confirm">确认播放</button>
+                </div>
+            </div>
+        `;
+        content.querySelector('.search-action-menu-close').addEventListener('click', closeMenu);
+        content.querySelector('.play-now-cancel').addEventListener('click', closeMenu);
+        content.querySelector('.play-now-confirm').addEventListener('click', () => {
+            closeMenu();
+            setTimeout(() => this.handlePlayNow(songData, isDirectory, btn), 300);
         });
     }
     
