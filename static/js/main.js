@@ -625,13 +625,13 @@ class MusicPlayerApp {
 
         if (this.elements.fullPlayerOffsetDown) {
             this.elements.fullPlayerOffsetDown.addEventListener('click', () => {
-                const newOffset = ktvSync.adjustOffset(-0.1);
+                const newOffset = ktvSync.adjustOffset(-0.2);
                 this.updateVideoOffsetUI(newOffset);
             });
         }
         if (this.elements.fullPlayerOffsetUp) {
             this.elements.fullPlayerOffsetUp.addEventListener('click', () => {
-                const newOffset = ktvSync.adjustOffset(0.1);
+                const newOffset = ktvSync.adjustOffset(0.2);
                 this.updateVideoOffsetUI(newOffset);
             });
         }

@@ -2070,6 +2070,14 @@ button:active { transform: scale(0.98); }
     transform: scale(0.95);
 }
 
+/* KTV 控件垂直容器 */
+.full-player-ktv-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
 /* KTV 升降调控件 */
 .full-player-pitch-control {
     display: flex;
