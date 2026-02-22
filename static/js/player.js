@@ -346,12 +346,35 @@ export class Player {
     updateStatus(status) {
         const oldStatus = this.status;
         this.status = status;
+
+        // 记录插值参考点，供前端 RAF 循环推算当前进度
+        const mpvData = status?.mpv_state || status?.mpv || {};
+        const timePos = mpvData.time_pos ?? mpvData.time ?? null;
+        const paused  = mpvData.paused ?? true;
+        if (timePos !== null) {
+            this._interpTime    = timePos;
+            this._interpStamp   = Date.now();
+            this._interpPlaying = !paused;
+        }
+
         this.emit('statusUpdate', { status, oldStatus });
     }
 
     // 获取当前状态
     getStatus() {
         return this.status;
+    }
+
+    // 获取插值后的当前播放位置（秒），供进度条 RAF 循环使用
+    getInterpolatedTime() {
+        if (!this._interpPlaying || this._interpTime == null) {
+            return this._interpTime ?? 0;
+        }
+        const elapsed  = (Date.now() - this._interpStamp) / 1000;
+        const mpvData  = this.status?.mpv_state || this.status?.mpv || {};
+        const duration = mpvData.duration ?? 0;
+        const result   = this._interpTime + elapsed;
+        return duration > 0 ? Math.min(result, duration) : result;
     }
 
     // 判断是否正在播放

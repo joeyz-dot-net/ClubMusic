@@ -91,6 +91,9 @@ class MusicPlayerApp {
             // 8. 启动状态轮询 - 生产环境优化：缩短间隔从 2000ms 到 1000ms
             // 改进原因：降低网络延迟对播放状态更新的影响
             player.startPolling(1000);
+
+            // 9. 启动进度条 RAF 循环（~60fps 本地插值，与服务器轮询解耦）
+            this._startProgressLoop();
             
             this.initialized = true;
             console.log('✅ ClubMusic 初始化完成');
@@ -376,7 +379,41 @@ class MusicPlayerApp {
         display.classList.toggle('offset-active', rounded !== 0);
     }
 
-    // 初始化音量控制
+    // RAF 进度循环：以每帧频率（~60fps）更新进度条，无需依赖服务器轮询
+    _startProgressLoop() {
+        if (this._progressRafId) return;
+        const loop = () => {
+            this._updateProgressBar();
+            this._progressRafId = requestAnimationFrame(loop);
+        };
+        this._progressRafId = requestAnimationFrame(loop);
+    }
+
+    _stopProgressLoop() {
+        if (this._progressRafId) {
+            cancelAnimationFrame(this._progressRafId);
+            this._progressRafId = null;
+        }
+    }
+
+    _updateProgressBar() {
+        const status = player.getStatus();
+        const mpvData = status?.mpv_state || status?.mpv || {};
+        const duration = mpvData.duration || 0;
+        if (duration <= 0) return;
+
+        const currentTime = player.getInterpolatedTime();
+        const percent = (currentTime / duration) * 100;
+
+        if (this.elements.fullPlayerCurrentTime)
+            this.elements.fullPlayerCurrentTime.textContent = formatTime(currentTime);
+        if (this.elements.fullPlayerProgressFill)
+            this.elements.fullPlayerProgressFill.style.width = percent + '%';
+        if (this.elements.fullPlayerProgressThumb)
+            this.elements.fullPlayerProgressThumb.style.left = percent + '%';
+    }
+
+
     initVolumeControl() {
         // 初始化音量控制
         const fullPlayerSlider = this.elements.fullPlayerVolumeSlider;
@@ -783,41 +820,27 @@ class MusicPlayerApp {
         // 更新进度信息（支持两种字段名）
         const mpvData = status.mpv || status.mpv_state || {};
         if (mpvData) {
-            const currentTime = mpvData.time_pos || mpvData.time || 0;
             const duration = mpvData.duration || 0;
 
             // 前端只负责显示播放进度，自动播放完全由后端控制
+            // 注：currentTime 和全屏进度条由 RAF 循环（_updateProgressBar）实时更新
 
-            // 更新全屏播放器时间
-            if (this.elements.fullPlayerCurrentTime) {
-                this.elements.fullPlayerCurrentTime.textContent = formatTime(currentTime);
-            }
             if (this.elements.fullPlayerDuration) {
                 this.elements.fullPlayerDuration.textContent = formatTime(duration);
             }
 
-            // 更新播放进度条
+            // 更新播放进度条（迷你播放器）
             if (this.elements.playerProgressFill && duration > 0) {
+                const currentTime = mpvData.time_pos || mpvData.time || 0;
                 const percent = (currentTime / duration) * 100;
                 if (this.elements.playerProgress) {
                     this.elements.playerProgressFill.style.width = percent + '%';
                 }
             }
 
-            // 更新全屏播放器进度条
-            if (this.elements.fullPlayerProgressFill && duration > 0) {
-                const percent = (currentTime / duration) * 100;
-                if (this.elements.fullPlayerProgressBar) {
-                    this.elements.fullPlayerProgressFill.style.width = percent + '%';
-                }
-                // 更新进度条拖拽手柄位置
-                if (this.elements.fullPlayerProgressThumb) {
-                    this.elements.fullPlayerProgressThumb.style.left = percent + '%';
-                }
-            }
-
             // 更新迷你播放器进度条
             if (duration > 0) {
+                const currentTime = mpvData.time_pos || mpvData.time || 0;
                 const percent = (currentTime / duration) * 100;
                 // 查找迷你播放器进度条（如果没有缓存元素）
                 const miniProgressFill = document.getElementById('miniPlayerProgressFill');
