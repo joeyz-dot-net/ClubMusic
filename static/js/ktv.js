@@ -67,7 +67,6 @@ export class KTVSync {
             this.player = new YT.Player('fullPlayerYouTube', {
                 height: '100%',
                 width: '100%',
-                videoId: '',  // 初始为空，后续通过 loadVideoById 加载
                 playerVars: {
                     autoplay: 0,
                     controls: controlsEnabled ? 1 : 0,  // 根据配置显示/隐藏 YouTube 控件
@@ -120,7 +119,7 @@ export class KTVSync {
     onPlayerError(event) {
         console.error('[KTV] YouTube 播放器错误:', event.data);
         // 错误码: 2=无效ID, 5=HTML5播放器错误, 100=视频不存在, 101/150=不允许嵌入
-        if (event.data === 100 || event.data === 101 || event.data === 150) {
+        if (event.data === 2 || event.data === 100 || event.data === 101 || event.data === 150) {
             console.error('[KTV] 视频无法播放，自动跳过下一首');
             this._failedVideoId = this.currentVideoId;  // 记住失败的ID，防止重试
             this.disableVideoMode();  // 立即清理视频模式状态
@@ -311,6 +310,11 @@ export class KTVSync {
     loadVideo(videoId) {
         if (!this.player || !this.playerReady) {
             console.error('[KTV] 播放器未就绪');
+            return;
+        }
+
+        if (!videoId || typeof videoId !== 'string' || videoId.trim() === '') {
+            console.error('[KTV] 无效的视频ID，跳过加载:', videoId);
             return;
         }
 
