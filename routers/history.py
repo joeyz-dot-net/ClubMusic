@@ -6,6 +6,7 @@ routers/history.py - 播放历史相关路由
   GET  /playback_history
   GET  /playback_history_merged
   POST /song_add_to_history
+  POST /playback_history_delete
 """
 
 import logging
@@ -102,6 +103,42 @@ async def song_add_to_history(request: Request):
         )
 
         return {"status": "OK", "message": "已添加到播放历史"}
+    except Exception as e:
+        return JSONResponse(
+            {"status": "ERROR", "error": str(e)},
+            status_code=500
+        )
+
+
+@router.post("/playback_history_delete")
+async def delete_playback_history(request: Request):
+    """删除单条播放历史记录"""
+    try:
+        payload = {}
+        content_type = (request.headers.get("content-type") or "").lower()
+        if "application/json" in content_type:
+            payload = await request.json()
+        else:
+            form = await request.form()
+            payload = {k: v for k, v in form.items()}
+
+        url = (payload.get("url") or "").strip()
+
+        if not url:
+            return JSONResponse(
+                {"status": "ERROR", "error": "url不能为空"},
+                status_code=400
+            )
+
+        success = PLAYER.playback_history.remove_by_url(url)
+
+        if success:
+            return {"status": "OK", "message": "已删除播放历史记录"}
+        else:
+            return JSONResponse(
+                {"status": "ERROR", "error": "未找到该播放历史记录"},
+                status_code=404
+            )
     except Exception as e:
         return JSONResponse(
             {"status": "ERROR", "error": str(e)},

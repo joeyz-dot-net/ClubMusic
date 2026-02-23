@@ -259,6 +259,11 @@ export class MusicAPI {
         return this.get('/playback_history_merged');
     }
 
+    // 删除单条播放历史记录
+    async deleteHistoryRecord(url) {
+        return this.post('/playback_history_delete', { url });
+    }
+
     // KTV功能：刷新视频URL（当视频直链过期时）
     async refreshVideoUrl() {
         const response = await fetch('/refresh_video_url', { method: 'POST' });

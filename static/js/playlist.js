@@ -3,6 +3,7 @@ import { api } from './api.js';
 import { Toast, loading } from './ui.js';
 import { operationLock } from './operationLock.js';
 import { thumbnailManager } from './utils.js';
+import { i18n } from './i18n.js';
 
 export class PlaylistManager {
     constructor() {
@@ -1539,188 +1540,221 @@ async function showPlaybackHistory() {
         }
         
         historyList.innerHTML = '';
-        
-        if (history.length === 0) {
-            historyList.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">暂无播放历史</div>';
-        } else {
-            // 获取应用主题
-            const appTheme = getCurrentAppTheme();
-            const colors = getThemeColors(appTheme);
-            
-            history.forEach((item, index) => {
-                const historyItem = document.createElement('div');
-                historyItem.style.cssText = `
-                    padding: 12px 16px;
-                    border-bottom: 1px solid ${appTheme === 'light' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)'};
-                    display: flex;
-                    align-items: center;
-                    gap: 12px;
-                    cursor: pointer;
-                    transition: background 0.2s;
-                `;
-                
-                historyItem.addEventListener('mouseover', () => {
-                    historyItem.style.background = colors.buttonHover;
-                });
-                
-                historyItem.addEventListener('mouseout', () => {
-                    historyItem.style.background = 'transparent';
-                });
-                
-                // 封面 - 检查是否有有效的缩略图URL
-                const thumbnailUrl = item.thumbnail_url;
-                const hasValidThumbnail = thumbnailUrl && thumbnailUrl !== 'null' && thumbnailUrl !== 'undefined' && thumbnailUrl.trim() !== '';
-                
-                const coverContainer = document.createElement('div');
-                coverContainer.style.cssText = `
-                    width: 40px;
-                    height: 40px;
-                    border-radius: 4px;
-                    background: ${colors.buttonBg};
-                    flex-shrink: 0;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    overflow: hidden;
-                `;
-                
-                if (hasValidThumbnail) {
-                    const cover = document.createElement('img');
-                    cover.crossOrigin = 'anonymous';
-                    cover.style.cssText = `
-                        width: 100%;
-                        height: 100%;
-                        object-fit: cover;
-                    `;
-                    
-                    // YouTube 缩略图降级策略（规范化 sddefault.jpg 为 hqdefault.jpg）
-                    const getThumbnailFallbacks = (url) => {
-                        if (url && url.includes('img.youtube.com/vi/')) {
-                            const baseUrl = url.substring(0, url.lastIndexOf('/'));
-                            const normalizedFirst = url.endsWith('/sddefault.jpg')
-                                ? baseUrl + '/hqdefault.jpg'
-                                : url;
-                            return [
-                                normalizedFirst,
-                                baseUrl + '/mqdefault.jpg',
-                                baseUrl + '/default.jpg'
-                            ];
-                        }
-                        return [url];
-                    };
-                    
-                    const fallbackUrls = getThumbnailFallbacks(thumbnailUrl);
-                    let currentFallbackIndex = 0;
-                    
-                    cover.onerror = function() {
-                        currentFallbackIndex++;
-                        if (currentFallbackIndex < fallbackUrls.length) {
-                            // 尝试下一个降级版本
-                            this.src = fallbackUrls[currentFallbackIndex];
-                        } else {
-                            // 所有降级都失败，显示占位符
-                            this.style.display = 'none';
-                            const placeholder = document.createElement('div');
-                            placeholder.style.cssText = `
-                                width: 100%;
-                                height: 100%;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                font-size: 20px;
-                            `;
-                            placeholder.textContent = '🎵';
-                            coverContainer.appendChild(placeholder);
-                        }
-                    };
-                    
-                    cover.src = fallbackUrls[0];
-                    coverContainer.appendChild(cover);
-                } else {
-                    // 没有有效缩略图，直接显示占位符
-                    const placeholder = document.createElement('div');
-                    placeholder.style.cssText = `
-                        width: 100%;
-                        height: 100%;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        font-size: 20px;
-                    `;
-                    placeholder.textContent = '🎵';
-                    coverContainer.appendChild(placeholder);
-                }
-                
-                // 信息
-                const info = document.createElement('div');
-                info.style.cssText = `
-                    flex: 1;
-                    overflow: hidden;
-                `;
-                
-                const title = document.createElement('div');
-                title.style.cssText = `
-                    color: ${colors.textColor};
-                    font-weight: 500;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                    font-size: 14px;
-                `;
-                title.textContent = item.title || '未知歌曲';
-                
-                const typeLabel = document.createElement('div');
-                typeLabel.style.cssText = `
-                    color: ${colors.secondaryText};
-                    font-size: 12px;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                    margin-top: 2px;
-                `;
-                const itemType = item.type === 'youtube' ? '🎬 YouTube' : '🎵 本地音乐';
-                typeLabel.textContent = itemType;
-                
-                info.appendChild(title);
-                info.appendChild(typeLabel);
-                
-                // 时间戳
-                const timeEl = document.createElement('div');
-                timeEl.style.cssText = `
-                    color: ${colors.secondaryText};
-                    font-size: 12px;
-                    white-space: nowrap;
-                    flex-shrink: 0;
-                `;
-                const date = new Date(item.ts * 1000);
-                timeEl.textContent = date.toLocaleString('zh-CN', { 
-                    month: '2-digit', 
-                    day: '2-digit', 
-                    hour: '2-digit', 
-                    minute: '2-digit',
-                    hour12: false
-                });
-                
-                historyItem.appendChild(coverContainer);
-                historyItem.appendChild(info);
-                historyItem.appendChild(timeEl);
-                
-                // 🆕 点击歌曲卡片 - 显示歌单选择模态框
-                historyItem.addEventListener('click', async () => {
-                    const song = {
-                        url: item.url,
-                        title: item.title,
-                        type: item.type,
-                        thumbnail_url: item.thumbnail_url
-                    };
-                    
-                    // 显示歌单选择模态框，让用户选择添加到哪个歌单
-                    showSelectPlaylistModal(song, historyModal);
-                });
-                
-                historyList.appendChild(historyItem);
-            });
+
+        // 获取应用主题
+        const appTheme = getCurrentAppTheme();
+        const colors = getThemeColors(appTheme);
+
+        // 插入搜索框
+        const existingSearch = historyModal.querySelector('.history-search-container');
+        if (existingSearch) existingSearch.remove();
+
+        const searchContainer = document.createElement('div');
+        searchContainer.className = 'history-search-container';
+        searchContainer.style.cssText = 'padding: 8px 16px 0; flex-shrink: 0;';
+
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.placeholder = i18n.t('history.search.placeholder');
+        searchInput.style.cssText = `
+            width: 100%;
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid ${appTheme === 'light' ? 'rgba(0, 0, 0, 0.15)' : 'rgba(255, 255, 255, 0.15)'};
+            background: ${appTheme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)'};
+            color: ${colors.textColor};
+            font-size: 14px;
+            outline: none;
+            box-sizing: border-box;
+        `;
+        searchInput.addEventListener('focus', () => {
+            searchInput.style.borderColor = '#667eea';
+        });
+        searchInput.addEventListener('blur', () => {
+            searchInput.style.borderColor = appTheme === 'light' ? 'rgba(0, 0, 0, 0.15)' : 'rgba(255, 255, 255, 0.15)';
+        });
+        searchContainer.appendChild(searchInput);
+
+        const historyContent = historyModal.querySelector('.history-modal-content');
+        historyContent.insertBefore(searchContainer, historyList);
+
+        // 历史数据（可变，用于删除后更新）
+        let allHistory = [...history];
+
+        // 从历史中移除指定URL的记录
+        function removeFromHistory(url) {
+            allHistory = allHistory.filter(item => item.url !== url);
         }
+
+        // 渲染单个历史项
+        function renderHistoryItem(item) {
+            const historyItem = document.createElement('div');
+            historyItem.setAttribute('data-url', item.url);
+            historyItem.style.cssText = `
+                padding: 12px 16px;
+                border-bottom: 1px solid ${appTheme === 'light' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)'};
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                cursor: pointer;
+                transition: background 0.2s;
+            `;
+
+            historyItem.addEventListener('mouseover', () => {
+                historyItem.style.background = colors.buttonHover;
+            });
+            historyItem.addEventListener('mouseout', () => {
+                historyItem.style.background = 'transparent';
+            });
+
+            // 封面
+            const thumbnailUrl = item.thumbnail_url;
+            const hasValidThumbnail = thumbnailUrl && thumbnailUrl !== 'null' && thumbnailUrl !== 'undefined' && thumbnailUrl.trim() !== '';
+
+            const coverContainer = document.createElement('div');
+            coverContainer.style.cssText = `
+                width: 40px;
+                height: 40px;
+                border-radius: 4px;
+                background: ${colors.buttonBg};
+                flex-shrink: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+            `;
+
+            if (hasValidThumbnail) {
+                const cover = document.createElement('img');
+                cover.crossOrigin = 'anonymous';
+                cover.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
+
+                const getThumbnailFallbacks = (url) => {
+                    if (url && url.includes('img.youtube.com/vi/')) {
+                        const baseUrl = url.substring(0, url.lastIndexOf('/'));
+                        const normalizedFirst = url.endsWith('/sddefault.jpg')
+                            ? baseUrl + '/hqdefault.jpg'
+                            : url;
+                        return [normalizedFirst, baseUrl + '/mqdefault.jpg', baseUrl + '/default.jpg'];
+                    }
+                    return [url];
+                };
+
+                const fallbackUrls = getThumbnailFallbacks(thumbnailUrl);
+                let currentFallbackIndex = 0;
+
+                cover.onerror = function() {
+                    currentFallbackIndex++;
+                    if (currentFallbackIndex < fallbackUrls.length) {
+                        this.src = fallbackUrls[currentFallbackIndex];
+                    } else {
+                        this.style.display = 'none';
+                        const placeholder = document.createElement('div');
+                        placeholder.style.cssText = 'width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 20px;';
+                        placeholder.textContent = '🎵';
+                        coverContainer.appendChild(placeholder);
+                    }
+                };
+
+                cover.src = fallbackUrls[0];
+                coverContainer.appendChild(cover);
+            } else {
+                const placeholder = document.createElement('div');
+                placeholder.style.cssText = 'width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 20px;';
+                placeholder.textContent = '🎵';
+                coverContainer.appendChild(placeholder);
+            }
+
+            // 信息
+            const info = document.createElement('div');
+            info.style.cssText = 'flex: 1; overflow: hidden;';
+
+            const title = document.createElement('div');
+            title.style.cssText = `
+                color: ${colors.textColor};
+                font-weight: 500;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                font-size: 14px;
+            `;
+            title.textContent = item.title || '未知歌曲';
+
+            const typeLabel = document.createElement('div');
+            typeLabel.style.cssText = `
+                color: ${colors.secondaryText};
+                font-size: 12px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                margin-top: 2px;
+            `;
+            typeLabel.textContent = item.type === 'youtube' ? '🎬 YouTube' : '🎵 本地音乐';
+
+            info.appendChild(title);
+            info.appendChild(typeLabel);
+
+            // 时间戳
+            const timeEl = document.createElement('div');
+            timeEl.style.cssText = `
+                color: ${colors.secondaryText};
+                font-size: 12px;
+                white-space: nowrap;
+                flex-shrink: 0;
+            `;
+            const date = new Date(item.ts * 1000);
+            timeEl.textContent = date.toLocaleString('zh-CN', {
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
+
+            historyItem.appendChild(coverContainer);
+            historyItem.appendChild(info);
+            historyItem.appendChild(timeEl);
+
+            // 点击歌曲卡片 - 显示操作菜单
+            historyItem.addEventListener('click', async () => {
+                const song = {
+                    url: item.url,
+                    title: item.title,
+                    type: item.type,
+                    thumbnail_url: item.thumbnail_url
+                };
+                showHistoryActionMenu(song, historyModal, removeFromHistory, renderFilteredHistory);
+            });
+
+            return historyItem;
+        }
+
+        // 渲染过滤后的历史列表
+        function renderFilteredHistory(filterText) {
+            historyList.innerHTML = '';
+            const query = (filterText || '').trim().toLowerCase();
+            const filtered = query
+                ? allHistory.filter(item => (item.title || '').toLowerCase().includes(query))
+                : allHistory;
+
+            if (filtered.length === 0) {
+                historyList.innerHTML = `<div style="padding: 20px; text-align: center; color: #999;">${
+                    query ? i18n.t('history.noResults') : i18n.t('history.empty')
+                }</div>`;
+            } else {
+                filtered.forEach(item => {
+                    historyList.appendChild(renderHistoryItem(item));
+                });
+            }
+        }
+
+        // 初始渲染
+        renderFilteredHistory('');
+
+        // 搜索框事件
+        searchInput.addEventListener('input', () => {
+            renderFilteredHistory(searchInput.value);
+        });
         
         // 显示模态框
         historyModal.style.display = 'block';
@@ -2028,4 +2062,137 @@ async function closeHistoryModal(historyModal) {
         
         console.log('[历史] 已关闭，返回默认歌单列表');
     }, 300);
+}
+
+// 显示播放历史操作菜单（复用 search-action-menu 样式）
+function showHistoryActionMenu(song, historyModal, removeFromHistoryFn, rerenderCallback) {
+    // 移除已存在的菜单
+    document.querySelectorAll('.search-action-menu').forEach(m => m.remove());
+
+    const menu = document.createElement('div');
+    menu.className = 'search-action-menu';
+    menu.innerHTML = `
+        <div class="search-action-menu-content">
+            <div class="search-action-menu-header">
+                <div class="search-action-menu-title">${(song.title || '---').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+                <button class="search-action-menu-close">✕</button>
+            </div>
+            <div class="search-action-menu-body">
+                <button class="search-action-menu-item" data-action="play-now">
+                    <span class="icon">▶️</span>
+                    <span class="label">${i18n.t('history.actionMenu.playNow')}</span>
+                </button>
+                <button class="search-action-menu-item" data-action="add-to-next">
+                    <span class="icon">⏭️</span>
+                    <span class="label">${i18n.t('history.actionMenu.addToNext')}</span>
+                </button>
+                <button class="search-action-menu-item" data-action="add-to-playlist">
+                    <span class="icon">📋</span>
+                    <span class="label">${i18n.t('history.actionMenu.addToPlaylist')}</span>
+                </button>
+                <button class="search-action-menu-item" data-action="delete-record" style="color: #ff6b6b;">
+                    <span class="icon">🗑️</span>
+                    <span class="label">${i18n.t('history.actionMenu.deleteRecord')}</span>
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(menu);
+    setTimeout(() => menu.classList.add('show'), 10);
+
+    const closeMenu = () => {
+        menu.classList.remove('show');
+        setTimeout(() => menu.remove(), 300);
+    };
+
+    menu.querySelector('.search-action-menu-close').addEventListener('click', closeMenu);
+
+    menu.addEventListener('click', (e) => {
+        if (e.target === menu) closeMenu();
+    });
+
+    menu.querySelectorAll('.search-action-menu-item').forEach(menuItem => {
+        menuItem.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const action = menuItem.getAttribute('data-action');
+            closeMenu();
+
+            setTimeout(async () => {
+                if (action === 'play-now') {
+                    await handleHistoryPlayNow(song);
+                } else if (action === 'add-to-next') {
+                    await handleHistoryAddToNext(song);
+                } else if (action === 'add-to-playlist') {
+                    showSelectPlaylistModal(song, historyModal);
+                } else if (action === 'delete-record') {
+                    await handleHistoryDeleteRecord(song, removeFromHistoryFn, rerenderCallback);
+                }
+            }, 300);
+        });
+    });
+}
+
+// 立即播放：直接替换当前播放
+async function handleHistoryPlayNow(song) {
+    try {
+        await api.play(song.url, song.title, song.type || 'local', 0);
+        Toast.success(`▶️ ${i18n.t('history.playNowSuccess')}: ${song.title}`);
+    } catch (error) {
+        console.error('[历史-立即播放] 失败:', error);
+        Toast.error('播放失败: ' + error.message);
+    }
+}
+
+// 添加到下一首：插入到当前播放歌曲之后
+async function handleHistoryAddToNext(song) {
+    try {
+        const currentPlaylistId = playlistManager.getSelectedPlaylistId() || 'default';
+
+        const result = await api.addToPlaylist({
+            playlist_id: currentPlaylistId,
+            song: {
+                url: song.url,
+                title: song.title,
+                type: song.type || 'local',
+                thumbnail_url: song.thumbnail_url || ''
+            }
+        });
+
+        if (result.status === 'OK') {
+            Toast.success(`⏭️ ${i18n.t('history.addToNextSuccess')}: ${song.title}`);
+            await playlistManager.loadCurrent();
+        } else if (result.duplicate) {
+            Toast.warning('该歌曲已在播放队列中');
+        } else {
+            Toast.error(`${i18n.t('history.addToNextFailed')}: ${result.error || result.message || ''}`);
+        }
+    } catch (error) {
+        console.error('[历史-添加到下一首] 失败:', error);
+        Toast.error(`${i18n.t('history.addToNextFailed')}: ${error.message}`);
+    }
+}
+
+// 删除单条历史记录
+async function handleHistoryDeleteRecord(song, removeFromHistoryFn, rerenderCallback) {
+    try {
+        const result = await api.deleteHistoryRecord(song.url);
+
+        if (result.status === 'OK') {
+            Toast.success(`🗑️ ${i18n.t('history.deleteSuccess')}`);
+            // 从内存数组中移除
+            removeFromHistoryFn(song.url);
+            // 使用当前搜索条件重新渲染
+            if (typeof rerenderCallback === 'function') {
+                const searchInput = document.querySelector('.history-search-container input');
+                const currentFilter = searchInput ? searchInput.value : '';
+                rerenderCallback(currentFilter);
+            }
+        } else {
+            Toast.error(`${i18n.t('history.deleteFailed')}: ${result.error || ''}`);
+        }
+    } catch (error) {
+        console.error('[历史-删除记录] 失败:', error);
+        Toast.error(`${i18n.t('history.deleteFailed')}: ${error.message}`);
+    }
 }

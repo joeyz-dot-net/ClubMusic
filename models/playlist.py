@@ -388,6 +388,24 @@ class PlayHistory(Playlist):
         if self._file_path:
             self.save()
 
+    def remove_by_url(self, url: str) -> bool:
+        """根据URL删除单条播放历史记录
+
+        参数:
+          url: 要删除的历史记录的URL
+
+        返回:
+          True 如果成功删除，False 如果未找到
+        """
+        for idx, song in enumerate(self._items):
+            if isinstance(song, Song) and song.url == url:
+                self._items.pop(idx)
+                if self._file_path:
+                    self.save()
+                logger.info(f"已删除播放历史记录: {song.title} ({url})")
+                return True
+        return False
+
     def set_file_path(self, file_path: str):
         """设置持久化文件路径"""
         self._file_path = file_path

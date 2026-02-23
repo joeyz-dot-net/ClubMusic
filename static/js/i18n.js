@@ -38,6 +38,20 @@ const translations = {
         'search.history': '播放历史',
         'nav.settings': '设置',
         'nav.debug': '调试',
+
+        // 播放历史 - 操作菜单
+        'history.actionMenu.playNow': '立即播放',
+        'history.actionMenu.addToNext': '添加到下一首',
+        'history.actionMenu.addToPlaylist': '添加到歌单',
+        'history.actionMenu.deleteRecord': '删除此记录',
+        'history.search.placeholder': '搜索播放历史...',
+        'history.empty': '暂无播放历史',
+        'history.deleteSuccess': '已删除播放历史记录',
+        'history.deleteFailed': '删除失败',
+        'history.playNowSuccess': '正在播放',
+        'history.addToNextSuccess': '已添加到下一首',
+        'history.addToNextFailed': '添加失败',
+        'history.noResults': '没有匹配的结果',
     },
     en: {
         // Settings panel - Titles and buttons
@@ -74,6 +88,20 @@ const translations = {
         'search.history': 'Playback History',
         'nav.settings': 'Settings',
         'nav.debug': 'Debug',
+
+        // Play history - Action menu
+        'history.actionMenu.playNow': 'Play Now',
+        'history.actionMenu.addToNext': 'Add to Next',
+        'history.actionMenu.addToPlaylist': 'Add to Playlist',
+        'history.actionMenu.deleteRecord': 'Delete Record',
+        'history.search.placeholder': 'Search play history...',
+        'history.empty': 'No playback history',
+        'history.deleteSuccess': 'History record deleted',
+        'history.deleteFailed': 'Delete failed',
+        'history.playNowSuccess': 'Now playing',
+        'history.addToNextSuccess': 'Added as next song',
+        'history.addToNextFailed': 'Failed to add',
+        'history.noResults': 'No matching results',
     }
 };
 

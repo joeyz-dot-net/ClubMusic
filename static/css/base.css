@@ -1601,6 +1601,15 @@ button:active { transform: scale(0.98); }
     gap: 8px;
 }
 
+/* 播放历史搜索框 */
+.history-search-container input::placeholder {
+    color: rgba(153, 153, 153, 0.8);
+}
+
+[data-theme="light"] .history-search-container input::placeholder {
+    color: rgba(100, 100, 100, 0.6);
+}
+
 /* YouTube搜索结果 */
 .youtube-search-results, .youtube-search-modal {
 }
