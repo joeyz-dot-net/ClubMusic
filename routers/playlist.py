@@ -631,16 +631,25 @@ async def playlist_remove(request: Request):
 
 @router.post("/playlist_clear")
 async def playlist_clear():
-    """清空播放队列"""
+    """清空播放队列，保留正在播放的歌曲"""
     try:
         with _player_lock:
             playlist = PLAYLISTS_MANAGER.get_playlist(CURRENT_PLAYLIST_ID)
             if playlist:
-                playlist.songs = []
+                current_idx = PLAYER.current_index
+                if 0 <= current_idx < len(playlist.songs):
+                    # 有正在播放的歌曲：只保留该首，移至索引 0
+                    current_song = playlist.songs[current_idx]
+                    playlist.songs = [current_song]
+                    PLAYER.current_index = 0
+                    logger.info("[清空队列] 已保留正在播放的歌曲，重置 PLAYER.current_index = 0")
+                else:
+                    # 没有正在播放的歌曲（current_index == -1）：全部清空
+                    playlist.songs = []
+                    PLAYER.current_index = -1
+                    logger.info("[清空队列] 队列已清空，重置 PLAYER.current_index = -1")
                 playlist.updated_at = time.time()
                 PLAYLISTS_MANAGER.save()
-                PLAYER.current_index = -1
-                logger.info("[清空队列] 队列已清空，重置 PLAYER.current_index = -1")
 
         await _broadcast_state()
         return JSONResponse({"status": "OK", "message": "清空成功"})
