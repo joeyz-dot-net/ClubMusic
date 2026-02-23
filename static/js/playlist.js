@@ -1328,7 +1328,7 @@ function initTouchDragSort(container, rerenderFn, rerenderArgs) {
                 endDrag(e);
             }
             resetDragState();
-        });
+        }, { passive: true });
 
         // 触摸取消
         handle.addEventListener('touchcancel', () => {

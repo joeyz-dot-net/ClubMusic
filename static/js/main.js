@@ -752,7 +752,7 @@ class MusicPlayerApp {
             // 触摸事件（移动端）
             this.elements.fullPlayerProgressBar.addEventListener('touchstart', startDrag, { passive: false });
             document.addEventListener('touchmove', handleDrag, { passive: false });
-            document.addEventListener('touchend', endDrag);
+            document.addEventListener('touchend', endDrag, { passive: true });
         }
 
         // 完整播放器的音量控制
