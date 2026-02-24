@@ -181,6 +181,9 @@
 		<button class="nav-item" data-tab="search">
 			<span class="nav-icon">🔍</span>
 		</button>
+		<button class="nav-item" id="historyNavBtn" title="播放历史">
+			<span class="nav-icon">🕐</span>
+		</button>
 		<button class="nav-item" id="settingsNavBtn" title="设置">
 			<span class="nav-icon">⚙️</span>
 		</button>
@@ -204,7 +207,7 @@
 		<div class="search-modal-overlay"></div>
 		<div class="search-modal-content">
 			<div class="search-modal-header">
-				<button class="search-modal-back" id="searchModalBack">✕</button>
+				
 				<input type="checkbox" id="karaokeModeToggle" class="toggle-checkbox" />
 				<label for="karaokeModeToggle" class="toggle-label">
 					<span class="toggle-switch"></span>
@@ -214,6 +217,7 @@
 					</span>
 				</label>
 				<input type="text" id="searchModalInput" class="search-modal-input" placeholder="搜索歌曲、艺术家..." autocomplete="off" />
+				<button class="search-modal-back" id="searchModalBack">✕</button>
 			</div>
 			<div id="searchModalHistory" class="search-modal-history" style="display:none;">
 				<div id="searchModalHistoryList" class="search-modal-history-list"></div>

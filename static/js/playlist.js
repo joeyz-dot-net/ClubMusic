@@ -577,40 +577,6 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
         });
         headerContainer.appendChild(defaultLeftSection);
 
-        // 历史按钮
-        const historyBtn = document.createElement('button');
-        historyBtn.style.cssText = `
-            background: ${colors.buttonBg};
-            border: 1.5px solid ${colors.buttonBorder};
-            color: ${colors.buttonText};
-            width: 40px;
-            height: 40px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 18px;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        `;
-        historyBtn.innerHTML = '📜';
-        historyBtn.title = '播放历史';
-        historyBtn.addEventListener('mouseover', () => {
-            historyBtn.style.background = colors.buttonHover;
-            historyBtn.style.transform = 'scale(1.1)';
-            historyBtn.style.boxShadow = `0 4px 12px ${colors.shadow}`;
-        });
-        historyBtn.addEventListener('mouseout', () => {
-            historyBtn.style.background = colors.buttonBg;
-            historyBtn.style.transform = 'scale(1)';
-            historyBtn.style.boxShadow = 'none';
-        });
-        historyBtn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            await showPlaybackHistory();
-        });
-
         // 清空按钮
         const clearBtn = document.createElement('button');
         clearBtn.style.cssText = `
@@ -655,7 +621,6 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
             }
         });
 
-        headerContainer.appendChild(historyBtn);
         headerContainer.appendChild(clearBtn);
         toolbarContainer.appendChild(headerContainer);
     }
@@ -1507,7 +1472,7 @@ function initTouchDragSort(container, rerenderFn, rerenderArgs) {
 export { renderPlaylistUI as playlistRenderer };
 
 // ✅ 新增：显示播放历史模态框
-async function showPlaybackHistory() {
+export async function showPlaybackHistory() {
     try {
         loading.show('📜 加载播放历史...');
         

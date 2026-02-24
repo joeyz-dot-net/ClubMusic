@@ -3,7 +3,7 @@
 
 import { api } from './api.js';
 import { player } from './player.js';
-import { playlistManager, renderPlaylistUI } from './playlist.js';
+import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js';
 import { playlistsManagement } from './playlists-management.js';
 import { volumeControl } from './volume.js';
 import { searchManager } from './search.js';
@@ -229,6 +229,7 @@ class MusicPlayerApp {
             
             this.lastPlayStatus = status;
             this.updatePlayerUI(status);
+            this.updateQueueNavIcon();
 
             // 同步音调状态（页面刷新后恢复，或换歌后自动重置为 0）
             if (status?.pitch_shift !== undefined && status.pitch_shift !== this.lastPitchShift) {
@@ -1073,18 +1074,36 @@ class MusicPlayerApp {
         }
     }
 
-    // 更新队列按钮图标（始终显示固定的正在播放图标）
+    // 更新队列按钮图标：播放中→动态均衡器，暂停→静止均衡器，无歌曲→🎵
     updateQueueNavIcon() {
         const queueNavIcon = document.querySelector('[data-tab="playlists"] .nav-icon');
         if (!queueNavIcon) return;
 
-        queueNavIcon.textContent = '🎵';
-        queueNavIcon.style.background = '';
-        queueNavIcon.style.borderRadius = '';
-        queueNavIcon.style.padding = '';
-        queueNavIcon.style.display = '';
-        queueNavIcon.style.alignItems = '';
-        queueNavIcon.style.justifyContent = '';
+        const status = player.getStatus();
+        const currentMeta = status?.current_meta;
+        const paused = status?.paused ?? false;
+
+        if (currentMeta) {
+            const isLight = themeManager.getCurrentTheme() === 'light';
+            const accentColor = isLight ? '#667eea' : '#7c93f5';
+            const mutedColor  = isLight ? 'rgba(102,126,234,0.45)' : 'rgba(124,147,245,0.45)';
+            const barColor    = paused ? mutedColor : accentColor;
+            const stateClass  = paused ? 'eq-paused' : 'eq-playing';
+
+            queueNavIcon.textContent = '';
+            const eq = document.createElement('div');
+            eq.className = `toolbar-eq ${stateClass}`;
+            eq.style.cssText = 'width:32px;height:32px;';
+            for (let i = 0; i < 3; i++) {
+                const bar = document.createElement('div');
+                bar.className = 'eq-bar';
+                bar.style.background = barColor;
+                eq.appendChild(bar);
+            }
+            queueNavIcon.appendChild(eq);
+        } else {
+            queueNavIcon.textContent = '🎵';
+        }
     }
 
     // 播放/暂停
@@ -1434,7 +1453,16 @@ class MusicPlayerApp {
                 settingsManager.openPanel();
             });
         }
-        
+
+        // 播放历史按钮点击处理
+        const historyNavBtn = document.getElementById('historyNavBtn');
+        if (historyNavBtn) {
+            historyNavBtn.addEventListener('click', async () => {
+                console.log('🕐 点击播放历史按钮');
+                await showPlaybackHistory();
+            });
+        }
+
         // 修改设置管理器的关闭方法，添加恢复逻辑
         const originalClosePanel = settingsManager.closePanel;
         settingsManager.closePanel = function() {
