@@ -85,7 +85,7 @@ export class PlaylistsManagement {
             return;
         }
 
-        const playlists = playlistManager.playlists || [];
+        const playlists = (playlistManager.playlists || []).filter(p => p.id !== 'default');
         console.log('📋 渲染歌单列表，共', playlists.length, '个歌单');
 
         this.modalBody.innerHTML = '';
