@@ -16,6 +16,7 @@ const translations = {
         'settings.language': '语言',
         'settings.language.auto': '自动选择',
         'settings.language.zh': '中文 (Chinese)',
+        'settings.language.zh-TW': '繁體中文 (Traditional Chinese)',
         'settings.language.en': 'English',
         
         // 按钮
@@ -66,6 +67,7 @@ const translations = {
         'settings.language': 'Language',
         'settings.language.auto': 'Auto Select',
         'settings.language.zh': '中文 (Chinese)',
+        'settings.language.zh-TW': '繁體中文 (Traditional Chinese)',
         'settings.language.en': 'English',
         
         // Buttons
@@ -102,6 +104,57 @@ const translations = {
         'history.addToNextSuccess': 'Added as next song',
         'history.addToNextFailed': 'Failed to add',
         'history.noResults': 'No matching results',
+    },
+    'zh-TW': {
+        // 設定面板 - 標題和按鈕
+        'settings.title': '⚙️ 設定',
+        'settings.close': '✕',
+
+        // 外觀設定
+        'settings.appearance': '🎨 外觀設定',
+        'settings.theme.dark': '深色主題',
+        'settings.theme.light': '淺色主題',
+        'settings.theme.auto': '自動',
+        'settings.language': '語言',
+        'settings.language.auto': '自動選擇',
+        'settings.language.zh': '中文 (简体)',
+        'settings.language.zh-TW': '繁體中文',
+        'settings.language.en': 'English',
+
+        // 按鈕
+        'settings.reset': '🔄 重設為預設值',
+        'settings.save': '✓ 儲存設定',
+
+        // 訊息提示
+        'settings.saving': '正在儲存設定...',
+        'settings.saveSuccess': '設定已儲存成功',
+        'settings.saveFailed': '儲存失敗',
+        'settings.resetting': '正在重設設定...',
+        'settings.resetSuccess': '設定已重設為預設值',
+        'settings.resetConfirm': '確定要將所有設定重設為預設值嗎？',
+        'settings.resetFailed': '重設失敗',
+
+        // 導覽列
+        'nav.queue': '播放佇列',
+        'nav.local': '本機',
+        'nav.search': '搜尋',
+        'search.history': '播放記錄',
+        'nav.settings': '設定',
+        'nav.debug': '除錯',
+
+        // 播放記錄 - 操作選單
+        'history.actionMenu.playNow': '立即播放',
+        'history.actionMenu.addToNext': '新增至下一首',
+        'history.actionMenu.addToPlaylist': '新增至歌單',
+        'history.actionMenu.deleteRecord': '刪除此記錄',
+        'history.search.placeholder': '搜尋播放記錄...',
+        'history.empty': '目前沒有播放記錄',
+        'history.deleteSuccess': '已刪除播放記錄',
+        'history.deleteFailed': '刪除失敗',
+        'history.playNowSuccess': '正在播放',
+        'history.addToNextSuccess': '已新增至下一首',
+        'history.addToNextFailed': '新增失敗',
+        'history.noResults': '沒有符合的結果',
     }
 };
 
@@ -144,6 +197,12 @@ export const i18n = {
             'zh-CN': 'zh',
             'zh-Hans': 'zh',
             'zh-Hans-CN': 'zh',
+            'zh-TW': 'zh-TW',
+            'zh-HK': 'zh-TW',
+            'zh-MO': 'zh-TW',
+            'zh-Hant': 'zh-TW',
+            'zh-Hant-TW': 'zh-TW',
+            'zh-Hant-HK': 'zh-TW',
             'en': 'en',
             'en-US': 'en',
             'en-GB': 'en',

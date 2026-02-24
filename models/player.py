@@ -1395,7 +1395,7 @@ class MusicPlayer:
         
         query_lower = query.strip().lower()
         results = []
-        found_dirs = set()  # 追踪已找到的目录，避免重复
+        found_paths = set()  # 追踪已添加的路径（目录+文件），避免重复
         abs_root = os.path.abspath(self.music_dir)
         
         try:
@@ -1409,23 +1409,60 @@ class MusicPlayer:
                 for dirname in dirs:
                     if len(results) >= max_results:
                         return results
-                    
+
                     if query_lower in dirname.lower():
                         dir_path = os.path.join(dp, dirname)
                         rel_path = os.path.relpath(dir_path, abs_root).replace("\\", "/")
-                        
-                        if rel_path not in found_dirs:
-                            found_dirs.add(rel_path)
-                            results.append({
-                                "url": rel_path,
-                                "title": dirname,
-                                "type": "directory",
-                                "is_directory": True
-                            })
-                            
-                            # 达到最大结果数时停止
-                            if len(results) >= max_results:
-                                return results
+
+                        if rel_path not in found_paths:
+                            found_paths.add(rel_path)
+
+                            # 展开匹配目录：列出直接子项
+                            try:
+                                children = sorted(os.listdir(dir_path), key=str.lower)
+                            except OSError:
+                                continue
+
+                            # 分离子目录和音乐文件
+                            child_subdirs = []
+                            child_files = []
+                            for child in children:
+                                child_full = os.path.join(dir_path, child)
+                                if os.path.isdir(child_full):
+                                    child_subdirs.append(child)
+                                else:
+                                    ext = os.path.splitext(child)[1].lower()
+                                    if ext in self.allowed_extensions:
+                                        child_files.append(child)
+
+                            if child_subdirs:
+                                # 有子目录：每个子目录作为独立结果
+                                for subdir in child_subdirs:
+                                    if len(results) >= max_results:
+                                        return results
+                                    subdir_rel = rel_path + "/" + subdir
+                                    if subdir_rel not in found_paths:
+                                        found_paths.add(subdir_rel)
+                                        results.append({
+                                            "url": subdir_rel,
+                                            "title": dirname + "/" + subdir,
+                                            "type": "directory",
+                                            "is_directory": True
+                                        })
+                            else:
+                                # 无子目录：直接展示音乐文件
+                                for filename in child_files:
+                                    if len(results) >= max_results:
+                                        return results
+                                    file_rel = rel_path + "/" + filename
+                                    if file_rel not in found_paths:
+                                        found_paths.add(file_rel)
+                                        results.append({
+                                            "url": file_rel,
+                                            "title": os.path.splitext(filename)[0],
+                                            "type": "local",
+                                            "is_directory": False
+                                        })
                 
                 # 搜索文件名匹配
                 for filename in files:
@@ -1437,14 +1474,16 @@ class MusicPlayer:
                         # 检查文件名是否包含搜索关键词
                         if query_lower in filename.lower():
                             rel_path = os.path.relpath(os.path.join(dp, filename), abs_root).replace("\\", "/")
-                            # 移除扩展名作为标题
-                            title = os.path.splitext(filename)[0]
-                            results.append({
-                                "url": rel_path,
-                                "title": title,
-                                "type": "local",
-                                "is_directory": False
-                            })
+                            if rel_path not in found_paths:
+                                found_paths.add(rel_path)
+                                # 移除扩展名作为标题
+                                title = os.path.splitext(filename)[0]
+                                results.append({
+                                    "url": rel_path,
+                                    "title": title,
+                                    "type": "local",
+                                    "is_directory": False
+                                })
         except Exception as e:
             logger.error(f"本地搜索失败: {e}")
         
