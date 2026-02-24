@@ -20,8 +20,7 @@ export class SearchManager {
         // 存储当前搜索结果
         this.currentSearchResults = {
             local: [],
-            youtube: [],
-            history: []
+            youtube: []
         };
         // YouTube搜索加载状态追踪
         this.youtubeLoadState = {
@@ -280,40 +279,7 @@ export class SearchManager {
             const localResults = result.local || [];
             const youtubeResults = result.youtube || [];
 
-
-                // 拉取已合并的播放历史并按 query 过滤后传入渲染（使历史成为一个独立标签）
-                let history = [];
-                try {
-                    const hres = await api.getPlaybackHistoryMerged();
-                    if (hres && hres.status === 'OK') {
-                        history = hres.history || [];
-
-                        // 按查询关键词过滤历史（大小写不敏感，匹配 title/url/uploader/artist）
-                        try {
-                            const q = (query || '').toString().trim().toLowerCase();
-                            if (q) {
-                                history = history.filter(item => {
-                                    try {
-                                        const title = (item.title || item.name || '').toString().toLowerCase();
-                                        const url = (item.url || item.rel || '').toString().toLowerCase();
-                                        const uploader = (item.uploader || item.artist || '').toString().toLowerCase();
-                                        return title.includes(q) || url.includes(q) || uploader.includes(q);
-                                    } catch (e) {
-                                        return false;
-                                    }
-                                });
-                            }
-                        } catch (e) {
-                            console.warn('[搜索] 播放历史过滤失败:', e);
-                        }
-                    }
-                } catch (e) {
-                    console.warn('[搜索] 获取播放历史失败:', e);
-                    history = [];
-                }
-
-                // 渲染搜索结果（包含已过滤的播放历史标签）
-                this.renderSearchResults(localResults, youtubeResults, history);
+            this.renderSearchResults(localResults, youtubeResults);
             
         } catch (error) {
             console.error('搜索失败:', error);
@@ -327,15 +293,14 @@ export class SearchManager {
     }
 
     // 渲染搜索结果
-    renderSearchResults(localResults, youtubeResults, historyResults = []) {
+    renderSearchResults(localResults, youtubeResults) {
         const searchModalBody = document.getElementById('searchModalBody');
         if (!searchModalBody) return;
 
         // 保存当前搜索结果
         this.currentSearchResults = {
             local: localResults || [],
-            youtube: youtubeResults || [],
-            history: historyResults || []
+            youtube: youtubeResults || []
         };
 
         const buildList = (items, type) => {
@@ -395,14 +360,13 @@ export class SearchManager {
             return listHTML;
         };
 
-            // 选择默认标签：优先本地，其次网络，其次播放历史
-            const defaultTab = localResults.length > 0 ? 'local' : (youtubeResults.length > 0 ? 'youtube' : (historyResults.length > 0 ? 'history' : 'local'));
+            // 选择默认标签：优先本地，其次网络
+            const defaultTab = localResults.length > 0 ? 'local' : 'youtube';
 
         searchModalBody.innerHTML = `
             <div class="search-tabs">
                 <button class="search-tab ${defaultTab === 'local' ? 'active' : ''}" data-tab="local">本地 (${localResults.length})</button>
                 <button class="search-tab ${defaultTab === 'youtube' ? 'active' : ''}" data-tab="youtube">网络 (${youtubeResults.length})</button>
-                    <button class="search-tab ${defaultTab === 'history' ? 'active' : ''}" data-tab="history">播放历史 (${historyResults.length})</button>
             </div>
             <div class="search-tab-panels">
                 <div class="search-results-panel ${defaultTab === 'local' ? 'active' : ''}" data-panel="local">
@@ -411,9 +375,6 @@ export class SearchManager {
                 <div class="search-results-panel ${defaultTab === 'youtube' ? 'active' : ''}" data-panel="youtube">
                     ${buildYoutubePanel()}
                 </div>
-                    <div class="search-results-panel ${defaultTab === 'history' ? 'active' : ''}" data-panel="history">
-                        ${buildList(historyResults, 'history')}
-                    </div>
             </div>
         `;
 
@@ -1408,8 +1369,7 @@ export class SearchManager {
         this.dirNavState = { isActive: false, breadcrumb: [] };
         this.renderSearchResults(
             this.currentSearchResults.local,
-            this.currentSearchResults.youtube,
-            this.currentSearchResults.history
+            this.currentSearchResults.youtube
         );
     }
 }
