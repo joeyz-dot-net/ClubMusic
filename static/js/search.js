@@ -2,6 +2,7 @@
 import { api } from './api.js';
 import { Toast, formatTime, searchLoading } from './ui.js';
 import { buildTrackItemHTML } from './templates.js';
+import { localFiles, getNodeByPath, getDirCoverUrl, countFiles } from './local.js';
 
 export class SearchManager {
     constructor() {
@@ -33,6 +34,13 @@ export class SearchManager {
             maxResultsLimit: 100     // 加载全部的最大值
         };
         this.karaokeMode = false;  // 伴奏模式开关
+        // 目录导航状态（在搜索弹窗内浏览目录时使用）
+        this.dirNavState = {
+            isActive: false,
+            breadcrumb: []
+            // breadcrumb 格式：[{name: '搜索结果', url: null}, {name: 'Jazz', url: 'Albums/Jazz'}, ...]
+            // url: null 表示 sentinel（搜索结果入口）
+        };
         this.loadHistory();
 
         // 异步加载YouTube搜索配置
@@ -249,6 +257,8 @@ export class SearchManager {
         this.lastQuery = query;
         this.lastSearchAt = now;
         this.isSearching = true;
+        // 新搜索时退出目录视图模式
+        this.dirNavState = { isActive: false, breadcrumb: [] };
         
         try {
             // 隐藏搜索历史
@@ -428,6 +438,16 @@ export class SearchManager {
 
                 // 显示操作菜单
                 this.showSearchActionMenu(e.target, item, isDirectory);
+            });
+        });
+
+        // 目录行整体点击 → 进入目录（操作按钮区域除外）
+        searchModalBody.querySelectorAll('.search-result-item[data-directory="true"]').forEach(item => {
+            item.addEventListener('click', (e) => {
+                if (e.target.closest('.track-menu-btn')) return;
+                const url = item.getAttribute('data-url');
+                const title = item.getAttribute('data-title');
+                this.enterDirectory(url, title);
             });
         });
 
@@ -1208,7 +1228,193 @@ export class SearchManager {
             }
         }
     }
+
+    // ============================================================
+    // 搜索弹窗内目录导航
+    // ============================================================
+
+    // 进入目录（统一入口）
+    async enterDirectory(url, title) {
+        // 首次进入时先压入 sentinel（搜索结果）
+        if (!this.dirNavState.isActive) {
+            this.dirNavState.breadcrumb = [{ name: '搜索结果', url: null }];
+            this.dirNavState.isActive = true;
+        }
+        // 压入当前目录
+        this.dirNavState.breadcrumb.push({ name: title, url });
+
+        // 确保树数据已加载
+        if (!localFiles.fullTree) {
+            try {
+                const res = await fetch('/tree');
+                if (!res.ok) throw new Error('获取文件树失败');
+                const data = await res.json();
+                localFiles.fullTree = data.tree || null;
+            } catch (e) {
+                Toast.error('无法加载目录数据');
+                this.dirNavState.breadcrumb.pop();
+                if (this.dirNavState.breadcrumb.length <= 1) {
+                    this.dirNavState = { isActive: false, breadcrumb: [] };
+                }
+                return;
+            }
+        }
+
+        const pathArr = url ? url.split('/').filter(Boolean) : [];
+        const node = getNodeByPath(localFiles.fullTree, pathArr);
+        if (!node) {
+            Toast.error('找不到该目录');
+            this.dirNavState.breadcrumb.pop();
+            if (this.dirNavState.breadcrumb.length <= 1) {
+                this.dirNavState = { isActive: false, breadcrumb: [] };
+            }
+            return;
+        }
+        this.renderDirView(node);
+    }
+
+    // 将 searchModalBody 替换为目录视图
+    renderDirView(node) {
+        const searchModalBody = document.getElementById('searchModalBody');
+        if (!searchModalBody) return;
+
+        const breadcrumbHTML = this.buildSearchBreadcrumbHTML(this.dirNavState.breadcrumb);
+        const contentHTML = this.buildDirContentHTML(node);
+
+        searchModalBody.innerHTML = `
+            <div class="search-dir-view">
+                <div class="search-dir-breadcrumb">${breadcrumbHTML}</div>
+                ${contentHTML}
+            </div>
+        `;
+
+        this.bindDirViewEvents(searchModalBody);
+    }
+
+    // 生成面包屑 HTML
+    buildSearchBreadcrumbHTML(breadcrumb) {
+        return breadcrumb.map((item, index) => {
+            const isLast = index === breadcrumb.length - 1;
+            const sep = index > 0 ? '<span class="search-breadcrumb-sep">›</span>' : '';
+            if (isLast) {
+                return `${sep}<span class="search-breadcrumb-item search-breadcrumb-item--current">${item.name}</span>`;
+            }
+            return `${sep}<span class="search-breadcrumb-item" data-breadcrumb-index="${index}">${item.name}</span>`;
+        }).join('');
+    }
+
+    // 生成目录内容 HTML（子目录卡片 + 歌曲列表）
+    buildDirContentHTML(node) {
+        const dirs = node.dirs || [];
+        const files = node.files || [];
+
+        if (!dirs.length && !files.length) {
+            return '<div class="search-dir-empty">此目录为空</div>';
+        }
+
+        let html = '';
+
+        // 子目录卡片网格
+        if (dirs.length > 0) {
+            html += '<div class="search-dir-grid">';
+            dirs.forEach(dir => {
+                const coverUrl = getDirCoverUrl(dir);
+                const fileCount = countFiles(dir);
+                html += `
+                    <div class="search-dir-card" data-dir-url="${dir.rel}" data-dir-name="${dir.name}">
+                        <div class="search-dir-card-cover">
+                            ${coverUrl ? `<img src="${coverUrl}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" loading="lazy" />` : ''}
+                            <div class="search-dir-card-cover-placeholder" ${coverUrl ? '' : 'style="display:flex"'}>📁</div>
+                        </div>
+                        <div class="search-dir-card-info">
+                            <div class="search-dir-card-title">${dir.name}</div>
+                            <div class="search-dir-card-count">${fileCount} 首歌曲</div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+        }
+
+        // 歌曲列表
+        if (files.length > 0) {
+            html += '<div class="search-dir-songs">';
+            files.forEach(file => {
+                html += buildTrackItemHTML({
+                    song: { url: file.rel, title: file.name, type: 'local' },
+                    type: 'local',
+                    metaText: file.rel,
+                    actionButtonClass: 'track-menu-btn search-result-add',
+                    actionButtonIcon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>',
+                    isCover: false
+                });
+            });
+            html += '</div>';
+        }
+
+        return html;
+    }
+
+    // 绑定目录视图内的事件
+    bindDirViewEvents(container) {
+        // 面包屑点击（非末项）
+        container.querySelectorAll('.search-breadcrumb-item[data-breadcrumb-index]').forEach(el => {
+            el.addEventListener('click', () => {
+                const index = parseInt(el.getAttribute('data-breadcrumb-index'), 10);
+                this.navigateToBreadcrumb(index);
+            });
+        });
+
+        // 子目录卡片点击 → 进入子目录
+        container.querySelectorAll('.search-dir-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const dirUrl = card.getAttribute('data-dir-url');
+                const dirName = card.getAttribute('data-dir-name');
+                this.enterDirectory(dirUrl, dirName);
+            });
+        });
+
+        // 歌曲 add 按钮 → 复用现有操作菜单
+        container.querySelectorAll('.search-result-add').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const item = e.target.closest('.search-result-item');
+                if (!item) return;
+                this.showSearchActionMenu(e.target, item, false);
+            });
+        });
+    }
+
+    // 点击面包屑回退
+    navigateToBreadcrumb(index) {
+        if (index === 0) {
+            this.restoreSearchResults();
+            return;
+        }
+        // 截断面包屑到指定层
+        this.dirNavState.breadcrumb = this.dirNavState.breadcrumb.slice(0, index + 1);
+        const item = this.dirNavState.breadcrumb[index];
+        const pathArr = item.url ? item.url.split('/').filter(Boolean) : [];
+        const node = getNodeByPath(localFiles.fullTree, pathArr);
+        if (!node) {
+            Toast.error('找不到该目录');
+            return;
+        }
+        this.renderDirView(node);
+    }
+
+    // 退出目录视图，恢复搜索结果
+    restoreSearchResults() {
+        this.dirNavState = { isActive: false, breadcrumb: [] };
+        this.renderSearchResults(
+            this.currentSearchResults.local,
+            this.currentSearchResults.youtube,
+            this.currentSearchResults.history
+        );
+    }
 }
+
+
 
 // 导出单例
 export const searchManager = new SearchManager();

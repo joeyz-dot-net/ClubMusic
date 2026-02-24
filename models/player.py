@@ -25,6 +25,16 @@ from models import Song, LocalSong, StreamSong, Playlist, PlayHistory
 
 logger = logging.getLogger(__name__)
 
+try:
+    import opencc as _opencc
+    _t2s_converter = _opencc.OpenCC('t2s')
+
+    def _to_simplified(text: str) -> str:
+        return _t2s_converter.convert(text)
+except ImportError:
+    def _to_simplified(text: str) -> str:
+        return text
+
 
 class MusicPlayer:
     """音乐播放器类 - 包含所有播放器配置和状态"""
@@ -1393,7 +1403,7 @@ class MusicPlayer:
         if not query or not query.strip():
             return []
         
-        query_lower = query.strip().lower()
+        query_normalized = _to_simplified(query.strip()).lower()
         results = []
         found_paths = set()  # 追踪已添加的路径（目录+文件），避免重复
         abs_root = os.path.abspath(self.music_dir)
@@ -1410,7 +1420,7 @@ class MusicPlayer:
                     if len(results) >= max_results:
                         return results
 
-                    if query_lower in dirname.lower():
+                    if query_normalized in _to_simplified(dirname).lower():
                         dir_path = os.path.join(dp, dirname)
                         rel_path = os.path.relpath(dir_path, abs_root).replace("\\", "/")
 
@@ -1472,7 +1482,7 @@ class MusicPlayer:
                     ext = os.path.splitext(filename)[1].lower()
                     if ext in self.allowed_extensions:
                         # 检查文件名是否包含搜索关键词
-                        if query_lower in filename.lower():
+                        if query_normalized in _to_simplified(filename).lower():
                             rel_path = os.path.relpath(os.path.join(dp, filename), abs_root).replace("\\", "/")
                             if rel_path not in found_paths:
                                 found_paths.add(rel_path)

@@ -47,6 +47,7 @@ dependencies = [
     "Pillow>=10.0.0",
     "yt-dlp>=2023.11.0",
     "mutagen>=1.46.0",
+    "opencc-python-reimplemented>=1.1.1",
 ]
 
 # 可选依赖组（用于不同的用途）

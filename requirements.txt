@@ -8,3 +8,4 @@ Pillow
 yt-dlp
 pyinstaller
 mutagen
+opencc-python-reimplemented

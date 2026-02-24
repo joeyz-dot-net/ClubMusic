@@ -7,7 +7,7 @@ let currentNavPath = [];
 const pendingAdds = new Set();
 
 // 获取目录的封面URL（使用目录中第一个歌曲的封面）
-const getDirCoverUrl = (dir) => {
+export const getDirCoverUrl = (dir) => {
     // 优先使用目录中的第一个文件
     if (dir.files && dir.files.length > 0) {
         return `/cover/${encodeURIComponent(dir.files[0].rel)}`;
@@ -23,7 +23,7 @@ const getDirCoverUrl = (dir) => {
 };
 
 // 统计目录中的文件数量
-const countFiles = (dir) => {
+export const countFiles = (dir) => {
     let count = (dir.files || []).length;
     (dir.dirs || []).forEach(subDir => {
         count += countFiles(subDir);
@@ -32,7 +32,7 @@ const countFiles = (dir) => {
 };
 
 // 根据路径获取节点
-const getNodeByPath = (root, path) => {
+export const getNodeByPath = (root, path) => {
     let node = root;
     for (const dirName of path) {
         if (!node || !node.dirs) return null;
