@@ -100,7 +100,7 @@ class MusicPlayerApp {
             
         } catch (error) {
             console.error('❌ 初始化失败:', error);
-            Toast.error('初始化失败: ' + error.message);
+            Toast.error(i18n.t('player.initFailed') + ': ' + error.message);
         }
     }
 
@@ -266,7 +266,7 @@ class MusicPlayerApp {
         player.on('play', (data) => {
             const { url, title } = data || {};
             if (title) {
-                Toast.success(`正在播放: ${title}`);
+                Toast.success(i18n.t('player.nowPlaying', { title }));
             }
         });
 
@@ -313,7 +313,7 @@ class MusicPlayerApp {
         ];
 
         // 循环模式: 0=不循环, 1=单曲循环, 2=全部循环
-        const loopModeText = ['不循环', '单曲循环', '全部循环'];
+        const loopModeText = [i18n.t('player.loop.off'), i18n.t('player.loop.single'), i18n.t('player.loop.all')];
         const loopModeEmoji = ['↻', '🔂', '🔁'];
         
         // 只在循环模式实际改变时输出日志
@@ -346,7 +346,7 @@ class MusicPlayerApp {
                 }
                 
                 // 更新title属性
-                btn.title = `循环模式: ${loopModeText[loopMode]}`;
+                btn.title = i18n.t('player.loop.title', { mode: loopModeText[loopMode] });
             }
         });
     }
@@ -787,7 +787,7 @@ class MusicPlayerApp {
         if (!status) return;
 
         // 更新标题和信息
-        const title = status.current_title || status.title || status.current_meta?.title || '未播放';
+        const title = status.current_title || status.title || status.current_meta?.title || i18n.t('player.notPlaying');
         const artist = status.current_meta?.artist || status.artist || '--';
         const playlistName = status.current_playlist_name || '默认';
         
@@ -872,7 +872,7 @@ class MusicPlayerApp {
         // 更新按钮文本/图标
         if (this.elements.playPauseBtn) {
             this.elements.playPauseBtn.textContent = isPlaying ? '⏸' : '▶';
-            this.elements.playPauseBtn.title = isPlaying ? '暂停' : '播放';
+            this.elements.playPauseBtn.title = isPlaying ? i18n.t('player.pause') : i18n.t('player.play');
         }
         if (this.elements.miniPlayPauseBtn) {
             this.elements.miniPlayPauseBtn.textContent = isPlaying ? '⏸' : '▶';
@@ -1001,7 +1001,7 @@ class MusicPlayerApp {
             
         } catch (error) {
             console.error('[应用] 切换失败:', error);
-            Toast.error('❌ 切换歌单失败: ' + error.message);
+            Toast.error(i18n.t('player.switchFailed') + ': ' + error.message);
         }
     }
 
@@ -1033,7 +1033,7 @@ class MusicPlayerApp {
                 this.playTimeouts = [];
             }
             
-            loading.show('📀 准备播放歌曲...');
+            loading.show(i18n.t('player.preparing'));
             
             // 播放歌曲，添加重试逻辑，网络歌曲特别容易失败
             let playSuccess = false;
@@ -1064,13 +1064,13 @@ class MusicPlayerApp {
             if (playSuccess) {
                 // 立即隐藏加载提示（不再等待推流）
                 loading.hide();
-                Toast.success(`🎵 正在播放: ${song.title}`);
+                Toast.success(i18n.t('player.nowPlaying', { title: song.title }));
             }
             
         } catch (error) {
             loading.hide();
             console.error('[播放错误] 播放失败:', error);
-            Toast.error('播放失败: ' + (error.message || error));
+            Toast.error(i18n.t('player.playFailed') + ': ' + (error.message || error));
         }
     }
 

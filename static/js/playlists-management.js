@@ -1,7 +1,8 @@
 // 歌单管理模块
 import { playlistManager } from './playlist.js';
-import { Toast } from './ui.js';
+import { Toast, ConfirmModal, InputModal } from './ui.js';
 import { operationLock } from './operationLock.js';
+import { i18n } from './i18n.js';
 
 export class PlaylistsManagement {
     constructor() {
@@ -23,14 +24,14 @@ export class PlaylistsManagement {
         const playlistsAddBtn = document.getElementById('playlistsAddBtn');
         if (playlistsAddBtn) {
             playlistsAddBtn.addEventListener('click', async () => {
-                const name = prompt('请输入歌单名称：');
+                const name = await InputModal.show({ title: i18n.t('playlists.createPrompt') });
                 if (name && name.trim()) {
                     try {
                         await playlistManager.create(name.trim());
-                        Toast.success('✅ 歌单创建成功');
+                        Toast.success(i18n.t('playlists.createSuccess'));
                         this.render();
                     } catch (error) {
-                        Toast.error('❌ 创建失败: ' + error.message);
+                        Toast.error(i18n.t('playlists.createFailed', { error: error.message }));
                     }
                 }
             });
@@ -94,9 +95,9 @@ export class PlaylistsManagement {
             this.modalBody.innerHTML = `
                 <div class="playlists-empty">
                     <div class="playlists-empty-icon">📁</div>
-                    <div class="playlists-empty-text">暂无歌单</div>
+                    <div class="playlists-empty-text">${i18n.t('playlists.empty')}</div>
                     <div style="font-size: 14px; color: rgba(255, 255, 255, 0.4); margin-top: 8px;">
-                        点击右上角 + 创建新歌单
+                        ${i18n.t('playlists.createHint')}
                     </div>
                 </div>
             `;
@@ -131,14 +132,14 @@ export class PlaylistsManagement {
                 </div>
                 <div class="playlist-info">
                     <div class="playlist-name">
-                        ${playlist.name || '未命名歌单'}
-                        ${playlist.id === 'default' ? '<span class="default-badge">默认</span>' : ''}
+                        ${playlist.name || i18n.t('playlist.unnamed')}
+                        ${playlist.id === 'default' ? `<span class="default-badge">${i18n.t('playlists.defaultBadge')}</span>` : ''}
                     </div>
                     <div class="playlist-count">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="opacity: 0.6;">
                             <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
                         </svg>
-                        ${playlist.songs?.length || 0} 首歌曲
+                        ${i18n.t('local.songCount', { count: playlist.songs?.length || 0 })}
                     </div>
                 </div>
                 <div class="playlist-actions">
@@ -177,7 +178,7 @@ export class PlaylistsManagement {
                     await playlistManager.loadAll();
                     
                     console.log('[歌单管理] ✅ 歌单切换完成:', playlist.name);
-                    Toast.success(`📋 已切换到：${playlist.name}`);
+                    Toast.success(i18n.t('playlists.switchSuccess', { name: playlist.name }));
                     
                     // ✅ 先隐藏模态框
                     console.log('[歌单管理] 步骤4: 隐藏模态框');
@@ -193,7 +194,7 @@ export class PlaylistsManagement {
                     }, 50);
                 } catch (error) {
                     console.error('[歌单管理] 切换失败:', error);
-                    Toast.error('❌ 切换失败: ' + error.message);
+                    Toast.error(i18n.t('playlists.switchFailed', { error: error.message }));
                 }
             });
 
@@ -208,14 +209,14 @@ export class PlaylistsManagement {
                         operationLock.acquire('edit');
                         
                         try {
-                            const newName = prompt(`编辑歌单名称：`, playlist.name);
+                            const newName = await InputModal.show({ title: i18n.t('playlists.renamePrompt'), defaultValue: playlist.name });
                             if (newName !== null && newName.trim() && newName.trim() !== playlist.name) {
                                 await playlistManager.update(playlist.id, { name: newName.trim() });
-                                Toast.success('✏️ 歌单已重命名');
+                                Toast.success(i18n.t('playlists.renameSuccess'));
                                 this.render(onPlaylistSwitch);
                             }
                         } catch (error) {
-                            Toast.error('❌ 重命名失败: ' + error.message);
+                            Toast.error(i18n.t('playlists.renameFailed', { error: error.message }));
                         } finally {
                             // 释放操作锁，恢复轮询
                             operationLock.release('edit');
@@ -236,26 +237,27 @@ export class PlaylistsManagement {
                         
                         try {
                             // 优化删除确认对话框
-                            const confirmed = confirm(
-                                `确定要删除歌单"${playlist.name}"吗？\n\n` +
-                                `该歌单包含 ${playlist.songs?.length || 0} 首歌曲，删除后无法恢复。`
-                            );
-                            
+                            const confirmed = await ConfirmModal.show({
+                                title: i18n.t('playlists.deleteConfirmTitle', { name: playlist.name }),
+                                message: i18n.t('playlists.deleteConfirmMsg', { count: playlist.songs?.length || 0 }),
+                                type: 'danger'
+                            });
+
                             if (confirmed) {
                                 // 添加删除动画
                                 item.style.transition = 'all 0.3s ease';
                                 item.style.opacity = '0';
                                 item.style.transform = 'translateX(-100%)';
-                                
+
                                 await new Promise(resolve => setTimeout(resolve, 300));
                                 await playlistManager.delete(playlist.id);
-                                Toast.success('🗑️ 歌单已删除');
+                                Toast.success(i18n.t('playlists.deleteSuccess'));
                                 this.render(onPlaylistSwitch);
                             }
                         } catch (error) {
                             item.style.opacity = '1';
                             item.style.transform = 'translateX(0)';
-                            Toast.error('❌ 删除失败: ' + error.message);
+                            Toast.error(i18n.t('playlists.deleteFailed', { error: error.message }));
                         } finally {
                             // 释放操作锁，恢复轮询
                             operationLock.release('delete');

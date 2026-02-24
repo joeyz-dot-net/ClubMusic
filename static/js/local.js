@@ -1,4 +1,5 @@
 import { Toast } from './ui.js';
+import { i18n } from './i18n.js';
 
 // 当前导航路径
 let currentNavPath = [];
@@ -45,7 +46,7 @@ export const getNodeByPath = (root, path) => {
 // 构建面包屑导航HTML
 const buildBreadcrumbHTML = (path) => {
     let html = '<div class="local-breadcrumb">';
-    html += '<span class="breadcrumb-home" data-nav-to="root">🏠 本地歌曲</span>';
+    html += `<span class="breadcrumb-home" data-nav-to="root">🏠 ${i18n.t('local.home')}</span>`;
     
     path.forEach((name, index) => {
         const navPath = path.slice(0, index + 1).join('/');
@@ -68,14 +69,14 @@ const buildCurrentDirHTML = (node, path) => {
     html += buildBreadcrumbHTML(path);
 
     if (!node) {
-        return html + '<div class="local-empty">暂无本地文件</div>';
+        return html + `<div class="local-empty">${i18n.t('local.empty')}</div>`;
     }
 
     const dirs = node.dirs || [];
     const files = node.files || [];
 
     if (!dirs.length && !files.length) {
-        return html + '<div class="local-empty">此目录为空</div>';
+        return html + `<div class="local-empty">${i18n.t('local.dirEmpty')}</div>`;
     }
 
     // 子目录 - 使用专辑卡片方式展示
@@ -93,7 +94,7 @@ const buildCurrentDirHTML = (node, path) => {
                     </div>
                     <div class="local-album-info">
                         <div class="local-album-title">${dir.name}</div>
-                        <div class="local-album-count">${fileCount} 首歌曲</div>
+                        <div class="local-album-count">${i18n.t('local.songCount', { count: fileCount })}</div>
                     </div>
                 </div>
             `;
@@ -123,7 +124,7 @@ const buildSongItemHTML = (file, coverUrl, seq) => {
                     <img src="${coverUrl}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" loading="lazy" />
                     <div class="track-cover-placeholder">🎵</div>
                 </div>
-                <div class="track-type">本地音乐</div>
+                <div class="track-type">${i18n.t('local.musicType')}</div>
             </div>
             <div class="track-info">
                 <div class="track-title">${file.name}</div>
@@ -183,7 +184,7 @@ export const localFiles = {
                 currentNavPath = [];
                 this.renderCurrentLevel();
             } else {
-                this.contentEl.innerHTML = '<div class="local-empty">暂无本地文件</div>';
+                this.contentEl.innerHTML = `<div class="local-empty">${i18n.t('local.empty')}</div>`;
             }
         } catch (error) {
             console.error('加载本地文件树失败:', error);
@@ -342,16 +343,16 @@ export const localFiles = {
 
             if (response.ok) {
                 // 获取歌单名称以显示在toast中
-                let playlistName = '队列';
+                let playlistName = i18n.t('nav.queue');
                 if (playlistId === 'default') {
-                    playlistName = '队列';
+                    playlistName = i18n.t('nav.queue');
                 } else if (window.app && window.app.modules && window.app.modules.playlistManager) {
                     const playlist = window.app.modules.playlistManager.playlists.find(p => p.id === playlistId);
                     if (playlist) {
                         playlistName = playlist.name;
                     }
                 }
-                Toast.success(`➕ 已添加到「${playlistName}」: ${fileName}`);
+                Toast.success(i18n.t('search.addSuccess', { name: playlistName, title: fileName }));
                 if (this.onSongAdded && typeof this.onSongAdded === 'function') {
                     setTimeout(() => {
                         this.onSongAdded();
@@ -361,14 +362,14 @@ export const localFiles = {
                 const error = await response.json();
                 // 重复歌曲使用警告提示而不是错误
                 if (error.duplicate) {
-                    Toast.warning(`${fileName} 已在播放列表中`);
+                    Toast.warning(`${fileName} ${i18n.t('search.alreadyInList')}`);
                 } else {
-                    Toast.error(`添加失败: ${error.error || '未知错误'}`);
+                    Toast.error(i18n.t('search.addFailed') + ': ' + (error.error || i18n.t('search.loadMoreFailed')));
                 }
             }
         } catch (error) {
             console.error('添加文件失败:', error);
-            Toast.error('添加失败');
+            Toast.error(i18n.t('search.addFailed'));
         } finally {
             // 延迟移除防抖标记，防止快速连续点击
             setTimeout(() => {

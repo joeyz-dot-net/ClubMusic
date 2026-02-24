@@ -1,6 +1,6 @@
 // 播放列表管理模块
 import { api } from './api.js';
-import { Toast, loading } from './ui.js';
+import { Toast, loading, ConfirmModal } from './ui.js';
 import { operationLock } from './operationLock.js';
 import { thumbnailManager } from './utils.js';
 import { i18n } from './i18n.js';
@@ -10,7 +10,7 @@ export class PlaylistManager {
         this.currentPlaylist = [];
         this.playlists = [];
         this.urlSet = new Set();
-        this.currentPlaylistName = '当前播放列表'; // 添加歌单名称
+        this.currentPlaylistName = i18n.t('playlist.current'); // 添加歌单名称
         // ✅ 从 localStorage 恢复当前选择的歌单ID，默认为 'default'
         this.selectedPlaylistId = this._loadSelectedPlaylistFromStorage();
         console.log('[PlaylistManager] ✓ 初始化完成，selectedPlaylistId:', this.selectedPlaylistId);
@@ -43,7 +43,7 @@ export class PlaylistManager {
         }
         if (Array.isArray(result.playlist)) {
             this.currentPlaylist = result.playlist;
-            this.currentPlaylistName = result.playlist_name || '当前播放列表'; // 获取歌单名称
+            this.currentPlaylistName = result.playlist_name || i18n.t('playlist.current'); // 获取歌单名称
             // 如果返回的歌单ID与请求不同（例如歌单被删除），同步更新
             if (result.playlist_id && result.playlist_id !== this.selectedPlaylistId) {
                 console.log('[歌单管理] 歌单已不存在，切换到:', result.playlist_id);
@@ -240,7 +240,7 @@ async function moveToTopAndPlay(song, currentIndex, onPlay, rerenderArgs) {
             const result = await api.reorderPlaylist(selectedPlaylistId, currentIndex, 0);
             if (result.status !== 'OK') {
                 console.error('[播放列表] 移动失败:', result);
-                Toast.error('移动失败');
+                Toast.error(i18n.t('playlist.opFailed'));
                 return;
             }
             console.log('[播放列表] ✓ 已移动到队列顶部');
@@ -279,7 +279,7 @@ async function addAllSongsToDefault(playlist, selectedPlaylistId) {
     }
     
     try {
-        loading.show(`📀 正在添加 ${playlist.length} 首歌曲...`);
+        loading.show(i18n.t('playlist.addingAll', { count: playlist.length }));
         
         // 获取默认歌单以检查重复
         const defaultPlaylist = playlistManager.playlists.find(p => p.id === 'default');
@@ -342,7 +342,7 @@ async function addAllSongsToDefault(playlist, selectedPlaylistId) {
                     
                     // 更新UI提示进度
                     const progress = Math.round((addedCount + skippedCount) / playlist.length * 100);
-                    loading.show(`📀 添加中... ${addedCount}/${playlist.length - skippedCount} (${progress}%)`);
+                    loading.show(i18n.t('playlist.addProgress', { done: addedCount, total: playlist.length - skippedCount, pct: progress }));
                 } else {
                     console.error(`[批量添加] ✗ 添加失败: ${song.title}`, result.error);
                     failedSongs.push(song.title);
@@ -369,12 +369,12 @@ async function addAllSongsToDefault(playlist, selectedPlaylistId) {
         });
         
         // 构建结果消息
-        let message = `✅ 成功添加 ${addedCount} 首歌曲`;
+        let message = i18n.t('playlist.addSuccess', { count: addedCount });
         if (skippedCount > 0) {
-            message += `，跳过 ${skippedCount} 首（已存在）`;
+            message += i18n.t('playlist.addSkipped', { count: skippedCount });
         }
         if (failedSongs.length > 0) {
-            message += `，失败 ${failedSongs.length} 首`;
+            message += i18n.t('playlist.addFailed', { count: failedSongs.length });
         }
         
         Toast.success(message);
@@ -458,7 +458,7 @@ export async function playSongFromSelectedPlaylist(song, onPlay) {
             }
             
             // 通知用户，但不播放（显示完整的歌单名称）
-            Toast.success(`✅ 已添加到「队列」: ${song.title}`);
+            Toast.success(i18n.t('playlist.addToQueue', { title: song.title }));
             console.log('[播放列表] ⚠️ 歌曲已添加，但未播放（非默认歌单）');
         }
         
@@ -558,7 +558,7 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
             color: ${colors.secondaryText};
             font-weight: 500;
         `;
-        songCount.textContent = `📊 ${playlist.length} 首歌曲`;
+        songCount.textContent = i18n.t('playlist.songCount', { count: playlist.length });
 
         infoSection.appendChild(playlistTitle);
         infoSection.appendChild(songCount);
@@ -595,7 +595,7 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
             flex-shrink: 0;
         `;
         clearBtn.innerHTML = '🗑️';
-        clearBtn.title = '清空播放队列';
+        clearBtn.title = i18n.t('playlist.clearQueue');
         clearBtn.addEventListener('mouseover', () => {
             clearBtn.style.background = colors.buttonHover;
             clearBtn.style.transform = 'scale(1.1)';
@@ -608,15 +608,16 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
         });
         clearBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (confirm('确定要清空队列吗？')) {
+            const confirmed = await ConfirmModal.show({ title: i18n.t('playlist.clearQueueConfirm'), type: 'danger' });
+            if (confirmed) {
                 try {
                     await api.post('/playlist_clear', {});
-                    Toast.success('✅ 队列已清空');
+                    Toast.success(i18n.t('playlist.clearSucceed'));
                     await playlistManager.loadCurrent();
                     renderPlaylistUI({ container, onPlay, currentMeta });
                 } catch (err) {
                     console.error('清空队列失败:', err);
-                    Toast.error('清空失败: ' + (err.message || err));
+                    Toast.error(i18n.t('playlist.clearFailed') + ': ' + (err.message || err));
                 }
             }
         });
@@ -682,7 +683,7 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
             color: ${colors.secondaryText};
             font-weight: 500;
         `;
-        songCount.textContent = `📊 ${playlist.length} 首歌曲`;
+        songCount.textContent = i18n.t('playlist.songCount', { count: playlist.length });
 
         infoSection.appendChild(playlistTitle);
         infoSection.appendChild(songCount);
@@ -712,7 +713,7 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
             flex-shrink: 0;
         `;
         returnBtn.innerHTML = '←';
-        returnBtn.title = '返回到队列（默认歌单）';
+        returnBtn.title = i18n.t('playlist.returnToQueue');
         returnBtn.addEventListener('mouseover', () => {
             returnBtn.style.background = colors.buttonHover;
             returnBtn.style.transform = 'scale(1.1) translateX(-2px)';
@@ -729,7 +730,7 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
             await playlistManager.loadCurrent();
             renderPlaylistUI({ container, onPlay, currentMeta });
             console.log('[歌单切换] 已返回默认歌单（队列）');
-            Toast.success('✅ 已返回队列');
+            Toast.success(i18n.t('playlist.returnedToQueue'));
         });
 
         const addAllBtn = document.createElement('button');
@@ -749,7 +750,7 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
             flex-shrink: 0;
         `;
         addAllBtn.innerHTML = '➕';
-        addAllBtn.title = '添加全部歌曲到队列';
+        addAllBtn.title = i18n.t('playlist.addAll');
         addAllBtn.addEventListener('mouseover', () => {
             addAllBtn.style.background = colors.buttonHover;
             addAllBtn.style.transform = 'scale(1.1) rotate(90deg)';
@@ -782,7 +783,7 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
             flex-shrink: 0;
         `;
         clearBtn.innerHTML = '🗑️';
-        clearBtn.title = '清空歌单';
+        clearBtn.title = i18n.t('playlist.clearPlaylist');
         clearBtn.addEventListener('mouseover', () => {
             clearBtn.style.background = colors.buttonHover;
             clearBtn.style.transform = 'translateY(-1px)';
@@ -793,17 +794,18 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
         });
         clearBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (confirm(`确定要清空歌单「${playlistName}」吗？`)) {
+            const confirmed = await ConfirmModal.show({ title: i18n.t('playlist.clearPlaylistConfirm', { name: playlistName }), type: 'danger' });
+            if (confirmed) {
                 try {
                     await api.delete(`/playlists/${selectedPlaylistId}`);
-                    Toast.success('❌ 歌单已删除');
+                    Toast.success(i18n.t('playlists.deleteSuccess'));
                     playlistManager.setSelectedPlaylist('default');
                     await playlistManager.loadAll();
                     await playlistManager.loadCurrent();
                     renderPlaylistUI({ container, onPlay, currentMeta });
                 } catch (err) {
                     console.error('清空歌单失败:', err);
-                    Toast.error('清空失败: ' + (err.message || err));
+                    Toast.error(i18n.t('playlist.clearFailed') + ': ' + (err.message || err));
                 }
             }
         });
@@ -838,7 +840,7 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
     
     // ✅ 根据当前选择的歌单ID，获取对应的歌单数据
     let playlist = [];
-    let playlistName = '当前播放列表';
+    let playlistName = i18n.t('playlist.current');
     
     if (selectedPlaylistId === 'default') {
         // 显示默认歌单（当前播放队列）
@@ -849,7 +851,7 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
         const selectedPlaylist = playlistManager.playlists.find(p => p.id === selectedPlaylistId);
         if (selectedPlaylist) {
             playlist = selectedPlaylist.songs || [];
-            playlistName = selectedPlaylist.name || '未命名歌单';
+            playlistName = selectedPlaylist.name || i18n.t('playlist.unnamed');
             console.log('[渲染列表] 显示非默认歌单:', selectedPlaylistId, '名称:', playlistName);
         } else {
             console.warn('[渲染列表] 找不到歌单:', selectedPlaylistId, '，回退到默认歌单');
@@ -882,7 +884,7 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
             text-align: center;
             color: #999;
         `;
-        emptyText.innerHTML = '📭 暂无歌曲<br><span style="font-size: 14px;"></span>';
+        emptyText.innerHTML = i18n.t('playlist.noSongs');
         
         // 历史按钮
         const historyBtn = document.createElement('button');
@@ -1088,7 +1090,7 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
         
         const typeEl = document.createElement('div');
         typeEl.className = 'track-type';
-        const songType = song.type === 'youtube' ? 'YouTube' : '本地音乐';
+        const songType = song.type === 'youtube' ? 'YouTube' : i18n.t('local.musicType');
         typeEl.textContent = songType;
         
         leftContainer.appendChild(cover);
@@ -1100,7 +1102,7 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
         
         const songTitleEl = document.createElement('div');
         songTitleEl.className = 'track-title';
-        songTitleEl.textContent = song.title || '未知歌曲';
+        songTitleEl.textContent = song.title || i18n.t('track.unknown');
         
         const metaEl = document.createElement('div');
         metaEl.className = 'track-meta';
@@ -1162,22 +1164,23 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
                     return;
                 }
                 
-                if (confirm(`确定删除《${song.title}》吗？`)) {
+                const confirmed = await ConfirmModal.show({ title: i18n.t('playlist.deleteConfirm', { title: song.title }), type: 'danger' });
+                if (confirmed) {
                     try {
                         // 禁用按钮防止重复点击
                         deleteBtn.disabled = true;
                         deleteBtn.style.opacity = '0.5';
-                        
+
                         await playlistManager.removeAt(index);
-                        
+
                         // 确保所有歌单数据都是最新的
                         await playlistManager.loadAll();
-                        
-                        Toast.success('已删除');
+
+                        Toast.success(i18n.t('playlist.deleted'));
                         renderPlaylistUI({ container, onPlay, currentMeta });
                     } catch (err) {
                         console.error(`删除歌曲失败 (索引: ${index}):`, err);
-                        Toast.error('删除失败: ' + (err.message || err));
+                        Toast.error(i18n.t('playlist.deleteFailed') + ': ' + (err.message || err));
                         
                         // 删除失败时重新启用按钮
                         deleteBtn.disabled = false;
@@ -1413,20 +1416,20 @@ function initTouchDragSort(container, rerenderFn, rerenderArgs) {
                     const result = await api.reorderPlaylist(selectedPlaylistId, draggedItemOriginalIndex, actualNewIndex);
                     
                     if (result.status === 'OK') {
-                        Toast.success('已调整顺序');
+                        Toast.success(i18n.t('playlist.reordered'));
                         // 先刷新数据，再重新渲染列表
                         await playlistManager.loadCurrent();
                         await playlistManager.loadAll();
                         rerenderFn(rerenderArgs);
                     } else {
-                        Toast.error('调整失败: ' + (result.error || result.message));
+                        Toast.error(i18n.t('playlist.reorderFailed') + ': ' + (result.error || result.message));
                         await playlistManager.loadCurrent();
                         await playlistManager.loadAll();
                         rerenderFn(rerenderArgs);
                     }
                 } catch (err) {
                     console.error('调整顺序失败:', err);
-                    Toast.error('调整失败');
+                    Toast.error(i18n.t('playlist.reorderFailed'));
                     await playlistManager.loadCurrent();
                     await playlistManager.loadAll();
                     rerenderFn(rerenderArgs);
@@ -1474,13 +1477,13 @@ export { renderPlaylistUI as playlistRenderer };
 // ✅ 新增：显示播放历史模态框
 export async function showPlaybackHistory() {
     try {
-        loading.show('📜 加载播放历史...');
+        loading.show(i18n.t('history.loading'));
         
         // 获取合并后的播放历史
         const result = await api.getPlaybackHistoryMerged();
         
         if (result.status !== 'OK') {
-            Toast.error('加载历史失败: ' + (result.error || '未知错误'));
+            Toast.error(i18n.t('history.loadFailed') + ': ' + (result.error || '未知错误'));
             loading.hide();
             return;
         }
@@ -1643,7 +1646,7 @@ export async function showPlaybackHistory() {
                 text-overflow: ellipsis;
                 font-size: 14px;
             `;
-            title.textContent = item.title || '未知歌曲';
+            title.textContent = item.title || i18n.t('track.unknown');
 
             const typeLabel = document.createElement('div');
             typeLabel.style.cssText = `
@@ -1654,7 +1657,7 @@ export async function showPlaybackHistory() {
                 text-overflow: ellipsis;
                 margin-top: 2px;
             `;
-            typeLabel.textContent = item.type === 'youtube' ? '🎬 YouTube' : '🎵 本地音乐';
+            typeLabel.textContent = item.type === 'youtube' ? i18n.t('history.typeYoutube') : i18n.t('history.typeLocal');
 
             info.appendChild(title);
             info.appendChild(typeLabel);
@@ -1751,7 +1754,7 @@ export async function showPlaybackHistory() {
         
     } catch (error) {
         console.error('[历史] 加载失败:', error);
-        Toast.error('❌ 加载历史失败: ' + error.message);
+        Toast.error(i18n.t('history.loadFailed') + ': ' + error.message);
         loading.hide();
     }
 }

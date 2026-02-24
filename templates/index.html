@@ -54,10 +54,10 @@
 </head>
 <body>
 
-	<div id="playlist" class="tab-content playlist-tab" aria-label="播放列表">
+	<div id="playlist" class="tab-content playlist-tab" aria-label="播放列表" data-i18n-aria="nav.queue">
 		
 		<div id="youtubeSearchResults" class="youtube-search-results" style="display:none;">
-			<h4 class="youtube-search-title">搜索结果</h4>
+			<h4 class="youtube-search-title" data-i18n="search.title">搜索结果</h4>
 			<div id="youtubeSearchList" class="youtube-search-list"></div>
 		</div>
 		
@@ -69,7 +69,7 @@
 		<div id="youtubeSearchModal" class="youtube-search-modal" style="display:none;">
 			<div class="youtube-search-modal-content">
 				<div class="youtube-search-modal-header">
-					<h3>搜索结果</h3>
+					<h3 data-i18n="search.title">搜索结果</h3>
 					<button class="youtube-search-modal-close" data-icon="✕">✕</button>
 				</div>
 				<div class="youtube-search-modal-body">
@@ -119,36 +119,36 @@
 
 			<!-- Controls -->
 			<div class="full-player-controls">
-				<button class="full-player-control-btn full-player-expand" id="fullPlayerExpand" title="放大视图">
+				<button class="full-player-control-btn full-player-expand" id="fullPlayerExpand" title="放大视图" data-i18n-title="player.expand">
 					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
 					</svg>
 				</button>
-				<button class="full-player-control-btn full-player-prev" id="fullPlayerPrev" title="上一首">
+				<button class="full-player-control-btn full-player-prev" id="fullPlayerPrev" title="上一首" data-i18n-title="player.prev">
 					<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
 						<path d="M16 6h2v12h-2V6zM8 12l8.5-6v12L8 12z"/>
 					</svg>
 				</button>
-				<button class="full-player-control-btn full-player-play-pause" id="fullPlayerPlayPause" title="播放/暂停">
+				<button class="full-player-control-btn full-player-play-pause" id="fullPlayerPlayPause" title="播放/暂停" data-i18n-title="player.playPause">
 					<svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
 						<path d="M8 5v14l11-7z"/>
 					</svg>
 				</button>
-				<button class="full-player-control-btn full-player-next" id="fullPlayerNext" title="下一首">
+				<button class="full-player-control-btn full-player-next" id="fullPlayerNext" title="下一首" data-i18n-title="player.next">
 					<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
 						<path d="M6 6h2v12H6V6zm10 6l-8.5 6V6L16 12z"/>
 					</svg>
 				</button>
 				<div class="full-player-ktv-controls">
 					<div class="full-player-pitch-control" id="fullPlayerPitchControl">
-						<button class="full-player-control-btn full-player-pitch-btn" id="fullPlayerPitchDown" title="降调">♭</button>
+						<button class="full-player-control-btn full-player-pitch-btn" id="fullPlayerPitchDown" title="降调" data-i18n-title="player.pitchDown">♭</button>
 						<span class="full-player-pitch-display" id="fullPlayerPitchDisplay">0</span>
-						<button class="full-player-control-btn full-player-pitch-btn" id="fullPlayerPitchUp" title="升调">♯</button>
+						<button class="full-player-control-btn full-player-pitch-btn" id="fullPlayerPitchUp" title="升调" data-i18n-title="player.pitchUp">♯</button>
 					</div>
 					<div class="full-player-video-offset-control" id="fullPlayerVideoOffsetControl">
-						<button class="full-player-control-btn full-player-offset-btn" id="fullPlayerOffsetDown" title="视频延迟 0.2 秒">－</button>
+						<button class="full-player-control-btn full-player-offset-btn" id="fullPlayerOffsetDown" title="视频延迟 0.2 秒" data-i18n-title="player.videoDelay">－</button>
 						<span class="full-player-offset-display" id="fullPlayerOffsetDisplay">0.0s</span>
-						<button class="full-player-control-btn full-player-offset-btn" id="fullPlayerOffsetUp" title="视频提前 0.2 秒">＋</button>
+						<button class="full-player-control-btn full-player-offset-btn" id="fullPlayerOffsetUp" title="视频提前 0.2 秒" data-i18n-title="player.videoAdvance">＋</button>
 					</div>
 				</div>
 			</div>
@@ -181,10 +181,10 @@
 		<button class="nav-item" data-tab="search">
 			<span class="nav-icon">🔍</span>
 		</button>
-		<button class="nav-item" id="historyNavBtn" title="播放历史">
+		<button class="nav-item" id="historyNavBtn" title="播放历史" data-i18n-title="search.history">
 			<span class="nav-icon">🕐</span>
 		</button>
-		<button class="nav-item" id="settingsNavBtn" title="设置">
+		<button class="nav-item" id="settingsNavBtn" title="设置" data-i18n-title="nav.settings">
 			<span class="nav-icon">⚙️</span>
 		</button>
 	</nav>
@@ -193,7 +193,7 @@
 	<div id="historyModal" class="history-modal" style="display:none;">
 		<div class="history-modal-content">
 			<div class="history-modal-header">
-				<h3>播放历史</h3>
+				<h3 data-i18n="search.history">播放历史</h3>
 				<button class="history-modal-close" data-icon="✕">✕</button>
 			</div>
 			<div class="history-modal-list" id="historyList"></div>
@@ -212,11 +212,11 @@
 				<label for="karaokeModeToggle" class="toggle-label">
 					<span class="toggle-switch"></span>
 					<span class="toggle-text">
-						<span class="toggle-on">伴奏</span>
-						<span class="toggle-off">伴奏</span>
+						<span class="toggle-on" data-i18n="search.karaoke">伴奏</span>
+						<span class="toggle-off" data-i18n="search.karaoke">伴奏</span>
 					</span>
 				</label>
-				<input type="text" id="searchModalInput" class="search-modal-input" placeholder="搜索歌曲、艺术家..." autocomplete="off" />
+				<input type="text" id="searchModalInput" class="search-modal-input" placeholder="搜索歌曲、艺术家..." data-i18n-placeholder="search.placeholder" autocomplete="off" />
 				<button class="search-modal-back" id="searchModalBack">✕</button>
 			</div>
 			<div id="searchModalHistory" class="search-modal-history" style="display:none;">
@@ -224,7 +224,7 @@
 				<div class="search-modal-history-actions">
 					<button id="searchModalHistoryClear" class="search-modal-history-clear" type="button">
 						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6v12c0 1.1.9 2 2 2h4c1.1 0 2-.9 2-2V6m-5-3h6"></path></svg>
-						清空历史
+						<span data-i18n="search.clearHistory">清空历史</span>
 					</button>
 				</div>
 			</div>
@@ -232,7 +232,7 @@
 				<div class="search-suggestions">
 					<div class="search-placeholder">
 						<span class="search-placeholder-icon">🔍</span>
-						<p>搜索串流音乐</p>
+						<p data-i18n="search.streamMusic">搜索串流音乐</p>
 					</div>
 				</div>
 			</div>
@@ -250,7 +250,7 @@
 						<path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" fill="currentColor"/>
 					</svg>
 				</button> -->
-				<h2>选择歌单</h2>
+				<h2 data-i18n="playlists.select">选择歌单</h2>
 				<button class="playlists-add-btn" id="playlistsAddBtn">
 					<svg width="24" height="24" viewBox="0 0 24 24">
 						<path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor"/>
@@ -267,7 +267,7 @@
 	<div id="selectPlaylistModal" class="select-playlist-modal" style="display:none;">
 		<div class="select-playlist-modal-content">
 			<div class="select-playlist-modal-header">
-				<h2>选择歌单</h2>
+				<h2 data-i18n="playlists.select">选择歌单</h2>
 				<button class="select-playlist-close-btn" id="selectPlaylistCloseBtn">
 					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<line x1="18" y1="6" x2="6" y2="18"></line>
@@ -279,7 +279,7 @@
 				<!-- 歌单列表将在这里动态生成 -->
 			</div>
 			<div class="select-playlist-modal-footer">
-				<button class="select-playlist-cancel-btn" id="selectPlaylistCancelBtn">取消</button>
+				<button class="select-playlist-cancel-btn" id="selectPlaylistCancelBtn" data-i18n="modal.cancel">取消</button>
 			</div>
 		</div>
 	</div>

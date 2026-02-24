@@ -3,6 +3,7 @@ import { api } from './api.js';
 import { Toast, formatTime, searchLoading } from './ui.js';
 import { buildTrackItemHTML } from './templates.js';
 import { localFiles, getNodeByPath, getDirCoverUrl, countFiles } from './local.js';
+import { i18n } from './i18n.js';
 
 export class SearchManager {
     constructor() {
@@ -197,7 +198,7 @@ export class SearchManager {
         
         if (history.length === 0) {
             searchModalHistory.style.display = 'none';
-            searchModalBody.innerHTML = '<div class="search-empty-state"><div class="search-empty-icon">🔍</div><p class="search-empty-text">输入关键词搜索歌曲</p></div>';
+            searchModalBody.innerHTML = `<div class="search-empty-state"><div class="search-empty-icon">🔍</div><p class="search-empty-text">${i18n.t('search.inputPrompt')}</p></div>`;
             return;
         }
         
@@ -205,7 +206,7 @@ export class SearchManager {
         searchModalBody.innerHTML = '';
         
         // 创建历史记录标题
-        const title = `最近搜索 <span class="search-history-count">(${history.length})</span>`;
+        const title = `${i18n.t('search.history.title')} <span class="search-history-count">(${history.length})</span>`;
         
         searchModalHistoryList.innerHTML = `
             <div class="search-history-header">${title}</div>
@@ -213,7 +214,7 @@ export class SearchManager {
                 <div class="search-history-item">
                     <div class="search-history-icon">🔍</div>
                     <span class="search-history-text" data-query="${item}">${item}</span>
-                    <button class="search-history-delete" data-query="${item}" title="删除此搜索">×</button>
+                    <button class="search-history-delete" data-query="${item}" title="${i18n.t('search.history.delete')}">×</button>
                 </div>
             `).join('')}
         `;
@@ -266,14 +267,14 @@ export class SearchManager {
             }
             
             // 显示全屏加载动画
-            searchLoading.show('🔍 正在搜索...');
+            searchLoading.show(i18n.t('search.searching'));
             
             // 调用搜索API（伴奏模式时追加"伴奏"关键词）
             const actualQuery = this.karaokeMode ? `${query} 伴奏` : query;
             const result = await this.search(actualQuery);
             
             if (!result || result.status !== 'OK') {
-                throw new Error(result?.error || '搜索失败');
+                throw new Error(result?.error || i18n.t('search.loadMoreFailed'));
             }
             
             const localResults = result.local || [];
@@ -283,7 +284,7 @@ export class SearchManager {
             
         } catch (error) {
             console.error('搜索失败:', error);
-            searchModalBody.innerHTML = `<div style="padding: 40px; text-align: center; color: #f44;">搜索失败: ${error.message}</div>`;
+            searchModalBody.innerHTML = `<div style="padding: 40px; text-align: center; color: #f44;">${i18n.t('search.failed', { error: error.message })}</div>`;
         } finally {
             // 隐藏全屏加载动画
             searchLoading.hide();
@@ -305,16 +306,16 @@ export class SearchManager {
 
         const buildList = (items, type) => {
             if (!items || items.length === 0) {
-                return '<div class="search-empty">暂无结果</div>';
+                return '<div class="search-empty">' + i18n.t('search.noResults') + '</div>';
             }
             return items.map(song => {
                 // ✅ 支持目录类型显示
                 const isDirectory = song.is_directory || song.type === 'directory';
                 const meta = isDirectory
-                    ? '📁 目录'
+                    ? i18n.t('search.typeDirectory')
                     : (type === 'local'
-                        ? (song.url || '未知位置')
-                        : (song.duration ? formatTime(song.duration) : '未知时长'));
+                        ? (song.url || i18n.t('track.unknownLocation'))
+                        : (song.duration ? formatTime(song.duration) : i18n.t('track.unknownDuration')));
 
                 const icon = isDirectory
                     ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>'
@@ -341,19 +342,19 @@ export class SearchManager {
                     <div class="search-load-more-container" id="youtubeLoadMoreContainer">
                         <button class="search-load-more-btn" id="youtubeLoadMoreBtn">
                             <span class="icon">⬇️</span>
-                            <span class="label">加载更多 (20)</span>
+                            <span class="label">${i18n.t('search.loadMore', { count: 20 })}</span>
                         </button>
                         <button class="search-load-all-btn" id="youtubeLoadAllBtn">
                             <span class="icon">📥</span>
-                            <span class="label">加载全部</span>
+                            <span class="label">${i18n.t('search.loadAll')}</span>
                         </button>
                     </div>
                     <div class="search-load-status" id="youtubeLoadStatus" style="display:none;">
-                        <span class="status-text">正在加载...</span>
+                        <span class="status-text">${i18n.t('search.loadingMore')}</span>
                     </div>
                     <div class="search-no-more" id="youtubeNoMore" style="display:none;">
                         <span class="icon">✓</span>
-                        <span class="text">已加载全部结果</span>
+                        <span class="text">${i18n.t('search.allLoaded')}</span>
                     </div>
                 `;
             }
@@ -365,8 +366,8 @@ export class SearchManager {
 
         searchModalBody.innerHTML = `
             <div class="search-tabs">
-                <button class="search-tab ${defaultTab === 'local' ? 'active' : ''}" data-tab="local">本地 (${localResults.length})</button>
-                <button class="search-tab ${defaultTab === 'youtube' ? 'active' : ''}" data-tab="youtube">网络 (${youtubeResults.length})</button>
+                <button class="search-tab ${defaultTab === 'local' ? 'active' : ''}" data-tab="local">${i18n.t('search.localTab', { count: localResults.length })}</button>
+                <button class="search-tab ${defaultTab === 'youtube' ? 'active' : ''}" data-tab="youtube">${i18n.t('search.networkTab', { count: youtubeResults.length })}</button>
             </div>
             <div class="search-tab-panels">
                 <div class="search-results-panel ${defaultTab === 'local' ? 'active' : ''}" data-panel="local">
@@ -457,13 +458,13 @@ export class SearchManager {
         const resultCount = currentResults.length;
 
         // 获取当前歌单信息用于显示
-        let playlistName = '当前歌单';
+        let playlistName = i18n.t('playlist.current');
         let playlistIcon = '📥';
 
         try {
             const playlistManager = window.app?.modules?.playlistManager;
             if (playlistManager) {
-                playlistName = playlistManager.getCurrentName() || '当前歌单';
+                playlistName = playlistManager.getCurrentName() || i18n.t('playlist.current');
                 playlistIcon = playlistManager.getCurrentPlaylistIcon() || '📥';
             }
         } catch (err) {
@@ -482,15 +483,15 @@ export class SearchManager {
                 <div class="search-action-menu-body">
                     <button class="search-action-menu-item" data-action="play-now">
                         <span class="icon">▶️</span>
-                        <span class="label">立即播放</span>
+                        <span class="label">${i18n.t('search.actionMenu.playNow')}</span>
                     </button>
                     <button class="search-action-menu-item" data-action="add-to-queue">
                         <span class="icon">➕</span>
-                        <span class="label">添加到队列</span>
+                        <span class="label">${i18n.t('search.actionMenu.addToQueue')}</span>
                     </button>
                     <button class="search-action-menu-item" data-action="add-all-to-playlist">
                         <span class="icon">${playlistIcon}</span>
-                        <span class="label">添加全部(${resultCount})到「${playlistName}」</span>
+                        <span class="label">${i18n.t('search.actionMenu.addAll', { count: resultCount, name: playlistName })}</span>
                     </button>
                 </div>
             </div>
@@ -552,14 +553,14 @@ export class SearchManager {
         const content = menu.querySelector('.search-action-menu-content');
         content.innerHTML = `
             <div class="search-action-menu-header">
-                <div class="search-action-menu-title">确认立即播放</div>
+                <div class="search-action-menu-title">${i18n.t('search.confirmPlayNow')}</div>
                 <button class="search-action-menu-close">✕</button>
             </div>
             <div class="search-action-menu-body">
-                <p class="play-now-confirm-msg">立即播放会跳过当前播放歌曲，并缓冲15-30秒才会开始播放</p>
+                <p class="play-now-confirm-msg">${i18n.t('search.confirmPlayNowMsg')}</p>
                 <div class="play-now-confirm-buttons">
-                    <button class="search-action-menu-item play-now-cancel">取消</button>
-                    <button class="search-action-menu-item play-now-confirm">确认播放</button>
+                    <button class="search-action-menu-item play-now-cancel">${i18n.t('modal.cancel')}</button>
+                    <button class="search-action-menu-item play-now-confirm">${i18n.t('search.confirmPlayNowBtn')}</button>
                 </div>
             </div>
         `;
@@ -579,7 +580,7 @@ export class SearchManager {
             const playlistId = this.getCurrentPlaylistId ? this.getCurrentPlaylistId() : this.currentPlaylistId;
             
             if (isDirectory) {
-                Toast.warning('目录暂不支持立即播放，请选择添加到队列');
+                Toast.warning(i18n.t('search.dirNotSupported'));
                 return;
             }
             
@@ -600,7 +601,7 @@ export class SearchManager {
             });
             
             if (!addResponse.ok) {
-                throw new Error('添加歌曲失败');
+                throw new Error(i18n.t('search.addSongFailed'));
             }
             
             // 2. 刷新播放列表数据
@@ -630,12 +631,12 @@ export class SearchManager {
                 });
             }
             
-            Toast.success(`▶️ 正在播放: ${songData.title}`);
+            Toast.success(i18n.t('search.nowPlaying', { title: songData.title }));
             btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
             
         } catch (error) {
             console.error('[立即播放] 失败:', error);
-            Toast.error('播放失败: ' + error.message);
+            Toast.error(i18n.t('search.playFailed') + ': ' + error.message);
             btn.innerHTML = originalHTML;
             btn.disabled = false;
         }
@@ -654,7 +655,7 @@ export class SearchManager {
                 
                 // 显示加载状态
                 const originalHTML = btn.innerHTML;
-                btn.innerHTML = '⏳ 加载中...';
+                btn.innerHTML = i18n.t('search.loadingDir');
                 btn.disabled = true;
                 
                 try {
@@ -666,17 +667,17 @@ export class SearchManager {
                     });
                     
                     if (!response.ok) {
-                        throw new Error('获取目录歌曲失败');
+                        throw new Error(i18n.t('search.getDirFailed'));
                     }
                     
                     const result = await response.json();
                     if (result.status !== 'OK') {
-                        throw new Error(result.error || '获取歌曲失败');
+                        throw new Error(result.error || i18n.t('search.getDirFailed'));
                     }
                     
                     const songs = result.songs || [];
                     if (songs.length === 0) {
-                        Toast.warning('目录中没有音乐文件');
+                        Toast.warning(i18n.t('search.noMusicInDir'));
                         btn.innerHTML = originalHTML;
                         btn.disabled = false;
                         return;
@@ -728,15 +729,15 @@ export class SearchManager {
                     }
                     
                     // 获取歌单名称
-                    let playlistName = '队列';
+                    let playlistName = i18n.t('nav.queue');
                     if (playlistId !== 'default' && window.app && window.app.modules && window.app.modules.playlistManager) {
                         const playlist = window.app.modules.playlistManager.playlists.find(p => p.id === playlistId);
                         if (playlist) {
                             playlistName = playlist.name;
                         }
                     }
-                    
-                    Toast.success(`➕ 已添加 ${addedCount} 首歌曲到「${playlistName}」`);
+
+                    Toast.success(i18n.t('search.addDirSuccess', { count: addedCount, name: playlistName }));
                     btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
                     
                     // ✅【关键】刷新播放列表显示 - 直接调用 renderPlaylistUI 确保立即显示
@@ -769,7 +770,7 @@ export class SearchManager {
                     }
                 } catch (error) {
                     console.error('添加目录歌曲失败:', error);
-                    Toast.error('添加目录失败: ' + error.message);
+                    Toast.error(i18n.t('search.addDirFailed') + ': ' + error.message);
                     btn.innerHTML = originalHTML;
                     btn.disabled = false;
                 }
@@ -799,16 +800,16 @@ export class SearchManager {
                 
                 if (response.ok) {
                     // 获取歌单名称以显示在toast中
-                    let playlistName = '队列';
+                    let playlistName = i18n.t('nav.queue');
                     if (playlistId === 'default') {
-                        playlistName = '队列';
+                        playlistName = i18n.t('nav.queue');
                     } else if (window.app && window.app.modules && window.app.modules.playlistManager) {
                         const playlist = window.app.modules.playlistManager.playlists.find(p => p.id === playlistId);
                         if (playlist) {
                             playlistName = playlist.name;
                         }
                     }
-                    Toast.success(`➕ 已添加到「${playlistName}」: ${songData.title}`);
+                    Toast.success(i18n.t('search.addSuccess', { name: playlistName, title: songData.title }));
                     btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
                     btn.disabled = true;
                     
@@ -844,15 +845,15 @@ export class SearchManager {
                     const error = await response.json();
                     // 重复歌曲使用警告提示
                     if (error.duplicate) {
-                        Toast.warning(`${songData.title} 已在播放列表中`);
+                        Toast.warning(`${songData.title} ${i18n.t('search.alreadyInList')}`);
                     } else {
-                        throw new Error(error.error || '添加失败');
+                        throw new Error(error.error || i18n.t('search.addFailed'));
                     }
                 }
             }
         } catch (error) {
             console.error('添加歌曲失败:', error);
-            Toast.error('添加失败');
+            Toast.error(i18n.t('search.addFailed'));
         }
     }
 
@@ -865,7 +866,7 @@ export class SearchManager {
             const results = this.currentSearchResults[currentTab] || [];
 
             if (results.length === 0) {
-                Toast.warning('没有可添加的搜索结果');
+                Toast.warning(i18n.t('search.noResultsToAdd'));
                 return;
             }
 
@@ -873,13 +874,13 @@ export class SearchManager {
             const songs = results.filter(item => !item.is_directory && item.type !== 'directory');
 
             if (songs.length === 0) {
-                Toast.warning('搜索结果中没有有效的歌曲');
+                Toast.warning(i18n.t('search.noValidSongs'));
                 return;
             }
 
             // 显示加载提示
-            Toast.info(`正在添加 ${songs.length} 首歌曲到歌单...`);
-            searchLoading.show(`正在添加 ${songs.length} 首歌曲...`);
+            Toast.info(i18n.t('search.batchAddInfo', { count: songs.length }));
+            searchLoading.show(i18n.t('search.batchAddLoading', { count: songs.length }));
 
             try {
                 // 获取当前播放位置
@@ -902,7 +903,7 @@ export class SearchManager {
                         // 准备歌曲数据
                         const songData = {
                             url: song.url,
-                            title: song.title || song.name || '未知歌曲',
+                            title: song.title || song.name || i18n.t('track.unknown'),
                             type: song.type || 'local',
                             duration: song.duration || 0,
                             thumbnail_url: song.thumbnail_url || ''
@@ -921,7 +922,7 @@ export class SearchManager {
                         if (response.ok) {
                             addedCount++;
                             const progress = Math.round((addedCount / songs.length) * 100);
-                            searchLoading.show(`添加中... ${addedCount}/${songs.length} (${progress}%)`);
+                            searchLoading.show(i18n.t('search.batchAddProgress', { done: addedCount, total: songs.length, pct: progress }));
                         } else {
                             console.warn('[批量添加] 添加失败:', songData.title);
                         }
@@ -936,7 +937,7 @@ export class SearchManager {
                 searchLoading.hide();
 
                 // 获取歌单名称
-                let playlistName = '队列';
+                let playlistName = i18n.t('nav.queue');
                 if (playlistId !== 'default' && window.app && window.app.modules && window.app.modules.playlistManager) {
                     const playlist = window.app.modules.playlistManager.playlists.find(p => p.id === playlistId);
                     if (playlist) {
@@ -944,7 +945,7 @@ export class SearchManager {
                     }
                 }
 
-                Toast.success(`✅ 已添加 ${addedCount}/${songs.length} 首歌曲到「${playlistName}」`);
+                Toast.success(i18n.t('search.batchAddSuccess', { done: addedCount, total: songs.length, name: playlistName }));
 
                 // 刷新播放列表显示
                 try {
@@ -977,18 +978,18 @@ export class SearchManager {
             } catch (error) {
                 searchLoading.hide();
                 console.error('[批量添加] 添加失败:', error);
-                Toast.error('批量添加失败: ' + error.message);
+                Toast.error(i18n.t('search.batchAddFailed') + ': ' + error.message);
             }
         } catch (error) {
             console.error('[批量添加] 处理失败:', error);
-            Toast.error('操作失败: ' + error.message);
+            Toast.error(i18n.t('playlist.opFailed') + ': ' + error.message);
         }
     }
 
     // 搜索歌曲
     async search(query) {
         if (!query || !query.trim()) {
-            throw new Error('搜索关键词不能为空');
+            throw new Error(i18n.t('search.queryEmpty'));
         }
 
         try {
@@ -1091,7 +1092,7 @@ export class SearchManager {
             const result = await api.searchSong(state.query, newMaxResults);
 
             if (result.status !== 'OK') {
-                throw new Error(result.error || '加载失败');
+                throw new Error(result.error || i18n.t('search.loadMoreFailed'));
             }
 
             const newResults = result.youtube || [];
@@ -1104,7 +1105,7 @@ export class SearchManager {
 
             if (freshResults.length === 0) {
                 state.hasMore = false;
-                Toast.info('已加载全部搜索结果');
+                Toast.info(i18n.t('search.allLoaded'));
             } else {
                 // 追加新结果
                 this.currentSearchResults.youtube.push(...freshResults);
@@ -1116,12 +1117,12 @@ export class SearchManager {
                 }
 
                 this.appendYoutubeResults(freshResults);
-                Toast.success(`已加载 ${freshResults.length} 个新结果`);
+                Toast.success(i18n.t('search.loadedMore', { count: freshResults.length }));
             }
 
         } catch (error) {
             console.error('[加载更多] 失败:', error);
-            Toast.error('加载失败: ' + error.message);
+            Toast.error(i18n.t('search.loadMoreFailed') + ': ' + error.message);
         } finally {
             state.isLoading = false;
             this.updateYoutubeLoadUI();
@@ -1141,7 +1142,7 @@ export class SearchManager {
             buildTrackItemHTML({
                 song,
                 type: 'youtube',
-                metaText: song.duration ? formatTime(song.duration) : '未知时长',
+                metaText: song.duration ? formatTime(song.duration) : i18n.t('track.unknownDuration'),
                 actionButtonClass: 'track-menu-btn search-result-add',
                 actionButtonIcon: '<svg class="icon icon-plus"><use xlink:href="#icon-plus"></use></svg>'
             })
@@ -1184,7 +1185,7 @@ export class SearchManager {
             if (loadMoreBtn) {
                 const label = loadMoreBtn.querySelector('.label');
                 if (label) {
-                    label.textContent = `加载更多 (${state.maxResultsStep})`;
+                    label.textContent = i18n.t('search.loadMore', { count: state.maxResultsStep });
                 }
             }
         }
@@ -1198,7 +1199,7 @@ export class SearchManager {
     async enterDirectory(url, title) {
         // 首次进入时先压入 sentinel（搜索结果）
         if (!this.dirNavState.isActive) {
-            this.dirNavState.breadcrumb = [{ name: '搜索结果', url: null }];
+            this.dirNavState.breadcrumb = [{ name: i18n.t('search.breadcrumb'), url: null }];
             this.dirNavState.isActive = true;
         }
         // 压入当前目录
@@ -1212,7 +1213,7 @@ export class SearchManager {
                 const data = await res.json();
                 localFiles.fullTree = data.tree || null;
             } catch (e) {
-                Toast.error('无法加载目录数据');
+                Toast.error(i18n.t('search.cannotLoadDir'));
                 this.dirNavState.breadcrumb.pop();
                 if (this.dirNavState.breadcrumb.length <= 1) {
                     this.dirNavState = { isActive: false, breadcrumb: [] };
@@ -1224,7 +1225,7 @@ export class SearchManager {
         const pathArr = url ? url.split('/').filter(Boolean) : [];
         const node = getNodeByPath(localFiles.fullTree, pathArr);
         if (!node) {
-            Toast.error('找不到该目录');
+            Toast.error(i18n.t('search.dirNotFound'));
             this.dirNavState.breadcrumb.pop();
             if (this.dirNavState.breadcrumb.length <= 1) {
                 this.dirNavState = { isActive: false, breadcrumb: [] };
@@ -1270,7 +1271,7 @@ export class SearchManager {
         const files = node.files || [];
 
         if (!dirs.length && !files.length) {
-            return '<div class="search-dir-empty">此目录为空</div>';
+            return '<div class="search-dir-empty">' + i18n.t('local.dirEmpty') + '</div>';
         }
 
         let html = '';
@@ -1289,7 +1290,7 @@ export class SearchManager {
                         </div>
                         <div class="search-dir-card-info">
                             <div class="search-dir-card-title">${dir.name}</div>
-                            <div class="search-dir-card-count">${fileCount} 首歌曲</div>
+                            <div class="search-dir-card-count">${i18n.t('local.songCount', { count: fileCount })}</div>
                         </div>
                     </div>
                 `;
@@ -1358,7 +1359,7 @@ export class SearchManager {
         const pathArr = item.url ? item.url.split('/').filter(Boolean) : [];
         const node = getNodeByPath(localFiles.fullTree, pathArr);
         if (!node) {
-            Toast.error('找不到该目录');
+            Toast.error(i18n.t('search.dirNotFound'));
             return;
         }
         this.renderDirView(node);

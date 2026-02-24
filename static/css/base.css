@@ -3145,3 +3145,101 @@ button:active { transform: scale(0.98); }
     background: var(--bg-secondary);
     border-radius: 8px;
 }
+
+/* ======= Custom Modal (ConfirmModal / InputModal) ======= */
+.custom-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 20000;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    backdrop-filter: blur(4px);
+}
+.custom-modal-overlay.visible {
+    opacity: 1;
+}
+.custom-modal-container {
+    background: var(--bg-primary, #1e1e2e);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    padding: 24px;
+    min-width: 280px;
+    max-width: 380px;
+    width: 90%;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+    transform: scale(0.92) translateY(8px);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.custom-modal-overlay.visible .custom-modal-container {
+    transform: scale(1) translateY(0);
+}
+.custom-modal-body {
+    margin-bottom: 20px;
+}
+.custom-modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary, #fff);
+    line-height: 1.5;
+    word-break: break-word;
+}
+.custom-modal-message {
+    font-size: 13px;
+    color: var(--text-secondary, rgba(255,255,255,0.65));
+    margin-top: 8px;
+    line-height: 1.5;
+}
+.custom-modal-input {
+    display: block;
+    width: 100%;
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 8px;
+    color: var(--text-primary, #fff);
+    font-size: 14px;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+.custom-modal-input:focus {
+    border-color: #667eea;
+}
+.custom-modal-footer {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+.custom-modal-btn {
+    padding: 9px 20px;
+    border-radius: 8px;
+    border: none;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+}
+.custom-modal-btn:active {
+    transform: scale(0.97);
+}
+.custom-modal-btn-cancel {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary, #fff);
+}
+.custom-modal-btn-cancel:hover {
+    background: rgba(255, 255, 255, 0.18);
+}
+.custom-modal-btn-confirm {
+    color: #fff;
+}
+.custom-modal-btn-confirm.info {
+    background: #1e88e5;
+}
+.custom-modal-btn-confirm.info:hover {
+    background: #1565c0;
+}
