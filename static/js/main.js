@@ -229,7 +229,6 @@ class MusicPlayerApp {
             
             this.lastPlayStatus = status;
             this.updatePlayerUI(status);
-            this.updateQueueNavIcon();
 
             // 同步音调状态（页面刷新后恢复，或换歌后自动重置为 0）
             if (status?.pitch_shift !== undefined && status.pitch_shift !== this.lastPitchShift) {
@@ -482,10 +481,7 @@ class MusicPlayerApp {
             }
             
             this.renderPlaylist();
-            
-            // 初始化队列按钮图标
-            this.updateQueueNavIcon();
-            
+
             // 激活队列导航按钮
             const navItems = document.querySelectorAll('.nav-item');
             navItems.forEach(item => {
@@ -992,10 +988,7 @@ class MusicPlayerApp {
             
             // 刷新播放列表 UI
             this.renderPlaylist();
-            
-            // 动态更新队列按钮图标
-            this.updateQueueNavIcon();
-            
+
             console.log('[应用] ✓ 已切换到歌单:', playlistId);
             
         } catch (error) {
@@ -1070,38 +1063,6 @@ class MusicPlayerApp {
             loading.hide();
             console.error('[播放错误] 播放失败:', error);
             Toast.error(i18n.t('player.playFailed') + ': ' + (error.message || error));
-        }
-    }
-
-    // 更新队列按钮图标：播放中→动态均衡器，暂停→静止均衡器，无歌曲→🎵
-    updateQueueNavIcon() {
-        const queueNavIcon = document.querySelector('[data-tab="playlists"] .nav-icon');
-        if (!queueNavIcon) return;
-
-        const status = player.getStatus();
-        const currentMeta = status?.current_meta;
-        const paused = status?.paused ?? false;
-
-        if (currentMeta) {
-            const isLight = themeManager.getCurrentTheme() === 'light';
-            const accentColor = isLight ? '#667eea' : '#7c93f5';
-            const mutedColor  = isLight ? 'rgba(102,126,234,0.45)' : 'rgba(124,147,245,0.45)';
-            const barColor    = paused ? mutedColor : accentColor;
-            const stateClass  = paused ? 'eq-paused' : 'eq-playing';
-
-            queueNavIcon.textContent = '';
-            const eq = document.createElement('div');
-            eq.className = `toolbar-eq ${stateClass}`;
-            eq.style.cssText = 'width:32px;height:32px;';
-            for (let i = 0; i < 3; i++) {
-                const bar = document.createElement('div');
-                bar.className = 'eq-bar';
-                bar.style.background = barColor;
-                eq.appendChild(bar);
-            }
-            queueNavIcon.appendChild(eq);
-        } else {
-            queueNavIcon.textContent = '🎵';
         }
     }
 
