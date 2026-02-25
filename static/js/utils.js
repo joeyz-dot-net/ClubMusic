@@ -108,9 +108,24 @@ export function getFileExtension(filename) {
     return filename.slice((filename.lastIndexOf('.') - 1 >>> 0) + 2);
 }
 
-// 检查是否为移动设备
+// 检查是否为 iPad (包括 iPadOS 13+ 伪装为 Macintosh 的情况)
+export function isIPad() {
+    // 旧版 iPad (iPadOS 13 之前)
+    if (/iPad/i.test(navigator.userAgent)) return true;
+    // 新版 iPad (iPadOS 13+): UA 为 "Macintosh" + 触摸支持
+    if (/Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1) return true;
+    return false;
+}
+
+// 检查当前视口是否应显示平板/侧边栏布局
+export function isTabletLayout() {
+    return window.innerWidth >= 769;
+}
+
+// 检查是否为移动设备 (包括 iPadOS 13+ 检测)
 export function isMobile() {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    return /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+        || isIPad();
 }
 
 // 复制文本到剪贴板

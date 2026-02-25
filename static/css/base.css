@@ -1,5 +1,10 @@
 /* Base Styles - 基础样式不包含主题颜色 */
 
+/* CSS Custom Properties */
+:root {
+    --sidebar-width: 0px;
+}
+
 /* 全局重置 */
 * {
     margin: 0;

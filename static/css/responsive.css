@@ -849,3 +849,189 @@
     .full-player-artist { font-size: 13px; }
     .full-player-play-pause { width: 54px; height: 54px; }
 }
+
+/* ============================================
+   iPad / Tablet 布局 (侧边栏导航)
+   当视口宽度 >= 769px 时生效
+   - iPad Air 竖屏 (820px) 及以上
+   - iPad mini 横屏 (1024px)
+   - iPad Pro 所有方向
+   - 自动回退: Split View / Slide Over (< 769px)
+     会回退到手机底部导航布局
+   ============================================ */
+
+@media (min-width: 769px) {
+    /* -- CSS 自定义属性: 侧边栏宽度 -- */
+    :root {
+        --sidebar-width: 72px;
+    }
+
+    /* ---- 底部导航栏 -> 左侧边栏 ---- */
+    .bottom-nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        right: auto;
+        width: var(--sidebar-width);
+        height: 100%;
+        flex-direction: column;
+        justify-content: flex-start;
+        align-items: center;
+        padding: 24px 0;
+        padding-bottom: max(24px, env(safe-area-inset-bottom));
+        gap: 8px;
+        border-top: none;
+        border-right: 1px solid;
+    }
+
+    .nav-item {
+        flex: 0 0 auto;
+        width: 100%;
+        padding: 14px 0;
+        justify-content: center;
+    }
+
+    .nav-icon {
+        font-size: 26px;
+    }
+
+    .nav-label {
+        font-size: 9px;
+    }
+
+    /* ---- 主内容区域偏移 ---- */
+    .tab-content,
+    #tree {
+        margin-left: var(--sidebar-width);
+        padding-bottom: 32px;
+    }
+
+    /* ---- 模态框: 从侧边栏右侧开始, 移除底部偏移 ---- */
+    /* 搜索模态框: 原 bottom: 64px, left: 0 */
+    .search-modal {
+        left: var(--sidebar-width);
+        bottom: 0;
+        max-height: 100vh;
+    }
+
+    /* 历史模态框: 原 bottom: 64px, left: 0 */
+    .history-modal {
+        left: var(--sidebar-width);
+        bottom: 0;
+    }
+
+    /* 排行榜模态框: 原 bottom: 64px */
+    #rankingModal {
+        left: var(--sidebar-width);
+        bottom: 0;
+        max-height: 100vh;
+    }
+
+    #rankingModal .modal-content {
+        max-height: 100vh;
+    }
+
+    /* ---- 全屏覆盖层无需更改 (覆盖整个视口含侧边栏) ---- */
+    /* .full-player, .playlists-modal, .settings-panel,
+       #debugModal, .select-playlist-modal, .toast 保持不变 */
+
+    /* ---- 播放列表: 更宽屏幕允许更多空间 ---- */
+    .playlist-track-item:not(.current-playing) .track-title {
+        max-width: none;
+    }
+
+    .track-playlist-name {
+        max-width: 200px;
+    }
+
+    /* ---- 当前播放曲目: iPad 上更大封面 ---- */
+    .playlist-track-item.current-playing .track-cover {
+        width: 200px;
+        height: 200px;
+    }
+
+    .playlist-track-item.current-playing .track-title {
+        font-size: 20px;
+    }
+
+    /* ---- 全屏播放器: 更大屏幕优化 ---- */
+    .full-player-artwork-container {
+        width: min(500px, 60vw);
+        height: min(500px, 60vw);
+    }
+
+    .full-player-title {
+        font-size: 22px;
+    }
+
+    .full-player-artist {
+        font-size: 15px;
+    }
+
+    /* ---- 搜索 ---- */
+    .search-modal-body {
+        padding-bottom: 32px;
+    }
+
+    .search-modal-input {
+        font-size: 16px;
+        padding: 12px 16px;
+    }
+
+    /* ---- 歌单模态框: iPad 上稍宽 ---- */
+    .playlists-modal-content {
+        max-width: 500px;
+    }
+
+    /* ---- 设置面板: 利用更大屏幕 ---- */
+    .settings-container {
+        max-width: 560px;
+    }
+
+    /* ---- 搜索目录网格: 更宽屏幕3列 ---- */
+    .search-dir-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    /* ---- 本地文件网格: 更多列 ---- */
+    .local-card-grid {
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    }
+
+    .local-album-grid {
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    }
+
+    /* ---- 拖拽手柄: 恢复正常尺寸 ---- */
+    .drag-handle {
+        width: 32px;
+        height: 48px;
+        min-width: 32px;
+    }
+
+    .drag-handle svg {
+        width: 18px;
+        height: 18px;
+    }
+
+    /* ---- 歌单管理卡片: 正常尺寸 ---- */
+    .playlist-item {
+        padding: 14px 16px;
+        gap: 14px;
+    }
+
+    .playlist-icon {
+        width: 48px;
+        height: 48px;
+        font-size: 22px;
+    }
+
+    .playlist-name {
+        font-size: 16px;
+    }
+
+    .playlist-count {
+        font-size: 13px;
+    }
+}
