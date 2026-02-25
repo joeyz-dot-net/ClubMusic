@@ -14,7 +14,7 @@ import logging
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from routers.state import PLAYER, StreamSong
+from routers.state import PLAYER, StreamSong, error_response
 
 logger = logging.getLogger(__name__)
 
@@ -83,10 +83,7 @@ async def search_song(request: Request):
             "youtube": youtube_results
         }
     except Exception as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/search_song] 搜索异常", exc=e, _logger=logger)
 
 
 @router.get("/youtube_search_config")
@@ -114,16 +111,9 @@ async def search_youtube(request: Request):
             results = StreamSong.search(query, max_results=10)
             return {"status": "OK", "results": results}
         except Exception as e:
-            logger.error(f"[错误] YouTube 搜索失败: {e}")
-            return JSONResponse(
-                {"status": "ERROR", "error": f"搜索失败: {str(e)}"},
-                status_code=500
-            )
+            return error_response("[/search_youtube] YouTube搜索失败", exc=e, _logger=logger)
     except Exception as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/search_youtube] 搜索异常", exc=e, _logger=logger)
 
 
 @router.post("/get_directory_songs")
@@ -179,8 +169,4 @@ async def get_directory_songs(request: Request):
             "count": len(tracks)
         }
     except Exception as e:
-        logger.error(f"获取目录歌曲失败: {e}")
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/get_directory_songs] 获取目录歌曲失败", exc=e, _logger=logger)

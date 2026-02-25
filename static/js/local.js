@@ -1,5 +1,6 @@
 import { Toast } from './ui.js';
 import { i18n } from './i18n.js';
+import { escapeHTML } from './utils.js';
 
 // 当前导航路径
 let currentNavPath = [];
@@ -51,11 +52,11 @@ const buildBreadcrumbHTML = (path) => {
     path.forEach((name, index) => {
         const navPath = path.slice(0, index + 1).join('/');
         html += `<span class="breadcrumb-sep">›</span>`;
-        html += `<span class="breadcrumb-item" data-nav-to="${navPath}">${name}</span>`;
+        html += `<span class="breadcrumb-item" data-nav-to="${escapeHTML(navPath)}">${escapeHTML(name)}</span>`;
     });
     
     // 添加返回按钮
-    html += '<button class="local-return-btn" id="localCloseBtn" title="返回歌单">✕</button>';
+    html += `<button class="local-return-btn" id="localCloseBtn" title="${i18n.t('local.backToPlaylist')}">✕</button>`;
     
     html += '</div>';
     return html;
@@ -87,13 +88,13 @@ const buildCurrentDirHTML = (node, path) => {
             const fileCount = countFiles(dir);
             
             html += `
-                <div class="local-album-card" data-dir-name="${dir.name}">
+                <div class="local-album-card" data-dir-name="${escapeHTML(dir.name)}">
                     <div class="local-album-cover">
-                        ${coverUrl ? `<img src="${coverUrl}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" loading="lazy" />` : ''}
+                        ${coverUrl ? `<img src="${escapeHTML(coverUrl)}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" loading="lazy" />` : ''}
                         <div class="local-album-cover-placeholder" ${coverUrl ? '' : 'style="display:flex"'}>📁</div>
                     </div>
                     <div class="local-album-info">
-                        <div class="local-album-title">${dir.name}</div>
+                        <div class="local-album-title">${escapeHTML(dir.name)}</div>
                         <div class="local-album-count">${i18n.t('local.songCount', { count: fileCount })}</div>
                     </div>
                 </div>
@@ -118,16 +119,16 @@ const buildCurrentDirHTML = (node, path) => {
 // 构建歌曲项HTML（播放列表样式）
 const buildSongItemHTML = (file, coverUrl, seq) => {
     return `
-        <div class="playlist-track-item local-song-item" data-file-path="${file.rel}" data-file-name="${file.name}">
+        <div class="playlist-track-item local-song-item" data-file-path="${escapeHTML(file.rel)}" data-file-name="${escapeHTML(file.name)}">
             <div class="track-left">
                 <div class="track-cover">
-                    <img src="${coverUrl}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" loading="lazy" />
+                    <img src="${escapeHTML(coverUrl)}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" loading="lazy" />
                     <div class="track-cover-placeholder">🎵</div>
                 </div>
                 <div class="track-type">${i18n.t('local.musicType')}</div>
             </div>
             <div class="track-info">
-                <div class="track-title">${file.name}</div>
+                <div class="track-title">${escapeHTML(file.name)}</div>
             </div>
             <div class="track-seq">${seq}</div>
         </div>

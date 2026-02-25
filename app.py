@@ -481,9 +481,7 @@ try:
     else:
         logger.error(f"静态文件目录不存在: {static_dir}")
 except Exception as e:
-    logger.warning(f"无法挂载static文件夹: {e}")
-    import traceback
-    traceback.print_exc()
+    logger.warning(f"无法挂载static文件夹: {e}", exc_info=True)
 
 
 # ============================================
@@ -493,10 +491,11 @@ except Exception as e:
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
     """全局异常处理器"""
+    logger.error("Unhandled exception on %s %s", request.method, request.url.path, exc_info=exc)
     return JSONResponse(
         {
             "status": "ERROR",
-            "error": str(exc)
+            "error": "Internal server error"
         },
         status_code=500
     )

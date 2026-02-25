@@ -1,5 +1,6 @@
 // 调试面板模块
 import { themeManager } from './themeManager.js';
+import { i18n } from './i18n.js';
 
 export class Debug {
     constructor() {
@@ -170,7 +171,7 @@ export class Debug {
                 const valueStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
                 return `<div style="color: #51cf66;">[${timestamp}] ${key}: ${valueStr}</div>`;
             }).join('');
-            this.elements.debugPlayer.innerHTML = logsHtml || '<div style="color: #888;">暂无数据</div>';
+            this.elements.debugPlayer.innerHTML = logsHtml || `<div style="color: #888;">${i18n.t('debug.noData')}</div>`;
         }
     }
 
@@ -191,7 +192,7 @@ export class Debug {
                 const valueStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
                 return `<div style="color: #51cf66;">[${timestamp}] ${key}: ${valueStr}</div>`;
             }).join('');
-            this.elements.debugPlaylist.innerHTML = logsHtml || '<div style="color: #888;">暂无数据</div>';
+            this.elements.debugPlaylist.innerHTML = logsHtml || `<div style="color: #888;">${i18n.t('debug.noData')}</div>`;
         }
     }
 
@@ -213,7 +214,7 @@ export class Debug {
                 const valueStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
                 return `<div style="color: #51cf66;">[${timestamp}] ${key}: ${valueStr}</div>`;
             }).join('');
-            this.elements.debugStorage.innerHTML = logsHtml || '<div style="color: #888;">暂无数据</div>';
+            this.elements.debugStorage.innerHTML = logsHtml || `<div style="color: #888;">${i18n.t('debug.noData')}</div>`;
         }
     }
 
@@ -223,7 +224,7 @@ export class Debug {
             const logsHtml = this.debugLogHistory.map(log =>
                 `<div style="color: ${this.getLogColor(log.type)};">[${log.timestamp}] ${log.type}: ${log.message}</div>`
             ).join('');
-            this.elements.debugLogs.innerHTML = logsHtml || '<div style="color: #888;">暂无日志</div>';
+            this.elements.debugLogs.innerHTML = logsHtml || `<div style="color: #888;">${i18n.t('debug.noLogs')}</div>`;
             // 自动滚到底部
             this.elements.debugLogs.scrollTop = this.elements.debugLogs.scrollHeight;
         }

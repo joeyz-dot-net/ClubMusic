@@ -13,6 +13,7 @@ import asyncio
 import threading
 
 from fastapi import WebSocket
+from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
@@ -167,3 +168,33 @@ def _broadcast_from_thread():
         asyncio.run_coroutine_threadsafe(_broadcast_state(), _main_loop)
     except Exception as e:
         logger.debug(f"[WS] 跨线程广播失败: {e}")
+
+
+# ==================== 统一错误响应 ====================
+
+def error_response(
+    msg: str,
+    status_code: int = 500,
+    *,
+    exc: Exception = None,
+    _logger: logging.Logger = None,
+    extra: dict = None,
+) -> JSONResponse:
+    """返回标准化的 JSON 错误响应，并自动记录日志。
+
+    - 当提供 *exc* 时：记录 msg + 完整堆栈；5xx 响应对客户端隐藏内部细节
+    - 当 *exc* 为 None 且 status >= 500 时：仅记录 msg
+    - 4xx：直接将 *msg* 返回给客户端，不自动记录日志
+    """
+    _log = _logger or logger
+    if exc is not None:
+        _log.error(msg, exc_info=exc)
+        client_msg = "Internal server error" if status_code >= 500 else msg
+    else:
+        if status_code >= 500:
+            _log.error(msg)
+        client_msg = msg
+    body: dict = {"status": "ERROR", "error": client_msg}
+    if extra:
+        body.update(extra)
+    return JSONResponse(body, status_code=status_code)

@@ -2,7 +2,7 @@
 import { api } from './api.js';
 import { Toast, loading, ConfirmModal } from './ui.js';
 import { operationLock } from './operationLock.js';
-import { thumbnailManager } from './utils.js';
+import { thumbnailManager, escapeHTML } from './utils.js';
 import { i18n } from './i18n.js';
 
 export class PlaylistManager {
@@ -63,6 +63,11 @@ export class PlaylistManager {
             return this.playlists;
         }
         throw new Error('加载歌单列表失败');
+    }
+
+    // 并行刷新当前播放列表和所有歌单
+    async refreshAll() {
+        await Promise.all([this.loadCurrent(), this.loadAll()]);
     }
 
     // 创建新歌单
@@ -247,8 +252,7 @@ async function moveToTopAndPlay(song, currentIndex, onPlay, rerenderArgs) {
         }
         
         // 刷新数据
-        await playlistManager.loadCurrent();
-        await playlistManager.loadAll();
+        await playlistManager.refreshAll();
         
         // 播放歌曲（现在已经在索引0）
         if (onPlay) {
@@ -358,8 +362,7 @@ async function addAllSongsToDefault(playlist, selectedPlaylistId) {
         
         // 完成后刷新播放列表数据
         loading.hide();
-        await playlistManager.loadAll();
-        await playlistManager.loadCurrent();
+        await playlistManager.refreshAll();
         
         // 显示完成结果
         console.log('[批量添加] 完成:', {
@@ -800,8 +803,7 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
                     await api.delete(`/playlists/${selectedPlaylistId}`);
                     Toast.success(i18n.t('playlists.deleteSuccess'));
                     playlistManager.setSelectedPlaylist('default');
-                    await playlistManager.loadAll();
-                    await playlistManager.loadCurrent();
+                    await playlistManager.refreshAll();
                     renderPlaylistUI({ container, onPlay, currentMeta });
                 } catch (err) {
                     console.error('清空歌单失败:', err);
@@ -1418,20 +1420,17 @@ function initTouchDragSort(container, rerenderFn, rerenderArgs) {
                     if (result.status === 'OK') {
                         Toast.success(i18n.t('playlist.reordered'));
                         // 先刷新数据，再重新渲染列表
-                        await playlistManager.loadCurrent();
-                        await playlistManager.loadAll();
+                        await playlistManager.refreshAll();
                         rerenderFn(rerenderArgs);
                     } else {
                         Toast.error(i18n.t('playlist.reorderFailed') + ': ' + (result.error || result.message));
-                        await playlistManager.loadCurrent();
-                        await playlistManager.loadAll();
+                        await playlistManager.refreshAll();
                         rerenderFn(rerenderArgs);
                     }
                 } catch (err) {
                     console.error('调整顺序失败:', err);
                     Toast.error(i18n.t('playlist.reorderFailed'));
-                    await playlistManager.loadCurrent();
-                    await playlistManager.loadAll();
+                    await playlistManager.refreshAll();
                     rerenderFn(rerenderArgs);
                 }
             }
@@ -1749,6 +1748,14 @@ export async function showPlaybackHistory() {
                 closeHistoryModal(historyModal);
             });
         }
+
+        // Escape 键关闭历史模态框
+        const handleHistoryEsc = (e) => {
+            if (e.key === 'Escape' && historyModal.classList.contains('modal-visible')) {
+                closeHistoryModal(historyModal);
+            }
+        };
+        document.addEventListener('keydown', handleHistoryEsc);
         
         console.log('[历史] 显示了 ' + history.length + ' 条播放历史');
         
@@ -1916,8 +1923,7 @@ async function showSelectPlaylistModal(song, historyModal) {
                         checkMark.style.opacity = '1';
                         
                         // 刷新歌单数据
-                        await playlistManager.loadAll();
-                        await playlistManager.loadCurrent();
+                        await playlistManager.refreshAll();
                         
                         // ✅ 关闭歌单选择模态框，返回播放历史
                         selectPlaylistModal.classList.remove('modal-visible');
@@ -2042,7 +2048,7 @@ function showHistoryActionMenu(song, historyModal, removeFromHistoryFn, rerender
     menu.innerHTML = `
         <div class="search-action-menu-content">
             <div class="search-action-menu-header">
-                <div class="search-action-menu-title">${(song.title || '---').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+                <div class="search-action-menu-title">${escapeHTML(song.title || '---')}</div>
                 <button class="search-action-menu-close">✕</button>
             </div>
             <div class="search-action-menu-body">

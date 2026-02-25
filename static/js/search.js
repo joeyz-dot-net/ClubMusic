@@ -4,6 +4,7 @@ import { Toast, formatTime, searchLoading } from './ui.js';
 import { buildTrackItemHTML } from './templates.js';
 import { localFiles, getNodeByPath, getDirCoverUrl, countFiles } from './local.js';
 import { i18n } from './i18n.js';
+import { escapeHTML } from './utils.js';
 
 export class SearchManager {
     constructor() {
@@ -125,6 +126,13 @@ export class SearchManager {
             };
 
             searchModalBack.addEventListener('click', closeAndRefresh);
+
+            // Escape 键关闭搜索模态框
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && searchModal.classList.contains('modal-visible')) {
+                    closeAndRefresh();
+                }
+            });
             
             // 点击背景关闭
             const searchModalOverlay = searchModal.querySelector('.search-modal-overlay');
@@ -213,8 +221,8 @@ export class SearchManager {
             ${history.map(item => `
                 <div class="search-history-item">
                     <div class="search-history-icon">🔍</div>
-                    <span class="search-history-text" data-query="${item}">${item}</span>
-                    <button class="search-history-delete" data-query="${item}" title="${i18n.t('search.history.delete')}">×</button>
+                    <span class="search-history-text" data-query="${escapeHTML(item)}">${escapeHTML(item)}</span>
+                    <button class="search-history-delete" data-query="${escapeHTML(item)}" title="${i18n.t('search.history.delete')}">×</button>
                 </div>
             `).join('')}
         `;
@@ -284,7 +292,7 @@ export class SearchManager {
             
         } catch (error) {
             console.error('搜索失败:', error);
-            searchModalBody.innerHTML = `<div style="padding: 40px; text-align: center; color: #f44;">${i18n.t('search.failed', { error: error.message })}</div>`;
+            searchModalBody.innerHTML = `<div style="padding: 40px; text-align: center; color: #f44;">${escapeHTML(i18n.t('search.failed', { error: error.message }))}</div>`;
         } finally {
             // 隐藏全屏加载动画
             searchLoading.hide();
@@ -477,7 +485,7 @@ export class SearchManager {
         menu.innerHTML = `
             <div class="search-action-menu-content">
                 <div class="search-action-menu-header">
-                    <div class="search-action-menu-title">${songData.title}</div>
+                    <div class="search-action-menu-title">${escapeHTML(songData.title)}</div>
                     <button class="search-action-menu-close">✕</button>
                 </div>
                 <div class="search-action-menu-body">
@@ -607,8 +615,7 @@ export class SearchManager {
             // 2. 刷新播放列表数据
             const playlistManager = window.app?.modules?.playlistManager;
             if (playlistManager) {
-                await playlistManager.loadCurrent();
-                await playlistManager.loadAll();
+                await playlistManager.refreshAll();
             }
             
             // 3. 立即播放这首歌
@@ -744,8 +751,7 @@ export class SearchManager {
                     try {
                         const playlistManager = window.app?.modules?.playlistManager;
                         if (playlistManager) {
-                            await playlistManager.loadCurrent();
-                            await playlistManager.loadAll();
+                            await playlistManager.refreshAll();
                         }
                         
                         const container = document.getElementById('playListContainer');
@@ -817,8 +823,7 @@ export class SearchManager {
                     try {
                         const playlistManager = window.app?.modules?.playlistManager;
                         if (playlistManager) {
-                            await playlistManager.loadCurrent();
-                            await playlistManager.loadAll();
+                            await playlistManager.refreshAll();
                         }
 
                         const container = document.getElementById('playListContainer');
@@ -951,8 +956,7 @@ export class SearchManager {
                 try {
                     const playlistManager = window.app?.modules?.playlistManager;
                     if (playlistManager) {
-                        await playlistManager.loadCurrent();
-                        await playlistManager.loadAll();
+                        await playlistManager.refreshAll();
                     }
 
                     const container = document.getElementById('playListContainer');
@@ -1259,9 +1263,9 @@ export class SearchManager {
             const isLast = index === breadcrumb.length - 1;
             const sep = index > 0 ? '<span class="search-breadcrumb-sep">›</span>' : '';
             if (isLast) {
-                return `${sep}<span class="search-breadcrumb-item search-breadcrumb-item--current">${item.name}</span>`;
+                return `${sep}<span class="search-breadcrumb-item search-breadcrumb-item--current">${escapeHTML(item.name)}</span>`;
             }
-            return `${sep}<span class="search-breadcrumb-item" data-breadcrumb-index="${index}">${item.name}</span>`;
+            return `${sep}<span class="search-breadcrumb-item" data-breadcrumb-index="${index}">${escapeHTML(item.name)}</span>`;
         }).join('');
     }
 
@@ -1283,13 +1287,13 @@ export class SearchManager {
                 const coverUrl = getDirCoverUrl(dir);
                 const fileCount = countFiles(dir);
                 html += `
-                    <div class="search-dir-card" data-dir-url="${dir.rel}" data-dir-name="${dir.name}">
+                    <div class="search-dir-card" data-dir-url="${escapeHTML(dir.rel)}" data-dir-name="${escapeHTML(dir.name)}">
                         <div class="search-dir-card-cover">
-                            ${coverUrl ? `<img src="${coverUrl}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" loading="lazy" />` : ''}
+                            ${coverUrl ? `<img src="${escapeHTML(coverUrl)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" loading="lazy" />` : ''}
                             <div class="search-dir-card-cover-placeholder" ${coverUrl ? '' : 'style="display:flex"'}>📁</div>
                         </div>
                         <div class="search-dir-card-info">
-                            <div class="search-dir-card-title">${dir.name}</div>
+                            <div class="search-dir-card-title">${escapeHTML(dir.name)}</div>
                             <div class="search-dir-card-count">${i18n.t('local.songCount', { count: fileCount })}</div>
                         </div>
                     </div>

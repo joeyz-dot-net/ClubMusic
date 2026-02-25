@@ -13,7 +13,7 @@ import logging
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from routers.state import PLAYER, PLAYBACK_HISTORY
+from routers.state import PLAYER, PLAYBACK_HISTORY, error_response
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +30,7 @@ async def get_playback_history():
             "history": history
         }
     except Exception as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/playback_history] 获取播放历史异常", exc=e, _logger=logger)
 
 
 @router.get("/playback_history_merged")
@@ -65,10 +62,7 @@ async def get_playback_history_merged():
             "count": len(merged_history)
         }
     except Exception as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/playback_history_merged] 获取合并历史异常", exc=e, _logger=logger)
 
 
 @router.post("/song_add_to_history")
@@ -104,10 +98,7 @@ async def song_add_to_history(request: Request):
 
         return {"status": "OK", "message": "已添加到播放历史"}
     except Exception as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/song_add_to_history] 添加播放历史异常", exc=e, _logger=logger)
 
 
 @router.post("/playback_history_delete")
@@ -140,7 +131,4 @@ async def delete_playback_history(request: Request):
                 status_code=404
             )
     except Exception as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/playback_history_delete] 删除播放历史异常", exc=e, _logger=logger)

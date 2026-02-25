@@ -460,8 +460,7 @@ class MusicPlayerApp {
     // 初始化播放列表
     async initPlaylist() {
         try {
-            await playlistManager.loadCurrent();
-            await playlistManager.loadAll();
+            await playlistManager.refreshAll();
             
             // ✅ 从 playlistManager 恢复当前选择歌单的 ID（从 localStorage 中已恢复）
             const savedId = playlistManager.getSelectedPlaylistId();

@@ -1,7 +1,7 @@
 // 通用模板构建函数
 // 用于在多处复用统一的歌曲列表项结构
 
-import { thumbnailManager } from './utils.js';
+import { thumbnailManager, escapeHTML } from './utils.js';
 import { i18n } from './i18n.js';
 
 export function buildTrackItemHTML({
@@ -20,19 +20,25 @@ export function buildTrackItemHTML({
     const displayType = isDirectory ? i18n.t('search.typeDirectory') : (type === 'local' ? i18n.t('track.typeLocal') : 'YouTube');
     const meta = metaText || (isDirectory ? i18n.t('search.typeDirectory') : (type === 'local' ? (song.url || i18n.t('track.unknownLocation')) : i18n.t('track.unknownDuration')));
 
+    const safeUrl = escapeHTML(song.url || '');
+    const safeTitle = escapeHTML(title);
+    const safeCover = escapeHTML(cover);
+    const safeMeta = escapeHTML(meta);
+    const safeDisplayType = escapeHTML(displayType);
+
     return `
-        <div class="search-result-item playlist-track-item" data-url="${song.url || ''}" data-title="${title}" data-type="${isDirectory ? 'directory' : type}" data-thumbnail_url="${cover || ''}" data-directory="${isDirectory}">
+        <div class="search-result-item playlist-track-item" data-url="${safeUrl}" data-title="${safeTitle}" data-type="${isDirectory ? 'directory' : type}" data-thumbnail_url="${safeCover}" data-directory="${isDirectory}">
             <div class="track-left">
                 <div class="track-cover">
-                    <img src="${cover}" alt="" crossorigin="anonymous" data-original-url="${cover}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                    <img src="${safeCover}" alt="" crossorigin="anonymous" data-original-url="${safeCover}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
                     <div class="track-cover-placeholder">${isDirectory ? '📁' : '🎵'}</div>
                 </div>
-                <div class="track-type">${displayType}</div>
+                <div class="track-type">${safeDisplayType}</div>
             </div>
             <div class="track-info">
-                <div class="track-title">${title}</div>
+                <div class="track-title">${safeTitle}</div>
                 <div class="track-meta">
-                    <div class="track-playlist-name">${meta}</div>
+                    <div class="track-playlist-name">${safeMeta}</div>
                 </div>
             </div>
             <button class="${actionButtonClass}">

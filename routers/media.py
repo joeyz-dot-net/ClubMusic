@@ -18,7 +18,7 @@ import logging
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse, FileResponse, Response
 
-from routers.state import PLAYER, _get_resource_path
+from routers.state import PLAYER, _get_resource_path, error_response
 
 logger = logging.getLogger(__name__)
 
@@ -279,13 +279,7 @@ async def video_proxy(url: str, request: Request):
                 )
 
     except Exception as e:
-        logger.error(f"[KTV] 视频代理异常: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/video_proxy] 视频代理异常", exc=e, _logger=logger)
 
 
 @router.post("/refresh_video_url")
@@ -356,18 +350,10 @@ async def refresh_video_url():
             )
 
         except Exception as e:
-            logger.error(f"[KTV] 刷新视频URL异常: {e}")
-            return JSONResponse(
-                {"status": "ERROR", "error": str(e)},
-                status_code=500
-            )
+            return error_response("[/refresh_video_url] 刷新视频URL异常", exc=e, _logger=logger)
 
     except Exception as e:
-        logger.error(f"[KTV] refresh_video_url 异常: {e}")
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/refresh_video_url] 异常", exc=e, _logger=logger)
 
 
 @router.post("/volume")
@@ -402,13 +388,7 @@ async def set_volume(request: Request):
                 logger.warning(f"[警告] 获取音量失败: {e}")
                 return {"status": "OK", "volume": 50}
     except Exception as e:
-        logger.error(f"[错误] /volume 路由异常: {type(e).__name__}: {e}")
-        import traceback
-        traceback.print_exc()
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/volume] 路由异常", exc=e, _logger=logger)
 
 
 @router.get("/volume/defaults")

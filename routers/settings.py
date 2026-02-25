@@ -20,7 +20,7 @@ import logging
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from routers.state import PLAYER
+from routers.state import PLAYER, error_response
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +39,7 @@ async def get_user_settings():
             }
         }
     except Exception as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[GET /settings] 获取设置异常", exc=e, _logger=logger)
 
 
 @router.post("/settings")
@@ -57,11 +54,7 @@ async def update_user_settings(request: Request):
             "data": data
         }
     except Exception as e:
-        logger.error(f"[设置] 处理失败: {e}")
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[POST /settings] 处理设置异常", exc=e, _logger=logger)
 
 
 @router.post("/settings/reset")
@@ -82,11 +75,7 @@ async def reset_settings():
             status_code=200
         )
     except Exception as e:
-        logger.exception(f"[API] 重置设置异常: {e}")
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[POST /settings/reset] 重置设置异常", exc=e, _logger=logger)
 
 
 @router.post("/settings/{key}")
@@ -114,10 +103,7 @@ async def update_single_setting(key: str, request: Request):
             "data": {key: value}
         }
     except Exception as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response(f"[POST /settings/{key}] 更新设置异常", exc=e, _logger=logger)
 
 
 @router.get("/settings/schema")
@@ -185,11 +171,7 @@ async def get_ui_config():
             "data": default_config
         }
     except Exception as e:
-        logger.error(f"[UI配置] 读取失败: {e}")
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[GET /ui-config] 读取UI配置异常", exc=e, _logger=logger)
 
 
 @router.post("/ui-config")
@@ -239,11 +221,7 @@ async def update_ui_config(request: Request):
             }
         }
     except Exception as e:
-        logger.error(f"[UI配置] 保存失败: {e}")
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[POST /ui-config] 保存UI配置异常", exc=e, _logger=logger)
 
 
 @router.get("/diagnostic/ytdlp")
@@ -282,7 +260,4 @@ async def diagnostic_ytdlp():
 
         return result
     except Exception as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[GET /diagnostic/ytdlp] 诊断异常", exc=e, _logger=logger)

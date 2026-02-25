@@ -27,7 +27,6 @@ import os
 import re
 import time
 import logging
-import traceback
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, HTMLResponse
@@ -37,6 +36,7 @@ from routers.state import (
     DEFAULT_PLAYLIST_ID, CURRENT_PLAYLIST_ID,
     _player_lock, _broadcast_state, _get_resource_path,
     Song, LocalSong, StreamSong,
+    error_response,
 )
 
 logger = logging.getLogger(__name__)
@@ -102,7 +102,7 @@ async def create_playlist_restful(request: Request):
         name = data.get("name", "新歌单").strip()
 
         if not name:
-            return JSONResponse({"error": "歌单名称不能为空"}, status_code=400)
+            return error_response("歌单名称不能为空", 400)
 
         playlist = PLAYLISTS_MANAGER.create_playlist(name)
         return {
@@ -111,7 +111,7 @@ async def create_playlist_restful(request: Request):
             "songs": []
         }
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        return error_response("[POST /playlists] 创建歌单异常", exc=e, _logger=logger)
 
 
 @router.post("/playlist_create")
@@ -128,10 +128,7 @@ async def create_playlist(request: Request):
             "name": playlist.name
         }
     except Exception as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/playlist_create] 创建歌单异常", exc=e, _logger=logger)
 
 
 @router.post("/playlist_add")
@@ -208,12 +205,7 @@ async def add_to_playlist(request: Request):
             "message": f"已添加到下一曲（位置 {insert_index}）"
         }
     except Exception as e:
-        logger.error(f"[ERROR] 添加歌曲失败: {str(e)}")
-        traceback.print_exc()
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/playlist_add] 添加歌曲失败", exc=e, _logger=logger)
 
 
 @router.post("/playlists/{playlist_id}/add_next")
@@ -276,11 +268,7 @@ async def add_song_to_playlist_next(playlist_id: str, request: Request):
 
         return {"status": "OK", "message": "已添加到下一曲"}
     except Exception as e:
-        traceback.print_exc()
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/playlists/{id}/add_next] 添加歌曲失败", exc=e, _logger=logger)
 
 
 @router.post("/playlists/{playlist_id}/add_top")
@@ -320,11 +308,7 @@ async def add_song_to_playlist_top(playlist_id: str, request: Request):
 
         return {"status": "OK", "message": "已添加到歌单顶部"}
     except Exception as e:
-        traceback.print_exc()
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/playlists/{id}/add_top] 添加歌曲到顶部失败", exc=e, _logger=logger)
 
 
 @router.get("/playlist")
@@ -374,10 +358,7 @@ async def get_current_playlist(playlist_id: str = None):
             "current_index": current_index
         }
     except Exception as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/playlist] 获取歌单异常", exc=e, _logger=logger)
 
 
 @router.delete("/playlists/{playlist_id}")
@@ -398,10 +379,7 @@ async def delete_playlist(playlist_id: str):
                 status_code=404
             )
     except Exception as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[DELETE /playlists/{id}] 删除歌单异常", exc=e, _logger=logger)
 
 
 @router.post("/playlists/{playlist_id}/remove")
@@ -447,12 +425,7 @@ async def remove_song_from_playlist(playlist_id: str, request: Request):
         return JSONResponse({"status": "OK", "message": "删除成功"})
 
     except Exception as e:
-        logger.error(f"[EXCEPTION] remove_song_from_playlist error: {type(e).__name__}: {str(e)}")
-        traceback.print_exc()
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/playlists/{id}/remove] 移除歌曲异常", exc=e, _logger=logger)
 
 
 @router.put("/playlists/{playlist_id}")
@@ -484,10 +457,7 @@ async def update_playlist(playlist_id: str, data: dict):
                 status_code=404
             )
     except Exception as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[PUT /playlists/{id}] 更新歌单异常", exc=e, _logger=logger)
 
 
 @router.post("/playlists/{playlist_id}/switch")
@@ -496,7 +466,7 @@ async def switch_playlist(playlist_id: str):
     try:
         playlist = PLAYLISTS_MANAGER.get_playlist(playlist_id)
         if not playlist:
-            return JSONResponse({"error": "歌单不存在"}, status_code=404)
+            return error_response("歌单不存在", 404)
 
         return {
             "status": "OK",
@@ -507,7 +477,7 @@ async def switch_playlist(playlist_id: str):
             }
         }
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        return error_response("[/playlists/{id}/switch] 切换歌单异常", exc=e, _logger=logger)
 
 
 @router.post("/playlist_play")
@@ -544,10 +514,7 @@ async def playlist_play(request: Request):
                 status_code=400
             )
     except Exception as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/playlist_play] 播放异常", exc=e, _logger=logger)
 
 
 @router.post("/playlist_reorder")
@@ -573,10 +540,7 @@ async def playlist_reorder(request: Request):
                 status_code=400
             )
     except Exception as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/playlist_reorder] 排序异常", exc=e, _logger=logger)
 
 
 @router.post("/playlist_remove")
@@ -621,12 +585,7 @@ async def playlist_remove(request: Request):
         return JSONResponse({"status": "OK", "message": "删除成功"})
 
     except Exception as e:
-        logger.info(f"[EXCEPTION] playlist_remove error: {type(e).__name__}: {str(e)}")
-        traceback.print_exc()
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/playlist_remove] 移除歌曲异常", exc=e, _logger=logger)
 
 
 @router.post("/playlist_clear")
@@ -654,7 +613,4 @@ async def playlist_clear():
         await _broadcast_state()
         return JSONResponse({"status": "OK", "message": "清空成功"})
     except Exception as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/playlist_clear] 清空队列异常", exc=e, _logger=logger)

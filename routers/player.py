@@ -20,7 +20,6 @@ routers/player.py - 播放器控制路由
 import os
 import time
 import logging
-import traceback
 from urllib.parse import quote
 
 from fastapi import APIRouter, Request
@@ -32,6 +31,7 @@ from routers.state import (
     _player_lock, _broadcast_state,
     mpv_get, mpv_command,
     LocalSong, StreamSong,
+    error_response,
 )
 
 logger = logging.getLogger(__name__)
@@ -109,11 +109,7 @@ async def play(request: Request):
             "current": PLAYER.current_meta
         }
     except Exception as e:
-        traceback.print_exc()
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/play] 播放异常", exc=e, _logger=logger)
 
 
 @router.post("/play_song")
@@ -219,12 +215,7 @@ async def next_track():
             "current_index": PLAYER.current_index,
         }
     except Exception as e:
-        logger.error(f"[ERROR] /next 异常: {str(e)}")
-        traceback.print_exc()
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/next] 切换下一首异常", exc=e, _logger=logger)
 
 
 @router.post("/prev")
@@ -303,12 +294,7 @@ async def prev_track():
             "current_index": PLAYER.current_index,
         }
     except Exception as e:
-        logger.error(f"[ERROR] /prev 异常: {str(e)}")
-        traceback.print_exc()
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/prev] 切换上一首异常", exc=e, _logger=logger)
 
 
 @router.get("/status")
@@ -394,10 +380,7 @@ async def pause():
         await _broadcast_state()
         return {"status": "OK", "paused": not paused}
     except Exception as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/pause] 暂停/继续异常", exc=e, _logger=logger)
 
 
 @router.post("/toggle_pause")
@@ -422,10 +405,7 @@ async def seek(request: Request):
             mpv_command(["seek", percent, "absolute-percent"])
             return {"status": "OK", "percent": percent}
     except Exception as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/seek] 跳转异常", exc=e, _logger=logger)
 
 
 @router.post("/loop")
@@ -440,10 +420,7 @@ async def set_loop_mode():
 
         return {"status": "OK", "loop_mode": PLAYER.loop_mode}
     except Exception as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/loop] 设置循环模式异常", exc=e, _logger=logger)
 
 
 @router.post("/pitch")
@@ -457,15 +434,9 @@ async def set_pitch_shift(request: Request):
         logger.info(f"[播放状态改变] {direction}调: {semitones:+d} 半音")
         return {"status": "OK", "pitch_shift": PLAYER.pitch_shift}
     except (ValueError, TypeError) as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": f"无效的半音值: {e}"},
-            status_code=400
-        )
+        return error_response(f"无效的半音值: {e}", 400)
     except Exception as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/pitch] 设置音调异常", exc=e, _logger=logger)
 
 
 @router.post("/youtube_extract_playlist")
@@ -484,10 +455,7 @@ async def youtube_extract_playlist(request: Request):
         videos = StreamSong.extract_playlist(url, max_results=PLAYER.youtube_url_extra_max)
         return {"status": "OK", "videos": videos}
     except Exception as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/youtube_extract_playlist] 提取播放列表异常", exc=e, _logger=logger)
 
 
 @router.post("/play_youtube_playlist")
@@ -521,7 +489,4 @@ async def play_youtube_playlist(request: Request):
 
         return {"status": "OK", "added": len(videos)}
     except Exception as e:
-        return JSONResponse(
-            {"status": "ERROR", "error": str(e)},
-            status_code=500
-        )
+        return error_response("[/play_youtube_playlist] 播放列表异常", exc=e, _logger=logger)

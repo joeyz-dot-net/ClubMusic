@@ -1,5 +1,16 @@
 // 工具函数模块
 
+// HTML 转义（防 XSS）
+export function escapeHTML(str) {
+    if (typeof str !== 'string') return '';
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 // 深拷贝对象
 export function deepClone(obj) {
     if (obj === null || typeof obj !== 'object') return obj;

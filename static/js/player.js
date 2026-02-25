@@ -10,6 +10,8 @@ export class Player {
         this.listeners = new Map();
         this.currentPlayingUrl = null;  // 追踪当前播放的歌曲URL
         this.pollingPaused = false;  // 轮询暂停标志
+        this._hiddenByVisibility = false;  // 标签页隐藏标志
+        this._lastPollIntervalMs = 5000;  // 记住轮询间隔以便恢复
 
         // WebSocket 相关
         this.ws = null;
@@ -17,6 +19,15 @@ export class Player {
         this.wsReconnectDelay = 1000;
         this.wsReconnectTimer = null;
         this.wsHeartbeatInterval = null;
+
+        // 监听标签页可见性变化，隐藏时暂停轮询以节省带宽
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                this._pauseForHidden();
+            } else {
+                this._resumeFromHidden();
+            }
+        });
 
         // 注册操作锁回调
         operationLock.onPause(() => {
@@ -160,6 +171,7 @@ export class Player {
     // 状态轮询
     startPolling(interval = 5000) {
         if (this.pollInterval) return;
+        this._lastPollIntervalMs = interval;
 
         this.pollInterval = setInterval(async () => {
             // 检查操作锁：如果有活跃的锁，跳过本次轮询
@@ -231,6 +243,37 @@ export class Player {
             this.ws.close();
             this.ws = null;
         }
+    }
+
+    // 标签页隐藏时暂停轮询和监控（WebSocket 保持活跃）
+    _pauseForHidden() {
+        if (this._hiddenByVisibility) return;
+        this._hiddenByVisibility = true;
+        console.log('[Player] 标签页隐藏，暂停轮询');
+        if (this.pollInterval) {
+            clearInterval(this.pollInterval);
+            this.pollInterval = null;
+        }
+        if (this.monitorInterval) {
+            clearInterval(this.monitorInterval);
+            this.monitorInterval = null;
+        }
+    }
+
+    // 标签页恢复可见时重启轮询并立即刷新状态
+    async _resumeFromHidden() {
+        if (!this._hiddenByVisibility) return;
+        this._hiddenByVisibility = false;
+        console.log('[Player] 标签页恢复可见，重启轮询');
+        // 立即获取最新状态
+        try {
+            const status = await api.getStatus();
+            this.updateStatus(status);
+        } catch (err) {
+            console.warn('[Player] 恢复时获取状态失败:', err);
+        }
+        // 重启轮询
+        this.startPolling(this._lastPollIntervalMs);
     }
 
     // ==================== WebSocket 实时同步 ====================

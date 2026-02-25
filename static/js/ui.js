@@ -21,6 +21,8 @@ export function formatTime(seconds) {
 export class Toast {
     static show(message, type = 'info', duration = 3000) {
         const toast = createElement('div', `toast toast-${type}`);
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'polite');
         
         // 图标映射（圆形徽章）
         const icons = {
@@ -30,85 +32,24 @@ export class Toast {
             info: 'ℹ'
         };
         
-        // 图标颜色（柔和半透明叠加）
-        const iconColors = {
-            success: 'rgba(76, 175, 80, 0.15)',
-            error: 'rgba(244, 67, 54, 0.15)',
-            warning: 'rgba(255, 152, 0, 0.15)',
-            info: 'rgba(33, 150, 243, 0.15)'
-        };
-        
-        // 图标文字颜色
-        const iconTextColors = {
-            success: '#4caf50',
-            error: '#f44336',
-            warning: '#ff9800',
-            info: '#2196f3'
-        };
-        
         // 创建内容结构：图标 + 消息
         const icon = icons[type] || icons.info;
-        const iconColor = iconColors[type] || iconColors.info;
-        const iconTextColor = iconTextColors[type] || iconTextColors.info;
         
         toast.innerHTML = `
-            <div class="toast-icon" style="
-                width: 32px;
-                height: 32px;
-                border-radius: 50%;
-                background: ${iconColor};
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 16px;
-                font-weight: bold;
-                color: ${iconTextColor};
-                flex-shrink: 0;
-            ">${icon}</div>
-            <div class="toast-message" style="
-                flex: 1;
-                font-size: 14px;
-                line-height: 1.5;
-            ">${message}</div>
+            <div class="toast-icon">${icon}</div>
+            <div class="toast-message">${message}</div>
         `;
-        
-        // 毛玻璃效果样式（顶部居中，滑入动画）
-        Object.assign(toast.style, {
-            position: 'fixed',
-            top: '24px',
-            left: '50%',
-            transform: 'translateX(-50%) translateY(-20px)',
-            minWidth: '280px',
-            maxWidth: '420px',
-            padding: '16px',
-            borderRadius: '12px',
-            background: 'rgba(30, 30, 30, 0.9)',
-            backdropFilter: 'blur(20px) saturate(180%)',
-            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            color: 'white',
-            zIndex: '10000',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            opacity: '0',
-            transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-            pointerEvents: 'none'
-        });
         
         document.body.appendChild(toast);
         
         // 滑入并淡入
         setTimeout(() => {
-            toast.style.opacity = '1';
-            toast.style.transform = 'translateX(-50%) translateY(0)';
+            toast.classList.add('toast-visible');
         }, 10);
         
         // 自动移除（滑出并淡出）
         setTimeout(() => {
-            toast.style.opacity = '0';
-            toast.style.transform = 'translateX(-50%) translateY(-20px)';
+            toast.classList.remove('toast-visible');
             setTimeout(() => {
                 if (toast.parentNode) {
                     document.body.removeChild(toast);

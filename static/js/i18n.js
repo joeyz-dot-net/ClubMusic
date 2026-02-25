@@ -39,6 +39,8 @@ const translations = {
         'search.history': '播放历史',
         'nav.settings': '设置',
         'nav.debug': '调试',
+        'debug.noData': '暂无数据',
+        'debug.noLogs': '暂无日志',
 
         // 播放历史 - 操作菜单
         'history.actionMenu.playNow': '立即播放',
@@ -149,6 +151,7 @@ const translations = {
         'local.home': '本地歌曲',
         'local.empty': '暂无本地文件',
         'local.dirEmpty': '此目录为空',
+        'local.backToPlaylist': '返回歌单',
         'local.musicType': '本地音乐',
         'local.songCount': '{count} 首歌曲',
 
@@ -242,6 +245,8 @@ const translations = {
         'search.history': 'Playback History',
         'nav.settings': 'Settings',
         'nav.debug': 'Debug',
+        'debug.noData': 'No data',
+        'debug.noLogs': 'No logs',
 
         // Play history - Action menu
         'history.actionMenu.playNow': 'Play Now',
@@ -352,6 +357,7 @@ const translations = {
         'local.home': 'Local Songs',
         'local.empty': 'No local files',
         'local.dirEmpty': 'Directory is empty',
+        'local.backToPlaylist': 'Back to playlist',
         'local.musicType': 'Local Music',
         'local.songCount': '{count} songs',
 
@@ -445,6 +451,8 @@ const translations = {
         'search.history': '播放記錄',
         'nav.settings': '設定',
         'nav.debug': '除錯',
+        'debug.noData': '暫無資料',
+        'debug.noLogs': '暫無日誌',
 
         // 播放記錄 - 操作選單
         'history.actionMenu.playNow': '立即播放',
@@ -555,6 +563,7 @@ const translations = {
         'local.home': '本機歌曲',
         'local.empty': '尚無本機檔案',
         'local.dirEmpty': '此目錄為空',
+        'local.backToPlaylist': '返回歌單',
         'local.musicType': '本機音樂',
         'local.songCount': '{count} 首歌曲',
 

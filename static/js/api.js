@@ -24,6 +24,7 @@ function makeLeadingDebounce(fn, waitMs) {
 export class MusicAPI {
     constructor(baseURL = '') {
         this.baseURL = baseURL;
+        this.defaultTimeout = 15000;
 
         // 防抖包装（先到先得 Leading Debounce）
         // next/prev/play: 1000ms — 切歌操作耗时较长，1 秒窗口防止堆叠
@@ -34,72 +35,106 @@ export class MusicAPI {
         this._debouncedPause = makeLeadingDebounce(this._rawPause.bind(this), 500);
     }
 
-    async get(endpoint) {
+    // 创建带超时的 fetch 请求
+    _fetchWithTimeout(url, options = {}, timeout) {
+        const ms = timeout || this.defaultTimeout;
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), ms);
+        return fetch(url, { ...options, signal: controller.signal })
+            .finally(() => clearTimeout(timer));
+    }
+
+    async get(endpoint, { timeout } = {}) {
         try {
-            const response = await fetch(`${this.baseURL}${endpoint}`);
-            return await response.json();
+            const response = await this._fetchWithTimeout(`${this.baseURL}${endpoint}`, {}, timeout);
+            const data = await response.json();
+            if (!response.ok) {
+                console.warn(`[API] GET ${endpoint} HTTP ${response.status}:`, data);
+                return { _error: true, status: response.status, ...data };
+            }
+            return data;
         } catch (err) {
             console.warn(`[API] GET ${endpoint} failed:`, err);
-            return {}; // 保证调用方不会得到 undefined 导致读取属性时报错
+            return { _error: true, message: err.message };
         }
     }
 
-    async post(endpoint, data) {
+    async post(endpoint, data, { timeout } = {}) {
         try {
-            const response = await fetch(`${this.baseURL}${endpoint}`, {
+            const response = await this._fetchWithTimeout(`${this.baseURL}${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
-            });
-            return await response.json();
+            }, timeout);
+            const result = await response.json();
+            if (!response.ok) {
+                console.warn(`[API] POST ${endpoint} HTTP ${response.status}:`, result);
+                return { _error: true, status: response.status, ...result };
+            }
+            return result;
         } catch (err) {
             console.warn(`[API] POST ${endpoint} failed:`, err);
-            return {};
+            return { _error: true, message: err.message };
         }
     }
 
-    async postForm(endpoint, formData) {
+    async postForm(endpoint, formData, { timeout } = {}) {
         try {
-            const response = await fetch(`${this.baseURL}${endpoint}`, {
+            const response = await this._fetchWithTimeout(`${this.baseURL}${endpoint}`, {
                 method: 'POST',
                 body: formData
-            });
-            return await response.json();
+            }, timeout);
+            const result = await response.json();
+            if (!response.ok) {
+                console.warn(`[API] POST-FORM ${endpoint} HTTP ${response.status}:`, result);
+                return { _error: true, status: response.status, ...result };
+            }
+            return result;
         } catch (err) {
             console.warn(`[API] POST-FORM ${endpoint} failed:`, err);
-            return {};
+            return { _error: true, message: err.message };
         }
     }
 
-    async delete(endpoint) {
+    async delete(endpoint, { timeout } = {}) {
         try {
-            const response = await fetch(`${this.baseURL}${endpoint}`, {
+            const response = await this._fetchWithTimeout(`${this.baseURL}${endpoint}`, {
                 method: 'DELETE'
-            });
-            return await response.json();
+            }, timeout);
+            const result = await response.json();
+            if (!response.ok) {
+                console.warn(`[API] DELETE ${endpoint} HTTP ${response.status}:`, result);
+                return { _error: true, status: response.status, ...result };
+            }
+            return result;
         } catch (err) {
             console.warn(`[API] DELETE ${endpoint} failed:`, err);
-            return {};
+            return { _error: true, message: err.message };
         }
     }
 
-    async put(endpoint, data) {
+    async put(endpoint, data, { timeout } = {}) {
         try {
-            const response = await fetch(`${this.baseURL}${endpoint}`, {
+            const response = await this._fetchWithTimeout(`${this.baseURL}${endpoint}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
-            });
-            return await response.json();
+            }, timeout);
+            const result = await response.json();
+            if (!response.ok) {
+                console.warn(`[API] PUT ${endpoint} HTTP ${response.status}:`, result);
+                return { _error: true, status: response.status, ...result };
+            }
+            return result;
         } catch (err) {
             console.warn(`[API] PUT ${endpoint} failed:`, err);
-            return {};
+            return { _error: true, message: err.message };
         }
     }
 
     // 播放器相关 API
     async getStatus() {
-        return this.get('/status');
+        return this.get('/status', { timeout: 10000 });
     }
 
     // 原始（未防抖）播放方法
@@ -266,8 +301,7 @@ export class MusicAPI {
 
     // KTV功能：刷新视频URL（当视频直链过期时）
     async refreshVideoUrl() {
-        const response = await fetch('/refresh_video_url', { method: 'POST' });
-        return response.json();
+        return this.post('/refresh_video_url', {});
     }
 }
 
