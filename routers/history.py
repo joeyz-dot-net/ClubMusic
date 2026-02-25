@@ -10,10 +10,12 @@ routers/history.py - 播放历史相关路由
 """
 
 import logging
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
-from routers.state import PLAYER, PLAYBACK_HISTORY, error_response
+from models import MusicPlayer
+from routers.dependencies import get_player
+from routers.state import error_response
 
 logger = logging.getLogger(__name__)
 
@@ -21,10 +23,10 @@ router = APIRouter()
 
 
 @router.get("/playback_history")
-async def get_playback_history():
+async def get_playback_history(player: MusicPlayer = Depends(get_player)):
     """获取播放历史"""
     try:
-        history = PLAYER.playback_history.get_all()
+        history = player.playback_history.get_all()
         return {
             "status": "OK",
             "history": history
@@ -34,10 +36,10 @@ async def get_playback_history():
 
 
 @router.get("/playback_history_merged")
-async def get_playback_history_merged():
+async def get_playback_history_merged(player: MusicPlayer = Depends(get_player)):
     """获取已合并的播放历史 - 相同URL只显示一次，最后播放时间降序排列"""
     try:
-        raw_history = PLAYER.playback_history.get_all()
+        raw_history = player.playback_history.get_all()
 
         # 按 URL 合并，只保留最新的记录
         merged_dict = {}
@@ -66,7 +68,7 @@ async def get_playback_history_merged():
 
 
 @router.post("/song_add_to_history")
-async def song_add_to_history(request: Request):
+async def song_add_to_history(request: Request, player: MusicPlayer = Depends(get_player)):
     """新增一条播放历史记录"""
     try:
         payload = {}
@@ -89,7 +91,7 @@ async def song_add_to_history(request: Request):
             )
 
         is_local = song_type != "youtube"
-        PLAYER.playback_history.add_to_history(
+        player.playback_history.add_to_history(
             url,
             title or url,
             is_local=is_local,
@@ -102,7 +104,7 @@ async def song_add_to_history(request: Request):
 
 
 @router.post("/playback_history_delete")
-async def delete_playback_history(request: Request):
+async def delete_playback_history(request: Request, player: MusicPlayer = Depends(get_player)):
     """删除单条播放历史记录"""
     try:
         payload = {}
@@ -121,7 +123,7 @@ async def delete_playback_history(request: Request):
                 status_code=400
             )
 
-        success = PLAYER.playback_history.remove_by_url(url)
+        success = player.playback_history.remove_by_url(url)
 
         if success:
             return {"status": "OK", "message": "已删除播放历史记录"}

@@ -22,13 +22,14 @@ import time
 import logging
 from urllib.parse import quote
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
+from models import MusicPlayer, Playlists, PlayHistory
+from routers.dependencies import get_player, get_playlists, get_playback_history, get_player_lock
 from routers.state import (
-    PLAYER, PLAYLISTS_MANAGER, PLAYBACK_HISTORY,
     DEFAULT_PLAYLIST_ID, CURRENT_PLAYLIST_ID,
-    _player_lock, _broadcast_state,
+    _broadcast_state,
     mpv_get, mpv_command,
     LocalSong, StreamSong,
     error_response,
@@ -42,7 +43,13 @@ router = APIRouter()
 # ==================== 路由 ====================
 
 @router.post("/play")
-async def play(request: Request):
+async def play(
+    request: Request,
+    player: MusicPlayer = Depends(get_player),
+    playlists: Playlists = Depends(get_playlists),
+    playback_history: PlayHistory = Depends(get_playback_history),
+    player_lock=Depends(get_player_lock),
+):
     """播放指定歌曲 - 服务器MPV播放 + 浏览器推流"""
     try:
         form = await request.form()
@@ -76,27 +83,27 @@ async def play(request: Request):
         else:
             song = LocalSong(file_path=url, title=title)
 
-        with _player_lock:
-            PLAYER.play(
+        with player_lock:
+            player.play(
                 song,
-                mpv_command_func=PLAYER.mpv_command,
-                mpv_pipe_exists_func=PLAYER.mpv_pipe_exists,
-                ensure_mpv_func=PLAYER.ensure_mpv,
-                add_to_history_func=PLAYBACK_HISTORY.add_to_history,
+                mpv_command_func=player.mpv_command,
+                mpv_pipe_exists_func=player.mpv_pipe_exists,
+                ensure_mpv_func=player.ensure_mpv,
+                add_to_history_func=playback_history.add_to_history,
                 save_to_history=True,
-                mpv_cmd=PLAYER.mpv_cmd
+                mpv_cmd=player.mpv_cmd
             )
-            PLAYER.reset_pitch_shift()
+            player.reset_pitch_shift()
 
             logger.info(f"▶️ [播放状态改变] 正在播放: {title} (类型: {song_type})")
 
             try:
-                playlist = PLAYLISTS_MANAGER.get_playlist(CURRENT_PLAYLIST_ID)
+                playlist = playlists.get_playlist(CURRENT_PLAYLIST_ID)
                 if playlist:
                     for idx, song_item in enumerate(playlist.songs):
                         song_item_url = song_item.get("url") if isinstance(song_item, dict) else str(song_item)
                         if song_item_url == url:
-                            PLAYER.current_index = idx
+                            player.current_index = idx
                             logger.info(f"[播放] ✓ 已更新 current_index = {idx}, 歌曲: {title}")
                             break
             except Exception as e:
@@ -106,24 +113,35 @@ async def play(request: Request):
         return {
             "status": "OK",
             "message": "播放成功",
-            "current": PLAYER.current_meta
+            "current": player.current_meta
         }
     except Exception as e:
         return error_response("[/play] 播放异常", exc=e, _logger=logger)
 
 
 @router.post("/play_song")
-async def play_song(request: Request):
+async def play_song(
+    request: Request,
+    player: MusicPlayer = Depends(get_player),
+    playlists: Playlists = Depends(get_playlists),
+    playback_history: PlayHistory = Depends(get_playback_history),
+    player_lock=Depends(get_player_lock),
+):
     """播放指定歌曲（别名）"""
-    return await play(request)
+    return await play(request, player, playlists, playback_history, player_lock)
 
 
 @router.post("/next")
-async def next_track():
+async def next_track(
+    player: MusicPlayer = Depends(get_player),
+    playlists: Playlists = Depends(get_playlists),
+    playback_history: PlayHistory = Depends(get_playback_history),
+    player_lock=Depends(get_player_lock),
+):
     """播放下一首（删除当前曲并播放队首）"""
     try:
-        with _player_lock:
-            playlist = PLAYLISTS_MANAGER.get_playlist(DEFAULT_PLAYLIST_ID)
+        with player_lock:
+            playlist = playlists.get_playlist(DEFAULT_PLAYLIST_ID)
             songs = playlist.songs if playlist else []
 
             if not songs:
@@ -131,9 +149,9 @@ async def next_track():
                 return {"status": "EMPTY", "message": "队列为空"}
 
             current_playing_url = (
-                PLAYER.current_meta.get("url")
-                or PLAYER.current_meta.get("rel")
-                or PLAYER.current_meta.get("raw_url")
+                player.current_meta.get("url")
+                or player.current_meta.get("rel")
+                or player.current_meta.get("raw_url")
             )
             removed_index = -1
             if current_playing_url:
@@ -155,12 +173,12 @@ async def next_track():
                 song_title = removed_song.get("title") if isinstance(removed_song, dict) else str(removed_song)
                 logger.info(f"[/next] 已删除第一首: {song_title}")
 
-            PLAYLISTS_MANAGER.save()
+            playlists.save()
 
             if not songs:
                 logger.info("[/next] 删除后队列已空，停止播放")
-                PLAYER.current_meta = {}
-                PLAYER.current_index = -1
+                player.current_meta = {}
+                player.current_index = -1
                 return {"status": "EMPTY", "message": "队列已空"}
 
             next_song_data = songs[0]
@@ -189,12 +207,12 @@ async def next_track():
                 song = LocalSong(file_path=url, title=title)
                 logger.info(f"[/next] 播放本地文件: {title}")
 
-            success = PLAYER.play(
+            success = player.play(
                 song,
-                mpv_command_func=PLAYER.mpv_command,
-                mpv_pipe_exists_func=PLAYER.mpv_pipe_exists,
-                ensure_mpv_func=PLAYER.ensure_mpv,
-                add_to_history_func=PLAYBACK_HISTORY.add_to_history,
+                mpv_command_func=player.mpv_command,
+                mpv_pipe_exists_func=player.mpv_pipe_exists,
+                ensure_mpv_func=player.ensure_mpv,
+                add_to_history_func=playback_history.add_to_history,
                 save_to_history=True
             )
 
@@ -205,25 +223,30 @@ async def next_track():
                     status_code=500
                 )
 
-            PLAYER.current_index = 0
+            player.current_index = 0
             logger.info(f"[/next] ✓ 已切换到下一首: {title}")
 
         await _broadcast_state()
         return {
             "status": "OK",
-            "current": PLAYER.current_meta,
-            "current_index": PLAYER.current_index,
+            "current": player.current_meta,
+            "current_index": player.current_index,
         }
     except Exception as e:
         return error_response("[/next] 切换下一首异常", exc=e, _logger=logger)
 
 
 @router.post("/prev")
-async def prev_track():
+async def prev_track(
+    player: MusicPlayer = Depends(get_player),
+    playlists: Playlists = Depends(get_playlists),
+    playback_history: PlayHistory = Depends(get_playback_history),
+    player_lock=Depends(get_player_lock),
+):
     """播放上一首"""
     try:
-        with _player_lock:
-            playlist = PLAYLISTS_MANAGER.get_playlist(CURRENT_PLAYLIST_ID)
+        with player_lock:
+            playlist = playlists.get_playlist(CURRENT_PLAYLIST_ID)
             songs = playlist.songs if playlist else []
 
             if not songs:
@@ -233,7 +256,7 @@ async def prev_track():
                     status_code=400
                 )
 
-            current_idx = PLAYER.current_index if PLAYER.current_index >= 0 else 0
+            current_idx = player.current_index if player.current_index >= 0 else 0
             prev_idx = current_idx - 1 if current_idx > 0 else len(songs) - 1
 
             if prev_idx < 0 or current_idx == 0:
@@ -268,12 +291,12 @@ async def prev_track():
                 song = LocalSong(file_path=url, title=title)
                 logger.info(f"[上一首] 播放本地文件: {title}")
 
-            success = PLAYER.play(
+            success = player.play(
                 song,
-                mpv_command_func=PLAYER.mpv_command,
-                mpv_pipe_exists_func=PLAYER.mpv_pipe_exists,
-                ensure_mpv_func=PLAYER.ensure_mpv,
-                add_to_history_func=PLAYBACK_HISTORY.add_to_history,
+                mpv_command_func=player.mpv_command,
+                mpv_pipe_exists_func=player.mpv_pipe_exists,
+                ensure_mpv_func=player.ensure_mpv,
+                add_to_history_func=playback_history.add_to_history,
                 save_to_history=True
             )
 
@@ -284,26 +307,26 @@ async def prev_track():
                     status_code=500
                 )
 
-            PLAYER.current_index = prev_idx
+            player.current_index = prev_idx
             logger.info(f"[上一首] ✓ 已切换到上一首: {title}")
 
         await _broadcast_state()
         return {
             "status": "OK",
-            "current": PLAYER.current_meta,
-            "current_index": PLAYER.current_index,
+            "current": player.current_meta,
+            "current_index": player.current_index,
         }
     except Exception as e:
         return error_response("[/prev] 切换上一首异常", exc=e, _logger=logger)
 
 
 @router.get("/status")
-async def get_status():
+async def get_status(player: MusicPlayer = Depends(get_player), playlists: Playlists = Depends(get_playlists)):
     """获取播放器状态"""
     try:
         from routers.media import _get_cover_from_directory, _extract_embedded_cover_bytes
 
-        playlist = PLAYLISTS_MANAGER.get_playlist(CURRENT_PLAYLIST_ID)
+        playlist = playlists.get_playlist(CURRENT_PLAYLIST_ID)
 
         mpv_state = {"paused": True, "time_pos": 0, "duration": 0, "volume": 50}
         try:
@@ -316,14 +339,14 @@ async def get_status():
         except Exception as e:
             logger.debug(f"获取 MPV 状态失败 (MPV 可能未运行): {e}")
 
-        current_meta = dict(PLAYER.current_meta) if PLAYER.current_meta else {}
+        current_meta = dict(player.current_meta) if player.current_meta else {}
         if current_meta.get("type") == "local" and not current_meta.get("thumbnail_url"):
             url = current_meta.get("url", "")
             if url:
                 if os.path.isabs(url):
                     abs_path = url
                 else:
-                    abs_path = os.path.join(PLAYER.music_dir, url)
+                    abs_path = os.path.join(player.music_dir, url)
 
                 has_cover = False
                 if os.path.isfile(abs_path):
@@ -342,8 +365,8 @@ async def get_status():
             "current_meta": current_meta,
             "current_playlist_id": CURRENT_PLAYLIST_ID,
             "current_playlist_name": playlist.name if playlist else "--",
-            "loop_mode": PLAYER.loop_mode,
-            "pitch_shift": PLAYER.pitch_shift,
+            "loop_mode": player.loop_mode,
+            "pitch_shift": player.pitch_shift,
             "mpv_state": mpv_state
         }
     except Exception as e:
@@ -364,16 +387,16 @@ async def get_status():
 
 
 @router.post("/pause")
-async def pause():
+async def pause(player: MusicPlayer = Depends(get_player), player_lock=Depends(get_player_lock)):
     """暂停/继续播放"""
     try:
-        with _player_lock:
+        with player_lock:
             paused = mpv_get("pause")
             mpv_command(["set_property", "pause", not paused])
 
         new_paused = not paused
-        if PLAYER.current_meta and PLAYER.current_meta.get("url"):
-            title = PLAYER.current_meta.get("title", "N/A")
+        if player.current_meta and player.current_meta.get("url"):
+            title = player.current_meta.get("title", "N/A")
             status_text = "⏸️ 暂停" if new_paused else "▶️ 播放中"
             logger.info(f"[播放状态改变] {status_text} | 歌曲: {title}")
 
@@ -384,9 +407,9 @@ async def pause():
 
 
 @router.post("/toggle_pause")
-async def toggle_pause():
+async def toggle_pause(player: MusicPlayer = Depends(get_player), player_lock=Depends(get_player_lock)):
     """暂停/继续播放（别名）"""
-    return await pause()
+    return await pause(player, player_lock)
 
 
 @router.post("/seek")
@@ -409,30 +432,30 @@ async def seek(request: Request):
 
 
 @router.post("/loop")
-async def set_loop_mode():
+async def set_loop_mode(player: MusicPlayer = Depends(get_player)):
     """设置循环模式"""
     try:
-        PLAYER.toggle_loop_mode()
+        player.toggle_loop_mode()
 
         loop_modes = {0: "❌ 不循环", 1: "🔂 单曲循环", 2: "🔁 全部循环"}
-        mode_text = loop_modes.get(PLAYER.loop_mode, "未知")
+        mode_text = loop_modes.get(player.loop_mode, "未知")
         logger.info(f"[播放状态改变] 循环模式: {mode_text}")
 
-        return {"status": "OK", "loop_mode": PLAYER.loop_mode}
+        return {"status": "OK", "loop_mode": player.loop_mode}
     except Exception as e:
         return error_response("[/loop] 设置循环模式异常", exc=e, _logger=logger)
 
 
 @router.post("/pitch")
-async def set_pitch_shift(request: Request):
+async def set_pitch_shift(request: Request, player: MusicPlayer = Depends(get_player)):
     """设置音调偏移（KTV升降调，-6 到 +6 个半音）"""
     try:
         data = await request.json()
         semitones = max(-6, min(6, int(data.get("semitones", 0))))
-        PLAYER.set_pitch_shift(semitones)
+        player.set_pitch_shift(semitones)
         direction = "升" if semitones > 0 else ("降" if semitones < 0 else "原")
         logger.info(f"[播放状态改变] {direction}调: {semitones:+d} 半音")
-        return {"status": "OK", "pitch_shift": PLAYER.pitch_shift}
+        return {"status": "OK", "pitch_shift": player.pitch_shift}
     except (ValueError, TypeError) as e:
         return error_response(f"无效的半音值: {e}", 400)
     except Exception as e:
@@ -440,7 +463,7 @@ async def set_pitch_shift(request: Request):
 
 
 @router.post("/youtube_extract_playlist")
-async def youtube_extract_playlist(request: Request):
+async def youtube_extract_playlist(request: Request, player: MusicPlayer = Depends(get_player)):
     """提取YouTube播放列表"""
     try:
         form = await request.form()
@@ -452,14 +475,14 @@ async def youtube_extract_playlist(request: Request):
                 status_code=400
             )
 
-        videos = StreamSong.extract_playlist(url, max_results=PLAYER.youtube_url_extra_max)
+        videos = StreamSong.extract_playlist(url, max_results=player.youtube_url_extra_max)
         return {"status": "OK", "videos": videos}
     except Exception as e:
         return error_response("[/youtube_extract_playlist] 提取播放列表异常", exc=e, _logger=logger)
 
 
 @router.post("/play_youtube_playlist")
-async def play_youtube_playlist(request: Request):
+async def play_youtube_playlist(request: Request, playlists: Playlists = Depends(get_playlists)):
     """播放YouTube播放列表"""
     try:
         data = await request.json()
@@ -471,9 +494,9 @@ async def play_youtube_playlist(request: Request):
                 status_code=400
             )
 
-        playlist = PLAYLISTS_MANAGER.get_playlist(CURRENT_PLAYLIST_ID)
+        playlist = playlists.get_playlist(CURRENT_PLAYLIST_ID)
         if not playlist:
-            playlist = PLAYLISTS_MANAGER.get_playlist(DEFAULT_PLAYLIST_ID)
+            playlist = playlists.get_playlist(DEFAULT_PLAYLIST_ID)
 
         for video in videos:
             playlist.songs.append({
@@ -485,7 +508,7 @@ async def play_youtube_playlist(request: Request):
             })
 
         playlist.updated_at = time.time()
-        PLAYLISTS_MANAGER.save()
+        playlists.save()
 
         return {"status": "OK", "added": len(videos)}
     except Exception as e:

@@ -28,13 +28,14 @@ import re
 import time
 import logging
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse, HTMLResponse
 
+from models import MusicPlayer, Playlists
+from routers.dependencies import get_player, get_playlists, get_player_lock
 from routers.state import (
-    PLAYER, PLAYLISTS_MANAGER, PLAYBACK_HISTORY,
     DEFAULT_PLAYLIST_ID, CURRENT_PLAYLIST_ID,
-    _player_lock, _broadcast_state, _get_resource_path,
+    _broadcast_state, _get_resource_path,
     Song, LocalSong, StreamSong,
     error_response,
 )
@@ -56,9 +57,9 @@ async def index():
 
 
 @router.get("/playlist_songs")
-async def get_playlist_songs():
+async def get_playlist_songs(playlists: Playlists = Depends(get_playlists)):
     """获取当前歌单的所有歌曲"""
-    playlist = PLAYLISTS_MANAGER.get_playlist(CURRENT_PLAYLIST_ID)
+    playlist = playlists.get_playlist(CURRENT_PLAYLIST_ID)
     songs = playlist.songs if playlist else []
     return {
         "status": "OK",
@@ -69,16 +70,16 @@ async def get_playlist_songs():
 
 
 @router.get("/tree")
-async def get_file_tree():
+async def get_file_tree(player: MusicPlayer = Depends(get_player)):
     """获取本地文件树结构"""
     return {
         "status": "OK",
-        "tree": PLAYER.local_file_tree
+        "tree": player.local_file_tree
     }
 
 
 @router.get("/playlists")
-async def get_playlists():
+async def list_playlists(playlists: Playlists = Depends(get_playlists)):
     """获取所有歌单"""
     return {
         "status": "OK",
@@ -89,13 +90,13 @@ async def get_playlists():
                 "count": len(p.songs),
                 "songs": p.songs
             }
-            for pid, p in PLAYLISTS_MANAGER._playlists.items()
+            for pid, p in playlists._playlists.items()
         ]
     }
 
 
 @router.post("/playlists")
-async def create_playlist_restful(request: Request):
+async def create_playlist_restful(request: Request, playlists: Playlists = Depends(get_playlists)):
     """创建新歌单 (RESTful API)"""
     try:
         data = await request.json()
@@ -104,7 +105,7 @@ async def create_playlist_restful(request: Request):
         if not name:
             return error_response("歌单名称不能为空", 400)
 
-        playlist = PLAYLISTS_MANAGER.create_playlist(name)
+        playlist = playlists.create_playlist(name)
         return {
             "id": playlist.id,
             "name": playlist.name,
@@ -115,13 +116,13 @@ async def create_playlist_restful(request: Request):
 
 
 @router.post("/playlist_create")
-async def create_playlist(request: Request):
+async def create_playlist(request: Request, playlists: Playlists = Depends(get_playlists)):
     """创建新歌单"""
     try:
         data = await request.json()
         name = data.get("name", "新歌单").strip()
 
-        playlist = PLAYLISTS_MANAGER.create_playlist(name)
+        playlist = playlists.create_playlist(name)
         return {
             "status": "OK",
             "playlist_id": playlist.id,
@@ -132,7 +133,11 @@ async def create_playlist(request: Request):
 
 
 @router.post("/playlist_add")
-async def add_to_playlist(request: Request):
+async def add_to_playlist(
+    request: Request,
+    player: MusicPlayer = Depends(get_player),
+    playlists: Playlists = Depends(get_playlists),
+):
     """添加歌曲到歌单（支持指定插入位置）"""
     try:
         data = await request.json()
@@ -146,7 +151,7 @@ async def add_to_playlist(request: Request):
                 status_code=400
             )
 
-        playlist = PLAYLISTS_MANAGER.get_playlist(playlist_id)
+        playlist = playlists.get_playlist(playlist_id)
         if not playlist:
             return JSONResponse(
                 {"status": "ERROR", "error": "歌单不存在"},
@@ -164,8 +169,8 @@ async def add_to_playlist(request: Request):
                 )
 
         if insert_index is None:
-            current_index = PLAYER.current_index if hasattr(PLAYER, 'current_index') else -1
-            logger.info(f"[添加歌曲] 计算插入位置 - PLAYER.current_index: {current_index}, 歌单长度: {len(playlist.songs)}")
+            current_index = player.current_index if hasattr(player, 'current_index') else -1
+            logger.info(f"[添加歌曲] 计算插入位置 - player.current_index: {current_index}, 歌单长度: {len(playlist.songs)}")
 
             if current_index >= 0 and current_index < len(playlist.songs):
                 insert_index = current_index + 1
@@ -197,7 +202,7 @@ async def add_to_playlist(request: Request):
         insert_index = max(0, min(insert_index, len(playlist.songs)))
         playlist.songs.insert(insert_index, song_dict)
         playlist.updated_at = time.time()
-        PLAYLISTS_MANAGER.save()
+        playlists.save()
 
         logger.info(f"[添加歌曲] ✓ 已插入 - 歌单: {playlist_id}, 位置: {insert_index}, 歌曲: {song_data.get('title', 'N/A')}")
         return {
@@ -209,7 +214,7 @@ async def add_to_playlist(request: Request):
 
 
 @router.post("/playlists/{playlist_id}/add_next")
-async def add_song_to_playlist_next(playlist_id: str, request: Request):
+async def add_song_to_playlist_next(playlist_id: str, request: Request, playlists: Playlists = Depends(get_playlists)):
     """添加歌曲到下一曲位置"""
     try:
         form_data = await request.form()
@@ -224,7 +229,7 @@ async def add_song_to_playlist_next(playlist_id: str, request: Request):
                 status_code=400
             )
 
-        playlist = PLAYLISTS_MANAGER.get_playlist(playlist_id)
+        playlist = playlists.get_playlist(playlist_id)
         if not playlist:
             return JSONResponse(
                 {"status": "ERROR", "error": f"歌单 {playlist_id} 不存在"},
@@ -264,7 +269,7 @@ async def add_song_to_playlist_next(playlist_id: str, request: Request):
         song_dict = song_obj.to_dict()
         playlist.songs.insert(insert_index, song_dict)
         playlist.updated_at = time.time()
-        PLAYLISTS_MANAGER.save()
+        playlists.save()
 
         return {"status": "OK", "message": "已添加到下一曲"}
     except Exception as e:
@@ -272,7 +277,7 @@ async def add_song_to_playlist_next(playlist_id: str, request: Request):
 
 
 @router.post("/playlists/{playlist_id}/add_top")
-async def add_song_to_playlist_top(playlist_id: str, request: Request):
+async def add_song_to_playlist_top(playlist_id: str, request: Request, playlists: Playlists = Depends(get_playlists)):
     """添加歌曲到歌单顶部"""
     try:
         form_data = await request.form()
@@ -291,7 +296,7 @@ async def add_song_to_playlist_top(playlist_id: str, request: Request):
         if thumbnail_url:
             song_data["thumbnail_url"] = thumbnail_url
 
-        playlist = PLAYLISTS_MANAGER.get_playlist(playlist_id)
+        playlist = playlists.get_playlist(playlist_id)
         if not playlist:
             return JSONResponse(
                 {"status": "ERROR", "error": f"歌单 {playlist_id} 不存在"},
@@ -304,7 +309,7 @@ async def add_song_to_playlist_top(playlist_id: str, request: Request):
             playlist.songs.insert(0, playlist.songs.pop())
 
         playlist.updated_at = time.time()
-        PLAYLISTS_MANAGER.save()
+        playlists.save()
 
         return {"status": "OK", "message": "已添加到歌单顶部"}
     except Exception as e:
@@ -312,15 +317,19 @@ async def add_song_to_playlist_top(playlist_id: str, request: Request):
 
 
 @router.get("/playlist")
-async def get_current_playlist(playlist_id: str = None):
+async def get_current_playlist(
+    playlist_id: str = None,
+    player: MusicPlayer = Depends(get_player),
+    playlists: Playlists = Depends(get_playlists),
+):
     """获取指定歌单内容（用户隔离：每个浏览器独立选择歌单）"""
     try:
         songs = []
         target_playlist_id = playlist_id or DEFAULT_PLAYLIST_ID
 
-        playlist = PLAYLISTS_MANAGER.get_playlist(target_playlist_id)
+        playlist = playlists.get_playlist(target_playlist_id)
         if not playlist:
-            playlist = PLAYLISTS_MANAGER.get_playlist(DEFAULT_PLAYLIST_ID)
+            playlist = playlists.get_playlist(DEFAULT_PLAYLIST_ID)
             target_playlist_id = DEFAULT_PLAYLIST_ID
 
         if playlist and hasattr(playlist, "songs"):
@@ -344,7 +353,7 @@ async def get_current_playlist(playlist_id: str = None):
 
         current_index = -1
         try:
-            current_index = PLAYER.current_index if hasattr(PLAYER, 'current_index') else -1
+            current_index = player.current_index if hasattr(player, 'current_index') else -1
         except Exception:
             pass
 
@@ -362,7 +371,7 @@ async def get_current_playlist(playlist_id: str = None):
 
 
 @router.delete("/playlists/{playlist_id}")
-async def delete_playlist(playlist_id: str):
+async def delete_playlist(playlist_id: str, playlists: Playlists = Depends(get_playlists)):
     """删除歌单"""
     try:
         if playlist_id == "default":
@@ -371,7 +380,7 @@ async def delete_playlist(playlist_id: str):
                 status_code=400
             )
 
-        if PLAYLISTS_MANAGER.delete_playlist(playlist_id):
+        if playlists.delete_playlist(playlist_id):
             return {"status": "OK", "message": "删除成功"}
         else:
             return JSONResponse(
@@ -383,7 +392,13 @@ async def delete_playlist(playlist_id: str):
 
 
 @router.post("/playlists/{playlist_id}/remove")
-async def remove_song_from_playlist(playlist_id: str, request: Request):
+async def remove_song_from_playlist(
+    playlist_id: str,
+    request: Request,
+    player: MusicPlayer = Depends(get_player),
+    playlists: Playlists = Depends(get_playlists),
+    player_lock=Depends(get_player_lock),
+):
     """从指定歌单中移除歌曲"""
     try:
         form = await request.form()
@@ -397,7 +412,7 @@ async def remove_song_from_playlist(playlist_id: str, request: Request):
                 status_code=400
             )
 
-        playlist = PLAYLISTS_MANAGER.get_playlist(playlist_id)
+        playlist = playlists.get_playlist(playlist_id)
         if not playlist:
             return JSONResponse(
                 {"status": "ERROR", "error": "找不到歌单"},
@@ -410,16 +425,16 @@ async def remove_song_from_playlist(playlist_id: str, request: Request):
                 status_code=400
             )
 
-        with _player_lock:
+        with player_lock:
             playlist.songs.pop(index)
             playlist.updated_at = time.time()
-            PLAYLISTS_MANAGER.save()
+            playlists.save()
 
             if playlist_id == DEFAULT_PLAYLIST_ID:
-                if PLAYER.current_index >= len(playlist.songs):
-                    PLAYER.current_index = max(-1, len(playlist.songs) - 1)
-                elif index < PLAYER.current_index:
-                    PLAYER.current_index -= 1
+                if player.current_index >= len(playlist.songs):
+                    player.current_index = max(-1, len(playlist.songs) - 1)
+                elif index < player.current_index:
+                    player.current_index -= 1
 
         await _broadcast_state()
         return JSONResponse({"status": "OK", "message": "删除成功"})
@@ -429,7 +444,7 @@ async def remove_song_from_playlist(playlist_id: str, request: Request):
 
 
 @router.put("/playlists/{playlist_id}")
-async def update_playlist(playlist_id: str, data: dict):
+async def update_playlist(playlist_id: str, data: dict, playlists: Playlists = Depends(get_playlists)):
     """更新歌单信息（如名称）"""
     try:
         if playlist_id == "default":
@@ -445,7 +460,7 @@ async def update_playlist(playlist_id: str, data: dict):
                 status_code=400
             )
 
-        if PLAYLISTS_MANAGER.rename_playlist(playlist_id, new_name):
+        if playlists.rename_playlist(playlist_id, new_name):
             return {
                 "status": "OK",
                 "message": "修改成功",
@@ -461,10 +476,10 @@ async def update_playlist(playlist_id: str, data: dict):
 
 
 @router.post("/playlists/{playlist_id}/switch")
-async def switch_playlist(playlist_id: str):
+async def switch_playlist(playlist_id: str, playlists: Playlists = Depends(get_playlists)):
     """验证歌单是否存在（用户隔离：不修改后端全局状态）"""
     try:
-        playlist = PLAYLISTS_MANAGER.get_playlist(playlist_id)
+        playlist = playlists.get_playlist(playlist_id)
         if not playlist:
             return error_response("歌单不存在", 404)
 
@@ -481,13 +496,17 @@ async def switch_playlist(playlist_id: str):
 
 
 @router.post("/playlist_play")
-async def playlist_play(request: Request):
+async def playlist_play(
+    request: Request,
+    player: MusicPlayer = Depends(get_player),
+    playlists: Playlists = Depends(get_playlists),
+):
     """播放队列中指定索引的歌曲"""
     try:
         form = await request.form()
         index = int(form.get("index", 0))
 
-        playlist = PLAYLISTS_MANAGER.get_playlist(CURRENT_PLAYLIST_ID)
+        playlist = playlists.get_playlist(CURRENT_PLAYLIST_ID)
         songs = playlist.songs if playlist else []
 
         if 0 <= index < len(songs):
@@ -506,7 +525,7 @@ async def playlist_play(request: Request):
             else:
                 song = LocalSong(file_path=url, title=title)
 
-            PLAYER.play(song, index=index)
+            player.play(song, index=index)
             return JSONResponse({"status": "OK", "message": "播放成功"})
         else:
             return JSONResponse(
@@ -518,7 +537,7 @@ async def playlist_play(request: Request):
 
 
 @router.post("/playlist_reorder")
-async def playlist_reorder(request: Request):
+async def playlist_reorder(request: Request, playlists: Playlists = Depends(get_playlists)):
     """重新排序播放队列"""
     try:
         data = await request.json()
@@ -527,12 +546,12 @@ async def playlist_reorder(request: Request):
         playlist_id = data.get("playlist_id", CURRENT_PLAYLIST_ID)
 
         if from_index is not None and to_index is not None:
-            playlist = PLAYLISTS_MANAGER.get_playlist(playlist_id)
+            playlist = playlists.get_playlist(playlist_id)
             if playlist and 0 <= from_index < len(playlist.songs) and 0 <= to_index < len(playlist.songs):
                 song = playlist.songs.pop(from_index)
                 playlist.songs.insert(to_index, song)
                 playlist.updated_at = time.time()
-                PLAYLISTS_MANAGER.save()
+                playlists.save()
             return JSONResponse({"status": "OK", "message": "重新排序成功"})
         else:
             return JSONResponse(
@@ -544,7 +563,12 @@ async def playlist_reorder(request: Request):
 
 
 @router.post("/playlist_remove")
-async def playlist_remove(request: Request):
+async def playlist_remove(
+    request: Request,
+    player: MusicPlayer = Depends(get_player),
+    playlists: Playlists = Depends(get_playlists),
+    player_lock=Depends(get_player_lock),
+):
     """从队列移除歌曲"""
     try:
         form = await request.form()
@@ -558,7 +582,7 @@ async def playlist_remove(request: Request):
                 status_code=400
             )
 
-        playlist = PLAYLISTS_MANAGER.get_playlist(CURRENT_PLAYLIST_ID)
+        playlist = playlists.get_playlist(CURRENT_PLAYLIST_ID)
         if not playlist:
             return JSONResponse(
                 {"status": "ERROR", "error": "找不到歌单"},
@@ -571,15 +595,15 @@ async def playlist_remove(request: Request):
                 status_code=400
             )
 
-        with _player_lock:
+        with player_lock:
             playlist.songs.pop(index)
             playlist.updated_at = time.time()
-            PLAYLISTS_MANAGER.save()
+            playlists.save()
 
-            if PLAYER.current_index >= len(playlist.songs):
-                PLAYER.current_index = max(-1, len(playlist.songs) - 1)
-            elif index < PLAYER.current_index:
-                PLAYER.current_index -= 1
+            if player.current_index >= len(playlist.songs):
+                player.current_index = max(-1, len(playlist.songs) - 1)
+            elif index < player.current_index:
+                player.current_index -= 1
 
         await _broadcast_state()
         return JSONResponse({"status": "OK", "message": "删除成功"})
@@ -589,26 +613,30 @@ async def playlist_remove(request: Request):
 
 
 @router.post("/playlist_clear")
-async def playlist_clear():
+async def playlist_clear(
+    player: MusicPlayer = Depends(get_player),
+    playlists: Playlists = Depends(get_playlists),
+    player_lock=Depends(get_player_lock),
+):
     """清空播放队列，保留正在播放的歌曲"""
     try:
-        with _player_lock:
-            playlist = PLAYLISTS_MANAGER.get_playlist(CURRENT_PLAYLIST_ID)
+        with player_lock:
+            playlist = playlists.get_playlist(CURRENT_PLAYLIST_ID)
             if playlist:
-                current_idx = PLAYER.current_index
+                current_idx = player.current_index
                 if 0 <= current_idx < len(playlist.songs):
                     # 有正在播放的歌曲：只保留该首，移至索引 0
                     current_song = playlist.songs[current_idx]
                     playlist.songs = [current_song]
-                    PLAYER.current_index = 0
-                    logger.info("[清空队列] 已保留正在播放的歌曲，重置 PLAYER.current_index = 0")
+                    player.current_index = 0
+                    logger.info("[清空队列] 已保留正在播放的歌曲，重置 player.current_index = 0")
                 else:
                     # 没有正在播放的歌曲（current_index == -1）：全部清空
                     playlist.songs = []
-                    PLAYER.current_index = -1
-                    logger.info("[清空队列] 队列已清空，重置 PLAYER.current_index = -1")
+                    player.current_index = -1
+                    logger.info("[清空队列] 队列已清空，重置 player.current_index = -1")
                 playlist.updated_at = time.time()
-                PLAYLISTS_MANAGER.save()
+                playlists.save()
 
         await _broadcast_state()
         return JSONResponse({"status": "OK", "message": "清空成功"})

@@ -15,10 +15,12 @@ import os
 import sys
 import subprocess
 import logging
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Depends
 from fastapi.responses import JSONResponse, FileResponse, Response
 
-from routers.state import PLAYER, _get_resource_path, error_response
+from models import MusicPlayer
+from routers.dependencies import get_player
+from routers.state import _get_resource_path, error_response
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +109,7 @@ async def get_preview_image():
 
 
 @router.get("/cover/{file_path:path}")
-async def get_cover(file_path: str):
+async def get_cover(file_path: str, player: MusicPlayer = Depends(get_player)):
     """获取本地歌曲或目录的封面
 
     对于文件：1. 优先提取音频内嵌封面  2. 回退到目录封面文件
@@ -121,7 +123,7 @@ async def get_cover(file_path: str):
         if os.path.isabs(decoded_path):
             abs_path = decoded_path
         else:
-            abs_path = os.path.join(PLAYER.music_dir, decoded_path)
+            abs_path = os.path.join(player.music_dir, decoded_path)
 
         # 目录：查找封面文件
         if os.path.isdir(abs_path):
@@ -283,10 +285,10 @@ async def video_proxy(url: str, request: Request):
 
 
 @router.post("/refresh_video_url")
-async def refresh_video_url():
+async def refresh_video_url(player: MusicPlayer = Depends(get_player)):
     """重新获取当前播放歌曲的视频直链（当直链过期时调用）"""
     try:
-        current_song = PLAYER.current_meta
+        current_song = player.current_meta
         if not current_song or current_song.get("type") != "youtube":
             return JSONResponse(
                 {"status": "ERROR", "error": "当前不是YouTube歌曲"},
@@ -328,7 +330,7 @@ async def refresh_video_url():
                 video_urls = video_result.stdout.strip().split("\n")
                 if video_urls and video_urls[0]:
                     new_video_url = video_urls[0].strip()
-                    PLAYER.current_meta["video_url"] = new_video_url
+                    player.current_meta["video_url"] = new_video_url
                     logger.info(f"[KTV] 视频URL已刷新: {new_video_url[:100]}...")
 
                     if video_id:
@@ -357,7 +359,7 @@ async def refresh_video_url():
 
 
 @router.post("/volume")
-async def set_volume(request: Request):
+async def set_volume(request: Request, player: MusicPlayer = Depends(get_player)):
     """设置或获取音量"""
     try:
         form = await request.form()
@@ -367,7 +369,7 @@ async def set_volume(request: Request):
             try:
                 volume = int(volume_str)
                 volume = max(0, min(100, volume))
-                PLAYER.mpv_command(["set_property", "volume", volume])
+                player.mpv_command(["set_property", "volume", volume])
                 return {"status": "OK", "volume": volume}
             except ValueError:
                 return JSONResponse(
@@ -376,9 +378,9 @@ async def set_volume(request: Request):
                 )
         else:
             try:
-                current_volume = PLAYER.mpv_get("volume")
+                current_volume = player.mpv_get("volume")
                 if current_volume is None:
-                    local_volume = PLAYER.config.get("LOCAL_VOLUME", "50")
+                    local_volume = player.config.get("LOCAL_VOLUME", "50")
                     try:
                         return {"status": "OK", "volume": int(local_volume)}
                     except (ValueError, TypeError):
@@ -392,10 +394,10 @@ async def set_volume(request: Request):
 
 
 @router.get("/volume/defaults")
-async def get_volume_defaults():
+async def get_volume_defaults(player: MusicPlayer = Depends(get_player)):
     """获取默认音量配置（从settings.ini）"""
     try:
-        config = getattr(PLAYER, 'config', {})
+        config = getattr(player, 'config', {})
         local_vol = config.get("LOCAL_VOLUME", "50") if config else "50"
         try:
             local_volume = int(local_vol)

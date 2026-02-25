@@ -11,10 +11,12 @@ routers/search.py - 搜索路由
 
 import os
 import logging
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
-from routers.state import PLAYER, StreamSong, error_response
+from models import MusicPlayer
+from routers.dependencies import get_player
+from routers.state import StreamSong, error_response
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +24,7 @@ router = APIRouter()
 
 
 @router.post("/search_song")
-async def search_song(request: Request):
+async def search_song(request: Request, player: MusicPlayer = Depends(get_player)):
     """搜索歌曲（本地 + YouTube）"""
     try:
         import time as time_module
@@ -30,7 +32,7 @@ async def search_song(request: Request):
 
         data = await request.json()
         query = data.get("query", "").strip()
-        max_results = data.get("max_results", PLAYER.youtube_search_max_results)
+        max_results = data.get("max_results", player.youtube_search_max_results)
 
         if not query:
             return JSONResponse(
@@ -46,7 +48,7 @@ async def search_song(request: Request):
         if is_url:
             yt_start = time_module.time()
             try:
-                playlist_result = StreamSong.extract_playlist(query, max_results=PLAYER.youtube_url_extra_max)
+                playlist_result = StreamSong.extract_playlist(query, max_results=player.youtube_url_extra_max)
                 if playlist_result.get("status") == "OK":
                     youtube_results = playlist_result.get("entries", [])
                     if not youtube_results:
@@ -62,7 +64,7 @@ async def search_song(request: Request):
                 logger.warning(f"[警告] 提取 YouTube URL 失败: {e}")
         else:
             local_start = time_module.time()
-            local_results = PLAYER.search_local(query, max_results=PLAYER.local_search_max_results)
+            local_results = player.search_local(query, max_results=player.local_search_max_results)
             logger.info(f"[搜索性能] 本地搜索耗时: {time_module.time() - local_start:.2f}秒，结果数: {len(local_results)}")
 
             yt_start = time_module.time()
@@ -87,10 +89,10 @@ async def search_song(request: Request):
 
 
 @router.get("/youtube_search_config")
-async def get_youtube_search_config():
+async def get_youtube_search_config(player: MusicPlayer = Depends(get_player)):
     """获取YouTube搜索配置"""
     return {
-        "max_results": PLAYER.youtube_search_max_results
+        "max_results": player.youtube_search_max_results
     }
 
 
@@ -117,7 +119,7 @@ async def search_youtube(request: Request):
 
 
 @router.post("/get_directory_songs")
-async def get_directory_songs(request: Request):
+async def get_directory_songs(request: Request, player: MusicPlayer = Depends(get_player)):
     """获取目录下的所有歌曲"""
     try:
         data = await request.json()
@@ -130,7 +132,7 @@ async def get_directory_songs(request: Request):
             )
 
         # 防止目录遍历攻击
-        abs_root = os.path.abspath(PLAYER.music_dir)
+        abs_root = os.path.abspath(player.music_dir)
         abs_path = os.path.abspath(os.path.join(abs_root, directory))
 
         if not abs_path.startswith(abs_root):
@@ -149,7 +151,7 @@ async def get_directory_songs(request: Request):
         for dp, _, files in os.walk(abs_path):
             for f in files:
                 ext = os.path.splitext(f)[1].lower()
-                if ext in PLAYER.allowed_extensions:
+                if ext in player.allowed_extensions:
                     full_path = os.path.join(dp, f)
                     rel_path = os.path.relpath(full_path, abs_root).replace("\\", "/")
                     tracks.append({

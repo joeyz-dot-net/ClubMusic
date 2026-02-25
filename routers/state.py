@@ -198,3 +198,14 @@ def error_response(
     if extra:
         body.update(extra)
     return JSONResponse(body, status_code=status_code)
+
+
+# ==================== 注入外部依赖到 MusicPlayer ====================
+# 消除 models/player.py 对 routers.state 的循环导入
+# handle_playback_end() 和 _prefetch_next_song_url() 通过这些回调访问全局单例
+PLAYER.set_external_deps(
+    playlists_manager=PLAYLISTS_MANAGER,
+    default_playlist_id=DEFAULT_PLAYLIST_ID,
+    playback_history=PLAYBACK_HISTORY,
+    broadcast_from_thread=_broadcast_from_thread,
+)

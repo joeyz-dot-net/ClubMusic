@@ -17,10 +17,12 @@ import os
 import sys
 import subprocess
 import logging
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse
 
-from routers.state import PLAYER, error_response
+from routers.state import error_response
+from routers.dependencies import get_player
+from models import MusicPlayer
 
 logger = logging.getLogger(__name__)
 
@@ -225,7 +227,7 @@ async def update_ui_config(request: Request):
 
 
 @router.get("/diagnostic/ytdlp")
-async def diagnostic_ytdlp():
+async def diagnostic_ytdlp(player: MusicPlayer = Depends(get_player)):
     """诊断 yt-dlp 配置状态（用于排查网络歌曲播放问题）"""
     try:
         if getattr(sys, 'frozen', False):
@@ -239,8 +241,8 @@ async def diagnostic_ytdlp():
             "yt_dlp_path": bin_yt_dlp,
             "exists": os.path.exists(bin_yt_dlp),
             "executable": os.access(bin_yt_dlp, os.X_OK) if os.path.exists(bin_yt_dlp) else False,
-            "mpv_running": PLAYER.mpv_pipe_exists(),
-            "mpv_cmd": PLAYER.mpv_cmd,
+            "mpv_running": player.mpv_pipe_exists(),
+            "mpv_cmd": player.mpv_cmd,
             "env_yt_dlp_path": os.environ.get('YT_DLP_PATH', 'Not Set'),
         }
 

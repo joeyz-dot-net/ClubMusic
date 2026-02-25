@@ -278,7 +278,29 @@ class MusicPlayer:
         # 初始化音频设备名映射表（GUID -> 设备友好名）
         self._audio_device_names = self._init_audio_device_map()
 
+        # 外部依赖（通过 set_external_deps 注入，消除对 routers.state 的循环导入）
+        self._ext_playlists_manager = None
+        self._ext_default_playlist_id = None
+        self._ext_playback_history = None
+        self._ext_broadcast_from_thread = None
+
         logger.info(f"播放器初始化完成: music_dir={self.music_dir}, extensions={self.allowed_extensions}")
+
+    def set_external_deps(self, playlists_manager, default_playlist_id,
+                          playback_history, broadcast_from_thread):
+        """注入外部依赖，消除对 routers.state 的循环导入。
+
+        参数:
+            playlists_manager: Playlists 管理器实例
+            default_playlist_id: 默认歌单 ID (字符串)
+            playback_history: PlayHistory 播放历史实例
+            broadcast_from_thread: 从后台线程触发 WebSocket 广播的回调函数
+        """
+        self._ext_playlists_manager = playlists_manager
+        self._ext_default_playlist_id = default_playlist_id
+        self._ext_playback_history = playback_history
+        self._ext_broadcast_from_thread = broadcast_from_thread
+        logger.info("[DI] ✓ 外部依赖已注入到 MusicPlayer")
 
     def _init_audio_device_map(self) -> dict:
         """初始化音频设备 GUID 到设备名的映射表
@@ -754,8 +776,14 @@ class MusicPlayer:
         实现完整的后端控制自动播放流程
         """
         try:
-            # 通过模块导入获取全局管理器实例（绕过线程隔离限制）
-            import routers.state as app
+            # 使用注入的外部依赖（由 set_external_deps 提供，无需循环导入 routers.state）
+            playlists_mgr = self._ext_playlists_manager
+            default_pid = self._ext_default_playlist_id
+            ext_history = self._ext_playback_history
+
+            if playlists_mgr is None or default_pid is None:
+                logger.warning("[自动播放] ⚠️ 外部依赖未注入，跳过自动播放")
+                return
 
             logger.info("[自动播放] ✓ 检测到歌曲播放结束，开始后端自动播放逻辑")
 
@@ -763,7 +791,7 @@ class MusicPlayer:
 
             with self._lock:
                 # 获取默认歌单（当前播放队列）
-                default_playlist = app.PLAYLISTS_MANAGER.get_playlist(app.DEFAULT_PLAYLIST_ID)
+                default_playlist = playlists_mgr.get_playlist(default_pid)
                 if not default_playlist or len(default_playlist.songs) == 0:
                     logger.info("[自动播放] ⚠️ 默认歌单为空，停止自动播放")
                     return
@@ -785,7 +813,7 @@ class MusicPlayer:
                     # 找到了匹配的歌曲，删除它
                     removed_song = default_playlist.songs.pop(removed_index)
                     default_playlist.updated_at = time.time()
-                    app.PLAYLISTS_MANAGER.save()
+                    playlists_mgr.save()
 
                     song_title = removed_song.get('title') if isinstance(removed_song, dict) else str(removed_song)
                     logger.info(f"[自动播放] ✓ 已删除播放完毕的歌曲 (索引{removed_index}): {song_title}")
@@ -795,7 +823,7 @@ class MusicPlayer:
                     if len(default_playlist.songs) > 0:
                         removed_song = default_playlist.songs.pop(0)
                         default_playlist.updated_at = time.time()
-                        app.PLAYLISTS_MANAGER.save()
+                        playlists_mgr.save()
                         song_title = removed_song.get('title') if isinstance(removed_song, dict) else str(removed_song)
                         logger.info(f"[自动播放] ✓ 已删除列表第一首: {song_title}")
 
@@ -825,11 +853,12 @@ class MusicPlayer:
                         song = LocalSong(file_path=url, title=title)
 
                     # 播放歌曲
+                    add_history_func = ext_history.add_to_history if ext_history else self.add_to_playback_history
                     success = song.play(
                         mpv_command_func=self.mpv_command,
                         mpv_pipe_exists_func=self.mpv_pipe_exists,
                         ensure_mpv_func=self.ensure_mpv,
-                        add_to_history_func=app.PLAYBACK_HISTORY.add_to_history,
+                        add_to_history_func=add_history_func,
                         save_to_history=True,
                         music_dir=self.music_dir
                     )
@@ -852,8 +881,8 @@ class MusicPlayer:
                     self.current_index = -1
 
             # 锁外广播（_build_state_message 需要读 MPV 管道，不能在锁内执行）
-            if auto_play_success:
-                app._broadcast_from_thread()
+            if auto_play_success and self._ext_broadcast_from_thread:
+                self._ext_broadcast_from_thread()
 
         except Exception as e:
             logger.error(f"[自动播放] ❌ 后端自动播放异常: {e}")
@@ -2071,8 +2100,11 @@ class MusicPlayer:
         """
         def _do():
             try:
-                import routers.state as _app
-                playlist = _app.PLAYLISTS_MANAGER.get_playlist(_app.DEFAULT_PLAYLIST_ID)
+                playlists_mgr = self._ext_playlists_manager
+                default_pid = self._ext_default_playlist_id
+                if playlists_mgr is None or default_pid is None:
+                    return
+                playlist = playlists_mgr.get_playlist(default_pid)
                 if not playlist or not playlist.songs:
                     return
 
