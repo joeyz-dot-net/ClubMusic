@@ -192,7 +192,8 @@ class MusicPlayerApp {
             nppPlayPause: document.getElementById('nppPlayPause'),
             nppPrev: document.getElementById('nppPrev'),
             nppNext: document.getElementById('nppNext'),
-            nppArtworkSection: document.getElementById('nppArtworkSection')
+            nppArtworkSection: document.getElementById('nppArtworkSection'),
+            nppProgressBar: document.getElementById('nppProgressBar')
         };
     }
 
@@ -603,67 +604,130 @@ class MusicPlayerApp {
             let dragStart = { x: 0, y: 0 };
             let isDragging = false;
             let startOpacity = 1;
+            let isPhoneLandscape = false; // iPhone 横屏时使用水平滑动
             // iPad 屏幕更大，增大阈值防止误触
             const dragThreshold = isIPad() ? 120 : 80;
-            
+
             this.elements.fullPlayer.addEventListener('touchstart', (e) => {
                 dragStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
                 isDragging = true;
                 startOpacity = 1;
+                // 在触摸开始时判断是否为 iPhone 横屏
+                isPhoneLandscape = window.matchMedia('(orientation: landscape) and (max-height: 500px)').matches;
+                // 忽略距左边缘 30px 内的触摸（避免与 iOS 返回手势冲突）
+                if (isPhoneLandscape && dragStart.x < 30) {
+                    isDragging = false;
+                }
             }, { passive: true });
 
             this.elements.fullPlayer.addEventListener('touchmove', (e) => {
                 if (!isDragging) return;
-                
-                const currentY = e.touches[0].clientY;
-                const deltaY = currentY - dragStart.y;
-                
-                // 只在向下拖拽时响应
-                if (deltaY > 0) {
-                    const opacity = Math.max(0.3, 1 - (deltaY / 300));
-                    
-                    this.elements.fullPlayer.style.transform = `translateY(${deltaY}px)`;
-                    this.elements.fullPlayer.style.opacity = opacity;
+
+                if (isPhoneLandscape) {
+                    // iPhone 横屏: 水平右滑关闭
+                    const currentX = e.touches[0].clientX;
+                    const deltaX = currentX - dragStart.x;
+                    if (deltaX > 0) {
+                        const opacity = Math.max(0.3, 1 - (deltaX / 300));
+                        this.elements.fullPlayer.style.transform = `translateX(${deltaX}px)`;
+                        this.elements.fullPlayer.style.opacity = opacity;
+                    }
+                } else {
+                    // 竖屏/iPad: 垂直下滑关闭
+                    const currentY = e.touches[0].clientY;
+                    const deltaY = currentY - dragStart.y;
+                    if (deltaY > 0) {
+                        const opacity = Math.max(0.3, 1 - (deltaY / 300));
+                        this.elements.fullPlayer.style.transform = `translateY(${deltaY}px)`;
+                        this.elements.fullPlayer.style.opacity = opacity;
+                    }
                 }
             }, { passive: true });
 
             this.elements.fullPlayer.addEventListener('touchend', (e) => {
                 if (!isDragging) return;
                 isDragging = false;
-                
-                const endY = e.changedTouches[0].clientY;
-                const deltaY = endY - dragStart.y;
-                
-                if (deltaY > dragThreshold) {
-                    // 拖拽距离足够，执行返回
-                    this.elements.fullPlayer.style.transition = 'all 0.3s ease-out';
-                    this.elements.fullPlayer.style.transform = 'translateY(100%)';
-                    this.elements.fullPlayer.style.opacity = '0';
-                    
-                    setTimeout(() => {
-                        this.elements.fullPlayer.style.transition = '';
-                        this.elements.fullPlayer.style.transform = '';
-                        this.elements.fullPlayer.style.opacity = '';
-                        goBackToNav();
-                    }, 300);
+
+                if (isPhoneLandscape) {
+                    // iPhone 横屏: 水平判断
+                    const endX = e.changedTouches[0].clientX;
+                    const deltaX = endX - dragStart.x;
+
+                    if (deltaX > dragThreshold) {
+                        this.elements.fullPlayer.style.transition = 'all 0.3s ease-out';
+                        this.elements.fullPlayer.style.transform = 'translateX(100%)';
+                        this.elements.fullPlayer.style.opacity = '0';
+
+                        setTimeout(() => {
+                            this.elements.fullPlayer.style.transition = '';
+                            this.elements.fullPlayer.style.transform = '';
+                            this.elements.fullPlayer.style.opacity = '';
+                            goBackToNav();
+                        }, 300);
+                    } else {
+                        this.elements.fullPlayer.style.transition = 'all 0.3s ease-out';
+                        this.elements.fullPlayer.style.transform = 'translateX(0)';
+                        this.elements.fullPlayer.style.opacity = '1';
+
+                        setTimeout(() => {
+                            this.elements.fullPlayer.style.transition = '';
+                        }, 300);
+                    }
                 } else {
-                    // 拖拽距离不足，回弹
-                    this.elements.fullPlayer.style.transition = 'all 0.3s ease-out';
-                    this.elements.fullPlayer.style.transform = 'translateY(0)';
-                    this.elements.fullPlayer.style.opacity = '1';
-                    
-                    setTimeout(() => {
-                        this.elements.fullPlayer.style.transition = '';
-                    }, 300);
+                    // 竖屏/iPad: 垂直判断
+                    const endY = e.changedTouches[0].clientY;
+                    const deltaY = endY - dragStart.y;
+
+                    if (deltaY > dragThreshold) {
+                        this.elements.fullPlayer.style.transition = 'all 0.3s ease-out';
+                        this.elements.fullPlayer.style.transform = 'translateY(100%)';
+                        this.elements.fullPlayer.style.opacity = '0';
+
+                        setTimeout(() => {
+                            this.elements.fullPlayer.style.transition = '';
+                            this.elements.fullPlayer.style.transform = '';
+                            this.elements.fullPlayer.style.opacity = '';
+                            goBackToNav();
+                        }, 300);
+                    } else {
+                        this.elements.fullPlayer.style.transition = 'all 0.3s ease-out';
+                        this.elements.fullPlayer.style.transform = 'translateY(0)';
+                        this.elements.fullPlayer.style.opacity = '1';
+
+                        setTimeout(() => {
+                            this.elements.fullPlayer.style.transition = '';
+                        }, 300);
+                    }
                 }
             });
 
-            // iPad 旋转时重置展开模式，防止布局错乱
+            // iPad 旋转时重置展开模式，防止布局错乱 + 更新 NPP 面板
             if (isIPad()) {
-                window.matchMedia('(orientation: landscape)').addEventListener('change', () => {
-                    if (this.isArtworkExpanded) {
-                        this.toggleArtworkExpand();
-                    }
+                const handleOrientationChange = () => {
+                    // 延迟等待浏览器完成 reflow
+                    setTimeout(() => {
+                        if (this.isArtworkExpanded) {
+                            this.toggleArtworkExpand();
+                        }
+                        // 同时更新 NPP 面板可见性
+                        const status = player.getStatus();
+                        if (status) {
+                            this._updateNowPlayingPanel(status);
+                        }
+                    }, 100);
+                };
+                window.matchMedia('(orientation: landscape)').addEventListener('change', handleOrientationChange);
+
+                // 备用: resize 事件防抖监听
+                let resizeTimer;
+                window.addEventListener('resize', () => {
+                    clearTimeout(resizeTimer);
+                    resizeTimer = setTimeout(() => {
+                        const status = player.getStatus();
+                        if (status) {
+                            this._updateNowPlayingPanel(status);
+                        }
+                    }, 200);
                 });
             }
         }
@@ -883,6 +947,19 @@ class MusicPlayerApp {
         if (this.elements.nppPrev) {
             this.elements.nppPrev.addEventListener('click', () => {
                 player.prev().catch(err => console.error('[NPP Prev] Error:', err));
+            });
+        }
+
+        // Now Playing Panel 进度条: 点击定位
+        if (this.elements.nppProgressBar) {
+            this.elements.nppProgressBar.addEventListener('click', (e) => {
+                const rect = this.elements.nppProgressBar.getBoundingClientRect();
+                const percent = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+                const status = player.getStatus();
+                const duration = status?.mpv?.duration || status?.mpv_state?.duration || 0;
+                if (duration > 0) {
+                    player.seek(percent).catch(err => console.warn('[NPP Seek] Error:', err));
+                }
             });
         }
 

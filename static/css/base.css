@@ -1720,11 +1720,14 @@ button:active { transform: scale(0.98); }
     overflow-y: auto;
     display: none;
     opacity: 0;
-    transition: opacity 0.3s ease, background 0.3s ease;
+    transform: translateY(20px);
+    transition: opacity 0.3s ease, transform 0.3s ease, background 0.3s ease;
+    will-change: opacity, transform;
 }
 
 .full-player.show {
     opacity: 1;
+    transform: translateY(0);
 }
 
 .full-player-content {
@@ -1800,9 +1803,11 @@ button:active { transform: scale(0.98); }
 .full-player-artwork-container.expanded {
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
     border-radius: 0;
     max-width: 100vw;
     max-height: 100vh;
+    max-height: 100dvh;
     box-shadow: none;
     transition: all 0.3s ease;
 }
@@ -1887,6 +1892,7 @@ button:active { transform: scale(0.98); }
 .full-player.artwork-expanded .full-player-artwork {
     padding: 0;
     height: 100vh;
+    height: 100dvh;
 }
 
 /* 隐藏放大按钮（通过配置控制） */
@@ -3316,4 +3322,34 @@ button:active { transform: scale(0.98); }
     flex: 1;
     font-size: 14px;
     line-height: 1.5;
+}
+
+/* ============================================
+   iOS 横屏优化: 性能与可访问性
+   ============================================ */
+
+/* 交互元素: 消除 300ms 点击延迟 */
+button,
+a,
+.nav-item,
+.npp-control-btn,
+.full-player-control-btn,
+.full-player-progress-bar,
+.full-player-volume-slider input[type="range"],
+.playlist-track-item,
+.track-menu-btn,
+.npp-artwork-section {
+    touch-action: manipulation;
+}
+
+/* 减少动画偏好 */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }
