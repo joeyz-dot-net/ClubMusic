@@ -1863,6 +1863,19 @@ button:active { transform: scale(0.98); }
 /* 展开状态下的content布局 */
 .full-player.artwork-expanded .full-player-content {
     padding: 0;
+    position: relative;
+}
+
+/* 展开状态下控制栏固定在底部 */
+.full-player.artwork-expanded .full-player-controls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    justify-content: center;
+    padding: 16px 20px;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    z-index: 10;
 }
 
 /* 展开状态下禁止滚动 */
