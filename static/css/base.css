@@ -1827,9 +1827,12 @@ button:active { transform: scale(0.98); }
 .full-player.artwork-expanded .full-player-info,
 .full-player.artwork-expanded .full-player-progress-section {
     opacity: 0;
-    transform: translateY(10px);
+    height: 0;
+    overflow: hidden;
+    padding: 0;
+    margin: 0;
     pointer-events: none;
-    transition: opacity 0.3s ease, transform 0.3s ease;
+    transition: opacity 0.3s ease, height 0.3s ease;
 }
 
 /* 展开状态下隐藏控制栏中除放大按钮外的其他按钮 */
@@ -1841,7 +1844,16 @@ button:active { transform: scale(0.98); }
 }
 
 /* 展开状态下同时隐藏音量条、音调文字 */
-.full-player.artwork-expanded .full-player-volume,
+.full-player.artwork-expanded .full-player-volume {
+    opacity: 0;
+    height: 0;
+    overflow: hidden;
+    padding: 0;
+    margin: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease, height 0.3s ease;
+}
+
 .full-player.artwork-expanded .full-player-controls .full-player-pitch-display {
     opacity: 0;
     pointer-events: none;
@@ -1853,10 +1865,15 @@ button:active { transform: scale(0.98); }
     padding: 0;
 }
 
+/* 展开状态下禁止滚动 */
+.full-player.artwork-expanded {
+    overflow: hidden;
+}
+
 /* 展开状态下的artwork区域 */
 .full-player.artwork-expanded .full-player-artwork {
     padding: 0;
-    height: 75vh;
+    height: 100vh;
 }
 
 /* 隐藏放大按钮（通过配置控制） */

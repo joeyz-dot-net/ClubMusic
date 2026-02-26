@@ -172,7 +172,56 @@
 		</div>
 	</div>
 
-	
+	<!-- iPad Landscape: Now Playing Side Panel -->
+	<div id="nowPlayingPanel" class="now-playing-panel" style="display:none;">
+		<div class="now-playing-panel-inner">
+			<!-- Tap to open fullscreen player -->
+			<div class="npp-artwork-section" id="nppArtworkSection">
+				<div class="npp-artwork-container">
+					<img id="nppCover" src="" alt="" onerror="this.style.display='none';" loading="eager" decoding="async" />
+					<div class="npp-artwork-placeholder" id="nppPlaceholder">🎵</div>
+				</div>
+			</div>
+
+			<!-- Song Info -->
+			<div class="npp-info">
+				<div class="npp-title" id="nppTitle">未播放</div>
+				<div class="npp-artist" id="nppArtist">--</div>
+			</div>
+
+			<!-- Progress Bar -->
+			<div class="npp-progress-section">
+				<div class="npp-progress-bar" id="nppProgressBar">
+					<div class="npp-progress-fill" id="nppProgressFill"></div>
+				</div>
+				<div class="npp-time">
+					<span id="nppCurrentTime">0:00</span>
+					<span id="nppDuration">0:00</span>
+				</div>
+			</div>
+
+			<!-- Controls -->
+			<div class="npp-controls">
+				<button class="npp-control-btn npp-prev" id="nppPrev" title="上一首" data-i18n-title="player.prev">
+					<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+						<path d="M16 6h2v12h-2V6zM8 12l8.5-6v12L8 12z"/>
+					</svg>
+				</button>
+				<button class="npp-control-btn npp-play-pause" id="nppPlayPause" title="播放/暂停" data-i18n-title="player.playPause">
+					<svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor">
+						<path d="M8 5v14l11-7z"/>
+					</svg>
+				</button>
+				<button class="npp-control-btn npp-next" id="nppNext" title="下一首" data-i18n-title="player.next">
+					<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+						<path d="M6 6h2v12H6V6zm10 6l-8.5 6V6L16 12z"/>
+					</svg>
+				</button>
+			</div>
+		</div>
+	</div>
+
+
 	<!-- Bottom Navigation (简化版：队列、搜索、设置) -->
 	<nav id="bottomNav" class="bottom-nav">
 		<button class="nav-item active" data-tab="playlists" aria-label="播放列表" data-i18n-aria="nav.queue">

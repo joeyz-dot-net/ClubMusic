@@ -10,7 +10,7 @@ import { searchManager } from './search.js';
 import { themeManager } from './themeManager.js';
 import { debug } from './debug.js';
 import { Toast, loading, formatTime } from './ui.js';
-import { isMobile, ThumbnailManager } from './utils.js';
+import { isMobile, isIPad, ThumbnailManager } from './utils.js';
 import { localFiles } from './local.js';
 import { settingsManager } from './settingsManager.js';
 import { navManager } from './navManager.js';
@@ -178,7 +178,21 @@ class MusicPlayerApp {
             // 标签导航
             bottomNav: document.getElementById('bottomNav'),
             playlist: document.getElementById('playlist'),
-            tree: document.getElementById('tree')
+            tree: document.getElementById('tree'),
+
+            // Now Playing Panel (iPad Landscape)
+            nppPanel: document.getElementById('nowPlayingPanel'),
+            nppCover: document.getElementById('nppCover'),
+            nppPlaceholder: document.getElementById('nppPlaceholder'),
+            nppTitle: document.getElementById('nppTitle'),
+            nppArtist: document.getElementById('nppArtist'),
+            nppProgressFill: document.getElementById('nppProgressFill'),
+            nppCurrentTime: document.getElementById('nppCurrentTime'),
+            nppDuration: document.getElementById('nppDuration'),
+            nppPlayPause: document.getElementById('nppPlayPause'),
+            nppPrev: document.getElementById('nppPrev'),
+            nppNext: document.getElementById('nppNext'),
+            nppArtworkSection: document.getElementById('nppArtworkSection')
         };
     }
 
@@ -379,6 +393,63 @@ class MusicPlayerApp {
         display.classList.toggle('offset-active', rounded !== 0);
     }
 
+    // Now Playing 侧边面板更新 (iPad 横屏)
+    _updateNowPlayingPanel(status) {
+        const panel = this.elements.nppPanel;
+        if (!panel) return;
+
+        const isLandscapeTablet = window.matchMedia(
+            '(min-width: 1024px) and (orientation: landscape)'
+        ).matches;
+        const hasSong = !!(status?.current_meta?.title || status?.current_title);
+
+        if (!isLandscapeTablet || !hasSong) {
+            panel.style.display = 'none';
+            document.body.classList.remove('npp-visible');
+            return;
+        }
+
+        panel.style.display = '';
+        document.body.classList.add('npp-visible');
+
+        // 标题 / 艺术家
+        const title = status.current_title || status.title || status.current_meta?.title || '';
+        const artist = status.current_meta?.artist || status.artist || '--';
+
+        if (this.elements.nppTitle) this.elements.nppTitle.textContent = title;
+        if (this.elements.nppArtist) this.elements.nppArtist.textContent = artist;
+
+        // 封面 (复用 ThumbnailManager)
+        const thumbnailUrl = status.thumbnail_url || status.current_meta?.thumbnail_url || '';
+        if (thumbnailUrl && this.elements.nppCover) {
+            this.elements.nppCover.style.display = 'block';
+            if (this.elements.nppPlaceholder) this.elements.nppPlaceholder.style.display = 'none';
+            this.thumbnailManager.setupFallback(this.elements.nppCover, thumbnailUrl, '🎵');
+        } else {
+            if (this.elements.nppCover) this.elements.nppCover.style.display = 'none';
+            if (this.elements.nppPlaceholder) this.elements.nppPlaceholder.style.display = 'flex';
+        }
+
+        // 播放/暂停按钮 SVG
+        const isPlaying = (status.mpv?.paused || status.mpv_state?.paused) === false;
+        if (this.elements.nppPlayPause) {
+            const path = this.elements.nppPlayPause.querySelector('svg path');
+            if (path) {
+                path.setAttribute('d', isPlaying ?
+                    'M6 4h4v16H6V4zm8 0h4v16h-4V4z' :
+                    'M8 5v14l11-7z'
+                );
+            }
+        }
+
+        // 时长
+        const mpvData = status.mpv || status.mpv_state || {};
+        const duration = mpvData.duration || 0;
+        if (this.elements.nppDuration) {
+            this.elements.nppDuration.textContent = formatTime(duration);
+        }
+    }
+
     // RAF 进度循环：以每帧频率（~60fps）更新进度条，无需依赖服务器轮询
     _startProgressLoop() {
         if (this._progressRafId) return;
@@ -411,6 +482,12 @@ class MusicPlayerApp {
             this.elements.fullPlayerProgressFill.style.width = percent + '%';
         if (this.elements.fullPlayerProgressThumb)
             this.elements.fullPlayerProgressThumb.style.left = percent + '%';
+
+        // Now Playing Panel 进度
+        if (this.elements.nppProgressFill)
+            this.elements.nppProgressFill.style.width = percent + '%';
+        if (this.elements.nppCurrentTime)
+            this.elements.nppCurrentTime.textContent = formatTime(currentTime);
     }
 
 
@@ -526,6 +603,8 @@ class MusicPlayerApp {
             let dragStart = { x: 0, y: 0 };
             let isDragging = false;
             let startOpacity = 1;
+            // iPad 屏幕更大，增大阈值防止误触
+            const dragThreshold = isIPad() ? 120 : 80;
             
             this.elements.fullPlayer.addEventListener('touchstart', (e) => {
                 dragStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -541,7 +620,6 @@ class MusicPlayerApp {
                 
                 // 只在向下拖拽时响应
                 if (deltaY > 0) {
-                    const dragThreshold = 80; // 拖拽阈值
                     const opacity = Math.max(0.3, 1 - (deltaY / 300));
                     
                     this.elements.fullPlayer.style.transform = `translateY(${deltaY}px)`;
@@ -555,7 +633,6 @@ class MusicPlayerApp {
                 
                 const endY = e.changedTouches[0].clientY;
                 const deltaY = endY - dragStart.y;
-                const dragThreshold = 80; // 拖拽阈值
                 
                 if (deltaY > dragThreshold) {
                     // 拖拽距离足够，执行返回
@@ -580,6 +657,15 @@ class MusicPlayerApp {
                     }, 300);
                 }
             });
+
+            // iPad 旋转时重置展开模式，防止布局错乱
+            if (isIPad()) {
+                window.matchMedia('(orientation: landscape)').addEventListener('change', () => {
+                    if (this.isArtworkExpanded) {
+                        this.toggleArtworkExpand();
+                    }
+                });
+            }
         }
 
         // 全屏播放器控制
@@ -671,6 +757,16 @@ class MusicPlayerApp {
         if (this.elements.fullPlayerExpand) {
             this.elements.fullPlayerExpand.addEventListener('click', () => {
                 this.toggleArtworkExpand();
+            });
+        }
+
+        // 展开模式下点击封面/视频区域收回
+        const artworkContainer = this.elements.fullPlayerCover?.parentElement;
+        if (artworkContainer) {
+            artworkContainer.addEventListener('click', (e) => {
+                if (this.isArtworkExpanded && !e.target.closest('.full-player-expand')) {
+                    this.toggleArtworkExpand();
+                }
             });
         }
 
@@ -772,7 +868,46 @@ class MusicPlayerApp {
         if (debug && typeof debug.initAudioFormatButtons === 'function') {
             debug.initAudioFormatButtons();
         }
-        
+
+        // Now Playing Panel 控件
+        if (this.elements.nppPlayPause) {
+            this.elements.nppPlayPause.addEventListener('click', () => {
+                player.togglePlayPause();
+            });
+        }
+        if (this.elements.nppNext) {
+            this.elements.nppNext.addEventListener('click', () => {
+                player.next().catch(err => console.error('[NPP Next] Error:', err));
+            });
+        }
+        if (this.elements.nppPrev) {
+            this.elements.nppPrev.addEventListener('click', () => {
+                player.prev().catch(err => console.error('[NPP Prev] Error:', err));
+            });
+        }
+
+        // 点击封面打开全屏播放器
+        if (this.elements.nppArtworkSection) {
+            this.elements.nppArtworkSection.addEventListener('click', () => {
+                if (this.elements.fullPlayer) {
+                    this.elements.fullPlayer.style.display = 'flex';
+                    setTimeout(() => {
+                        this.elements.fullPlayer.classList.add('show');
+                    }, 10);
+                }
+            });
+        }
+
+        // 横屏/竖屏切换时更新 Now Playing 面板
+        if (isIPad()) {
+            window.matchMedia('(orientation: landscape)').addEventListener('change', () => {
+                const status = player.getStatus();
+                if (status) {
+                    this._updateNowPlayingPanel(status);
+                }
+            });
+        }
+
         // 标签页切换
         this.setupTabNavigation();
     }
@@ -927,6 +1062,9 @@ class MusicPlayerApp {
         if (status && status.loop_mode !== undefined) {
             this.updateLoopButtonUI(status.loop_mode);
         }
+
+        // 更新 Now Playing 侧边面板 (iPad 横屏)
+        this._updateNowPlayingPanel(status);
     }
 
 
@@ -1739,6 +1877,7 @@ class MusicPlayerApp {
             }
             if (fullPlayer) {
                 fullPlayer.classList.add('artwork-expanded');
+                fullPlayer.scrollTop = 0;
             }
 
             console.log('[UI] 视频容器已展开到全屏');

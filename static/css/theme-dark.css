@@ -720,3 +720,33 @@ button:hover { background: var(--button-hover-bg); border-color: var(--button-ho
 .ranking-empty-text {
     color: #888;
 }
+
+/* Now Playing Panel - Dark Theme */
+.now-playing-panel {
+    background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+    border-left-color: var(--border-color);
+}
+
+.npp-artwork-container {
+    background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+}
+
+.npp-title { color: #ffffff; }
+.npp-artist { color: #999; }
+
+.npp-progress-bar { background: rgba(255, 255, 255, 0.1); }
+.npp-progress-fill { background: linear-gradient(90deg, #4a9eff 0%, #1e7aff 100%); }
+.npp-time { color: #999; }
+
+.npp-control-btn { color: #fff; }
+.npp-control-btn:hover { background: rgba(255, 255, 255, 0.1); }
+
+.npp-play-pause {
+    background: linear-gradient(135deg, #4a9eff 0%, #1e7aff 100%);
+    color: #ffffff;
+    box-shadow: 0 4px 16px rgba(30, 122, 255, 0.4);
+}
+
+.npp-play-pause:hover {
+    background: linear-gradient(135deg, #5aafff 0%, #2e8aff 100%);
+}

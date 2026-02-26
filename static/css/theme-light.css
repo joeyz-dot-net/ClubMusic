@@ -774,3 +774,34 @@ body.theme-light {
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
 }
+
+/* Now Playing Panel - Light Theme */
+.theme-light .now-playing-panel {
+    background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
+    border-left-color: rgba(226, 232, 240, 0.6);
+}
+
+.theme-light .npp-artwork-container {
+    background: #f0f2f5;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.theme-light .npp-title { color: #1a202c; }
+.theme-light .npp-artist { color: #718096; }
+
+.theme-light .npp-progress-bar { background: rgba(0, 0, 0, 0.1); }
+.theme-light .npp-progress-fill { background: linear-gradient(90deg, #3182ce 0%, #2c5282 100%); }
+.theme-light .npp-time { color: #718096; }
+
+.theme-light .npp-control-btn { color: #4a5568; }
+.theme-light .npp-control-btn:hover { background: rgba(49, 130, 206, 0.08); }
+
+.theme-light .npp-play-pause {
+    background: linear-gradient(135deg, #3182ce 0%, #2c5282 100%);
+    color: #ffffff;
+    box-shadow: 0 4px 16px rgba(49, 130, 206, 0.3);
+}
+
+.theme-light .npp-play-pause:hover {
+    background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+}
