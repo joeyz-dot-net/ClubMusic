@@ -14,6 +14,8 @@ routers/dependencies.py - FastAPI 依赖注入提供函数
         player.play(song, ...)
 """
 
+from fastapi import Request
+
 from routers.state import (
     PLAYER,
     PLAYLISTS_MANAGER,
@@ -22,12 +24,25 @@ from routers.state import (
     SETTINGS,
     _player_lock,
     ws_manager,
+    get_player_for_pipe,
 )
 from models import MusicPlayer, Playlists, HitRank, PlayHistory
 
 
 def get_player() -> MusicPlayer:
     """提供 MusicPlayer 单例"""
+    return PLAYER
+
+
+def get_player_for_request(request: Request) -> MusicPlayer:
+    """根据请求中的 pipe 参数返回对应的 Player 实例。
+
+    pipe 查询参数存在 → 返回/创建 PipePlayer；
+    无 pipe 参数 → 返回默认 PLAYER 单例（向后兼容）。
+    """
+    pipe = request.query_params.get('pipe', None)
+    if pipe:
+        return get_player_for_pipe(pipe)
     return PLAYER
 
 

@@ -19,7 +19,7 @@ from fastapi import APIRouter, Request, HTTPException, Depends
 from fastapi.responses import JSONResponse, FileResponse, Response
 
 from models import MusicPlayer
-from routers.dependencies import get_player
+from routers.dependencies import get_player_for_request
 from routers.state import _get_resource_path, error_response
 
 logger = logging.getLogger(__name__)
@@ -109,7 +109,7 @@ async def get_preview_image():
 
 
 @router.get("/cover/{file_path:path}")
-async def get_cover(file_path: str, player: MusicPlayer = Depends(get_player)):
+async def get_cover(file_path: str, player: MusicPlayer = Depends(get_player_for_request)):
     """获取本地歌曲或目录的封面
 
     对于文件：1. 优先提取音频内嵌封面  2. 回退到目录封面文件
@@ -285,7 +285,7 @@ async def video_proxy(url: str, request: Request):
 
 
 @router.post("/refresh_video_url")
-async def refresh_video_url(player: MusicPlayer = Depends(get_player)):
+async def refresh_video_url(player: MusicPlayer = Depends(get_player_for_request)):
     """重新获取当前播放歌曲的视频直链（当直链过期时调用）"""
     try:
         current_song = player.current_meta
@@ -359,7 +359,7 @@ async def refresh_video_url(player: MusicPlayer = Depends(get_player)):
 
 
 @router.post("/volume")
-async def set_volume(request: Request, player: MusicPlayer = Depends(get_player)):
+async def set_volume(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
     """设置或获取音量"""
     try:
         form = await request.form()
@@ -394,7 +394,7 @@ async def set_volume(request: Request, player: MusicPlayer = Depends(get_player)
 
 
 @router.get("/volume/defaults")
-async def get_volume_defaults(player: MusicPlayer = Depends(get_player)):
+async def get_volume_defaults(player: MusicPlayer = Depends(get_player_for_request)):
     """获取默认音量配置（从settings.ini）"""
     try:
         config = getattr(player, 'config', {})

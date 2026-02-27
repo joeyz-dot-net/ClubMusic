@@ -26,9 +26,10 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
 from models import MusicPlayer, Playlists, PlayHistory
-from routers.dependencies import get_player, get_playlists, get_playback_history, get_player_lock
+from routers.dependencies import get_player_for_request, get_playlists, get_playback_history, get_player_lock
 from routers.state import (
     DEFAULT_PLAYLIST_ID, CURRENT_PLAYLIST_ID,
+    get_current_playlist_id,
     _broadcast_state,
     mpv_get, mpv_command,
     LocalSong, StreamSong,
@@ -45,7 +46,7 @@ router = APIRouter()
 @router.post("/play")
 async def play(
     request: Request,
-    player: MusicPlayer = Depends(get_player),
+    player: MusicPlayer = Depends(get_player_for_request),
     playlists: Playlists = Depends(get_playlists),
     playback_history: PlayHistory = Depends(get_playback_history),
     player_lock=Depends(get_player_lock),
@@ -98,7 +99,8 @@ async def play(
             logger.info(f"▶️ [播放状态改变] 正在播放: {title} (类型: {song_type})")
 
             try:
-                playlist = playlists.get_playlist(CURRENT_PLAYLIST_ID)
+                current_pid = get_current_playlist_id(player)
+                playlist = playlists.get_playlist(current_pid)
                 if playlist:
                     for idx, song_item in enumerate(playlist.songs):
                         song_item_url = song_item.get("url") if isinstance(song_item, dict) else str(song_item)
@@ -122,7 +124,7 @@ async def play(
 @router.post("/play_song")
 async def play_song(
     request: Request,
-    player: MusicPlayer = Depends(get_player),
+    player: MusicPlayer = Depends(get_player_for_request),
     playlists: Playlists = Depends(get_playlists),
     playback_history: PlayHistory = Depends(get_playback_history),
     player_lock=Depends(get_player_lock),
@@ -133,7 +135,8 @@ async def play_song(
 
 @router.post("/next")
 async def next_track(
-    player: MusicPlayer = Depends(get_player),
+    request: Request,
+    player: MusicPlayer = Depends(get_player_for_request),
     playlists: Playlists = Depends(get_playlists),
     playback_history: PlayHistory = Depends(get_playback_history),
     player_lock=Depends(get_player_lock),
@@ -141,7 +144,8 @@ async def next_track(
     """播放下一首（删除当前曲并播放队首）"""
     try:
         with player_lock:
-            playlist = playlists.get_playlist(DEFAULT_PLAYLIST_ID)
+            current_pid = get_current_playlist_id(player)
+            playlist = playlists.get_playlist(current_pid)
             songs = playlist.songs if playlist else []
 
             if not songs:
@@ -238,7 +242,8 @@ async def next_track(
 
 @router.post("/prev")
 async def prev_track(
-    player: MusicPlayer = Depends(get_player),
+    request: Request,
+    player: MusicPlayer = Depends(get_player_for_request),
     playlists: Playlists = Depends(get_playlists),
     playback_history: PlayHistory = Depends(get_playback_history),
     player_lock=Depends(get_player_lock),
@@ -246,7 +251,8 @@ async def prev_track(
     """播放上一首"""
     try:
         with player_lock:
-            playlist = playlists.get_playlist(CURRENT_PLAYLIST_ID)
+            current_pid = get_current_playlist_id(player)
+            playlist = playlists.get_playlist(current_pid)
             songs = playlist.songs if playlist else []
 
             if not songs:
@@ -321,20 +327,25 @@ async def prev_track(
 
 
 @router.get("/status")
-async def get_status(player: MusicPlayer = Depends(get_player), playlists: Playlists = Depends(get_playlists)):
+async def get_status(
+    request: Request,
+    player: MusicPlayer = Depends(get_player_for_request),
+    playlists: Playlists = Depends(get_playlists),
+):
     """获取播放器状态"""
     try:
         from routers.media import _get_cover_from_directory, _extract_embedded_cover_bytes
 
-        playlist = playlists.get_playlist(CURRENT_PLAYLIST_ID)
+        current_pid = get_current_playlist_id(player)
+        playlist = playlists.get_playlist(current_pid)
 
         mpv_state = {"paused": True, "time_pos": 0, "duration": 0, "volume": 50}
         try:
             mpv_state = {
-                "paused": mpv_get("pause"),
-                "time_pos": mpv_get("time-pos"),
-                "duration": mpv_get("duration"),
-                "volume": mpv_get("volume")
+                "paused": player.mpv_get("pause"),
+                "time_pos": player.mpv_get("time-pos"),
+                "duration": player.mpv_get("duration"),
+                "volume": player.mpv_get("volume")
             }
         except Exception as e:
             logger.debug(f"获取 MPV 状态失败 (MPV 可能未运行): {e}")
@@ -363,7 +374,7 @@ async def get_status(player: MusicPlayer = Depends(get_player), playlists: Playl
         return {
             "status": "OK",
             "current_meta": current_meta,
-            "current_playlist_id": CURRENT_PLAYLIST_ID,
+            "current_playlist_id": current_pid,
             "current_playlist_name": playlist.name if playlist else "--",
             "loop_mode": player.loop_mode,
             "pitch_shift": player.pitch_shift,
@@ -377,7 +388,7 @@ async def get_status(player: MusicPlayer = Depends(get_player), playlists: Playl
                 "status": "ERROR",
                 "error": "获取播放器状态失败",
                 "current_meta": {},
-                "current_playlist_id": DEFAULT_PLAYLIST_ID,
+                "current_playlist_id": get_current_playlist_id(player) if player else DEFAULT_PLAYLIST_ID,
                 "current_playlist_name": "--",
                 "loop_mode": 0,
                 "pitch_shift": 0,
@@ -388,12 +399,16 @@ async def get_status(player: MusicPlayer = Depends(get_player), playlists: Playl
 
 
 @router.post("/pause")
-async def pause(player: MusicPlayer = Depends(get_player), player_lock=Depends(get_player_lock)):
+async def pause(
+    request: Request,
+    player: MusicPlayer = Depends(get_player_for_request),
+    player_lock=Depends(get_player_lock),
+):
     """暂停/继续播放"""
     try:
         with player_lock:
-            paused = mpv_get("pause")
-            mpv_command(["set_property", "pause", not paused])
+            paused = player.mpv_get("pause")
+            player.mpv_command(["set_property", "pause", not paused])
 
         new_paused = not paused
         if player.current_meta and player.current_meta.get("url"):
@@ -408,32 +423,36 @@ async def pause(player: MusicPlayer = Depends(get_player), player_lock=Depends(g
 
 
 @router.post("/toggle_pause")
-async def toggle_pause(player: MusicPlayer = Depends(get_player), player_lock=Depends(get_player_lock)):
+async def toggle_pause(
+    request: Request,
+    player: MusicPlayer = Depends(get_player_for_request),
+    player_lock=Depends(get_player_lock),
+):
     """暂停/继续播放（别名）"""
-    return await pause(player, player_lock)
+    return await pause(request, player, player_lock)
 
 
 @router.post("/seek")
-async def seek(request: Request):
+async def seek(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
     """跳转到指定位置"""
     try:
         form = await request.form()
         percent = float(form.get("percent", 0))
 
-        duration = mpv_get("duration")
+        duration = player.mpv_get("duration")
         if duration and duration > 0:
             position = (percent / 100) * duration
-            mpv_command(["seek", position, "absolute"])
+            player.mpv_command(["seek", position, "absolute"])
             return {"status": "OK", "position": position}
         else:
-            mpv_command(["seek", percent, "absolute-percent"])
+            player.mpv_command(["seek", percent, "absolute-percent"])
             return {"status": "OK", "percent": percent}
     except Exception as e:
         return error_response("[/seek] 跳转异常", exc=e, _logger=logger)
 
 
 @router.post("/loop")
-async def set_loop_mode(player: MusicPlayer = Depends(get_player)):
+async def set_loop_mode(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
     """设置循环模式"""
     try:
         player.toggle_loop_mode()
@@ -448,7 +467,7 @@ async def set_loop_mode(player: MusicPlayer = Depends(get_player)):
 
 
 @router.post("/pitch")
-async def set_pitch_shift(request: Request, player: MusicPlayer = Depends(get_player)):
+async def set_pitch_shift(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
     """设置音调偏移（KTV升降调，-6 到 +6 个半音）"""
     try:
         data = await request.json()
@@ -464,7 +483,7 @@ async def set_pitch_shift(request: Request, player: MusicPlayer = Depends(get_pl
 
 
 @router.post("/youtube_extract_playlist")
-async def youtube_extract_playlist(request: Request, player: MusicPlayer = Depends(get_player)):
+async def youtube_extract_playlist(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
     """提取YouTube播放列表"""
     try:
         form = await request.form()
@@ -483,7 +502,11 @@ async def youtube_extract_playlist(request: Request, player: MusicPlayer = Depen
 
 
 @router.post("/play_youtube_playlist")
-async def play_youtube_playlist(request: Request, playlists: Playlists = Depends(get_playlists)):
+async def play_youtube_playlist(
+    request: Request,
+    player: MusicPlayer = Depends(get_player_for_request),
+    playlists: Playlists = Depends(get_playlists),
+):
     """播放YouTube播放列表"""
     try:
         data = await request.json()
@@ -495,7 +518,8 @@ async def play_youtube_playlist(request: Request, playlists: Playlists = Depends
                 status_code=400
             )
 
-        playlist = playlists.get_playlist(CURRENT_PLAYLIST_ID)
+        current_pid = get_current_playlist_id(player)
+        playlist = playlists.get_playlist(current_pid)
         if not playlist:
             playlist = playlists.get_playlist(DEFAULT_PLAYLIST_ID)
 

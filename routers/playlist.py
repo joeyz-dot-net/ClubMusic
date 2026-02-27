@@ -32,9 +32,10 @@ from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse, HTMLResponse
 
 from models import MusicPlayer, Playlists
-from routers.dependencies import get_player, get_playlists, get_player_lock
+from routers.dependencies import get_player_for_request, get_playlists, get_player_lock
 from routers.state import (
     DEFAULT_PLAYLIST_ID, CURRENT_PLAYLIST_ID,
+    get_current_playlist_id,
     _broadcast_state, _get_resource_path,
     Song, LocalSong, StreamSong,
     error_response,
@@ -57,20 +58,25 @@ async def index():
 
 
 @router.get("/playlist_songs")
-async def get_playlist_songs(playlists: Playlists = Depends(get_playlists)):
+async def get_playlist_songs(
+    request: Request,
+    player: MusicPlayer = Depends(get_player_for_request),
+    playlists: Playlists = Depends(get_playlists),
+):
     """获取当前歌单的所有歌曲"""
-    playlist = playlists.get_playlist(CURRENT_PLAYLIST_ID)
+    current_pid = get_current_playlist_id(player)
+    playlist = playlists.get_playlist(current_pid)
     songs = playlist.songs if playlist else []
     return {
         "status": "OK",
         "songs": songs,
-        "playlist_id": CURRENT_PLAYLIST_ID,
+        "playlist_id": current_pid,
         "playlist_name": playlist.name if playlist else "--"
     }
 
 
 @router.get("/tree")
-async def get_file_tree(player: MusicPlayer = Depends(get_player)):
+async def get_file_tree(player: MusicPlayer = Depends(get_player_for_request)):
     """获取本地文件树结构"""
     return {
         "status": "OK",
@@ -135,13 +141,13 @@ async def create_playlist(request: Request, playlists: Playlists = Depends(get_p
 @router.post("/playlist_add")
 async def add_to_playlist(
     request: Request,
-    player: MusicPlayer = Depends(get_player),
+    player: MusicPlayer = Depends(get_player_for_request),
     playlists: Playlists = Depends(get_playlists),
 ):
     """添加歌曲到歌单（支持指定插入位置）"""
     try:
         data = await request.json()
-        playlist_id = data.get("playlist_id", CURRENT_PLAYLIST_ID)
+        playlist_id = data.get("playlist_id", get_current_playlist_id(player))
         song_data = data.get("song")
         insert_index = data.get("insert_index")
 
@@ -318,19 +324,21 @@ async def add_song_to_playlist_top(playlist_id: str, request: Request, playlists
 
 @router.get("/playlist")
 async def get_current_playlist(
+    request: Request,
     playlist_id: str = None,
-    player: MusicPlayer = Depends(get_player),
+    player: MusicPlayer = Depends(get_player_for_request),
     playlists: Playlists = Depends(get_playlists),
 ):
     """获取指定歌单内容（用户隔离：每个浏览器独立选择歌单）"""
     try:
         songs = []
-        target_playlist_id = playlist_id or DEFAULT_PLAYLIST_ID
+        default_pid = get_current_playlist_id(player)
+        target_playlist_id = playlist_id or default_pid
 
         playlist = playlists.get_playlist(target_playlist_id)
         if not playlist:
-            playlist = playlists.get_playlist(DEFAULT_PLAYLIST_ID)
-            target_playlist_id = DEFAULT_PLAYLIST_ID
+            playlist = playlists.get_playlist(default_pid)
+            target_playlist_id = default_pid
 
         if playlist and hasattr(playlist, "songs"):
             for s in playlist.songs:
@@ -395,7 +403,7 @@ async def delete_playlist(playlist_id: str, playlists: Playlists = Depends(get_p
 async def remove_song_from_playlist(
     playlist_id: str,
     request: Request,
-    player: MusicPlayer = Depends(get_player),
+    player: MusicPlayer = Depends(get_player_for_request),
     playlists: Playlists = Depends(get_playlists),
     player_lock=Depends(get_player_lock),
 ):
@@ -430,7 +438,7 @@ async def remove_song_from_playlist(
             playlist.updated_at = time.time()
             playlists.save()
 
-            if playlist_id == DEFAULT_PLAYLIST_ID:
+            if playlist_id == get_current_playlist_id(player):
                 if player.current_index >= len(playlist.songs):
                     player.current_index = max(-1, len(playlist.songs) - 1)
                 elif index < player.current_index:
@@ -498,7 +506,7 @@ async def switch_playlist(playlist_id: str, playlists: Playlists = Depends(get_p
 @router.post("/playlist_play")
 async def playlist_play(
     request: Request,
-    player: MusicPlayer = Depends(get_player),
+    player: MusicPlayer = Depends(get_player_for_request),
     playlists: Playlists = Depends(get_playlists),
 ):
     """播放队列中指定索引的歌曲"""
@@ -506,7 +514,8 @@ async def playlist_play(
         form = await request.form()
         index = int(form.get("index", 0))
 
-        playlist = playlists.get_playlist(CURRENT_PLAYLIST_ID)
+        current_pid = get_current_playlist_id(player)
+        playlist = playlists.get_playlist(current_pid)
         songs = playlist.songs if playlist else []
 
         if 0 <= index < len(songs):
@@ -537,13 +546,17 @@ async def playlist_play(
 
 
 @router.post("/playlist_reorder")
-async def playlist_reorder(request: Request, playlists: Playlists = Depends(get_playlists)):
+async def playlist_reorder(
+    request: Request,
+    player: MusicPlayer = Depends(get_player_for_request),
+    playlists: Playlists = Depends(get_playlists),
+):
     """重新排序播放队列"""
     try:
         data = await request.json()
         from_index = data.get("from_index")
         to_index = data.get("to_index")
-        playlist_id = data.get("playlist_id", CURRENT_PLAYLIST_ID)
+        playlist_id = data.get("playlist_id", get_current_playlist_id(player))
 
         if from_index is not None and to_index is not None:
             playlist = playlists.get_playlist(playlist_id)
@@ -565,7 +578,7 @@ async def playlist_reorder(request: Request, playlists: Playlists = Depends(get_
 @router.post("/playlist_remove")
 async def playlist_remove(
     request: Request,
-    player: MusicPlayer = Depends(get_player),
+    player: MusicPlayer = Depends(get_player_for_request),
     playlists: Playlists = Depends(get_playlists),
     player_lock=Depends(get_player_lock),
 ):
@@ -574,7 +587,8 @@ async def playlist_remove(
         form = await request.form()
         index = int(form.get("index", -1))
 
-        logger.debug(f"playlist_remove - index: {index}, current_playlist_id: {CURRENT_PLAYLIST_ID}")
+        current_pid = get_current_playlist_id(player)
+        logger.debug(f"playlist_remove - index: {index}, current_playlist_id: {current_pid}")
 
         if index < 0:
             return JSONResponse(
@@ -582,7 +596,7 @@ async def playlist_remove(
                 status_code=400
             )
 
-        playlist = playlists.get_playlist(CURRENT_PLAYLIST_ID)
+        playlist = playlists.get_playlist(current_pid)
         if not playlist:
             return JSONResponse(
                 {"status": "ERROR", "error": "找不到歌单"},
@@ -614,14 +628,16 @@ async def playlist_remove(
 
 @router.post("/playlist_clear")
 async def playlist_clear(
-    player: MusicPlayer = Depends(get_player),
+    request: Request,
+    player: MusicPlayer = Depends(get_player_for_request),
     playlists: Playlists = Depends(get_playlists),
     player_lock=Depends(get_player_lock),
 ):
     """清空播放队列，保留正在播放的歌曲"""
     try:
         with player_lock:
-            playlist = playlists.get_playlist(CURRENT_PLAYLIST_ID)
+            current_pid = get_current_playlist_id(player)
+            playlist = playlists.get_playlist(current_pid)
             if playlist:
                 current_idx = player.current_index
                 if 0 <= current_idx < len(playlist.songs):

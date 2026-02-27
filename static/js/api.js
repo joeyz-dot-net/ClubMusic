@@ -26,6 +26,10 @@ export class MusicAPI {
         this.baseURL = baseURL;
         this.defaultTimeout = 15000;
 
+        // 读取 URL 中的 pipe 参数（用于多房间 PipePlayer 路由）
+        const urlParams = new URLSearchParams(window.location.search);
+        this.pipeParam = urlParams.get('pipe') || '';
+
         // 防抖包装（先到先得 Leading Debounce）
         // next/prev/play: 1000ms — 切歌操作耗时较长，1 秒窗口防止堆叠
         // pause: 500ms — 响应快，但防触摸双击
@@ -33,6 +37,13 @@ export class MusicAPI {
         this._debouncedPrev  = makeLeadingDebounce(this._rawPrev.bind(this),  1000);
         this._debouncedPlay  = makeLeadingDebounce(this._rawPlay.bind(this),  1000);
         this._debouncedPause = makeLeadingDebounce(this._rawPause.bind(this), 500);
+    }
+
+    // 将 pipe 参数附加到 URL（多房间支持）
+    _appendPipe(url) {
+        if (!this.pipeParam) return url;
+        const sep = url.includes('?') ? '&' : '?';
+        return `${url}${sep}pipe=${encodeURIComponent(this.pipeParam)}`;
     }
 
     // 创建带超时的 fetch 请求
@@ -46,7 +57,8 @@ export class MusicAPI {
 
     async get(endpoint, { timeout } = {}) {
         try {
-            const response = await this._fetchWithTimeout(`${this.baseURL}${endpoint}`, {}, timeout);
+            const url = this._appendPipe(`${this.baseURL}${endpoint}`);
+            const response = await this._fetchWithTimeout(url, {}, timeout);
             const data = await response.json();
             if (!response.ok) {
                 console.warn(`[API] GET ${endpoint} HTTP ${response.status}:`, data);
@@ -61,7 +73,8 @@ export class MusicAPI {
 
     async post(endpoint, data, { timeout } = {}) {
         try {
-            const response = await this._fetchWithTimeout(`${this.baseURL}${endpoint}`, {
+            const url = this._appendPipe(`${this.baseURL}${endpoint}`);
+            const response = await this._fetchWithTimeout(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
@@ -80,7 +93,8 @@ export class MusicAPI {
 
     async postForm(endpoint, formData, { timeout } = {}) {
         try {
-            const response = await this._fetchWithTimeout(`${this.baseURL}${endpoint}`, {
+            const url = this._appendPipe(`${this.baseURL}${endpoint}`);
+            const response = await this._fetchWithTimeout(url, {
                 method: 'POST',
                 body: formData
             }, timeout);
@@ -98,7 +112,8 @@ export class MusicAPI {
 
     async delete(endpoint, { timeout } = {}) {
         try {
-            const response = await this._fetchWithTimeout(`${this.baseURL}${endpoint}`, {
+            const url = this._appendPipe(`${this.baseURL}${endpoint}`);
+            const response = await this._fetchWithTimeout(url, {
                 method: 'DELETE'
             }, timeout);
             const result = await response.json();
@@ -115,7 +130,8 @@ export class MusicAPI {
 
     async put(endpoint, data, { timeout } = {}) {
         try {
-            const response = await this._fetchWithTimeout(`${this.baseURL}${endpoint}`, {
+            const url = this._appendPipe(`${this.baseURL}${endpoint}`);
+            const response = await this._fetchWithTimeout(url, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)

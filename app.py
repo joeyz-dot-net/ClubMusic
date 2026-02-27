@@ -447,6 +447,7 @@ async def add_security_headers(request: Request, call_next):
         "connect-src 'self' https: wss: ws:; "
         "media-src 'self' https: http: blob:; "
         "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; "
+        "frame-ancestors 'self' http://localhost:5000 https://*.joeyz.net https://*.voicemusic.net; "
         "worker-src 'self' blob:; "
         "child-src 'self' https://www.youtube.com https://www.youtube-nocookie.com blob:;"
     )

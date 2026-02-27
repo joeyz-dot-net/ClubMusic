@@ -302,6 +302,96 @@ class MusicPlayer:
         self._ext_broadcast_from_thread = broadcast_from_thread
         logger.info("[DI] ✓ 外部依赖已注入到 MusicPlayer")
 
+    @classmethod
+    def create_pipe_player(cls, pipe_name: str, playlists_manager,
+                           playback_history, broadcast_from_thread=None):
+        """创建轻量级 PipePlayer 实例，连接到外部管理的 MPV 管道。
+
+        PipePlayer 不启动 MPV 进程（管道由外部如 ClubVoice 管理），
+        共享全局 PLAYLISTS_MANAGER 实现歌单共享，
+        拥有独立的播放状态、队列和事件监听线程。
+
+        参数:
+            pipe_name: MPV IPC 管道路径（如 r'\\\\.\\pipe\\mpv-ipc-room1'）
+            playlists_manager: 共享的 Playlists 管理器实例
+            playback_history: 共享的 PlayHistory 实例
+            broadcast_from_thread: WebSocket 广播回调（可选）
+        """
+        instance = object.__new__(cls)
+
+        # 管道配置
+        instance.pipe_name = pipe_name
+        instance.mpv_cmd = None  # 标记：不启动 MPV
+        instance.mpv_process = None
+        instance.music_dir = ""
+        instance.allowed_extensions = []
+        instance.data_dir = ""
+        instance.debug = False
+        instance.local_search_max_results = 0
+        instance.youtube_search_max_results = 20
+        instance.youtube_url_extra_max = 50
+        instance.server_host = "0.0.0.0"
+        instance.server_port = 80
+        instance.flask_host = "0.0.0.0"
+        instance.flask_port = 80
+
+        # 播放状态（独立于主 PLAYER）
+        instance.playlist = []
+        instance.current_index = -1
+        instance.current_meta = {}
+        instance.loop_mode = 0
+        instance.pitch_shift = 0
+        instance._last_play_time = 0
+        instance._prev_index = None
+        instance._prev_meta = None
+        instance._auto_thread = None
+        instance._stop_flag = False
+        instance._req_id = 0
+        instance._lock = threading.RLock()
+
+        # 共享资源（注入）
+        instance._ext_playlists_manager = playlists_manager
+        instance._ext_playback_history = playback_history
+        instance._ext_broadcast_from_thread = broadcast_from_thread
+
+        # 房间队列播放列表 ID
+        safe_id = pipe_name.replace("\\", "_").replace(".", "_").replace(":", "_")
+        instance._room_playlist_id = f"room_{safe_id}"
+        instance._ext_default_playlist_id = instance._room_playlist_id
+
+        # 共享播放历史
+        instance.playback_history = playback_history
+        instance.playback_history_file = ""
+        instance.playback_history_max = 9999
+
+        # 不构建本地文件树
+        instance.local_file_tree = {"name": "N/A", "rel": "", "dirs": [], "files": []}
+        instance._audio_device_names = {}
+        instance.config = {}
+        instance.current_playlist = None
+        instance.current_playlist_file = ""
+
+        # 自动创建房间队列播放列表
+        room_pl = playlists_manager.get_playlist(instance._room_playlist_id)
+        if not room_pl:
+            short_name = pipe_name.split("-")[-1][:12] if "-" in pipe_name else pipe_name[-12:]
+            room_pl = playlists_manager.create_playlist(f"Room {short_name}")
+            room_pl.id = instance._room_playlist_id
+            playlists_manager._playlists[instance._room_playlist_id] = room_pl
+            playlists_manager.save()
+            logger.info(f"[PipePlayer] 已创建房间队列播放列表: {instance._room_playlist_id}")
+
+        # 启动管道事件监听线程
+        instance._start_event_listener()
+
+        logger.info(f"[PipePlayer] ✓ 已创建 PipePlayer: {pipe_name}")
+        return instance
+
+    def destroy_pipe_player(self):
+        """销毁 PipePlayer 实例，停止事件监听线程。"""
+        self._stop_flag = True
+        logger.info(f"[PipePlayer] 已标记停止: {self.pipe_name}")
+
     def _init_audio_device_map(self) -> dict:
         """初始化音频设备 GUID 到设备名的映射表
         
@@ -703,7 +793,7 @@ class MusicPlayer:
             consecutive_errors = 0
             max_consecutive_errors = 10
             
-            while True:
+            while not self._stop_flag:
                 try:
                     # 确保 MPV 运行
                     if not self.mpv_pipe_exists():
@@ -916,6 +1006,10 @@ class MusicPlayer:
         返回:
           True 如果 mpv 管道可用，False 否则
         """
+        # PipePlayer 模式：不启动 MPV，只检查管道是否存在
+        if self.mpv_cmd is None:
+            return self.mpv_pipe_exists()
+
         # 每次调用重新解析，允许运行期间修改 MPV_CMD 并热加载
         self._extract_pipe_name_from_cmd()
 

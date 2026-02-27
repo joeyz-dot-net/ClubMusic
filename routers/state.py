@@ -210,3 +210,54 @@ PLAYER.set_external_deps(
     playback_history=PLAYBACK_HISTORY,
     broadcast_from_thread=_broadcast_from_thread,
 )
+
+
+# ==================== PipePlayer 池（多房间支持）====================
+from typing import Dict
+
+PIPE_PLAYERS: Dict[str, MusicPlayer] = {}
+_pipe_players_lock = threading.Lock()
+
+
+def get_player_for_pipe(pipe_name: str) -> MusicPlayer:
+    """获取或创建指定管道的 PipePlayer 实例。
+
+    无 pipe 或匹配默认管道 → 返回全局 PLAYER；
+    否则从池中返回/创建 PipePlayer。
+    """
+    if not pipe_name or pipe_name == PLAYER.pipe_name:
+        return PLAYER
+
+    with _pipe_players_lock:
+        if pipe_name in PIPE_PLAYERS:
+            return PIPE_PLAYERS[pipe_name]
+
+        logger.info(f"[PipePool] 创建 PipePlayer: {pipe_name}")
+        pipe_player = MusicPlayer.create_pipe_player(
+            pipe_name=pipe_name,
+            playlists_manager=PLAYLISTS_MANAGER,
+            playback_history=PLAYBACK_HISTORY,
+            broadcast_from_thread=_broadcast_from_thread,
+        )
+        PIPE_PLAYERS[pipe_name] = pipe_player
+        return pipe_player
+
+
+def get_current_playlist_id(player: MusicPlayer) -> str:
+    """获取玩家的当前播放列表 ID。
+
+    PipePlayer → room_{safe_id}；默认 PLAYER → CURRENT_PLAYLIST_ID。
+    """
+    room_pid = getattr(player, '_room_playlist_id', None)
+    if room_pid:
+        return room_pid
+    return CURRENT_PLAYLIST_ID
+
+
+def cleanup_pipe_player(pipe_name: str):
+    """清理指定管道的 PipePlayer（房间销毁时调用）。"""
+    with _pipe_players_lock:
+        player = PIPE_PLAYERS.pop(pipe_name, None)
+    if player:
+        player.destroy_pipe_player()
+        logger.info(f"[PipePool] 已清理 PipePlayer: {pipe_name}")
