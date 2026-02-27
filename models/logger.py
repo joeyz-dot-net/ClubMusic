@@ -223,6 +223,16 @@ class PollingRequestFilter(logging.Filter):
         return True  # 其他日志全部通过
 
 
+class AsyncioConnectionFilter(logging.Filter):
+    """Suppress harmless Windows ProactorEventLoop connection cleanup errors."""
+
+    def filter(self, record):
+        msg = record.getMessage()
+        if '_call_connection_lost' in msg and 'ConnectionResetError' in msg:
+            return False
+        return True
+
+
 def setup_logging(debug=None):
     """配置应用级别的日志
     
@@ -302,6 +312,9 @@ def setup_logging(debug=None):
     ]
     for name in _NOISY_LOGGERS:
         logging.getLogger(name).setLevel(logging.WARNING)
+
+    # 过滤 asyncio 在 Windows 上的 ProactorEventLoop 连接清理错误
+    logging.getLogger("asyncio").addFilter(AsyncioConnectionFilter())
 
     return logger
 
