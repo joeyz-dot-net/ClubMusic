@@ -1473,6 +1473,7 @@ function initTouchDragSort(container, rerenderFn, rerenderArgs) {
 
 // 兼容性导出，确保可被按名导入
 export { renderPlaylistUI as playlistRenderer };
+export { showSelectPlaylistModal };
 
 // ✅ 新增：显示播放历史模态框
 export async function showPlaybackHistory() {

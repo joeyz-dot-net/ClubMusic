@@ -2553,7 +2553,7 @@ button:active { transform: scale(0.98); }
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 999;
+    z-index: 2001;
     background: rgba(0, 0, 0, 0.4);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);

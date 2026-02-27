@@ -468,16 +468,23 @@ export class SearchManager {
         // 获取当前歌单信息用于显示
         let playlistName = i18n.t('playlist.current');
         let playlistIcon = '📥';
+        let selectedPlaylistId = 'default';
 
         try {
             const playlistManager = window.app?.modules?.playlistManager;
             if (playlistManager) {
                 playlistName = playlistManager.getCurrentName() || i18n.t('playlist.current');
                 playlistIcon = playlistManager.getCurrentPlaylistIcon() || '📥';
+                selectedPlaylistId = playlistManager.getSelectedPlaylistId() || 'default';
             }
         } catch (err) {
             console.warn('[搜索菜单] 获取歌单信息失败:', err);
         }
+
+        // 根据当前选择的歌单决定"添加到歌单"按钮的标签
+        const addToPlaylistLabel = selectedPlaylistId !== 'default'
+            ? i18n.t('search.actionMenu.addToPlaylistNamed', { name: playlistName })
+            : i18n.t('search.actionMenu.addToPlaylist');
 
         // 创建全屏模态框
         const menu = document.createElement('div');
@@ -497,6 +504,10 @@ export class SearchManager {
                         <span class="icon">➕</span>
                         <span class="label">${i18n.t('search.actionMenu.addToQueue')}</span>
                     </button>
+                    ${!isDirectory ? `<button class="search-action-menu-item" data-action="add-to-playlist">
+                        <span class="icon">📋</span>
+                        <span class="label">${addToPlaylistLabel}</span>
+                    </button>` : ''}
                     <button class="search-action-menu-item" data-action="add-all-to-playlist">
                         <span class="icon">${playlistIcon}</span>
                         <span class="label">${i18n.t('search.actionMenu.addAll', { count: resultCount, name: playlistName })}</span>
@@ -546,6 +557,34 @@ export class SearchManager {
                 setTimeout(async () => {
                     if (action === 'add-to-queue') {
                         await this.handleAddToQueue(songData, isDirectory, button);
+                    } else if (action === 'add-to-playlist') {
+                        const playlistManager = window.app?.modules?.playlistManager;
+                        const selectedId = playlistManager?.getSelectedPlaylistId() || 'default';
+                        if (selectedId !== 'default') {
+                            // 当前选择的不是默认歌单，直接添加到当前歌单
+                            try {
+                                const result = await api.addToPlaylist({
+                                    playlist_id: selectedId,
+                                    song: songData
+                                });
+                                if (result.status === 'OK') {
+                                    const name = playlistManager.getCurrentName() || selectedId;
+                                    Toast.success(i18n.t('search.addSuccess', { name, title: songData.title }));
+                                    await playlistManager.refreshAll();
+                                } else if (result.duplicate) {
+                                    Toast.warning(`${songData.title} ${i18n.t('search.alreadyInList')}`);
+                                } else {
+                                    Toast.error(i18n.t('search.addFailed'));
+                                }
+                            } catch (err) {
+                                console.error('[搜索] 添加到歌单失败:', err);
+                                Toast.error(i18n.t('search.addFailed'));
+                            }
+                        } else {
+                            // 默认歌单，显示歌单选择器
+                            const { showSelectPlaylistModal } = await import('./playlist.js');
+                            await showSelectPlaylistModal(songData, null);
+                        }
                     } else if (action === 'add-all-to-playlist') {
                         await this.handleAddAllToPlaylist(currentTab);
                     }
