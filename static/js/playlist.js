@@ -2109,10 +2109,40 @@ function showHistoryActionMenu(song, historyModal, removeFromHistoryFn, rerender
     });
 }
 
-// 立即播放：直接替换当前播放
+// 立即播放：将歌曲插入队列顶部并播放
 async function handleHistoryPlayNow(song) {
     try {
+        const currentPlaylistId = playlistManager.getSelectedPlaylistId() || 'default';
+
+        // 1. 将歌曲插入到队列顶部（index=0）
+        const addResult = await api.addToPlaylist({
+            playlist_id: currentPlaylistId,
+            song: {
+                url: song.url,
+                title: song.title,
+                type: song.type || 'local',
+                thumbnail_url: song.thumbnail_url || ''
+            },
+            insert_index: 0
+        });
+
+        // 2. 刷新播放列表数据
+        await playlistManager.refreshAll();
+
+        // 3. 播放歌曲
         await api.play(song.url, song.title, song.type || 'local', 0);
+
+        // 4. 刷新播放列表 UI
+        const container = document.getElementById('playListContainer');
+        const currentStatus = window.app?.lastPlayStatus || { current_meta: null };
+        if (container) {
+            renderPlaylistUI({
+                container,
+                onPlay: (s) => window.app?.playSong(s),
+                currentMeta: currentStatus.current_meta
+            });
+        }
+
         Toast.success(`▶️ ${i18n.t('history.playNowSuccess')}: ${song.title}`);
     } catch (error) {
         console.error('[历史-立即播放] 失败:', error);
