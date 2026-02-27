@@ -367,7 +367,8 @@ async def get_status(player: MusicPlayer = Depends(get_player), playlists: Playl
             "current_playlist_name": playlist.name if playlist else "--",
             "loop_mode": player.loop_mode,
             "pitch_shift": player.pitch_shift,
-            "mpv_state": mpv_state
+            "mpv_state": mpv_state,
+            "server_time": time.time()
         }
     except Exception as e:
         logger.error(f"获取播放器状态失败: {e}")

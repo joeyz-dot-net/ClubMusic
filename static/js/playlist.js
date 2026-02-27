@@ -4,6 +4,7 @@ import { Toast, loading, ConfirmModal } from './ui.js';
 import { operationLock } from './operationLock.js';
 import { thumbnailManager, escapeHTML } from './utils.js';
 import { i18n } from './i18n.js';
+import { player } from './player.js';
 
 export class PlaylistManager {
     constructor() {
@@ -1669,7 +1670,7 @@ export async function showPlaybackHistory() {
                 white-space: nowrap;
                 flex-shrink: 0;
             `;
-            const date = new Date(item.ts * 1000);
+            const date = new Date((item.ts + player.clockOffset) * 1000);
             timeEl.textContent = date.toLocaleString('zh-CN', {
                 month: '2-digit',
                 day: '2-digit',

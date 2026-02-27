@@ -151,6 +151,7 @@ def _build_state_message() -> dict:
         "current_playlist_id": CURRENT_PLAYLIST_ID,
         "playlist_updated": True,
         "ts": time.time(),
+        "server_time": time.time(),
     }
 
 

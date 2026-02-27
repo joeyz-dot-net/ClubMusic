@@ -12,6 +12,7 @@ export class Player {
         this.pollingPaused = false;  // 轮询暂停标志
         this._hiddenByVisibility = false;  // 标签页隐藏标志
         this._lastPollIntervalMs = 5000;  // 记住轮询间隔以便恢复
+        this.clockOffset = 0; // 客户端与服务器的时钟偏移（秒）: client_time - server_time
 
         // WebSocket 相关
         this.ws = null;
@@ -355,6 +356,7 @@ export class Player {
             loop_mode: msg.loop_mode,
             pitch_shift: msg.pitch_shift,
             mpv_state: msg.mpv_state,
+            server_time: msg.server_time,
         };
         this.updateStatus(newStatus);
 
@@ -389,6 +391,11 @@ export class Player {
     updateStatus(status) {
         const oldStatus = this.status;
         this.status = status;
+
+        // 计算客户端与服务器的时钟偏移（用于修正历史记录时间戳显示）
+        if (status?.server_time) {
+            this.clockOffset = Date.now() / 1000 - status.server_time;
+        }
 
         // 记录插值参考点，供前端 RAF 循环推算当前进度
         const mpvData = status?.mpv_state || status?.mpv || {};

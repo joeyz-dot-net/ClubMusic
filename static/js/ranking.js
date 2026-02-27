@@ -2,6 +2,7 @@
 import { api } from './api.js';
 import { Toast } from './ui.js';
 import { i18n } from './i18n.js';
+import { player } from './player.js';
 
 export class RankingManager {
     constructor() {
@@ -166,7 +167,7 @@ export class RankingManager {
 
     formatDate(timestamp) {
         if (!timestamp) return '';
-        const date = new Date(timestamp * 1000);
+        const date = new Date((timestamp + player.clockOffset) * 1000);
         const today = new Date();
         const yesterday = new Date(today);
         yesterday.setDate(yesterday.getDate() - 1);
