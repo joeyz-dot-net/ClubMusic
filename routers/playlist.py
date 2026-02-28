@@ -86,7 +86,7 @@ async def get_file_tree(player: MusicPlayer = Depends(get_player_for_request)):
 
 @router.get("/playlists")
 async def list_playlists(playlists: Playlists = Depends(get_playlists)):
-    """获取所有歌单"""
+    """获取所有歌单（不包含房间临时播放列表）"""
     return {
         "status": "OK",
         "playlists": [
@@ -97,6 +97,7 @@ async def list_playlists(playlists: Playlists = Depends(get_playlists)):
                 "songs": p.songs
             }
             for pid, p in playlists._playlists.items()
+            if not playlists.is_room_playlist(pid)
         ]
     }
 

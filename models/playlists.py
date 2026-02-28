@@ -16,6 +16,7 @@ from models.song import StreamSong
 from models.logger import logger
 
 DEFAULT_PLAYLIST_ID = "default"
+ROOM_PLAYLIST_PREFIX = "room_"
 
 
 class Playlist:
@@ -254,6 +255,11 @@ class Playlist:
 class Playlists:
     """多歌单管理器 - 管理多个 Playlist 对象"""
 
+    @staticmethod
+    def is_room_playlist(playlist_id: str) -> bool:
+        """判断是否为房间临时播放列表（不持久化）"""
+        return playlist_id.startswith(ROOM_PLAYLIST_PREFIX)
+
     def __init__(self, data_file: str = "playlists.json"):
         """初始化多歌单管理器
 
@@ -284,12 +290,22 @@ class Playlists:
                     hydration_changed = False
                     for pl_data in playlists_data:
                         pl = Playlist.from_dict(pl_data)
+                        # 跳过残留的房间临时播放列表
+                        if self.is_room_playlist(pl.id):
+                            continue
                         # 再次补全缩略图（兼容旧数据），如有变更稍后保存
                         if pl._hydrate_stream_thumbnails():
                             hydration_changed = True
                         self._playlists[pl.id] = pl
                         if pl.id not in self._order:
                             self._order.append(pl.id)
+
+                    # 清理 _order 中残留的房间播放列表 ID
+                    room_ids_in_order = [pid for pid in self._order if self.is_room_playlist(pid)]
+                    if room_ids_in_order:
+                        for rid in room_ids_in_order:
+                            self._order.remove(rid)
+                        logger.info(f"已清理 {len(room_ids_in_order)} 个残留的房间临时播放列表")
 
                     if hydration_changed:
                         self.save()
@@ -313,11 +329,19 @@ class Playlists:
             self.save()
 
     def _do_save(self):
-        """执行实际的原子化磁盘写入（.tmp 写入后原子替换）"""
+        """执行实际的原子化磁盘写入（.tmp 写入后原子替换）
+
+        房间临时播放列表（room_ 前缀）不会写入磁盘。
+        """
         try:
+            persistent_order = [pid for pid in self._order if not self.is_room_playlist(pid)]
             data = {
-                "order": self._order,
-                "playlists": [pl.to_dict() for pl in self.get_all()],
+                "order": persistent_order,
+                "playlists": [
+                    self._playlists[pid].to_dict()
+                    for pid in persistent_order
+                    if pid in self._playlists
+                ],
             }
             path = Path(self.data_file)
             tmp = path.with_suffix(".tmp")

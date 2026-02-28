@@ -371,15 +371,13 @@ class MusicPlayer:
         instance.current_playlist = None
         instance.current_playlist_file = ""
 
-        # 自动创建房间队列播放列表
+        # 自动创建房间队列播放列表（临时，不持久化）
         room_pl = playlists_manager.get_playlist(instance._room_playlist_id)
         if not room_pl:
             short_name = pipe_name.split("-")[-1][:12] if "-" in pipe_name else pipe_name[-12:]
-            room_pl = playlists_manager.create_playlist(f"Room {short_name}")
-            room_pl.id = instance._room_playlist_id
+            room_pl = Playlist(playlist_id=instance._room_playlist_id, name=f"Room {short_name}")
             playlists_manager._playlists[instance._room_playlist_id] = room_pl
-            playlists_manager.save()
-            logger.info(f"[PipePlayer] 已创建房间队列播放列表: {instance._room_playlist_id}")
+            logger.info(f"[PipePlayer] 已创建房间临时播放列表: {instance._room_playlist_id}")
 
         # 启动管道事件监听线程
         instance._start_event_listener()
@@ -390,6 +388,14 @@ class MusicPlayer:
     def destroy_pipe_player(self):
         """销毁 PipePlayer 实例，停止事件监听线程。"""
         self._stop_flag = True
+        # 清理房间临时播放列表
+        if self._ext_playlists_manager and hasattr(self, '_room_playlist_id'):
+            self._ext_playlists_manager._playlists.pop(self._room_playlist_id, None)
+            try:
+                self._ext_playlists_manager._order.remove(self._room_playlist_id)
+            except ValueError:
+                pass
+            logger.info(f"[PipePlayer] 已清理房间临时播放列表: {self._room_playlist_id}")
         logger.info(f"[PipePlayer] 已标记停止: {self.pipe_name}")
 
     # ===================== RoomPlayer =====================
@@ -487,15 +493,13 @@ class MusicPlayer:
         instance.current_playlist = None
         instance.current_playlist_file = ""
 
-        # 自动创建房间队列播放列表
+        # 自动创建房间队列播放列表（临时，不持久化）
         room_pl = playlists_manager.get_playlist(instance._room_playlist_id)
         if not room_pl:
             short_name = room_id[:12]
-            room_pl = playlists_manager.create_playlist(f"Room {short_name}")
-            room_pl.id = instance._room_playlist_id
+            room_pl = Playlist(playlist_id=instance._room_playlist_id, name=f"Room {short_name}")
             playlists_manager._playlists[instance._room_playlist_id] = room_pl
-            playlists_manager.save()
-            logger.info(f"[RoomPlayer] 已创建房间队列播放列表: {instance._room_playlist_id}")
+            logger.info(f"[RoomPlayer] 已创建房间临时播放列表: {instance._room_playlist_id}")
 
         logger.info(f"[RoomPlayer] ✓ 已创建 RoomPlayer: room_id={room_id}, ipc={ipc_pipe}, pcm={pcm_pipe}")
         return instance
@@ -717,6 +721,15 @@ class MusicPlayer:
         if self._pcm_pipe_server:
             self._pcm_pipe_server.close()
             self._pcm_pipe_server = None
+
+        # 8. 清理房间临时播放列表
+        if self._ext_playlists_manager and hasattr(self, '_room_playlist_id'):
+            self._ext_playlists_manager._playlists.pop(self._room_playlist_id, None)
+            try:
+                self._ext_playlists_manager._order.remove(self._room_playlist_id)
+            except ValueError:
+                pass
+            logger.info(f"[RoomPlayer] 已清理房间临时播放列表: {self._room_playlist_id}")
 
         logger.info(f"[RoomPlayer] ✓ 已销毁: {room_id}")
 
