@@ -38,13 +38,13 @@ export class PlaylistsManagement {
         }
 
         // 歌单模态框关闭按钮
-        const playlistsBackBtn = document.getElementById('playlistsBackBtn');
-        if (playlistsBackBtn) {
-            playlistsBackBtn.addEventListener('click', () => {
+        const playlistsCloseBtn = document.getElementById('playlistsCloseBtn');
+        if (playlistsCloseBtn) {
+            playlistsCloseBtn.addEventListener('click', () => {
                 this.hide();
             });
         }
-        
+
         // 点击背景关闭模态框
         if (this.modal) {
             this.modal.addEventListener('click', (e) => {

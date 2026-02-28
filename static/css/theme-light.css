@@ -165,14 +165,16 @@ body.theme-light {
 
 /* 按钮 - 柔和蓝灰色调 */
 [data-theme="light"] .playlists-back-btn,
-[data-theme="light"] .playlists-add-btn {
+[data-theme="light"] .playlists-add-btn,
+[data-theme="light"] .playlists-close-btn {
     color: #475569;
     background: rgba(241, 245, 249, 0.6);
     border: 1px solid rgba(203, 213, 225, 0.3);
 }
 
 [data-theme="light"] .playlists-back-btn:hover,
-[data-theme="light"] .playlists-add-btn:hover {
+[data-theme="light"] .playlists-add-btn:hover,
+[data-theme="light"] .playlists-close-btn:hover {
     background: rgba(226, 232, 240, 0.8);
     color: #334155;
     border-color: rgba(148, 163, 184, 0.4);
@@ -288,12 +290,14 @@ body.theme-light {
 }
 
 #playlistsModal.dark-theme .playlists-back-btn,
-#playlistsModal.dark-theme .playlists-add-btn {
+#playlistsModal.dark-theme .playlists-add-btn,
+#playlistsModal.dark-theme .playlists-close-btn {
     color: #5a6c7d;
 }
 
 #playlistsModal.dark-theme .playlists-back-btn:hover,
-#playlistsModal.dark-theme .playlists-add-btn:hover {
+#playlistsModal.dark-theme .playlists-add-btn:hover,
+#playlistsModal.dark-theme .playlists-close-btn:hover {
     background: rgba(103, 138, 174, 0.12);
     color: #3d5467;
 }

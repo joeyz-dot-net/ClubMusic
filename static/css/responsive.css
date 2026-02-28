@@ -188,7 +188,7 @@
         font-size: clamp(16px, 4.2vw, 18px);
     }
     .modal-close, .ranking-modal-close, .history-modal-close,
-    .playlists-back-btn, .playlists-add-btn,
+    .playlists-back-btn, .playlists-add-btn, .playlists-close-btn,
     .search-modal-back, .full-player-back, .now-playing-close {
         width: var(--modal-close-size);
         height: var(--modal-close-size);
@@ -601,11 +601,6 @@
     .search-modal-input {
         font-size: 16px;
         padding: 12px 16px;
-    }
-
-    /* ---- 歌单模态框: iPad 上稍宽 ---- */
-    .playlists-modal-content {
-        max-width: 500px;
     }
 
     /* ---- 设置面板: 利用更大屏幕 ---- */

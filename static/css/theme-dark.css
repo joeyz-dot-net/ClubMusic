@@ -151,12 +151,14 @@ button:hover { background: var(--button-hover-bg); border-color: var(--button-ho
 }
 
 .playlists-back-btn,
-.playlists-add-btn {
+.playlists-add-btn,
+.playlists-close-btn {
     color: #fff;
 }
 
 .playlists-back-btn:hover,
-.playlists-add-btn:hover {
+.playlists-add-btn:hover,
+.playlists-close-btn:hover {
     background: #1a1a1a;
 }
 
