@@ -92,6 +92,18 @@ class PcmPipeServer:
         logger.info(f"[PcmPipeServer] 客户端已连接: {self.pipe_name}")
         return True
 
+    def cancel_wait(self):
+        """取消阻塞的 wait_for_client()（从另一个线程调用安全）。
+
+        通过关闭管道句柄使 ConnectNamedPipe 返回错误，从而解除阻塞。
+        """
+        handle = self._handle
+        if handle is not None:
+            self._handle = None
+            self._client_connected = False
+            _kernel32.CloseHandle(handle)
+            logger.info(f"[PcmPipeServer] 已取消等待（句柄已关闭）: {self.pipe_name}")
+
     def write(self, data: bytes) -> bool:
         """写入数据到管道。返回 True 表示成功。"""
         if self._handle is None or not self._client_connected:

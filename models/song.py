@@ -124,12 +124,12 @@ class LocalSong(Song):
             return 0
 
     def get_absolute_path(self, base_dir: str = None) -> str:
-        """获取绝对路径"""
+        """获取绝对路径（已规范化路径分隔符）"""
         if os.path.isabs(self.file_path):
-            return self.file_path
+            return os.path.normpath(self.file_path)
         if base_dir:
-            return os.path.join(base_dir, self.file_path)
-        return os.path.abspath(self.file_path)
+            return os.path.normpath(os.path.join(base_dir, self.file_path))
+        return os.path.normpath(os.path.abspath(self.file_path))
 
     def play(
         self,
@@ -151,7 +151,20 @@ class LocalSong(Song):
           music_dir: 音乐库目录（用于解析相对路径）
         """
         abs_file = self.get_absolute_path(base_dir=music_dir)
-        logger.debug(f"LocalSong.play -> 播放本地文件: {abs_file}")
+        logger.info(f"LocalSong.play -> 播放本地文件: {abs_file}")
+
+        # 预检: 文件存在性
+        if not os.path.exists(abs_file):
+            logger.error(
+                f"LocalSong.play -> 文件不存在: {abs_file}"
+                f"\n  原始 file_path: {self.file_path}"
+                f"\n  music_dir: {music_dir}"
+                f"\n  isabs(file_path): {os.path.isabs(self.file_path)}"
+            )
+            parent = os.path.dirname(abs_file)
+            if not os.path.exists(parent):
+                logger.error(f"  父目录也不存在: {parent}")
+            return False
 
         try:
             # 确保 mpv 管道存在
