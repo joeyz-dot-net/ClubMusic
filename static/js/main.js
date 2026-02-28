@@ -9,7 +9,7 @@ import { volumeControl } from './volume.js';
 import { searchManager } from './search.js';
 import { themeManager } from './themeManager.js';
 import { debug } from './debug.js';
-import { Toast, loading, formatTime } from './ui.js';
+import { Toast, formatTime } from './ui.js';
 import { isMobile, isIPad, ThumbnailManager } from './utils.js';
 import { localFiles } from './local.js';
 import { settingsManager } from './settingsManager.js';
@@ -580,6 +580,7 @@ class MusicPlayerApp {
         // 播放/暂停 - 主播放按钮
         if (this.elements.playPauseBtn) {
             this.elements.playPauseBtn.addEventListener('click', () => {
+                if (playLock.isPreparing()) return;
                 player.togglePlayPause();
             });
         }
@@ -736,105 +737,117 @@ class MusicPlayerApp {
         // 全屏播放器控制
         if (this.elements.fullPlayerPlayPause) {
             this.elements.fullPlayerPlayPause.addEventListener('click', () => {
+                if (playLock.isPreparing()) return;
                 player.togglePlayPause();
             });
         }
 
         // 下一首
         if (this.elements.nextBtn) {
-            this.elements.nextBtn.addEventListener('click', () => {
-                if (playLock.isPreparing()) {
-                    Toast.warning(i18n.t('player.preparingBusy', { title: playLock.preparingSongTitle }));
-                    return;
-                }
-                player.next().catch(err => {
+            this.elements.nextBtn.addEventListener('click', async () => {
+                if (!playLock.acquire(i18n.t('player.preparingNext'))) return;
+                try {
+                    await player.next();
+                } catch (err) {
                     console.error('[下一首] 错误:', err);
-                    Toast.error('下一首播放失败');
-                });
+                    Toast.error(i18n.t('player.nextFailed'));
+                } finally {
+                    playLock.release();
+                }
             });
         }
         if (this.elements.fullPlayerNext) {
-            this.elements.fullPlayerNext.addEventListener('click', () => {
-                if (playLock.isPreparing()) {
-                    Toast.warning(i18n.t('player.preparingBusy', { title: playLock.preparingSongTitle }));
-                    return;
-                }
-                player.next().catch(err => {
+            this.elements.fullPlayerNext.addEventListener('click', async () => {
+                if (!playLock.acquire(i18n.t('player.preparingNext'))) return;
+                try {
+                    await player.next();
+                } catch (err) {
                     console.error('[下一首] 错误:', err);
-                    Toast.error('下一首播放失败');
-                });
+                    Toast.error(i18n.t('player.nextFailed'));
+                } finally {
+                    playLock.release();
+                }
             });
         }
         if (this.elements.miniNextBtn) {
-            this.elements.miniNextBtn.addEventListener('click', (e) => {
+            this.elements.miniNextBtn.addEventListener('click', async (e) => {
                 e.stopPropagation(); // 阻止事件冒泡，避免触发打开全屏播放器
-                if (playLock.isPreparing()) {
-                    Toast.warning(i18n.t('player.preparingBusy', { title: playLock.preparingSongTitle }));
-                    return;
-                }
-                player.next().catch(err => {
+                if (!playLock.acquire(i18n.t('player.preparingNext'))) return;
+                try {
+                    await player.next();
+                } catch (err) {
                     console.error('[下一首] 错误:', err);
-                    Toast.error('下一首播放失败');
-                });
+                    Toast.error(i18n.t('player.nextFailed'));
+                } finally {
+                    playLock.release();
+                }
             });
         }
 
         // 上一首
         if (this.elements.prevBtn) {
-            this.elements.prevBtn.addEventListener('click', () => {
-                if (playLock.isPreparing()) {
-                    Toast.warning(i18n.t('player.preparingBusy', { title: playLock.preparingSongTitle }));
-                    return;
-                }
-                player.prev().catch(err => {
+            this.elements.prevBtn.addEventListener('click', async () => {
+                if (!playLock.acquire(i18n.t('player.preparingPrev'))) return;
+                try {
+                    await player.prev();
+                } catch (err) {
                     console.error('[上一首] 错误:', err);
-                    Toast.error('上一首播放失败');
-                });
+                    Toast.error(i18n.t('player.prevFailed'));
+                } finally {
+                    playLock.release();
+                }
             });
         }
         if (this.elements.fullPlayerPrev) {
-            this.elements.fullPlayerPrev.addEventListener('click', () => {
-                if (playLock.isPreparing()) {
-                    Toast.warning(i18n.t('player.preparingBusy', { title: playLock.preparingSongTitle }));
-                    return;
-                }
-                player.prev().catch(err => {
+            this.elements.fullPlayerPrev.addEventListener('click', async () => {
+                if (!playLock.acquire(i18n.t('player.preparingPrev'))) return;
+                try {
+                    await player.prev();
+                } catch (err) {
                     console.error('[上一首] 错误:', err);
-                    Toast.error('上一首播放失败');
-                });
+                    Toast.error(i18n.t('player.prevFailed'));
+                } finally {
+                    playLock.release();
+                }
             });
         }
 
         // 循环模式
         if (this.elements.loopBtn) {
             this.elements.loopBtn.addEventListener('click', () => {
+                if (playLock.isPreparing()) return;
                 player.cycleLoop();
             });
         }
         if (this.elements.nowPlayingRepeatBtn) {
             this.elements.nowPlayingRepeatBtn.addEventListener('click', () => {
+                if (playLock.isPreparing()) return;
                 player.cycleLoop();
             });
         }
         if (this.elements.fullPlayerPitchDown) {
             this.elements.fullPlayerPitchDown.addEventListener('click', () => {
+                if (playLock.isPreparing()) return;
                 player.pitchDown();
             });
         }
         if (this.elements.fullPlayerPitchUp) {
             this.elements.fullPlayerPitchUp.addEventListener('click', () => {
+                if (playLock.isPreparing()) return;
                 player.pitchUp();
             });
         }
 
         if (this.elements.fullPlayerOffsetDown) {
             this.elements.fullPlayerOffsetDown.addEventListener('click', () => {
+                if (playLock.isPreparing()) return;
                 const newOffset = ktvSync.adjustOffset(-0.2);
                 this.updateVideoOffsetUI(newOffset);
             });
         }
         if (this.elements.fullPlayerOffsetUp) {
             this.elements.fullPlayerOffsetUp.addEventListener('click', () => {
+                if (playLock.isPreparing()) return;
                 const newOffset = ktvSync.adjustOffset(0.2);
                 this.updateVideoOffsetUI(newOffset);
             });
@@ -865,12 +878,14 @@ class MusicPlayerApp {
         // 进度条控制
         if (this.elements.playerProgress) {
             this.elements.playerProgress.addEventListener('click', (e) => {
+                if (playLock.isPreparing()) return;
                 this.handleProgressClick(e);
             });
         }
         if (this.elements.fullPlayerProgressBar) {
             // 点击跳转
             this.elements.fullPlayerProgressBar.addEventListener('click', (e) => {
+                if (playLock.isPreparing()) return;
                 this.handleFullPlayerProgressClick(e);
             });
             
@@ -878,6 +893,7 @@ class MusicPlayerApp {
             let isDragging = false;
             
             const startDrag = (e) => {
+                if (playLock.isPreparing()) return;
                 isDragging = true;
                 this.elements.fullPlayerProgressBar.classList.add('dragging');
                 handleDrag(e);
@@ -935,11 +951,13 @@ class MusicPlayerApp {
         // 完整播放器的音量控制
         if (this.elements.fullPlayerVolumeSlider) {
             this.elements.fullPlayerVolumeSlider.addEventListener('input', (e) => {
+                if (playLock.isPreparing()) return;
                 const volume = parseInt(e.target.value);
                 // 通过 volumeControl 来设置音量，保持同步
                 volumeControl.updateDisplay(volume);
             });
             this.elements.fullPlayerVolumeSlider.addEventListener('change', (e) => {
+                if (playLock.isPreparing()) return;
                 const volume = parseInt(e.target.value);
                 // 通过 volumeControl 来设置音量到服务器
                 volumeControl.setVolume(volume);
@@ -957,31 +975,41 @@ class MusicPlayerApp {
         // Now Playing Panel 控件
         if (this.elements.nppPlayPause) {
             this.elements.nppPlayPause.addEventListener('click', () => {
+                if (playLock.isPreparing()) return;
                 player.togglePlayPause();
             });
         }
         if (this.elements.nppNext) {
-            this.elements.nppNext.addEventListener('click', () => {
-                if (playLock.isPreparing()) {
-                    Toast.warning(i18n.t('player.preparingBusy', { title: playLock.preparingSongTitle }));
-                    return;
+            this.elements.nppNext.addEventListener('click', async () => {
+                if (!playLock.acquire(i18n.t('player.preparingNext'))) return;
+                try {
+                    await player.next();
+                } catch (err) {
+                    console.error('[NPP Next] Error:', err);
+                    Toast.error(i18n.t('player.nextFailed'));
+                } finally {
+                    playLock.release();
                 }
-                player.next().catch(err => console.error('[NPP Next] Error:', err));
             });
         }
         if (this.elements.nppPrev) {
-            this.elements.nppPrev.addEventListener('click', () => {
-                if (playLock.isPreparing()) {
-                    Toast.warning(i18n.t('player.preparingBusy', { title: playLock.preparingSongTitle }));
-                    return;
+            this.elements.nppPrev.addEventListener('click', async () => {
+                if (!playLock.acquire(i18n.t('player.preparingPrev'))) return;
+                try {
+                    await player.prev();
+                } catch (err) {
+                    console.error('[NPP Prev] Error:', err);
+                    Toast.error(i18n.t('player.prevFailed'));
+                } finally {
+                    playLock.release();
                 }
-                player.prev().catch(err => console.error('[NPP Prev] Error:', err));
             });
         }
 
         // Now Playing Panel 进度条: 点击定位
         if (this.elements.nppProgressBar) {
             this.elements.nppProgressBar.addEventListener('click', (e) => {
+                if (playLock.isPreparing()) return;
                 const rect = this.elements.nppProgressBar.getBoundingClientRect();
                 const percent = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
                 const status = player.getStatus();
@@ -1275,13 +1303,11 @@ class MusicPlayerApp {
                 this.playTimeouts = [];
             }
 
-            // 播放准备锁：防止等待期间覆盖操作
+            // 播放准备锁：防止等待期间覆盖操作（自带全屏遮罩）
             if (!playLock.acquire(song.title)) {
                 return;
             }
 
-            loading.show(i18n.t('player.preparing'));
-            
             // 播放歌曲，添加重试逻辑，网络歌曲特别容易失败
             let playSuccess = false;
             let lastError = null;
@@ -1309,14 +1335,11 @@ class MusicPlayerApp {
             }
             
             if (playSuccess) {
-                // 立即隐藏加载提示（不再等待推流）
-                loading.hide();
                 playLock.release();
                 Toast.success(i18n.t('player.nowPlaying', { title: song.title }));
             }
 
         } catch (error) {
-            loading.hide();
             playLock.release();
             console.error('[播放错误] 播放失败:', error);
             Toast.error(i18n.t('player.playFailed') + ': ' + (error.message || error));
@@ -1325,25 +1348,34 @@ class MusicPlayerApp {
 
     // 播放/暂停
     togglePlayPause() {
+        if (playLock.isPreparing()) return;
         player.togglePlayPause();
     }
 
     // 下一首
-    playNext() {
-        if (playLock.isPreparing()) {
-            Toast.warning(i18n.t('player.preparingBusy', { title: playLock.preparingSongTitle }));
-            return;
+    async playNext() {
+        if (!playLock.acquire(i18n.t('player.preparingNext'))) return;
+        try {
+            await player.next();
+        } catch (err) {
+            console.error('[下一首] 错误:', err);
+            Toast.error(i18n.t('player.nextFailed'));
+        } finally {
+            playLock.release();
         }
-        player.next();
     }
 
     // 上一首
-    playPrev() {
-        if (playLock.isPreparing()) {
-            Toast.warning(i18n.t('player.preparingBusy', { title: playLock.preparingSongTitle }));
-            return;
+    async playPrev() {
+        if (!playLock.acquire(i18n.t('player.preparingPrev'))) return;
+        try {
+            await player.prev();
+        } catch (err) {
+            console.error('[上一首] 错误:', err);
+            Toast.error(i18n.t('player.prevFailed'));
+        } finally {
+            playLock.release();
         }
-        player.prev();
     }
 
     // 从默认歌单中删除当前正在播放的歌曲
