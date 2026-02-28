@@ -317,11 +317,16 @@ def update_mpv_cmd_with_device(config: configparser.ConfigParser, device_id: str
 def cleanup_on_exit():
     """程序退出时的清理函数"""
     try:
-        import subprocess
-        # 强制终止所有 MPV 进程
-        subprocess.run(["taskkill", "/IM", "mpv.exe", "/F"], capture_output=True, timeout=2)
-        print("\n✅ MPV 进程已清理")
-    except:
+        from routers.state import PLAYER
+        if PLAYER and PLAYER.mpv_process and PLAYER.mpv_process.poll() is None:
+            pid = PLAYER.mpv_process.pid
+            PLAYER.mpv_process.terminate()
+            try:
+                PLAYER.mpv_process.wait(timeout=3)
+            except Exception:
+                PLAYER.mpv_process.kill()
+            print(f"\n✅ MPV 进程已清理 (PID={pid})")
+    except Exception:
         pass
 
 

@@ -414,9 +414,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"关闭 MPV 进程失败: {e}")
         try:
-            import subprocess
-            subprocess.run(["taskkill", "/IM", "mpv.exe", "/F"], capture_output=True, timeout=2)
-            logger.info("✅ 使用 taskkill 强制终止 MPV 进程")
+            if PLAYER and PLAYER.mpv_process and PLAYER.mpv_process.pid:
+                import subprocess
+                subprocess.run(
+                    ["taskkill", "/PID", str(PLAYER.mpv_process.pid), "/F"],
+                    capture_output=True, timeout=2,
+                )
+                logger.info(f"✅ 使用 taskkill /PID 终止 MPV 进程 (PID={PLAYER.mpv_process.pid})")
         except Exception:
             pass
 
@@ -435,10 +439,12 @@ app = FastAPI(
 )
 
 # 添加 CORS 中间件（允许跨域请求）
+# 注意：allow_credentials=True 与 allow_origins=["*"] 不兼容（浏览器会拒绝）
+# 本应用无认证机制，因此不需要 credentials 支持
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

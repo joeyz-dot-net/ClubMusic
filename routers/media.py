@@ -121,9 +121,15 @@ async def get_cover(file_path: str, player: MusicPlayer = Depends(get_player_for
         decoded_path = unquote(file_path)
 
         if os.path.isabs(decoded_path):
-            abs_path = decoded_path
+            abs_path = os.path.normpath(decoded_path)
         else:
-            abs_path = os.path.join(player.music_dir, decoded_path)
+            abs_path = os.path.normpath(os.path.join(player.music_dir, decoded_path))
+
+        # 路径穿越保护：确保路径在 music_dir 内
+        music_dir_abs = os.path.normpath(os.path.abspath(player.music_dir))
+        abs_path_resolved = os.path.normpath(os.path.abspath(abs_path))
+        if not abs_path_resolved.startswith(music_dir_abs + os.sep) and abs_path_resolved != music_dir_abs:
+            raise HTTPException(status_code=403, detail="Forbidden: path outside music directory")
 
         # 目录：查找封面文件
         if os.path.isdir(abs_path):
@@ -302,13 +308,7 @@ async def refresh_video_url(player: MusicPlayer = Depends(get_player_for_request
                 status_code=400
             )
 
-        if getattr(sys, 'frozen', False):
-            app_dir = os.path.dirname(sys.executable)
-        else:
-            app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-        bin_yt_dlp = os.path.join(app_dir, "bin", "yt-dlp.exe")
-        yt_dlp_exe = bin_yt_dlp if os.path.exists(bin_yt_dlp) else "yt-dlp"
+        yt_dlp_exe = MusicPlayer._get_yt_dlp_path()
 
         video_id = current_song.get("video_id")
         if video_id:

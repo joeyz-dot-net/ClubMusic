@@ -344,19 +344,8 @@ class StreamSong(Song):
 
                 logger.info(f"🎬 检测到 YouTube URL，尝试通过 yt-dlp 获取直链...")
 
-                # 获取主程序目录（支持 PyInstaller 打包后的 exe）
-                if getattr(sys, 'frozen', False):
-                    app_dir = os.path.dirname(sys.executable)
-                else:
-                    app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-                bin_yt_dlp = os.path.join(app_dir, "bin", "yt-dlp.exe")
-                if os.path.exists(bin_yt_dlp):
-                    yt_dlp_exe = bin_yt_dlp
-                    logger.info(f"   📦 使用 yt-dlp: {bin_yt_dlp}")
-                else:
-                    logger.info(f"   📦 yt-dlp.exe 不在 bin 目录，使用系统 PATH")
-                    yt_dlp_exe = "yt-dlp"
+                from models.player import MusicPlayer
+                yt_dlp_exe = MusicPlayer._get_yt_dlp_path()
 
                 # 1. 优先查询缓存
                 cached = url_cache.get(self.video_id) if self.video_id else None

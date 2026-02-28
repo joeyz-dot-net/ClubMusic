@@ -230,11 +230,7 @@ async def update_ui_config(request: Request):
 async def diagnostic_ytdlp(player: MusicPlayer = Depends(get_player)):
     """诊断 yt-dlp 配置状态（用于排查网络歌曲播放问题）"""
     try:
-        if getattr(sys, 'frozen', False):
-            app_dir = os.path.dirname(sys.executable)
-        else:
-            app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        bin_yt_dlp = os.path.join(app_dir, "bin", "yt-dlp.exe")
+        bin_yt_dlp = MusicPlayer._get_yt_dlp_path()
 
         result = {
             "status": "OK",

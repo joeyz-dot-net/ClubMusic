@@ -4,6 +4,7 @@
 
 import json
 import os
+import tempfile
 import logging
 from abc import ABC, abstractmethod
 from .song import Song, LocalSong, StreamSong
@@ -411,7 +412,7 @@ class PlayHistory(Playlist):
         self._file_path = file_path
 
     def save(self):
-        """保存历史记录到文件（包含aggregated play_count和timestamps）"""
+        """保存历史记录到文件（原子写入：先写临时文件再重命名）"""
         if not self._file_path:
             return
         try:
@@ -425,9 +426,21 @@ class PlayHistory(Playlist):
                 # 保存每次播放的时间戳列表
                 song_dict['timestamps'] = getattr(song, 'timestamps', str(getattr(song, 'timestamp', 0)))
                 data.append(song_dict)
-            
-            with open(self._file_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+
+            # 原子写入：先写入临时文件，再重命名替换
+            dir_name = os.path.dirname(self._file_path) or "."
+            fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                os.replace(tmp_path, self._file_path)
+            except BaseException:
+                # 清理临时文件
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
         except Exception as e:
             logger.error(f"保存播放历史失败: {e}")
 

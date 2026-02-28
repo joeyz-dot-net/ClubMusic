@@ -130,6 +130,35 @@ class MusicPlayer:
         return os.path.join(MusicPlayer._get_app_dir(), "settings.ini")
 
     @staticmethod
+    def _get_yt_dlp_path() -> str:
+        """获取 yt-dlp 可执行文件路径（优先使用 bin 目录，其次系统 PATH）"""
+        app_dir = MusicPlayer._get_app_dir()
+        bin_yt_dlp = os.path.join(app_dir, "bin", "yt-dlp.exe")
+        if os.path.exists(bin_yt_dlp):
+            return bin_yt_dlp
+        return "yt-dlp"
+
+    @staticmethod
+    def _is_invalid_title(title, raw_url):
+        """判断 mpv 返回的 media-title 是否为无效标题（URL、video ID 等）"""
+        try:
+            if not title or not isinstance(title, str):
+                return True
+            s = title.strip()
+            if not s or s.startswith("http"):
+                return True
+            if raw_url and s == raw_url:
+                return True
+            if "youtu" in s.lower():
+                return True
+            # YouTube video ID（11字符，仅字母数字和 -_）不作为有效标题
+            if len(s) == 11 and all(c.isalnum() or c in ("-", "_") for c in s):
+                return True
+            return False
+        except Exception:
+            return True
+
+    @staticmethod
     def ensure_ini_exists(ini_path: str = None):
         """确保INI配置文件存在，不存在则创建默认配置
 
@@ -203,20 +232,10 @@ class MusicPlayer:
         # 规范化 MPV 命令中的相对路径
         self.mpv_cmd = MusicPlayer._normalize_mpv_cmd(self.mpv_cmd)
         self.data_dir = data_dir
-        
-        # 向后兼容性：提供 flask_host 和 flask_port 别名（已弃用）
-        self.flask_host = server_host
-        self.flask_port = int(server_port)
 
         # 确保数据目录存在
         if not os.path.exists(self.data_dir):
             os.makedirs(self.data_dir, exist_ok=True)
-
-        # 文件路径
-        self.playback_history_file = os.path.join(
-            self.data_dir, "playback_history.json"
-        )
-        self.current_playlist_file = os.path.join(self.data_dir, "playlist.json")
 
         # 播放器状态
         self.playlist = []  # 存储相对路径
@@ -286,6 +305,15 @@ class MusicPlayer:
 
         logger.info(f"播放器初始化完成: music_dir={self.music_dir}, extensions={self.allowed_extensions}")
 
+    def get_current_meta_snapshot(self) -> dict:
+        """线程安全地获取 current_meta 的快照副本。
+
+        current_meta 会被主线程、事件监听线程和标题获取线程并发读写，
+        此方法在 RLock 保护下返回一份浅拷贝，避免读到不一致的状态。
+        """
+        with self._lock:
+            return dict(self.current_meta) if self.current_meta else {}
+
     def set_external_deps(self, playlists_manager, default_playlist_id,
                           playback_history, broadcast_from_thread):
         """注入外部依赖，消除对 routers.state 的循环导入。
@@ -303,27 +331,23 @@ class MusicPlayer:
         logger.info("[DI] ✓ 外部依赖已注入到 MusicPlayer")
 
     @classmethod
-    def create_pipe_player(cls, pipe_name: str, playlists_manager,
-                           playback_history, broadcast_from_thread=None,
-                           music_dir: str = ""):
-        """创建轻量级 PipePlayer 实例，连接到外部管理的 MPV 管道。
-
-        PipePlayer 不启动 MPV 进程（管道由外部如 ClubVoice 管理），
-        共享全局 PLAYLISTS_MANAGER 实现歌单共享，
-        拥有独立的播放状态、队列和事件监听线程。
+    def _init_shared_state(cls, instance, *, pipe_name: str, id_key: str,
+                           playlists_manager, playback_history,
+                           broadcast_from_thread, music_dir: str = "",
+                           config_overrides: dict = None):
+        """初始化 PipePlayer/RoomPlayer 共享的基础属性。
 
         参数:
-            pipe_name: MPV IPC 管道路径（如 r'\\\\.\\pipe\\mpv-ipc-room1'）
-            playlists_manager: 共享的 Playlists 管理器实例
+            instance: object.__new__(cls) 创建的空实例
+            pipe_name: MPV IPC 管道路径
+            id_key: 用于生成 room_playlist_id 的标识符
+            playlists_manager: 共享的 Playlists 管理器
             playback_history: 共享的 PlayHistory 实例
-            broadcast_from_thread: WebSocket 广播回调（可选）
+            broadcast_from_thread: WebSocket 广播回调
+            music_dir: 音乐目录（可选）
+            config_overrides: 额外的 config 字典项
         """
-        instance = object.__new__(cls)
-
-        # 管道配置
         instance.pipe_name = pipe_name
-        instance.mpv_cmd = None  # 标记：不启动 MPV
-        instance.mpv_process = None
         instance.music_dir = music_dir
         instance.allowed_extensions = []
         instance.data_dir = ""
@@ -333,10 +357,8 @@ class MusicPlayer:
         instance.youtube_url_extra_max = 50
         instance.server_host = "0.0.0.0"
         instance.server_port = 80
-        instance.flask_host = "0.0.0.0"
-        instance.flask_port = 80
 
-        # 播放状态（独立于主 PLAYER）
+        # 播放状态
         instance.playlist = []
         instance.current_index = -1
         instance.current_meta = {}
@@ -356,7 +378,7 @@ class MusicPlayer:
         instance._ext_broadcast_from_thread = broadcast_from_thread
 
         # 房间队列播放列表 ID
-        safe_id = pipe_name.replace("\\", "_").replace(".", "_").replace(":", "_")
+        safe_id = id_key.replace("\\", "_").replace(".", "_").replace(":", "_")
         instance._room_playlist_id = f"room_{safe_id}"
         instance._ext_default_playlist_id = instance._room_playlist_id
 
@@ -368,22 +390,52 @@ class MusicPlayer:
         # 不构建本地文件树
         instance.local_file_tree = {"name": "N/A", "rel": "", "dirs": [], "files": []}
         instance._audio_device_names = {}
-        instance.config = {}
+        instance.config = config_overrides or {}
         instance.current_playlist = None
         instance.current_playlist_file = ""
 
         # 自动创建房间队列播放列表（临时，不持久化）
         room_pl = playlists_manager.get_playlist(instance._room_playlist_id)
         if not room_pl:
-            short_name = pipe_name.split("-")[-1][:12] if "-" in pipe_name else pipe_name[-12:]
+            short_name = id_key.split("-")[-1][:12] if "-" in id_key else id_key[-12:]
             room_pl = Playlist(playlist_id=instance._room_playlist_id, name=f"Room {short_name}")
             playlists_manager._playlists[instance._room_playlist_id] = room_pl
-            logger.info(f"[PipePlayer] 已创建房间临时播放列表: {instance._room_playlist_id}")
+
+    @classmethod
+    def create_pipe_player(cls, pipe_name: str, playlists_manager,
+                           playback_history, broadcast_from_thread=None,
+                           music_dir: str = ""):
+        """创建轻量级 PipePlayer 实例，连接到外部管理的 MPV 管道。
+
+        PipePlayer 不启动 MPV 进程（管道由外部如 ClubVoice 管理），
+        共享全局 PLAYLISTS_MANAGER 实现歌单共享，
+        拥有独立的播放状态、队列和事件监听线程。
+
+        参数:
+            pipe_name: MPV IPC 管道路径（如 r'\\\\.\\pipe\\mpv-ipc-room1'）
+            playlists_manager: 共享的 Playlists 管理器实例
+            playback_history: 共享的 PlayHistory 实例
+            broadcast_from_thread: WebSocket 广播回调（可选）
+        """
+        instance = object.__new__(cls)
+        instance.mpv_cmd = None  # 标记：不启动 MPV
+        instance.mpv_process = None
+
+        cls._init_shared_state(
+            instance,
+            pipe_name=pipe_name,
+            id_key=pipe_name,
+            playlists_manager=playlists_manager,
+            playback_history=playback_history,
+            broadcast_from_thread=broadcast_from_thread,
+            music_dir=music_dir,
+        )
 
         # 启动管道事件监听线程
         instance._start_event_listener()
 
         logger.info(f"[PipePlayer] ✓ 已创建 PipePlayer: {pipe_name}")
+        logger.info(f"[PipePlayer] 已创建房间临时播放列表: {instance._room_playlist_id}")
         return instance
 
     def destroy_pipe_player(self):
@@ -419,10 +471,9 @@ class MusicPlayer:
         """
         instance = object.__new__(cls)
 
-        # 管道配置
+        # RoomPlayer 专有：管道和 MPV 命令配置
         ipc_pipe = rf'\\.\pipe\mpv-ipc-{room_id}'
         pcm_pipe = rf'\\.\pipe\pcm-{room_id}'
-        instance.pipe_name = ipc_pipe
         instance._room_id = room_id
         instance._pcm_pipe_name = pcm_pipe
         instance._default_volume = default_volume
@@ -446,64 +497,20 @@ class MusicPlayer:
         instance._relay_stop = threading.Event()
         instance._pcm_client_connected = threading.Event()
 
-        # 与 PipePlayer 相同的基础属性
-        instance.music_dir = music_dir
-        instance.allowed_extensions = []
-        instance.data_dir = ""
-        instance.debug = False
-        instance.local_search_max_results = 0
-        instance.youtube_search_max_results = 20
-        instance.youtube_url_extra_max = 50
-        instance.server_host = "0.0.0.0"
-        instance.server_port = 80
-        instance.flask_host = "0.0.0.0"
-        instance.flask_port = 80
-
-        # 播放状态（独立于主 PLAYER）
-        instance.playlist = []
-        instance.current_index = -1
-        instance.current_meta = {}
-        instance.loop_mode = 0
-        instance.pitch_shift = 0
-        instance._last_play_time = 0
-        instance._prev_index = None
-        instance._prev_meta = None
-        instance._auto_thread = None
-        instance._stop_flag = False
-        instance._req_id = 0
-        instance._lock = threading.RLock()
-
-        # 共享资源（注入）
-        instance._ext_playlists_manager = playlists_manager
-        instance._ext_playback_history = playback_history
-        instance._ext_broadcast_from_thread = broadcast_from_thread
-
-        # 房间队列播放列表 ID
-        safe_id = room_id.replace("\\", "_").replace(".", "_").replace(":", "_")
-        instance._room_playlist_id = f"room_{safe_id}"
-        instance._ext_default_playlist_id = instance._room_playlist_id
-
-        # 共享播放历史
-        instance.playback_history = playback_history
-        instance.playback_history_file = ""
-        instance.playback_history_max = 9999
-
-        # 不构建本地文件树
-        instance.local_file_tree = {"name": "N/A", "rel": "", "dirs": [], "files": []}
-        instance._audio_device_names = {}
-        instance.config = {"LOCAL_VOLUME": str(default_volume)}
-        instance.current_playlist = None
-        instance.current_playlist_file = ""
-
-        # 自动创建房间队列播放列表（临时，不持久化）
-        room_pl = playlists_manager.get_playlist(instance._room_playlist_id)
-        if not room_pl:
-            short_name = room_id[:12]
-            room_pl = Playlist(playlist_id=instance._room_playlist_id, name=f"Room {short_name}")
-            playlists_manager._playlists[instance._room_playlist_id] = room_pl
-            logger.info(f"[RoomPlayer] 已创建房间临时播放列表: {instance._room_playlist_id}")
+        # 共享基础属性（与 PipePlayer 相同）
+        cls._init_shared_state(
+            instance,
+            pipe_name=ipc_pipe,
+            id_key=room_id,
+            playlists_manager=playlists_manager,
+            playback_history=playback_history,
+            broadcast_from_thread=broadcast_from_thread,
+            music_dir=music_dir,
+            config_overrides={"LOCAL_VOLUME": str(default_volume)},
+        )
 
         logger.info(f"[RoomPlayer] ✓ 已创建 RoomPlayer: room_id={room_id}, ipc={ipc_pipe}, pcm={pcm_pipe}")
+        logger.info(f"[RoomPlayer] 已创建房间临时播放列表: {instance._room_playlist_id}")
         return instance
 
     def start_room_mpv(self) -> bool:
@@ -959,53 +966,6 @@ class MusicPlayer:
         
         return player
 
-    @classmethod
-    def from_json_file(cls, json_path: str, data_dir: str = "."):
-        """从JSON配置文件创建播放器实例
-
-        参数:
-          json_path: 配置文件路径
-          data_dir: 数据文件存储目录
-
-        返回:
-          MusicPlayer 实例
-        """
-        cfg = cls._read_json_file(json_path)
-        return cls(
-            music_dir=cfg.get("music_dir", cls.DEFAULT_CONFIG["MUSIC_DIR"]),
-            allowed_extensions=cfg.get(
-                "allowed_extensions", cls.DEFAULT_CONFIG["ALLOWED_EXTENSIONS"]
-            ),
-            flask_host=cfg.get("flask_host", cls.DEFAULT_CONFIG["FLASK_HOST"]),
-            flask_port=int(cfg.get("flask_port", cls.DEFAULT_CONFIG["FLASK_PORT"])),
-            debug=cfg.get("debug", False),
-            mpv_cmd=cfg.get("mpv_cmd"),
-            data_dir=data_dir,
-        )
-
-    @classmethod
-    def from_config_file(cls, config_path: str, data_dir: str = "."):
-        """从配置文件创建播放器实例（自动检测文件格式）
-
-        支持 .ini 和 .json 格式
-
-        参数:
-          config_path: 配置文件路径
-          data_dir: 数据文件存储目录
-
-        返回:
-          MusicPlayer 实例
-        """
-        if not os.path.exists(config_path):
-            raise FileNotFoundError(f"配置文件不存在: {config_path}")
-
-        _, ext = os.path.splitext(config_path)
-        if ext.lower() == ".ini":
-            return cls.from_ini_file(config_path, data_dir)
-        elif ext.lower() == ".json":
-            return cls.from_json_file(config_path, data_dir)
-        else:
-            raise ValueError(f"不支持的配置文件格式: {ext}（支持 .ini 和 .json）")
 
     @staticmethod
     def _read_ini_file(ini_path: str) -> dict:
@@ -1029,28 +989,6 @@ class MusicPlayer:
         return cfg
 
     @staticmethod
-    def _read_json_file(json_path: str) -> dict:
-        """读取JSON配置文件"""
-        cfg = MusicPlayer.DEFAULT_CONFIG.copy()
-        try:
-            with open(json_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                # 支持两种格式：
-                # 1. 直接配置项
-                # 2. 嵌套在 'player' 或 'app' 字段下
-                if isinstance(data, dict):
-                    if "player" in data:
-                        cfg.update(data["player"])
-                    elif "app" in data:
-                        cfg.update(data["app"])
-                    else:
-                        cfg.update(data)
-            logger.info(f"已从 {json_path} 加载配置")
-        except Exception as e:
-            logger.warning(f"读取配置文件失败: {e}，使用默认配置")
-        return cfg
-
-    @staticmethod
     def save_config_to_ini(ini_path: str, config: dict):
         """将配置保存为INI文件
 
@@ -1070,35 +1008,6 @@ class MusicPlayer:
         except Exception as e:
             logger.error(f"保存配置文件失败: {e}")
 
-    @staticmethod
-    def save_config_to_json(json_path: str, config: dict):
-        """将配置保存为JSON文件
-
-        参数:
-          json_path: 输出文件路径
-          config: 配置字典
-        """
-        try:
-            with open(json_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, ensure_ascii=False, indent=2)
-            logger.info(f"配置已保存到 {json_path}")
-        except Exception as e:
-            logger.error(f"保存配置文件失败: {e}")
-
-    def save_config(self, config_path: str):
-        """将当前配置保存到文件
-
-        参数:
-          config_path: 输出文件路径
-        """
-        config = self.to_dict()
-        _, ext = os.path.splitext(config_path)
-        if ext.lower() == ".ini":
-            self.save_config_to_ini(config_path, config)
-        elif ext.lower() == ".json":
-            self.save_config_to_json(config_path, config)
-        else:
-            raise ValueError(f"不支持的配置文件格式: {ext}（支持 .ini 和 .json）")
 
     def _normalize_music_dir(self, path: str) -> str:
         """规范化音乐目录路径"""
@@ -1491,12 +1400,18 @@ class MusicPlayer:
                 return True
             logger.warning(f"MPV 进程存活但管道始终不可用，将重启 MPV")
 
-        # 清理任何现存的 mpv 进程，防止重复启动
+        # 清理当前持有的 mpv 进程，防止重复启动
         try:
-            if os.name == "nt":
-                subprocess.run(
-                    ["taskkill", "/IM", "mpv.exe", "/F"], capture_output=True, timeout=2
-                )
+            if self.mpv_process and self.mpv_process.poll() is None:
+                pid = self.mpv_process.pid
+                logger.info(f"终止当前 MPV 进程 (PID={pid})...")
+                self.mpv_process.terminate()
+                try:
+                    self.mpv_process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    self.mpv_process.kill()
+                    self.mpv_process.wait(timeout=2)
+                self.mpv_process = None
                 time.sleep(0.3)  # 让进程完全退出
         except Exception as e:
             logger.debug(f"清理 mpv 进程时的异常（可忽略）: {e}")
@@ -1604,11 +1519,11 @@ class MusicPlayer:
                         logger.info(f"✅ 在 PATH 中找到 MPV: {mpv_in_path}")
                         cmd_list[0] = mpv_in_path
                     else:
-                        logger.warning(f"⚠️  MPV 路径不存在: {mpv_exe_path}")
-                        logger.info(f"尝试使用 shell=True 模式启动...")
+                        logger.error(f"❌ MPV 可执行文件未找到: {mpv_exe_path}")
+                        logger.error(f"请检查 settings.ini 中的 mpv_cmd 配置")
                         raise FileNotFoundError(f"MPV not found: {mpv_exe_path}")
-                
-                logger.info(f"✅ 启动mpv进程 (shell=False)")
+
+                logger.info(f"✅ 启动mpv进程")
                 logger.debug(f"  命令列表: {cmd_list}")
                 process = subprocess.Popen(
                     cmd_list,
@@ -1620,16 +1535,9 @@ class MusicPlayer:
                 self.mpv_process = process
                 logger.info(f"✅ mpv进程已启动 (PID: {process.pid})")
             except Exception as e2:
-                logger.warning(f"方法1失败: {e2}，尝试方法2 (shell=True)")
-                logger.debug(f"  原始命令: {mpv_launch_cmd}")
-                try:
-                    process = subprocess.Popen(mpv_launch_cmd, shell=True)
-                    self.mpv_process = process
-                    logger.info(f"✅ mpv进程已启动 (shell=True, PID: {process.pid})")
-                except Exception as e3:
-                    logger.error(f"❌ 方法2也失败: {e3}")
-                    logger.error(f"请检查 MPV 路径配置: {self.mpv_cmd}")
-                    raise
+                logger.error(f"❌ 启动 MPV 失败: {e2}")
+                logger.error(f"请检查 MPV 路径配置: {self.mpv_cmd}")
+                raise
         except Exception as e:
             logger.error(f"启动 mpv 进程失败: {e}")
             return False
@@ -2295,16 +2203,7 @@ class MusicPlayer:
             actual_url = url
             if "youtube.com" in url or "youtu.be" in url:
                 logger.info(f"🎬 检测到 YouTube URL，尝试通过 yt-dlp 获取直链...")
-                # 主程序目录下的 bin 子目录
-                app_dir = MusicPlayer._get_app_dir()
-                bin_yt_dlp = os.path.join(app_dir, "bin", "yt-dlp.exe")
-                
-                if os.path.exists(bin_yt_dlp):
-                    yt_dlp_exe = bin_yt_dlp
-                    logger.info(f"   📦 使用 yt-dlp: {bin_yt_dlp}")
-                else:
-                    logger.info(f"   📦 yt-dlp.exe 不在 {bin_dir} 目录，使用系统 PATH")
-                    yt_dlp_exe = "yt-dlp"
+                yt_dlp_exe = MusicPlayer._get_yt_dlp_path()
                 
                 try:
                     # 使用 -f bestaudio 确保只获取音频流
@@ -2358,15 +2257,7 @@ class MusicPlayer:
                 try:
                     # 使用 yt-dlp 获取播放列表信息
                     logger.debug(f"尝试使用 yt-dlp 提取播放列表信息...")
-                    # 查找 yt-dlp 可执行文件 - 使用统一的 bin_dir
-                    app_dir = MusicPlayer._get_app_dir()
-                    bin_dir = _read_bin_dir_from_config(app_dir)
-                    bin_yt_dlp = os.path.join(app_dir, bin_dir, "yt-dlp.exe")
-                    
-                    if os.path.exists(bin_yt_dlp):
-                        yt_dlp_exe = bin_yt_dlp
-                    else:
-                        yt_dlp_exe = "yt-dlp"
+                    yt_dlp_exe = MusicPlayer._get_yt_dlp_path()
                     cmd = [yt_dlp_exe, "--flat-playlist", "-j", url]
                     result = subprocess.run(
                         cmd, capture_output=True, text=True, timeout=30
@@ -2435,57 +2326,38 @@ class MusicPlayer:
                     self.current_playlist.set_current_index(0)
                     logger.debug(f"创建新播放队列（单个视频）")
 
-            # 尝试轮询获取 mpv 的 media-title，最多尝试 20 次（大约 10 秒）
-            def _is_invalid_title(tit, urlraw):
-                try:
-                    if not tit or not isinstance(tit, str):
-                        return True
-                    s = tit.strip()
-                    if not s:
-                        return True
-                    # 如果返回看起来像 URL 或直接包含原始 URL，则视为无效
-                    if (
-                        s.startswith("http")
-                        or s.startswith("https")
-                        or urlraw
-                        and s == urlraw
-                    ):
-                        return True
-                    # 常见 YouTube ID（11字符且仅字母数字-_）不作为有效标题
-                    if len(s) == 11 and all(c.isalnum() or c in ("-", "_") for c in s):
-                        return True
-                    # 含有 youtube 域名或 youtu 标记也可能是无效（如 mpv 暂时返回片段）
-                    if "youtu" in s.lower():
-                        return True
-                    return False
-                except Exception:
-                    return True
+            # 后台线程轮询获取 mpv 的 media-title（避免阻塞调用方最多 10 秒）
+            def _poll_media_title():
+                for attempt in range(20):
+                    time.sleep(0.5)
+                    try:
+                        media_title = mpv_get_func("media-title")
+                        if (
+                            media_title
+                            and isinstance(media_title, str)
+                            and not MusicPlayer._is_invalid_title(media_title, url)
+                        ):
+                            # 将获得的媒体标题写入 media_title 字段，并同步更新用户可见的 name
+                            self.current_meta["media_title"] = media_title
+                            self.current_meta["name"] = media_title
+                            # 更新历史记录中最新项的标题（仅当save_to_history为True时）
+                            if save_to_history and not self.playback_history.is_empty():
+                                history_items = self.playback_history.get_all()
+                                if history_items and history_items[0]["url"] == url:
+                                    self.playback_history.update_item(0, name=media_title)
+                            logger.debug(f"mpv media-title 探测到 (尝试 {attempt+1}): {media_title}")
+                            break
+                        else:
+                            if attempt < 4:
+                                logger.debug(f"media-title 未就绪或不符合 (尝试 {attempt+1}), 值: {repr(media_title)}")
+                    except Exception as _e:
+                        if attempt == 19:
+                            logger.warning(f"无法读取 mpv media-title (最终失败): {_e}")
 
-            for attempt in range(20):
-                time.sleep(0.5)
-                try:
-                    media_title = mpv_get_func("media-title")
-                    if (
-                        media_title
-                        and isinstance(media_title, str)
-                        and not _is_invalid_title(media_title, url)
-                    ):
-                        # 将获得的媒体标题写入 media_title 字段，并同步更新用户可见的 name
-                        self.current_meta["media_title"] = media_title
-                        self.current_meta["name"] = media_title
-                        # 更新历史记录中最新项的标题（仅当save_to_history为True时）
-                        if save_to_history and not self.playback_history.is_empty():
-                            history_items = self.playback_history.get_all()
-                            if history_items and history_items[0]["url"] == url:
-                                self.playback_history.update_item(0, name=media_title)
-                        logger.debug(f"mpv media-title 探测到 (尝试 {attempt+1}): {media_title}") 
-                        break
-                    else:
-                        if attempt < 4:
-                            logger.debug(f"media-title 未就绪或不符合 (尝试 {attempt+1}), 值: {repr(media_title)}") 
-                except Exception as _e:
-                    if attempt == 19:
-                        logger.warning(f"无法读取 mpv media-title (最终失败): {_e}")
+            import threading
+            threading.Thread(
+                target=_poll_media_title, daemon=True, name="play_url-title-poll"
+            ).start()
 
             # 记录播放开始时间
             self._last_play_time = time.time()
@@ -2653,22 +2525,6 @@ class MusicPlayer:
                 def _fetch_media_title():
                     """后台线程：获取串流媒体的真实标题"""
 
-                    def _is_invalid_title(title, raw_url):
-                        if not title or not isinstance(title, str):
-                            return True
-                        s = title.strip()
-                        if not s or s.startswith("http"):
-                            return True
-                        if raw_url and s == raw_url:
-                            return True
-                        if "youtu" in s.lower():
-                            return True
-                        if len(s) == 11 and all(
-                            c.isalnum() or c in ("-", "_") for c in s
-                        ):
-                            return True
-                        return False
-
                     url = song.url
                     for attempt in range(20):
                         time.sleep(0.5)
@@ -2677,7 +2533,7 @@ class MusicPlayer:
                             if (
                                 media_title
                                 and isinstance(media_title, str)
-                                and not _is_invalid_title(media_title, url)
+                                and not MusicPlayer._is_invalid_title(media_title, url)
                             ):
                                 # 更新当前元数据
                                 self.current_meta["media_title"] = media_title
@@ -2761,14 +2617,7 @@ class MusicPlayer:
                     return
 
                 # 确定 yt-dlp 路径
-                if getattr(__import__('sys'), 'frozen', False):
-                    import sys as _sys
-                    app_dir = os.path.dirname(_sys.executable)
-                else:
-                    app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                yt_dlp_exe = os.path.join(app_dir, "bin", "yt-dlp.exe")
-                if not os.path.exists(yt_dlp_exe):
-                    yt_dlp_exe = "yt-dlp"
+                yt_dlp_exe = MusicPlayer._get_yt_dlp_path()
 
                 logger.info(f"[预获取] 当前曲已开始，预获取下一曲: {url[:60]}")
                 url_cache.prefetch(tmp.video_id, url, yt_dlp_exe)
@@ -2871,8 +2720,8 @@ class MusicPlayer:
         return {
             "MUSIC_DIR": self.music_dir,
             "ALLOWED_EXTENSIONS": ",".join(sorted(self.allowed_extensions)),
-            "FLASK_HOST": self.flask_host,
-            "FLASK_PORT": str(self.flask_port),
+            "SERVER_HOST": self.server_host,
+            "SERVER_PORT": str(self.server_port),
             "DEBUG": "true" if self.debug else "false",
             "MPV_CMD": self.mpv_cmd or "",
         }

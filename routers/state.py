@@ -144,7 +144,7 @@ def _build_state_message() -> dict:
         mpv_state = {"paused": True, "time_pos": 0, "duration": 0, "volume": 50}
     return {
         "type": "state_update",
-        "current_meta": dict(PLAYER.current_meta) if PLAYER.current_meta else {},
+        "current_meta": PLAYER.get_current_meta_snapshot(),
         "mpv_state": mpv_state,
         "loop_mode": PLAYER.loop_mode,
         "pitch_shift": PLAYER.pitch_shift,
