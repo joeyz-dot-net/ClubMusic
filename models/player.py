@@ -397,7 +397,7 @@ class MusicPlayer:
     @classmethod
     def create_room_player(cls, room_id: str, playlists_manager,
                            playback_history, broadcast_from_thread=None,
-                           default_volume: int = 80):
+                           default_volume: int = 80, music_dir: str = ""):
         """创建 RoomPlayer 实例 — ClubMusic 拥有并管理 MPV 进程 + PCM 音频中继。
 
         与 PipePlayer 的区别：RoomPlayer 自己启动 MPV（PCM stdout 模式），
@@ -425,6 +425,7 @@ class MusicPlayer:
         mpv_exe = os.path.join(app_dir, "bin", "mpv.exe")
         instance.mpv_cmd = (
             f'{mpv_exe}'
+            f' --no-config'
             f' --input-ipc-server={ipc_pipe}'
             f' --ao=pcm --ao-pcm-file=- --ao-pcm-waveheader=no'
             f' --audio-samplerate=48000 --audio-channels=stereo --audio-format=s16'
@@ -437,7 +438,7 @@ class MusicPlayer:
         instance._relay_stop = threading.Event()
 
         # 与 PipePlayer 相同的基础属性
-        instance.music_dir = ""
+        instance.music_dir = music_dir
         instance.allowed_extensions = []
         instance.data_dir = ""
         instance.debug = False
@@ -535,11 +536,23 @@ class MusicPlayer:
                 shell=False,
                 creationflags=CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW,
                 stdout=subprocess.PIPE,   # PCM 数据从 stdout 读取
-                stderr=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,   # 捕获 stderr 用于诊断
                 stdin=subprocess.DEVNULL,
             )
             self.mpv_process = process
             logger.info(f"[RoomPlayer] MPV 已启动 (PID={process.pid})")
+
+            # 启动 stderr 读取线程（避免 stderr 缓冲区满阻塞 MPV）
+            def _drain_stderr():
+                try:
+                    for line in process.stderr:
+                        text = line.decode('utf-8', errors='replace').rstrip()
+                        if text:
+                            logger.info(f"[RoomPlayer MPV stderr] {text}")
+                except Exception:
+                    pass
+            threading.Thread(target=_drain_stderr, daemon=True,
+                           name=f"mpv-stderr-{self._room_id}").start()
         except Exception as e:
             logger.error(f"[RoomPlayer] MPV 启动失败: {e}")
             return False
@@ -1145,7 +1158,7 @@ class MusicPlayer:
                 # 获取默认歌单（当前播放队列）
                 default_playlist = playlists_mgr.get_playlist(default_pid)
                 if not default_playlist or len(default_playlist.songs) == 0:
-                    logger.info("[自动播放] ⚠️ 默认歌单为空，停止自动播放")
+                    logger.info(f"[自动播放] ⚠️ 歌单 '{default_pid}' 为空，停止自动播放")
                     return
 
                 # 删除当前播放的歌曲（通过URL匹配）
@@ -1270,6 +1283,10 @@ class MusicPlayer:
         """
         # PipePlayer 模式：不启动 MPV，只检查管道是否存在
         if self.mpv_cmd is None:
+            return self.mpv_pipe_exists()
+
+        # RoomPlayer 模式：MPV 由 start_room_mpv() 管理，不走默认重启逻辑
+        if hasattr(self, '_room_id') and self._room_id:
             return self.mpv_pipe_exists()
 
         # 每次调用重新解析，允许运行期间修改 MPV_CMD 并热加载
@@ -1469,7 +1486,7 @@ class MusicPlayer:
                     logger.info(f"📂 [MPV 命令] loadfile: {file_url[:100]}{'...' if len(file_url) > 100 else ''}")
                     
                     # 显示当前 MPV 完整配置信息（包含运行时参数）
-                    if self.mpv_cmd:  # PipePlayer 没有 mpv_cmd，跳过此诊断块
+                    if self.mpv_cmd and not hasattr(self, '_room_id'):  # PipePlayer/RoomPlayer 跳过此诊断块
                         runtime_audio_device = os.environ.get("MPV_AUDIO_DEVICE", "")
                         mpv_display_cmd = self.mpv_cmd
 
@@ -1485,7 +1502,7 @@ class MusicPlayer:
                     is_network_url = file_url.startswith(('http://', 'https://'))
                     if is_network_url:
                         logger.info(f"   🌐 网络播放模式")
-                        if self.mpv_cmd:
+                        if self.mpv_cmd and not hasattr(self, '_room_id'):
                             logger.info(f"   📋 完整命令参数: {mpv_display_cmd} \"{file_url}\"")
                         # 显示 ytdl 相关属性
                         try:

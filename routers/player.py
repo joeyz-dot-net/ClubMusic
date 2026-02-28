@@ -70,7 +70,8 @@ async def play(
         logger.info(f"   📌 是否网络歌曲: {'✅ 是' if is_network_song else '❌ 否'}")
         pipe = request.query_params.get('pipe', '')
         logger.info(f"   📌 Pipe: {pipe or '(default)'}")
-        logger.info(f"   📌 Player: {'PipePlayer' if player.mpv_cmd is None else 'Default'}")
+        _player_type = 'PipePlayer' if player.mpv_cmd is None else ('RoomPlayer' if hasattr(player, '_room_id') else 'Default')
+        logger.info(f"   📌 Player: {_player_type}")
         logger.info(f"   📌 管道路径: {player.pipe_name}")
         logger.info("=" * 60)
 

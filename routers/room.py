@@ -16,7 +16,7 @@ from models import MusicPlayer
 from routers.state import (
     ROOM_PLAYERS, _room_players_lock,
     PLAYLISTS_MANAGER, PLAYBACK_HISTORY,
-    _broadcast_from_thread,
+    _broadcast_from_thread, PLAYER,
 )
 
 logger = logging.getLogger(__name__)
@@ -53,6 +53,7 @@ async def init_room(request: Request):
         playback_history=PLAYBACK_HISTORY,
         broadcast_from_thread=_broadcast_from_thread,
         default_volume=default_volume,
+        music_dir=PLAYER.music_dir,
     )
 
     # 启动 MPV + PCM relay
