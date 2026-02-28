@@ -1,55 +1,59 @@
 # ClubMusic — AI Agent Guide
 
 **Full-stack web music player**: FastAPI backend + ES6 frontend + MPV IPC engine.  
-**Key distinction**: Bilingual (zh/en), user-isolation via localStorage, event-driven auto-play, Windows/PyInstaller-optimized.
+**Key distinction**: Trilingual (zh/en/zh-TW), user-isolation via localStorage, event-driven auto-play, Windows/PyInstaller-optimized.
 
-> **Last Updated**: 2026-01-03 | **Focus**: Backend-controlled auto-play, API parity patterns, singleton architecture, deployment workflows, ES6 module system
+> **Last Updated**: 2026-02-28 | **Focus**: Modular routers, dependency injection, WebSocket push, RoomPlayer, backend-controlled auto-play, API parity patterns, singleton architecture
 
 ## ⚠️ Critical Rules (Must Follow)
 
 | Rule | Why & Example |
 |------|---------------|
-| **API Sync** | Backend [app.py](../app.py) + Frontend [static/js/api.js](../static/js/api.js) must match exactly. New route? Update BOTH. Field rename? Check both. Missing sync = silent failures. |
+| **API Sync** | Backend routers (`routers/*.py`) + Frontend [static/js/api.js](../static/js/api.js) must match exactly. New route? Update BOTH. Field rename? Check both. Missing sync = silent failures. |
 | **FormData vs JSON** | **Player control** (`/play`, `/seek`, `/volume`, `/playlist_remove`): use `await request.form()`. **Data CRUD** (`/playlists`, `/playlist_reorder`, `/search_song`): use `await request.json()`. Wrong type = 400 errors. |
-| **Global Singletons** | `PLAYER`, `PLAYLISTS_MANAGER`, `RANK_MANAGER` initialized in [app.py L70-80](../app.py#L70-L80). Access directly—never create new instances. Duplication = state corruption. |
+| **Global Singletons** | `PLAYER`, `PLAYLISTS_MANAGER`, `RANK_MANAGER` initialized in [routers/state.py](../routers/state.py). Access via dependency injection (`routers/dependencies.py`) in routers—never create new instances. Duplication = state corruption. |
 | **Persistence** | Call `PLAYLISTS_MANAGER.save()` after ANY playlist mutation. Forgetting = data loss on restart. |
 | **User Isolation** | Playlist selection stored in browser `localStorage.selectedPlaylistId`, NOT backend. Each tab/browser independent. Backend only validates existence via `/playlists/{id}/switch`. |
 | **UTF-8 Windows** | Every `.py` entry point needs UTF-8 wrapper (see [models/__init__.py#L6-11](../models/__init__.py)). Missing = Chinese chars garbled in logs. |
-| **i18n Completeness** | Always add BOTH `zh` and `en` keys in [static/js/i18n.js](../static/js/i18n.js) when adding UI text. Missing lang = undefined strings. |
+| **i18n Completeness** | Always add `zh`, `en`, and `zh-TW` keys in [static/js/i18n.js](../static/js/i18n.js) when adding UI text. Missing lang = undefined strings. |
 | **Default Playlist** | Never delete or rename the `default` playlist (ID: `"default"`). Backend assumes it always exists for auto-play logic. |
 
 ## Architecture & Data Flow
 
 ```
-Browser ←1s poll /status→ FastAPI (app.py) ←→ Singletons ←→ MPV (\\.\pipe\mpv-pipe)
-   │                           │                                ↑
-   ├── ES6 modules ────────────┴── models/*.py                 │
-   └── localStorage                    ├── player.py (event listener thread)
-       (selectedPlaylistId,            │   └─ Detects MPV "end-file" event
-        theme, language)                │      └─ Calls handle_playback_end()
-                                        │         └─ Deletes current song + plays next
-                                        │            (NO frontend involvement)
-                                        └── playlists.json, playback_history.json
+Browser ←WebSocket /ws→ FastAPI (app.py → routers/*.py) ←DI→ Singletons ←→ MPV (\\.\pipe\mpv-pipe)
+   │                           │                                              ↑
+   ├── ES6 modules ────────────┤── routers/state.py (global singletons)       │
+   │   (WebSocket + polling)   │── routers/dependencies.py (DI providers)     │
+   └── localStorage            │── routers/player.py, playlist.py, ...        │
+       (selectedPlaylistId,    │                                              │
+        theme, language)       └── models/*.py                                │
+                                    ├── player.py (event listener thread)     │
+                                    │   └─ handle_playback_end()              │
+                                    ├── backup.py (timed backup thread)       │
+                                    ├── url_cache.py (YouTube URL prefetch)   │
+                                    ├── pcm_pipe.py (PCM relay for rooms)     │
+                                    └── playlists.json, playback_history.json
 ```
 
-**Key Insight**: Auto-next is 100% backend-driven via MPV event listener thread in [models/player.py#L569-636](../models/player.py#L569-L636). Frontend only reflects state via `/status` polling.
+**Key Insight**: Auto-next is 100% backend-driven via MPV event listener thread in [models/player.py](../models/player.py). Frontend reflects state via WebSocket push (`/ws`) and `/status` polling fallback.
 
 ## Critical Patterns & Gotchas
 
 ### Auto-Play Mechanism (Backend-Controlled)
-**Location**: [models/player.py#L637-720](../models/player.py#L637-L720) — `handle_playback_end()`
+**Location**: [models/player.py](../models/player.py) — `handle_playback_end()`
 
 1. MPV event listener thread detects `end-file` event
 2. Backend automatically:
    - Deletes current song from default playlist (by URL match)
    - Plays next song in queue (index 0 after deletion)
    - Updates `PLAYER.current_index` and `PLAYER.current_meta`
-3. Frontend reads state changes via `/status` polling (1s interval)
+3. Frontend reads state changes via WebSocket push and `/status` polling fallback
 
 **Rule**: Never implement auto-next logic in frontend. Backend owns this completely.
 
 ### Song Insertion Pattern ("Add Next" feature)
-**Location**: [app.py#L851-917](../app.py#L851-L917) — `/playlist_add` endpoint
+**Location**: [routers/playlist.py](../routers/playlist.py) — `/playlist_add` endpoint
 
 ```python
 # Calculate insert position: don't interrupt current song, add to "next" position
@@ -64,7 +68,7 @@ playlist.songs.insert(insert_index, song_dict)
 - After deletion: if `current_index >= len(songs)`, reset to `max(-1, len(songs) - 1)`
 
 ### PyInstaller Resource Access
-**Pattern**: Use `_get_resource_path()` wrapper in [app.py#L38-51](../app.py#L38-L51)
+**Pattern**: Use `_get_resource_path()` wrapper in [routers/state.py](../routers/state.py)
 
 ```python
 # Development: uses source directory
@@ -76,7 +80,7 @@ app.mount("/static", StaticFiles(directory=static_dir))
 **External tools** (`mpv.exe`, `yt-dlp.exe`) live next to exe, NOT in `_MEIPASS`.
 
 ### Cover Art Retrieval
-**Endpoint**: `/cover/{file_path:path}` in [app.py#L258-310](../app.py#L258-L310)
+**Endpoint**: `/cover/{file_path:path}` in [routers/media.py](../routers/media.py)
 
 Priority order:
 1. Embedded cover (extracted via `mutagen`, returned as bytes)
@@ -98,7 +102,7 @@ if song_type == "youtube" and not thumbnail_url:
 Applies to: `/playlist_add`, `/playlists/{id}/add_next`, YouTube search results.
 
 ### Frontend State Management
-**Location**: [static/js/main.js#L23-42](../static/js/main.js#L23-L42)
+**Location**: [static/js/main.js](../static/js/main.js)
 
 ```javascript
 class MusicPlayerApp {
@@ -115,6 +119,58 @@ class MusicPlayerApp {
 ```
 
 **Rule**: All user preferences (theme, language, volume) stored in `localStorage`, NOT backend.
+
+### Router Architecture (v1.3.0 Refactoring)
+**Location**: [routers/](../routers/)
+
+`app.py` is now a thin shell that:
+1. Imports `routers.state` (triggers singleton initialization)
+2. Creates FastAPI app with middleware
+3. Mounts 8 routers via `app.include_router()`
+4. Handles lifecycle (startup: backup thread, auto-fill; shutdown: MPV cleanup)
+
+**Singleton access in routers**: Via dependency injection (`Depends(get_player)` etc.)
+- [routers/dependencies.py](../routers/dependencies.py): DI provider functions
+- [routers/state.py](../routers/state.py): Global singleton instances + WebSocket manager + RoomPlayer pool
+
+**Router modules**:
+
+| Router | File | Endpoints |
+|--------|------|-----------|
+| player | [routers/player.py](../routers/player.py) | /play, /next, /prev, /status, /pause, /seek, /loop, /pitch |
+| playlist | [routers/playlist.py](../routers/playlist.py) | /, /playlist_*, /playlists/*, /tree |
+| search | [routers/search.py](../routers/search.py) | /search_song, /search_youtube, /get_directory_songs |
+| history | [routers/history.py](../routers/history.py) | /playback_history*, /song_add_to_history |
+| media | [routers/media.py](../routers/media.py) | /cover/*, /video_proxy, /volume |
+| settings | [routers/settings.py](../routers/settings.py) | /settings*, /ui-config, /diagnostic/* |
+| websocket | [routers/websocket.py](../routers/websocket.py) | /ws |
+| room | [routers/room.py](../routers/room.py) | /room/init, /room/{id}, /room/{id}/status |
+
+### WebSocket Real-Time Push
+**Location**: [routers/websocket.py](../routers/websocket.py) + [routers/state.py](../routers/state.py)
+
+- Client connects to `/ws`, receives immediate state snapshot
+- Server broadcasts state on playback events via `_broadcast_from_thread()` (thread-safe, uses `asyncio.run_coroutine_threadsafe`)
+- Client sends "ping" heartbeat every 20s to keep connection alive
+- Frontend uses WebSocket as primary channel, falls back to `/status` polling
+
+**ConnectionManager**: [routers/state.py](../routers/state.py) — manages active WebSocket connections, auto-cleans dead connections on broadcast.
+
+### Multi-Room RoomPlayer
+**Location**: [routers/room.py](../routers/room.py) + [routers/state.py](../routers/state.py) + [models/pcm_pipe.py](../models/pcm_pipe.py)
+
+- POST `/room/init` creates a separate MusicPlayer + MPV process per room
+- Each room has its own Named Pipe (`\\.\pipe\mpv-{room_id}`) and PCM relay pipe
+- Room pool managed in `ROOM_PLAYERS` dict with thread lock
+- `get_player_for_pipe()` routes requests to correct player based on `?pipe=` query param
+
+### Automated Backup
+**Location**: [models/backup.py](../models/backup.py)
+
+- `BackupManager` reads config from `settings.ini [backup]`
+- Daemon thread copies `playlists.json` and `playback_history.json` at configured interval
+- Auto-deletes backups older than `keep_days`
+- Started in `app.py` lifespan handler
 
 ## ES6 Module System & Frontend Architecture
 
@@ -142,7 +198,7 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) { /* ... */
 
 | Module | Export | Purpose |
 |--------|--------|---------|
-| [api.js](../static/js/api.js) | `api` | All backend API calls—**must mirror app.py** |
+| [api.js](../static/js/api.js) | `api` | All backend API calls—**must mirror routers/*.py** |
 | [player.js](../static/js/player.js) | `player` | Playback state, controls, event emitter |
 | [playlist.js](../static/js/playlist.js) | `playlistManager`, `renderPlaylistUI` | Current playlist CRUD |
 | [playlists-management.js](../static/js/playlists-management.js) | `playlistsManagement` | Multi-playlist UI modal |
@@ -153,6 +209,15 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) { /* ... */
 | [search.js](../static/js/search.js) | `searchManager` | Search UI (local + YouTube) |
 | [local.js](../static/js/local.js) | `localFiles` | Local file tree browser |
 | [ui.js](../static/js/ui.js) | `Toast`, `loading`, `formatTime` | UI utilities |
+| [ktv.js](../static/js/ktv.js) | `ktv` | KTV video sync (YouTube IFrame + MPV audio) |
+| [playLock.js](../static/js/playLock.js) | `playPreparationLock` | Play preparation lock — prevents duplicate YouTube loads |
+| [unavailable.js](../static/js/unavailable.js) | `unavailableSongs` | Unavailable song URL tracking (session-only) |
+| [userSession.js](../static/js/userSession.js) | `userSession` | Cookie-based anonymous user identification |
+| [operationLock.js](../static/js/operationLock.js) | `operationLock` | Operation lock (pauses polling during drag/edit) |
+| [templates.js](../static/js/templates.js) | `buildTrackItemHTML` | Track list item HTML template builder |
+| [utils.js](../static/js/utils.js) | `escapeHTML`, `thumbnailManager` | Utility functions (XSS protection, thumbnails) |
+| [ranking.js](../static/js/ranking.js) | `RankingManager` | Playback ranking management |
+| [navManager.js](../static/js/navManager.js) | `navManager` | Navigation bar i18n management |
 
 **Import Pattern**:
 ```javascript
@@ -177,12 +242,12 @@ python run.py
 python app.py
 ```
 
-**Port**: 80 (requires admin on Windows). Change in [settings.ini](../settings.ini) if needed.
+**Port**: 9000 (default, configurable in [settings.ini](../settings.ini)).
 
 **What happens**:
 - `run.py`: Enumerates audio devices → updates `settings.ini` → launches `app.py`
-- `app.py`: Initializes singletons → starts MPV event listener → runs Uvicorn on port 80
-- Frontend: Polls `/status` every 1s for playback state updates
+- `app.py`: Mounts routers → starts MPV event listener → starts backup thread → runs Uvicorn on configured port
+- Frontend: Connects via WebSocket for real-time updates, falls back to `/status` polling
 
 ### VS Code Tasks (Available)
 
@@ -257,39 +322,42 @@ Key settings:
 **Reload**: Requires app restart. No hot-reload.
 
 ### Debugging
-**Console**: [static/js/debug.js](../static/js/debug.js) — press `` ` `` (backtick) to toggle debug panel.  
-**Logs**: stdout (dev) or use Windows Event Viewer (packaged exe).
+**Console**: [static/js/debug.js](../static/js/debug.js) — press `` ` `` (backtick) to toggle debug panel.
+**Logs**: File-based logs in `logs/` directory (daily rotation, 7-day retention). Also stdout in dev mode.
 
 ## High-Value Files (Read These First)
 
 | File | Purpose |
 |------|---------|
-| [app.py](../app.py) | FastAPI routing, singletons, auto-fill thread, all endpoints |
+| [app.py](../app.py) | FastAPI app shell — router mounting, lifecycle, middleware |
+| [routers/state.py](../routers/state.py) | Global singletons, WebSocket manager, RoomPlayer pool |
+| [routers/dependencies.py](../routers/dependencies.py) | Dependency injection providers for all routers |
 | [models/player.py](../models/player.py) | MPV lifecycle, event listener, playback history, auto-next logic |
 | [models/playlists.py](../models/playlists.py) | Multi-playlist model, persistence (`playlists.json`) |
 | [models/song.py](../models/song.py) | Song classes (LocalSong, StreamSong), yt-dlp wrappers |
-| [static/js/api.js](../static/js/api.js) | Frontend API wrapper—**must mirror app.py** |
+| [static/js/api.js](../static/js/api.js) | Frontend API wrapper—**must mirror routers/*.py** |
 | [static/js/main.js](../static/js/main.js) | App initialization, state management, polling loop |
-| [static/js/i18n.js](../static/js/i18n.js) | Translations (zh/en)—add both languages for new strings |
+| [static/js/i18n.js](../static/js/i18n.js) | Translations (zh/en/zh-TW)—add all languages for new strings |
 
 ## Common Mistakes & How to Avoid
 
 | Mistake | How to Detect | Fix |
 |---------|---------------|-----|
-| API mismatch | 400 errors, missing fields in response | Compare [app.py](../app.py) route with [static/js/api.js](../static/js/api.js) method |
+| API mismatch | 400 errors, missing fields in response | Compare `routers/*.py` route with [static/js/api.js](../static/js/api.js) method |
 | Forgot `save()` | Playlist changes lost on restart | Add `PLAYLISTS_MANAGER.save()` after mutation |
-| Wrong payload type | "form required" or empty request body | Check endpoint in [app.py](../app.py): FormData vs JSON |
-| Duplicated singleton | State out of sync, missing songs | Always use `app.PLAYER`, `app.PLAYLISTS_MANAGER` |
+| Wrong payload type | "form required" or empty request body | Check endpoint in `routers/*.py`: FormData vs JSON |
+| Duplicated singleton | State out of sync, missing songs | Always use DI via `Depends()` in routers, or access from `routers.state` |
 | Frontend auto-next | Double-play, skipped songs | Remove frontend logic; backend owns auto-next |
-| Missing i18n key | "undefined" in UI | Add to both `zh` and `en` in [static/js/i18n.js](../static/js/i18n.js) |
+| Missing i18n key | "undefined" in UI | Add to `zh`, `en`, and `zh-TW` in [static/js/i18n.js](../static/js/i18n.js) |
 | PyInstaller path issue | FileNotFoundError in packaged exe | Use `_get_resource_path()` for bundled assets |
 
 ## API Design Conventions
 
 ### FormData Endpoints (Player Control)
 ```python
-@app.post("/play")
-async def play(request: Request):
+# In routers/player.py
+@router.post("/play")
+async def play(request: Request, player: MusicPlayer = Depends(get_player)):
     form = await request.form()
     url = form.get("url")
     # ...
@@ -308,8 +376,9 @@ async play(url, title, type = 'local') {
 
 ### JSON Endpoints (Data CRUD)
 ```python
-@app.post("/playlist_add")
-async def add_to_playlist(request: Request):
+# In routers/playlist.py
+@router.post("/playlist_add")
+async def add_to_playlist(request: Request, player: MusicPlayer = Depends(get_player)):
     data = await request.json()
     playlist_id = data.get("playlist_id")
     # ...
@@ -326,12 +395,15 @@ async addToPlaylist(data) {
 
 ### Adding a New Endpoint
 
-**1. Backend** ([app.py](../app.py)):
+**1. Backend** (in appropriate `routers/*.py`):
 ```python
-@app.post("/my_endpoint")
-async def my_endpoint(request: Request):
+from fastapi import Depends
+from routers.dependencies import get_player
+
+@router.post("/my_endpoint")
+async def my_endpoint(request: Request, player: MusicPlayer = Depends(get_player)):
     data = await request.json()  # or request.form()
-    # ... logic ...
+    # ... logic using injected player ...
     return {"status": "OK", "data": result}
 ```
 
@@ -372,6 +444,10 @@ const translations = {
     en: {
         'my.new.key': 'My New Text',
         // ...
+    },
+    'zh-TW': {
+        'my.new.key': '我的新文本',
+        // ...
     }
 };
 ```
@@ -405,9 +481,12 @@ fastapi         # Web framework
 uvicorn         # ASGI server
 python-multipart # FormData support
 psutil          # Process management
+requests        # HTTP client
+Pillow          # Image processing
 yt-dlp          # YouTube download
 mutagen         # Audio metadata extraction
 pyinstaller     # Exe packaging
+opencc-python-reimplemented  # Traditional/Simplified Chinese conversion
 ```
 
 ### External Binaries (required in production)
