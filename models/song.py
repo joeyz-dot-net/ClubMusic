@@ -167,12 +167,6 @@ class LocalSong(Song):
             return False
 
         try:
-            # 确保 mpv 管道存在
-            if not mpv_pipe_exists_func():
-                logger.warning(f"mpv 管道不存在，尝试启动 mpv...")
-                if not ensure_mpv_func():
-                    raise RuntimeError("无法启动或连接到 mpv")
-
             mpv_command_func(["loadfile", abs_file, "replace"])
 
             # 添加到播放历史
@@ -336,17 +330,6 @@ class StreamSong(Song):
         logger.info("="*60)
 
         try:
-            # 检查 mpv 进程是否运行
-            logger.info(f"   🔍 检查 MPV 管道状态...")
-            if not mpv_pipe_exists_func():
-                logger.warning(f"   ⚠️ mpv pipe 不存在，尝试启动 mpv...")
-                if not ensure_mpv_func():
-                    logger.error(f"   ❌ 无法启动或连接到 mpv")
-                    raise RuntimeError("无法启动或连接到 mpv")
-                logger.info(f"   ✅ MPV 已启动")
-            else:
-                logger.info(f"   ✅ MPV 管道已存在")
-
             # 设置 ytdl-format 为最佳音质
             logger.debug("设置 mpv 属性: ytdl-format=bestaudio")
             mpv_command_func(["set_property", "ytdl-format", "bestaudio"])

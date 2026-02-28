@@ -1188,6 +1188,13 @@ class MusicPlayer:
             max_consecutive_errors = 10
             
             while not self._stop_flag:
+                # 等待管道就绪再尝试连接，避免管道未创建时反复报错
+                if not os.path.exists(self.pipe_name):
+                    self._wait_pipe(timeout=30)
+                    if self._stop_flag:
+                        break
+                    if not os.path.exists(self.pipe_name):
+                        continue
                 try:
                     # 从管道读取事件
                     with open(self.pipe_name, "r", encoding="utf-8") as pipe:
