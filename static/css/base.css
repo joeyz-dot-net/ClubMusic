@@ -1745,6 +1745,32 @@ button:active { transform: scale(0.98); }
     padding: 0;
 }
 
+/* Drag Handle (iOS-style pill) */
+.full-player-drag-handle {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 12px 0 4px;
+    flex-shrink: 0;
+    cursor: grab;
+}
+
+.full-player-drag-handle-bar {
+    width: 36px;
+    height: 5px;
+    border-radius: 3px;
+    background: rgba(128, 128, 128, 0.4);
+    transition: background 0.2s ease;
+}
+
+.full-player-drag-handle:hover .full-player-drag-handle-bar {
+    background: rgba(128, 128, 128, 0.6);
+}
+
+.full-player-content:has(.full-player-artwork-container.expanded) > .full-player-drag-handle {
+    display: none;
+}
+
 .full-player-header {
     display: flex;
     justify-content: center;
