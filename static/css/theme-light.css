@@ -247,6 +247,12 @@ body.theme-light {
     color: #5a6c7d;
 }
 
+#playlistsModal.bright-theme .room-badge {
+    background: linear-gradient(135deg, #f7971e 0%, #ffd200 100%);
+    color: #333;
+    border-color: rgba(247, 151, 30, 0.3);
+}
+
 #playlistsModal.bright-theme .playlist-action-btn {
     background: rgba(248, 249, 250, 0.8);
     border: 1px solid rgba(230, 235, 240, 0.6);
@@ -336,6 +342,12 @@ body.theme-light {
     background: linear-gradient(135deg, rgba(103, 138, 174, 0.15) 0%, rgba(103, 138, 174, 0.08) 100%);
     border: 1px solid rgba(103, 138, 174, 0.2);
     color: #5a6c7d;
+}
+
+#playlistsModal.dark-theme .room-badge {
+    background: linear-gradient(135deg, #f7971e 0%, #ffd200 100%);
+    color: #1a1a1a;
+    border-color: rgba(247, 151, 30, 0.4);
 }
 
 #playlistsModal.dark-theme .playlist-action-btn {

@@ -108,7 +108,8 @@ export class PlaylistsManagement {
             const item = document.createElement('div');
             const isSelected = playlist.id === playlistManager.selectedPlaylistId;
             item.className = 'playlist-item' + (isSelected ? ' selected' : '');
-            
+            const isRoom = !!playlist.is_room;
+
             // 为不同歌单生成不同的渐变色
             const gradients = [
                 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -120,12 +121,21 @@ export class PlaylistsManagement {
                 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
                 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)'
             ];
-            const gradient = gradients[index % gradients.length];
-            
+            const roomGradient = 'linear-gradient(135deg, #f7971e 0%, #ffd200 100%)';
+            const gradient = isRoom ? roomGradient : gradients[index % gradients.length];
+
             // 歌单图标
             const icons = ['🎵', '🎧', '🎸', '🎹', '🎤', '🎼', '🎺', '🥁'];
-            const icon = playlist.id === 'default' ? '⭐' : icons[index % icons.length];
-            
+            const icon = isRoom ? '🎤' : (playlist.id === 'default' ? '⭐' : icons[index % icons.length]);
+
+            // badge
+            const badgeHTML = isRoom
+                ? `<span class="default-badge room-badge">${i18n.t('playlists.roomBadge')}</span>`
+                : (playlist.id === 'default' ? `<span class="default-badge">${i18n.t('playlists.defaultBadge')}</span>` : '');
+
+            // 房间歌单不显示编辑和删除按钮
+            const showActions = playlist.id !== 'default' && !isRoom;
+
             item.innerHTML = `
                 <div class="playlist-icon" style="background: ${gradient}">
                     ${icon}
@@ -133,7 +143,7 @@ export class PlaylistsManagement {
                 <div class="playlist-info">
                     <div class="playlist-name">
                         ${playlist.name || i18n.t('playlist.unnamed')}
-                        ${playlist.id === 'default' ? `<span class="default-badge">${i18n.t('playlists.defaultBadge')}</span>` : ''}
+                        ${badgeHTML}
                     </div>
                     <div class="playlist-count">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="opacity: 0.6;">
@@ -143,7 +153,7 @@ export class PlaylistsManagement {
                     </div>
                 </div>
                 <div class="playlist-actions">
-                    ${playlist.id !== 'default' ? `
+                    ${showActions ? `
                         <button class="playlist-action-btn edit" title="编辑歌单">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z"/>
@@ -199,7 +209,7 @@ export class PlaylistsManagement {
             });
 
             // 编辑歌单名称
-            if (playlist.id !== 'default') {
+            if (playlist.id !== 'default' && !isRoom) {
                 const editBtn = item.querySelector('.playlist-action-btn.edit');
                 if (editBtn) {
                     editBtn.addEventListener('click', async (e) => {
@@ -226,7 +236,7 @@ export class PlaylistsManagement {
             }
 
             // 删除歌单
-            if (playlist.id !== 'default') {
+            if (playlist.id !== 'default' && !isRoom) {
                 const deleteBtn = item.querySelector('.playlist-action-btn.delete');
                 if (deleteBtn) {
                     deleteBtn.addEventListener('click', async (e) => {

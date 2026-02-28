@@ -63,6 +63,7 @@ export class PlaylistManager {
         const result = await api.getPlaylists();
         if (result.status === 'OK') {
             this.playlists = result.playlists || [];
+            this.roomPlaylist = this.playlists.find(p => p.is_room) || null;
             return this.playlists;
         }
         throw new Error('加载歌单列表失败');
@@ -111,10 +112,12 @@ export class PlaylistManager {
     // ✅ 新增：设置当前选择的歌单（并保存到 localStorage）
     setSelectedPlaylist(playlistId) {
         this.selectedPlaylistId = playlistId;
-        // 保存到 localStorage
+        // 房间歌单不写入 localStorage（房间销毁后 ID 失效）
         try {
-            localStorage.setItem('selectedPlaylistId', playlistId);
-            console.log('[歌单管理] 设置当前选择歌单:', playlistId, '(已保存到本地存储)');
+            if (!playlistId.startsWith('room_')) {
+                localStorage.setItem('selectedPlaylistId', playlistId);
+            }
+            console.log('[歌单管理] 设置当前选择歌单:', playlistId);
         } catch (e) {
             console.warn('[歌单管理] 保存到 localStorage 失败:', e);
         }
@@ -208,6 +211,11 @@ export class PlaylistManager {
         // 默认歌单使用星星图标
         if (selectedId === 'default') {
             return '⭐';
+        }
+
+        // 房间歌单使用独立图标
+        if (selectedId.startsWith('room_')) {
+            return '🎤';
         }
 
         // 查找当前歌单在列表中的索引
@@ -817,7 +825,9 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
 
         buttonGroup.appendChild(returnBtn);
         buttonGroup.appendChild(addAllBtn);
-        buttonGroup.appendChild(clearBtn);
+        if (!selectedPlaylistId.startsWith('room_')) {
+            buttonGroup.appendChild(clearBtn);
+        }
 
         const customIcon = playlistManager.getCurrentPlaylistIcon();
         const customIconEl = document.createElement('div');

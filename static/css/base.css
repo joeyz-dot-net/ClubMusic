@@ -1111,6 +1111,12 @@ button:active { transform: scale(0.98); }
     letter-spacing: 0.3px;
 }
 
+.room-badge {
+    background: linear-gradient(135deg, #f7971e 0%, #ffd200 100%);
+    color: #333;
+    border-color: rgba(247, 151, 30, 0.3);
+}
+
 .playlist-count {
     font-size: 14px;
     opacity: 0.7;

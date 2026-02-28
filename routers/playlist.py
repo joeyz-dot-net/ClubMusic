@@ -85,21 +85,38 @@ async def get_file_tree(player: MusicPlayer = Depends(get_player_for_request)):
 
 
 @router.get("/playlists")
-async def list_playlists(playlists: Playlists = Depends(get_playlists)):
-    """获取所有歌单（不包含房间临时播放列表）"""
-    return {
-        "status": "OK",
-        "playlists": [
-            {
-                "id": pid,
-                "name": p.name,
-                "count": len(p.songs),
-                "songs": p.songs
-            }
-            for pid, p in playlists._playlists.items()
-            if not playlists.is_room_playlist(pid)
-        ]
-    }
+async def list_playlists(
+    request: Request,
+    player: MusicPlayer = Depends(get_player_for_request),
+    playlists: Playlists = Depends(get_playlists),
+):
+    """获取所有歌单。当 pipe 指向 RoomPlayer 时，同时返回该房间的播放列表。"""
+    result_playlists = [
+        {
+            "id": pid,
+            "name": p.name,
+            "count": len(p.songs),
+            "songs": p.songs,
+            "is_room": False,
+        }
+        for pid, p in playlists._playlists.items()
+        if not playlists.is_room_playlist(pid)
+    ]
+
+    # 当前请求来自房间客户端时，附带该房间的播放列表
+    room_pid = getattr(player, '_room_playlist_id', None)
+    if room_pid:
+        room_pl = playlists.get_playlist(room_pid)
+        if room_pl:
+            result_playlists.insert(0, {
+                "id": room_pid,
+                "name": room_pl.name,
+                "count": len(room_pl.songs),
+                "songs": room_pl.songs,
+                "is_room": True,
+            })
+
+    return {"status": "OK", "playlists": result_playlists}
 
 
 @router.post("/playlists")
@@ -389,6 +406,12 @@ async def delete_playlist(playlist_id: str, playlists: Playlists = Depends(get_p
                 status_code=400
             )
 
+        if playlists.is_room_playlist(playlist_id):
+            return JSONResponse(
+                {"status": "ERROR", "error": "房间播放列表不可删除"},
+                status_code=400
+            )
+
         if playlists.delete_playlist(playlist_id):
             return {"status": "OK", "message": "删除成功"}
         else:
@@ -459,6 +482,12 @@ async def update_playlist(playlist_id: str, data: dict, playlists: Playlists = D
         if playlist_id == "default":
             return JSONResponse(
                 {"status": "ERROR", "error": "默认歌单不可修改"},
+                status_code=400
+            )
+
+        if playlists.is_room_playlist(playlist_id):
+            return JSONResponse(
+                {"status": "ERROR", "error": "房间播放列表不可修改名称"},
                 status_code=400
             )
 
