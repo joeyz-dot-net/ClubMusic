@@ -304,7 +304,8 @@ class MusicPlayer:
 
     @classmethod
     def create_pipe_player(cls, pipe_name: str, playlists_manager,
-                           playback_history, broadcast_from_thread=None):
+                           playback_history, broadcast_from_thread=None,
+                           music_dir: str = ""):
         """创建轻量级 PipePlayer 实例，连接到外部管理的 MPV 管道。
 
         PipePlayer 不启动 MPV 进程（管道由外部如 ClubVoice 管理），
@@ -323,7 +324,7 @@ class MusicPlayer:
         instance.pipe_name = pipe_name
         instance.mpv_cmd = None  # 标记：不启动 MPV
         instance.mpv_process = None
-        instance.music_dir = ""
+        instance.music_dir = music_dir
         instance.allowed_extensions = []
         instance.data_dir = ""
         instance.debug = False
@@ -443,6 +444,7 @@ class MusicPlayer:
         instance._relay_thread = None
         instance._client_acceptor_thread = None
         instance._relay_stop = threading.Event()
+        instance._pcm_client_connected = threading.Event()
 
         # 与 PipePlayer 相同的基础属性
         instance.music_dir = music_dir
@@ -565,6 +567,12 @@ class MusicPlayer:
         # 等待 IPC 管道就绪
         if not self._wait_pipe():
             logger.error(f"[RoomPlayer] IPC 管道超时: {self.pipe_name}")
+            if self.mpv_process:
+                rc = self.mpv_process.poll()
+                if rc is not None:
+                    logger.error(f"[RoomPlayer] MPV 已退出, returncode={rc}, cmd: {self.mpv_cmd}")
+                else:
+                    logger.error(f"[RoomPlayer] MPV 仍在运行 (PID={self.mpv_process.pid}) 但未创建管道")
             return False
         logger.info(f"[RoomPlayer] IPC 管道已就绪: {self.pipe_name}")
 
@@ -591,7 +599,8 @@ class MusicPlayer:
         self._pcm_pipe_server = PcmPipeServer(self._pcm_pipe_name)
 
         # 客户端连接状态: set = 已连接, clear = 未连接
-        client_connected = threading.Event()
+        self._pcm_client_connected.clear()
+        client_connected = self._pcm_client_connected
         # pipe 创建就绪信号: drain 线程在写入前需确保 pipe 已创建
         pipe_ready = threading.Event()
 
@@ -635,34 +644,78 @@ class MusicPlayer:
             logger.info(f"[RoomPlayer] PCM acceptor 线程结束: {self._pcm_pipe_name}")
 
         def _drain_loop():
-            """主 relay 线程: 持续读取 MPV stdout，有客户端时转发，无客户端时丢弃。"""
+            """主 relay 线程: 持续读取 MPV stdout，有客户端时转发，无客户端时丢弃。
+
+            关键: --ao=pcm 以 CPU 全速解码，无实时节拍。
+            必须在此线程中手动节拍控制，通过限制 read() 速率
+            来反压 MPV stdout pipe buffer，使 MPV 被节流到实时速度。
+            """
             FRAME_BYTES = 3840  # 960 samples × 2ch × 2bytes = 20ms @ 48kHz
+            FRAME_DURATION = FRAME_BYTES / (48000 * 2 * 2)  # ~0.02s (20ms)
 
             # 等待管道创建就绪（最多 10 秒）
             if not pipe_ready.wait(timeout=10):
                 logger.error("[RoomPlayer] PCM 管道创建超时，drain 线程退出")
                 return
 
+            logger.info("[RoomPlayer drain] 线程就绪，开始读取 MPV stdout")
+            total_bytes = 0
+            total_frames = 0
+            forwarded_frames = 0
+            discarded_frames = 0
+            first_data_logged = False
+            play_start_time = None  # 第一帧到达时开始计时
+
             while not self._relay_stop.is_set():
                 try:
                     data = self.mpv_process.stdout.read(FRAME_BYTES)
                     if not data:
-                        logger.info("[RoomPlayer] MPV stdout EOF")
+                        logger.info(f"[RoomPlayer drain] MPV stdout EOF "
+                                    f"(总共读取: {total_bytes} bytes, {total_frames} 帧, "
+                                    f"转发: {forwarded_frames}, 丢弃: {discarded_frames})")
+                        play_start_time = None  # 重置，为下一首准备
                         break
+
+                    total_bytes += len(data)
+                    total_frames += 1
+
+                    # 实时节拍控制: 第一帧开始计时，后续帧按 20ms/帧 节奏
+                    if play_start_time is None:
+                        play_start_time = time.monotonic()
+                    else:
+                        expected_time = play_start_time + total_frames * FRAME_DURATION
+                        now = time.monotonic()
+                        if expected_time > now:
+                            time.sleep(expected_time - now)
+
+                    if not first_data_logged:
+                        first_data_logged = True
+                        logger.info(f"[RoomPlayer drain] 首次收到 PCM 数据: {len(data)} bytes, "
+                                    f"client_connected={client_connected.is_set()}")
 
                     if client_connected.is_set():
                         if not self._pcm_pipe_server.write(data):
                             # 写入失败 = 客户端断开，通知 acceptor
                             client_connected.clear()
-                            logger.info("[RoomPlayer] PCM 写入失败，客户端已断开")
-                    # else: 无客户端，丢弃数据（防止 stdout 缓冲区满）
+                            logger.info(f"[RoomPlayer drain] PCM 写入失败，客户端已断开 "
+                                        f"(已转发 {forwarded_frames} 帧)")
+                        else:
+                            forwarded_frames += 1
+                    else:
+                        discarded_frames += 1
+
+                    # 每 5 秒输出一次统计（约 250 帧 @ 20ms/帧）
+                    if total_frames % 250 == 0:
+                        logger.info(f"[RoomPlayer drain] 统计: {total_bytes} bytes, "
+                                    f"转发={forwarded_frames}, 丢弃={discarded_frames}, "
+                                    f"client={client_connected.is_set()}")
 
                 except Exception as e:
                     if not self._relay_stop.is_set():
-                        logger.warning(f"[RoomPlayer] stdout 读取异常: {e}")
+                        logger.warning(f"[RoomPlayer drain] stdout 读取异常: {e}")
                     break
 
-            logger.info("[RoomPlayer] PCM drain 线程结束")
+            logger.info("[RoomPlayer drain] 线程结束")
 
         # 启动 acceptor 线程（管理 pipe 生命周期 + 客户端连接）
         self._client_acceptor_thread = threading.Thread(
@@ -1136,21 +1189,9 @@ class MusicPlayer:
             
             while not self._stop_flag:
                 try:
-                    # 确保 MPV 运行
-                    if not self.mpv_pipe_exists():
-                        consecutive_errors += 1
-                        if consecutive_errors > max_consecutive_errors:
-                            logger.warning("[事件监听] ⚠️ 连续错误过多，等待 10 秒后重试...")
-                            consecutive_errors = 0
-                            time.sleep(10)
-                            continue
-                        time.sleep(0.5)
-                        continue
-                    
-                    consecutive_errors = 0
-                    
                     # 从管道读取事件
                     with open(self.pipe_name, "r", encoding="utf-8") as pipe:
+                        consecutive_errors = 0
                         for line in pipe:
                             try:
                                 event_data = json.loads(line.strip())
@@ -1230,8 +1271,13 @@ class MusicPlayer:
                 
                 except (FileNotFoundError, IOError) as e:
                     consecutive_errors += 1
-                    logger.debug(f"[事件监听] 管道不可用或已关闭 (尝试 {consecutive_errors}/{max_consecutive_errors}): {e}")
-                    time.sleep(0.5)
+                    if consecutive_errors > max_consecutive_errors:
+                        logger.warning("[事件监听] ⚠️ 连续错误过多，等待 10 秒后重试...")
+                        consecutive_errors = 0
+                        time.sleep(10)
+                    else:
+                        logger.debug(f"[事件监听] 管道不可用或已关闭 (尝试 {consecutive_errors}/{max_consecutive_errors}): {e}")
+                        time.sleep(0.5)
                 except Exception as e:
                     logger.error(f"[事件监听] 异常: {e}")
                     time.sleep(1)
@@ -1391,21 +1437,20 @@ class MusicPlayer:
         """检查 MPV 管道是否存在（仅在 Windows 上检查）"""
         if not self.pipe_name:
             return False
-        try:
-            with open(self.pipe_name, "wb") as _:
-                return True
-        except (OSError, IOError):
-            return False
+        return os.path.exists(self.pipe_name)
 
     def _wait_pipe(self, timeout=6.0) -> bool:
         """等待 MPV 管道就绪"""
         end = time.time() + timeout
         while time.time() < end:
-            try:
-                with open(self.pipe_name, "wb") as _:
-                    return True
-            except Exception:
-                time.sleep(0.15)
+            if os.path.exists(self.pipe_name):
+                return True
+            # 检测 MPV 是否已退出，避免无意义等待
+            if self.mpv_process and self.mpv_process.poll() is not None:
+                rc = self.mpv_process.returncode
+                logger.error(f"MPV 进程已退出 (returncode={rc})，停止等待管道")
+                return False
+            time.sleep(0.15)
         return False
 
     def ensure_mpv(self) -> bool:
@@ -1431,6 +1476,13 @@ class MusicPlayer:
 
         if self.mpv_pipe_exists():
             return True
+
+        # MPV 进程仍然存活时，等待管道恢复，不要直接 taskkill
+        if self.mpv_process and self.mpv_process.poll() is None:
+            logger.info(f"MPV 进程存活 (PID={self.mpv_process.pid})，等待管道恢复...")
+            if self._wait_pipe(timeout=5):
+                return True
+            logger.warning(f"MPV 进程存活但管道始终不可用，将重启 MPV")
 
         # 清理任何现存的 mpv 进程，防止重复启动
         try:
@@ -1575,9 +1627,15 @@ class MusicPlayer:
             logger.error(f"启动 mpv 进程失败: {e}")
             return False
 
-        ready = self._wait_pipe()
+        ready = self._wait_pipe(timeout=15)
         if not ready:
             logger.error(f"等待 mpv 管道超时: {self.pipe_name}")
+            if self.mpv_process:
+                rc = self.mpv_process.poll()
+                if rc is not None:
+                    logger.error(f"MPV 已退出, returncode={rc}, cmd: {self.mpv_cmd}")
+                else:
+                    logger.error(f"MPV 仍在运行 (PID={self.mpv_process.pid}) 但未创建管道")
             return False
         
         # 🔊 MPV 启动成功后，设置默认音量为 50%
@@ -1604,6 +1662,16 @@ class MusicPlayer:
         """
 
         def _write():
+            # RoomPlayer: loadfile 前等待 PCM 客户端连接（无客户端时 ao=pcm 无背压，会瞬间 EOF）
+            if (cmd_list and cmd_list[0] == "loadfile"
+                    and hasattr(self, '_pcm_client_connected')):
+                if not self._pcm_client_connected.is_set():
+                    logger.info("[RoomPlayer] 等待 PCM 客户端连接后再 loadfile...")
+                    if not self._pcm_client_connected.wait(timeout=15):
+                        logger.error("[RoomPlayer] PCM 客户端连接超时 (15s)，取消 loadfile")
+                        raise TimeoutError("PCM client not connected within 15s")
+                    logger.info("[RoomPlayer] PCM 客户端已连接，继续 loadfile")
+
             # Debug: 显示发送的命令
             logger.debug(f"mpv_command -> sending: {cmd_list} to pipe {self.pipe_name}")
 
@@ -1663,9 +1731,24 @@ class MusicPlayer:
                 logger.debug(f"✅ 命令已发送到管道: {self.pipe_name}")
                 logger.debug(f"  JSON内容: {json_cmd}")
 
+            # RoomPlayer loadfile 后诊断
+            if (cmd_list and cmd_list[0] == "loadfile"
+                    and hasattr(self, '_room_id')):
+                mpv_alive = (self.mpv_process is not None
+                             and self.mpv_process.poll() is None)
+                pcm_connected = (hasattr(self, '_pcm_client_connected')
+                                 and self._pcm_client_connected.is_set())
+                logger.info(f"[RoomPlayer 诊断] loadfile 已发送 → "
+                            f"MPV进程存活={mpv_alive}, "
+                            f"PCM客户端={pcm_connected}, "
+                            f"管道={self.pipe_name}")
+
         try:
             _write()
             return True
+        except TimeoutError as e:
+            logger.error(f"❌ 命令发送超时: {e}")
+            return False
         except FileNotFoundError as e:
             logger.error(f"❌ 管道不存在: {self.pipe_name}")
             logger.error(f"   详情: {e}")
@@ -2541,6 +2624,20 @@ class MusicPlayer:
             self._last_play_time = time.time()
             logger.info(f"[MusicPlayer.play] 已更新 current_meta: duration={self.current_meta.get('duration', 'N/A')}")
             logger.debug(f"已更新 current_meta: {self.current_meta}")
+
+            # RoomPlayer 播放后诊断
+            if hasattr(self, '_room_id'):
+                mpv_alive = (self.mpv_process is not None
+                             and self.mpv_process.poll() is None)
+                pcm_ok = (hasattr(self, '_pcm_client_connected')
+                          and self._pcm_client_connected.is_set())
+                relay_alive = (hasattr(self, '_relay_thread')
+                               and self._relay_thread is not None
+                               and self._relay_thread.is_alive())
+                logger.info(f"[RoomPlayer 诊断] play 完成 → "
+                            f"MPV存活={mpv_alive}, "
+                            f"PCM客户端={pcm_ok}, "
+                            f"drain线程={relay_alive}")
 
             # 对于串流媒体，尝试获取真实的媒体标题
             if song.is_stream():

@@ -211,6 +211,12 @@ PLAYER.set_external_deps(
     broadcast_from_thread=_broadcast_from_thread,
 )
 
+# 预启动 MPV 进程，避免首次播放时等待管道创建
+if PLAYER.mpv_cmd is not None:
+    threading.Thread(
+        target=PLAYER.ensure_mpv, daemon=True, name="mpv-prestart"
+    ).start()
+
 
 # ==================== PipePlayer 池（多房间支持）====================
 from typing import Dict
@@ -248,6 +254,7 @@ def get_player_for_pipe(pipe_name: str) -> MusicPlayer:
             playlists_manager=PLAYLISTS_MANAGER,
             playback_history=PLAYBACK_HISTORY,
             broadcast_from_thread=_broadcast_from_thread,
+            music_dir=PLAYER.music_dir,
         )
         PIPE_PLAYERS[pipe_name] = pipe_player
         return pipe_player

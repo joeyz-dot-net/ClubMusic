@@ -127,7 +127,7 @@ class LocalSong(Song):
         """获取绝对路径（已规范化路径分隔符）"""
         if os.path.isabs(self.file_path):
             return os.path.normpath(self.file_path)
-        if base_dir:
+        if base_dir is not None and base_dir != "":
             return os.path.normpath(os.path.join(base_dir, self.file_path))
         return os.path.normpath(os.path.abspath(self.file_path))
 
