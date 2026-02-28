@@ -41,6 +41,31 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# ==================== 辅助函数 ====================
+
+def _extract_song_info(song_data) -> tuple:
+    """从歌曲数据中提取 (url, title, type, duration)"""
+    if isinstance(song_data, dict):
+        url = song_data.get("url", "")
+        title = song_data.get("title", url)
+        song_type = song_data.get("type", "local")
+        duration = song_data.get("duration", 0)
+    else:
+        url = str(song_data)
+        title = os.path.basename(url)
+        song_type = "local"
+        duration = 0
+    return url, title, song_type, duration
+
+
+def _create_song_object(url, title, song_type, duration):
+    """根据类型创建 LocalSong 或 StreamSong"""
+    if song_type == "youtube" or url.startswith("http"):
+        return StreamSong(stream_url=url, title=title or url, duration=duration)
+    else:
+        return LocalSong(file_path=url, title=title)
+
+
 # ==================== 路由 ====================
 
 @router.post("/play")
@@ -205,56 +230,62 @@ async def next_track(
                 player.current_index = -1
                 return {"status": "EMPTY", "message": "队列已空"}
 
-            next_song_data = songs[0]
-            if isinstance(next_song_data, dict):
-                url = next_song_data.get("url", "")
-                title = next_song_data.get("title", url)
-                song_type = next_song_data.get("type", "local")
-                duration = next_song_data.get("duration", 0)
-            else:
-                url = str(next_song_data)
-                title = os.path.basename(url)
-                song_type = "local"
-                duration = 0
+            # 跳过循环：最多尝试 MAX_SKIP 首，失败的移到队尾保留
+            MAX_SKIP = 5
+            skipped_songs = []
+            success = False
 
-            if not url:
-                logger.error(f"[/next] 队首歌曲数据不完整: {next_song_data}")
-                return JSONResponse(
-                    {"status": "ERROR", "error": "歌曲信息不完整"},
-                    status_code=400
+            for attempt in range(MAX_SKIP):
+                if not songs:
+                    break
+
+                url, title, song_type, duration = _extract_song_info(songs[0])
+
+                if not url:
+                    skipped = songs.pop(0)
+                    songs.append(skipped)
+                    skipped_songs.append({"url": url, "title": title})
+                    logger.warning(f"[/next] 跳过数据不完整的歌曲 ({attempt+1}/{MAX_SKIP}): {title}")
+                    continue
+
+                song = _create_song_object(url, title, song_type, duration)
+                logger.info(f"[/next] 尝试播放: {title}")
+
+                success = player.play(
+                    song,
+                    mpv_command_func=player.mpv_command,
+                    mpv_pipe_exists_func=player.mpv_pipe_exists,
+                    ensure_mpv_func=player.ensure_mpv,
+                    add_to_history_func=playback_history.add_to_history,
+                    save_to_history=True
                 )
 
-            if song_type == "youtube" or url.startswith("http"):
-                song = StreamSong(stream_url=url, title=title or url, duration=duration)
-                logger.info(f"[/next] 播放YouTube: {title}")
-            else:
-                song = LocalSong(file_path=url, title=title)
-                logger.info(f"[/next] 播放本地文件: {title}")
+                if success:
+                    player.current_index = 0
+                    logger.info(f"[/next] ✓ 已切换到下一首: {title}")
+                    break
+                else:
+                    skipped = songs.pop(0)
+                    songs.append(skipped)
+                    skipped_songs.append({"url": url, "title": title})
+                    logger.warning(f"[/next] 跳过失败歌曲 ({attempt+1}/{MAX_SKIP}): {title}")
 
-            success = player.play(
-                song,
-                mpv_command_func=player.mpv_command,
-                mpv_pipe_exists_func=player.mpv_pipe_exists,
-                ensure_mpv_func=player.ensure_mpv,
-                add_to_history_func=playback_history.add_to_history,
-                save_to_history=True
-            )
+            playlist.updated_at = time.time()
+            playlists.save()
 
             if not success:
-                logger.error(f"[/next] 播放失败: {title}")
+                logger.error(f"[/next] 连续 {len(skipped_songs)} 首播放失败")
                 return JSONResponse(
-                    {"status": "ERROR", "error": "播放失败"},
+                    {"status": "ERROR", "error": "连续播放失败", "skipped_songs": skipped_songs},
                     status_code=500
                 )
-
-            player.current_index = 0
-            logger.info(f"[/next] ✓ 已切换到下一首: {title}")
 
         await _broadcast_state()
         return {
             "status": "OK",
             "current": player.current_meta,
             "current_index": player.current_index,
+            "skipped_songs": skipped_songs,
         }
     except Exception as e:
         return error_response("[/next] 切换下一首异常", exc=e, _logger=logger)
@@ -290,57 +321,60 @@ async def prev_track(
 
             logger.info(f"[上一首] 从索引 {current_idx} 跳到 {prev_idx}，总歌曲数：{len(songs)}")
 
-            song_data = songs[prev_idx]
+            # 跳过循环：从 prev_idx 向前扫描，最多尝试 MAX_SKIP 首
+            MAX_SKIP = 5
+            skipped_songs = []
+            success = False
+            tried_idx = prev_idx
+            start_idx = prev_idx
 
-            if isinstance(song_data, dict):
-                url = song_data.get("url", "")
-                title = song_data.get("title", url)
-                song_type = song_data.get("type", "local")
-                duration = song_data.get("duration", 0)
-            else:
-                url = str(song_data)
-                title = os.path.basename(url)
-                song_type = "local"
-                duration = 0
+            for attempt in range(MAX_SKIP):
+                url, title, song_type, duration = _extract_song_info(songs[tried_idx])
 
-            if not url:
-                logger.error(f"[ERROR] /prev: 歌曲数据不完整: {song_data}")
-                return JSONResponse(
-                    {"status": "ERROR", "error": "歌曲信息不完整"},
-                    status_code=400
+                if not url:
+                    skipped_songs.append({"url": url, "title": title})
+                    logger.warning(f"[上一首] 跳过数据不完整的歌曲 ({attempt+1}/{MAX_SKIP}): {title}")
+                    tried_idx = (tried_idx - 1) % len(songs)
+                    if tried_idx == start_idx:
+                        break
+                    continue
+
+                song = _create_song_object(url, title, song_type, duration)
+                logger.info(f"[上一首] 尝试播放: {title}")
+
+                success = player.play(
+                    song,
+                    mpv_command_func=player.mpv_command,
+                    mpv_pipe_exists_func=player.mpv_pipe_exists,
+                    ensure_mpv_func=player.ensure_mpv,
+                    add_to_history_func=playback_history.add_to_history,
+                    save_to_history=True
                 )
 
-            if song_type == "youtube" or url.startswith("http"):
-                song = StreamSong(stream_url=url, title=title or url, duration=duration)
-                logger.info(f"[上一首] 播放YouTube: {title}")
-            else:
-                song = LocalSong(file_path=url, title=title)
-                logger.info(f"[上一首] 播放本地文件: {title}")
-
-            success = player.play(
-                song,
-                mpv_command_func=player.mpv_command,
-                mpv_pipe_exists_func=player.mpv_pipe_exists,
-                ensure_mpv_func=player.ensure_mpv,
-                add_to_history_func=playback_history.add_to_history,
-                save_to_history=True
-            )
+                if success:
+                    player.current_index = tried_idx
+                    logger.info(f"[上一首] ✓ 已切换到上一首: {title}")
+                    break
+                else:
+                    skipped_songs.append({"url": url, "title": title})
+                    logger.warning(f"[上一首] 跳过失败歌曲 ({attempt+1}/{MAX_SKIP}): {title}")
+                    tried_idx = (tried_idx - 1) % len(songs)
+                    if tried_idx == start_idx:
+                        break
 
             if not success:
-                logger.error(f"[ERROR] /prev: 播放失败")
+                logger.error(f"[上一首] 连续 {len(skipped_songs)} 首播放失败")
                 return JSONResponse(
-                    {"status": "ERROR", "error": "播放失败"},
+                    {"status": "ERROR", "error": "连续播放失败", "skipped_songs": skipped_songs},
                     status_code=500
                 )
-
-            player.current_index = prev_idx
-            logger.info(f"[上一首] ✓ 已切换到上一首: {title}")
 
         await _broadcast_state()
         return {
             "status": "OK",
             "current": player.current_meta,
             "current_index": player.current_index,
+            "skipped_songs": skipped_songs,
         }
     except Exception as e:
         return error_response("[/prev] 切换上一首异常", exc=e, _logger=logger)

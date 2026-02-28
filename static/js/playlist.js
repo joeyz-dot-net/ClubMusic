@@ -6,6 +6,7 @@ import { thumbnailManager, escapeHTML } from './utils.js';
 import { i18n } from './i18n.js';
 import { player } from './player.js';
 import { playLock } from './playLock.js';
+import { unavailableSongs } from './main.js';
 
 export class PlaylistManager {
     constructor() {
@@ -1227,6 +1228,16 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
                 await playSongFromSelectedPlaylist(song, onPlay);
             }
         });
+
+        // 标记不可用歌曲（播放失败被跳过的歌曲）
+        if (unavailableSongs.has(song.url)) {
+            item.classList.add('song-unavailable');
+            const warnIcon = document.createElement('div');
+            warnIcon.className = 'track-unavailable-badge';
+            warnIcon.title = i18n.t('playlist.songUnavailable');
+            warnIcon.textContent = '\u26A0';
+            item.appendChild(warnIcon);
+        }
 
         container.appendChild(item);
     });

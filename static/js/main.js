@@ -18,6 +18,11 @@ import { i18n } from './i18n.js';
 import { ktvSync } from './ktv.js';
 import { playLock } from './playLock.js';
 
+// 不可用歌曲 URL 集合（session-only，刷新页面后清除）
+// 当后端跳过播放失败的歌曲时，将其 URL 添加到此集合中
+// playlist.js 会检查此集合来标记不可用歌曲
+export const unavailableSongs = new Set();
+
 // ==========================================
 // 应用初始化
 // ==========================================
@@ -747,7 +752,8 @@ class MusicPlayerApp {
             this.elements.nextBtn.addEventListener('click', async () => {
                 if (!playLock.acquire(i18n.t('player.preparingNext'))) return;
                 try {
-                    await player.next();
+                    const result = await player.next();
+                    this._handlePlayResult(result, i18n.t('player.nextFailed'));
                 } catch (err) {
                     console.error('[下一首] 错误:', err);
                     Toast.error(i18n.t('player.nextFailed'));
@@ -760,7 +766,8 @@ class MusicPlayerApp {
             this.elements.fullPlayerNext.addEventListener('click', async () => {
                 if (!playLock.acquire(i18n.t('player.preparingNext'))) return;
                 try {
-                    await player.next();
+                    const result = await player.next();
+                    this._handlePlayResult(result, i18n.t('player.nextFailed'));
                 } catch (err) {
                     console.error('[下一首] 错误:', err);
                     Toast.error(i18n.t('player.nextFailed'));
@@ -774,7 +781,8 @@ class MusicPlayerApp {
                 e.stopPropagation(); // 阻止事件冒泡，避免触发打开全屏播放器
                 if (!playLock.acquire(i18n.t('player.preparingNext'))) return;
                 try {
-                    await player.next();
+                    const result = await player.next();
+                    this._handlePlayResult(result, i18n.t('player.nextFailed'));
                 } catch (err) {
                     console.error('[下一首] 错误:', err);
                     Toast.error(i18n.t('player.nextFailed'));
@@ -789,7 +797,8 @@ class MusicPlayerApp {
             this.elements.prevBtn.addEventListener('click', async () => {
                 if (!playLock.acquire(i18n.t('player.preparingPrev'))) return;
                 try {
-                    await player.prev();
+                    const result = await player.prev();
+                    this._handlePlayResult(result, i18n.t('player.prevFailed'));
                 } catch (err) {
                     console.error('[上一首] 错误:', err);
                     Toast.error(i18n.t('player.prevFailed'));
@@ -802,7 +811,8 @@ class MusicPlayerApp {
             this.elements.fullPlayerPrev.addEventListener('click', async () => {
                 if (!playLock.acquire(i18n.t('player.preparingPrev'))) return;
                 try {
-                    await player.prev();
+                    const result = await player.prev();
+                    this._handlePlayResult(result, i18n.t('player.prevFailed'));
                 } catch (err) {
                     console.error('[上一首] 错误:', err);
                     Toast.error(i18n.t('player.prevFailed'));
@@ -983,7 +993,8 @@ class MusicPlayerApp {
             this.elements.nppNext.addEventListener('click', async () => {
                 if (!playLock.acquire(i18n.t('player.preparingNext'))) return;
                 try {
-                    await player.next();
+                    const result = await player.next();
+                    this._handlePlayResult(result, i18n.t('player.nextFailed'));
                 } catch (err) {
                     console.error('[NPP Next] Error:', err);
                     Toast.error(i18n.t('player.nextFailed'));
@@ -996,7 +1007,8 @@ class MusicPlayerApp {
             this.elements.nppPrev.addEventListener('click', async () => {
                 if (!playLock.acquire(i18n.t('player.preparingPrev'))) return;
                 try {
-                    await player.prev();
+                    const result = await player.prev();
+                    this._handlePlayResult(result, i18n.t('player.prevFailed'));
                 } catch (err) {
                     console.error('[NPP Prev] Error:', err);
                     Toast.error(i18n.t('player.prevFailed'));
@@ -1346,6 +1358,27 @@ class MusicPlayerApp {
         }
     }
 
+    /**
+     * 处理 next/prev 返回结果中的跳过歌曲信息
+     * api.js 返回 {_error: true} 而非 throw，需要显式检查
+     * @param {Object} result - player.next() 或 player.prev() 的返回值
+     * @param {string} errorMsg - 错误时的 Toast 消息
+     */
+    _handlePlayResult(result, errorMsg) {
+        if (result?._error) {
+            if (result.skipped_songs) {
+                result.skipped_songs.forEach(s => { if (s.url) unavailableSongs.add(s.url); });
+                this.renderPlaylist();
+            }
+            throw new Error(result.error || errorMsg);
+        }
+        if (result?.skipped_songs?.length > 0) {
+            result.skipped_songs.forEach(s => { if (s.url) unavailableSongs.add(s.url); });
+            this.renderPlaylist();
+            Toast.warning(i18n.t('player.skippedSongs', { count: result.skipped_songs.length }));
+        }
+    }
+
     // 播放/暂停
     togglePlayPause() {
         if (playLock.isPreparing()) return;
@@ -1356,7 +1389,8 @@ class MusicPlayerApp {
     async playNext() {
         if (!playLock.acquire(i18n.t('player.preparingNext'))) return;
         try {
-            await player.next();
+            const result = await player.next();
+            this._handlePlayResult(result, i18n.t('player.nextFailed'));
         } catch (err) {
             console.error('[下一首] 错误:', err);
             Toast.error(i18n.t('player.nextFailed'));
@@ -1369,7 +1403,8 @@ class MusicPlayerApp {
     async playPrev() {
         if (!playLock.acquire(i18n.t('player.preparingPrev'))) return;
         try {
-            await player.prev();
+            const result = await player.prev();
+            this._handlePlayResult(result, i18n.t('player.prevFailed'));
         } catch (err) {
             console.error('[上一首] 错误:', err);
             Toast.error(i18n.t('player.prevFailed'));

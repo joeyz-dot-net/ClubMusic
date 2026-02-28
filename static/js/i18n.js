@@ -92,6 +92,7 @@ const translations = {
         'player.loop.all': '全部循环',
         'player.loop.title': '循环模式: {mode}',
         'player.notPlaying': '未播放',
+        'player.skippedSongs': '已跳过 {count} 首不可用歌曲',
 
         // 搜索
         'search.title': '搜索结果',
@@ -188,6 +189,7 @@ const translations = {
         'playlist.addFailed': '，失败 {count} 首',
         'playlist.addToQueue': '✅ 已添加到「队列」: {title}',
         'playlist.opFailed': '操作失败',
+        'playlist.songUnavailable': '文件不存在，已自动跳过',
 
         // 歌单管理
         'playlists.select': '选择歌单',
@@ -305,6 +307,7 @@ const translations = {
         'player.loop.all': 'Loop All',
         'player.loop.title': 'Loop mode: {mode}',
         'player.notPlaying': 'Not playing',
+        'player.skippedSongs': 'Skipped {count} unavailable song(s)',
 
         // Search
         'search.title': 'Search Results',
@@ -401,6 +404,7 @@ const translations = {
         'playlist.addFailed': ', {count} failed',
         'playlist.addToQueue': '✅ Added to queue: {title}',
         'playlist.opFailed': 'Operation failed',
+        'playlist.songUnavailable': 'File not found, skipped',
 
         // Playlists management
         'playlists.select': 'Select Playlist',
@@ -518,6 +522,7 @@ const translations = {
         'player.loop.all': '全部循環',
         'player.loop.title': '循環模式: {mode}',
         'player.notPlaying': '未播放',
+        'player.skippedSongs': '已跳過 {count} 首不可用歌曲',
 
         // 搜尋
         'search.title': '搜尋結果',
@@ -614,6 +619,7 @@ const translations = {
         'playlist.addFailed': '，失敗 {count} 首',
         'playlist.addToQueue': '✅ 已加入佇列: {title}',
         'playlist.opFailed': '操作失敗',
+        'playlist.songUnavailable': '檔案不存在，已自動跳過',
 
         // 歌單管理
         'playlists.select': '選擇歌單',

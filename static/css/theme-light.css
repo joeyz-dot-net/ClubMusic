@@ -119,6 +119,9 @@ body.theme-light {
     background: #ffffff !important;
     border-color: #3b82f6 !important;
 }
+#playlist.theme-light .playlist-track-item.song-unavailable .track-title {
+    color: #999 !important;
+}
 
 /* ==========================================
    歌单管理模态框 - 浅色主题

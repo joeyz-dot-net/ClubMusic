@@ -529,6 +529,22 @@ button:active { transform: scale(0.98); }
     overflow: visible;
 }
 
+/* 不可用歌曲标记（文件不存在等） */
+.playlist-track-item.song-unavailable {
+    opacity: 0.45;
+}
+.playlist-track-item.song-unavailable .track-title {
+    text-decoration: line-through;
+    color: #999;
+}
+.track-unavailable-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    font-size: 12px;
+    color: #ff9800;
+}
+
 /* 当前播放歌曲的水平进度条（底部） */
 .track-progress-bar {
     position: absolute;

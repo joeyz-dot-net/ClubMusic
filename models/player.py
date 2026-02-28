@@ -1291,8 +1291,12 @@ class MusicPlayer:
                         song_title = removed_song.get('title') if isinstance(removed_song, dict) else str(removed_song)
                         logger.info(f"[自动播放] ✓ 已删除列表第一首: {song_title}")
 
-                # 播放下一首（删除后的第一首）
-                if len(default_playlist.songs) > 0:
+                # 播放下一首（删除后的第一首），跳过失败歌曲（最多5首）
+                MAX_SKIP = 5
+                for attempt in range(MAX_SKIP):
+                    if not default_playlist.songs:
+                        break
+
                     next_song = default_playlist.songs[0]
 
                     if isinstance(next_song, dict):
@@ -1306,7 +1310,13 @@ class MusicPlayer:
                         song_type = "local"
                         duration = 0
 
-                    logger.info(f"[自动播放] ▶️ 开始播放下一首: {title}")
+                    if not url:
+                        skipped = default_playlist.songs.pop(0)
+                        default_playlist.songs.append(skipped)
+                        logger.warning(f"[自动播放] 跳过数据不完整的歌曲 ({attempt+1}/{MAX_SKIP}): {title}")
+                        continue
+
+                    logger.info(f"[自动播放] ▶️ 尝试播放下一首 ({attempt+1}/{MAX_SKIP}): {title}")
 
                     # 根据歌曲类型创建Song对象并播放
                     if song_type == "youtube" or (url and str(url).startswith("http")):
@@ -1336,13 +1346,24 @@ class MusicPlayer:
                         logger.info(f"[自动播放] ✅ 自动播放成功: {title}")
                         # 预获取下一曲直链
                         self._prefetch_next_song_url()
+                        break
                     else:
-                        logger.error(f"[自动播放] ❌ 播放失败: {title}")
-                else:
+                        # 播放失败：移到队尾保留，继续尝试下一首
+                        skipped = default_playlist.songs.pop(0)
+                        default_playlist.songs.append(skipped)
+                        logger.warning(f"[自动播放] 跳过失败歌曲 ({attempt+1}/{MAX_SKIP}): {title}")
+
+                # 无论成功失败都保存
+                default_playlist.updated_at = time.time()
+                playlists_mgr.save()
+
+                if not auto_play_success and not default_playlist.songs:
                     logger.info("[自动播放] ℹ️ 播放列表已空，停止自动播放")
                     # 清空当前播放信息
                     self.current_meta = {}
                     self.current_index = -1
+                elif not auto_play_success:
+                    logger.error(f"[自动播放] ❌ 连续 {MAX_SKIP} 首播放失败")
 
             # 锁外广播（_build_state_message 需要读 MPV 管道，不能在锁内执行）
             if auto_play_success and self._ext_broadcast_from_thread:
