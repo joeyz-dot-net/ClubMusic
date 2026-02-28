@@ -218,16 +218,26 @@ from typing import Dict
 PIPE_PLAYERS: Dict[str, MusicPlayer] = {}
 _pipe_players_lock = threading.Lock()
 
+# ==================== RoomPlayer 池（ClubMusic 管理的 MPV 房间）====================
+ROOM_PLAYERS: Dict[str, MusicPlayer] = {}
+_room_players_lock = threading.Lock()
+
 
 def get_player_for_pipe(pipe_name: str) -> MusicPlayer:
-    """获取或创建指定管道的 PipePlayer 实例。
+    """获取或创建指定管道的 Player 实例。
 
     无 pipe 或匹配默认管道 → 返回全局 PLAYER；
-    否则从池中返回/创建 PipePlayer。
+    优先查 ROOM_PLAYERS（ClubMusic 管理的 MPV），再查/创建 PipePlayer。
     """
     if not pipe_name or pipe_name == PLAYER.pipe_name:
         return PLAYER
 
+    # 优先查 ROOM_PLAYERS（ClubMusic 管理的 MPV）
+    with _room_players_lock:
+        if pipe_name in ROOM_PLAYERS:
+            return ROOM_PLAYERS[pipe_name]
+
+    # 兼容旧的 PipePlayer 池
     with _pipe_players_lock:
         if pipe_name in PIPE_PLAYERS:
             return PIPE_PLAYERS[pipe_name]
@@ -246,7 +256,7 @@ def get_player_for_pipe(pipe_name: str) -> MusicPlayer:
 def get_current_playlist_id(player: MusicPlayer) -> str:
     """获取玩家的当前播放列表 ID。
 
-    PipePlayer → room_{safe_id}；默认 PLAYER → CURRENT_PLAYLIST_ID。
+    PipePlayer/RoomPlayer → room_{safe_id}；默认 PLAYER → CURRENT_PLAYLIST_ID。
     """
     room_pid = getattr(player, '_room_playlist_id', None)
     if room_pid:
@@ -255,7 +265,16 @@ def get_current_playlist_id(player: MusicPlayer) -> str:
 
 
 def cleanup_pipe_player(pipe_name: str):
-    """清理指定管道的 PipePlayer（房间销毁时调用）。"""
+    """清理指定管道的 Player（房间销毁时调用）。"""
+    # 先查 ROOM_PLAYERS
+    with _room_players_lock:
+        room_player = ROOM_PLAYERS.pop(pipe_name, None)
+    if room_player:
+        room_player.destroy_room_player()
+        logger.info(f"[RoomPool] 已清理 RoomPlayer: {pipe_name}")
+        return
+
+    # 再查 PIPE_PLAYERS
     with _pipe_players_lock:
         player = PIPE_PLAYERS.pop(pipe_name, None)
     if player:

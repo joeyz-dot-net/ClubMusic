@@ -392,6 +392,264 @@ class MusicPlayer:
         self._stop_flag = True
         logger.info(f"[PipePlayer] 已标记停止: {self.pipe_name}")
 
+    # ===================== RoomPlayer =====================
+
+    @classmethod
+    def create_room_player(cls, room_id: str, playlists_manager,
+                           playback_history, broadcast_from_thread=None,
+                           default_volume: int = 80):
+        """创建 RoomPlayer 实例 — ClubMusic 拥有并管理 MPV 进程 + PCM 音频中继。
+
+        与 PipePlayer 的区别：RoomPlayer 自己启动 MPV（PCM stdout 模式），
+        并通过 Named Pipe Server 把 PCM 数据传给 ClubVoice。
+
+        参数:
+            room_id: 房间 ID（如 'testbots_ef36'）
+            playlists_manager: 共享的 Playlists 管理器实例
+            playback_history: 共享的 PlayHistory 实例
+            broadcast_from_thread: WebSocket 广播回调（可选）
+            default_volume: MPV 默认音量 (0-100)
+        """
+        instance = object.__new__(cls)
+
+        # 管道配置
+        ipc_pipe = rf'\\.\pipe\mpv-ipc-{room_id}'
+        pcm_pipe = rf'\\.\pipe\pcm-{room_id}'
+        instance.pipe_name = ipc_pipe
+        instance._room_id = room_id
+        instance._pcm_pipe_name = pcm_pipe
+        instance._default_volume = default_volume
+
+        # MPV 命令: PCM 输出到 stdout（由 relay 线程转发到 Named Pipe）
+        app_dir = MusicPlayer._get_app_dir()
+        mpv_exe = os.path.join(app_dir, "bin", "mpv.exe")
+        instance.mpv_cmd = (
+            f'{mpv_exe}'
+            f' --input-ipc-server={ipc_pipe}'
+            f' --ao=pcm --ao-pcm-file=- --ao-pcm-waveheader=no'
+            f' --audio-samplerate=48000 --audio-channels=stereo --audio-format=s16'
+            f' --idle=yes --force-window=no --no-video'
+            f' --volume={default_volume}'
+        )
+        instance.mpv_process = None
+        instance._pcm_pipe_server = None
+        instance._relay_thread = None
+        instance._relay_stop = threading.Event()
+
+        # 与 PipePlayer 相同的基础属性
+        instance.music_dir = ""
+        instance.allowed_extensions = []
+        instance.data_dir = ""
+        instance.debug = False
+        instance.local_search_max_results = 0
+        instance.youtube_search_max_results = 20
+        instance.youtube_url_extra_max = 50
+        instance.server_host = "0.0.0.0"
+        instance.server_port = 80
+        instance.flask_host = "0.0.0.0"
+        instance.flask_port = 80
+
+        # 播放状态（独立于主 PLAYER）
+        instance.playlist = []
+        instance.current_index = -1
+        instance.current_meta = {}
+        instance.loop_mode = 0
+        instance.pitch_shift = 0
+        instance._last_play_time = 0
+        instance._prev_index = None
+        instance._prev_meta = None
+        instance._auto_thread = None
+        instance._stop_flag = False
+        instance._req_id = 0
+        instance._lock = threading.RLock()
+
+        # 共享资源（注入）
+        instance._ext_playlists_manager = playlists_manager
+        instance._ext_playback_history = playback_history
+        instance._ext_broadcast_from_thread = broadcast_from_thread
+
+        # 房间队列播放列表 ID
+        safe_id = room_id.replace("\\", "_").replace(".", "_").replace(":", "_")
+        instance._room_playlist_id = f"room_{safe_id}"
+        instance._ext_default_playlist_id = instance._room_playlist_id
+
+        # 共享播放历史
+        instance.playback_history = playback_history
+        instance.playback_history_file = ""
+        instance.playback_history_max = 9999
+
+        # 不构建本地文件树
+        instance.local_file_tree = {"name": "N/A", "rel": "", "dirs": [], "files": []}
+        instance._audio_device_names = {}
+        instance.config = {"LOCAL_VOLUME": str(default_volume)}
+        instance.current_playlist = None
+        instance.current_playlist_file = ""
+
+        # 自动创建房间队列播放列表
+        room_pl = playlists_manager.get_playlist(instance._room_playlist_id)
+        if not room_pl:
+            short_name = room_id[:12]
+            room_pl = playlists_manager.create_playlist(f"Room {short_name}")
+            room_pl.id = instance._room_playlist_id
+            playlists_manager._playlists[instance._room_playlist_id] = room_pl
+            playlists_manager.save()
+            logger.info(f"[RoomPlayer] 已创建房间队列播放列表: {instance._room_playlist_id}")
+
+        logger.info(f"[RoomPlayer] ✓ 已创建 RoomPlayer: room_id={room_id}, ipc={ipc_pipe}, pcm={pcm_pipe}")
+        return instance
+
+    def start_room_mpv(self) -> bool:
+        """启动 RoomPlayer 的 MPV 进程 + PCM relay。
+
+        返回 True 表示 MPV 和 PCM pipe 均已就绪。
+        """
+        if not hasattr(self, '_room_id') or not self._room_id:
+            logger.error("[RoomPlayer] start_room_mpv 仅用于 RoomPlayer 实例")
+            return False
+
+        if self.mpv_pipe_exists():
+            logger.info(f"[RoomPlayer] MPV IPC 管道已存在: {self.pipe_name}")
+            return True
+
+        logger.info(f"[RoomPlayer] 启动 MPV: {self.mpv_cmd}")
+        try:
+            import shlex
+            import ctypes as _ctypes
+            CREATE_NEW_PROCESS_GROUP = 0x00000200
+            CREATE_NO_WINDOW = 0x08000000
+
+            cmd_list = shlex.split(self.mpv_cmd, posix=False)
+
+            # 添加 yt-dlp 支持
+            app_dir = MusicPlayer._get_app_dir()
+            yt_dlp = os.path.join(app_dir, "bin", "yt-dlp.exe")
+            if os.path.exists(yt_dlp):
+                yt_path_escaped = os.path.abspath(yt_dlp).replace("\\", "/")
+                cmd_list.append("--ytdl=yes")
+                cmd_list.append(f'--script-opts=ytdl_hook-ytdl_path="{yt_path_escaped}"')
+            else:
+                cmd_list.append("--ytdl=yes")
+
+            process = subprocess.Popen(
+                cmd_list,
+                shell=False,
+                creationflags=CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW,
+                stdout=subprocess.PIPE,   # PCM 数据从 stdout 读取
+                stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL,
+            )
+            self.mpv_process = process
+            logger.info(f"[RoomPlayer] MPV 已启动 (PID={process.pid})")
+        except Exception as e:
+            logger.error(f"[RoomPlayer] MPV 启动失败: {e}")
+            return False
+
+        # 等待 IPC 管道就绪
+        if not self._wait_pipe():
+            logger.error(f"[RoomPlayer] IPC 管道超时: {self.pipe_name}")
+            return False
+        logger.info(f"[RoomPlayer] IPC 管道已就绪: {self.pipe_name}")
+
+        # 启动 PCM relay 线程
+        self._start_pcm_relay()
+
+        # 启动事件监听线程
+        self._start_event_listener()
+
+        logger.info(f"[RoomPlayer] ✓ 房间 {self._room_id} MPV + PCM relay 已就绪")
+        return True
+
+    def _start_pcm_relay(self):
+        """启动 PCM relay 线程: 读取 MPV stdout → 写入 Named Pipe Server。"""
+        from models.pcm_pipe import PcmPipeServer
+
+        self._relay_stop.clear()
+        self._pcm_pipe_server = PcmPipeServer(self._pcm_pipe_name)
+
+        def _relay_loop():
+            FRAME_BYTES = 3840  # 960 samples × 2 channels × 2 bytes = 20ms @ 48kHz
+
+            if not self._pcm_pipe_server.create():
+                logger.error(f"[RoomPlayer] PCM 管道创建失败: {self._pcm_pipe_name}")
+                return
+
+            while not self._relay_stop.is_set():
+                # 等待 ClubVoice 客户端连接
+                logger.info(f"[RoomPlayer] 等待 PCM 客户端连接: {self._pcm_pipe_name}")
+                if not self._pcm_pipe_server.wait_for_client():
+                    if self._relay_stop.is_set():
+                        break
+                    logger.warning(f"[RoomPlayer] PCM 客户端连接失败，5 秒后重试...")
+                    time.sleep(5)
+                    continue
+
+                # 客户端已连接，开始中继
+                logger.info(f"[RoomPlayer] PCM relay 开始: {self._pcm_pipe_name}")
+                while not self._relay_stop.is_set():
+                    try:
+                        data = self.mpv_process.stdout.read(FRAME_BYTES)
+                        if not data:
+                            logger.info(f"[RoomPlayer] MPV stdout EOF")
+                            break
+                        if not self._pcm_pipe_server.write(data):
+                            # 客户端断开
+                            break
+                    except Exception as e:
+                        if not self._relay_stop.is_set():
+                            logger.warning(f"[RoomPlayer] relay 异常: {e}")
+                        break
+
+                # 客户端断开，DisconnectNamedPipe 然后允许下一个客户端
+                self._pcm_pipe_server.disconnect_client()
+                if not self._relay_stop.is_set():
+                    logger.info(f"[RoomPlayer] PCM 客户端断开，等待下一个...")
+
+            self._pcm_pipe_server.close()
+            logger.info(f"[RoomPlayer] PCM relay 线程结束: {self._pcm_pipe_name}")
+
+        self._relay_thread = threading.Thread(
+            target=_relay_loop, daemon=True,
+            name=f"pcm-relay-{self._room_id}"
+        )
+        self._relay_thread.start()
+
+    def destroy_room_player(self):
+        """销毁 RoomPlayer: 停止 relay、杀 MPV、清理管道。"""
+        room_id = getattr(self, '_room_id', '?')
+        logger.info(f"[RoomPlayer] 正在销毁: {room_id}")
+
+        # 1. 停止事件监听
+        self._stop_flag = True
+
+        # 2. 停止 PCM relay
+        if hasattr(self, '_relay_stop'):
+            self._relay_stop.set()
+
+        # 3. 杀 MPV 进程（关闭 stdout 让 relay 退出阻塞读）
+        if self.mpv_process:
+            try:
+                self.mpv_process.terminate()
+                self.mpv_process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                self.mpv_process.kill()
+                self.mpv_process.wait(timeout=2)
+            except Exception as e:
+                logger.warning(f"[RoomPlayer] 杀 MPV 异常: {e}")
+            finally:
+                self.mpv_process = None
+
+        # 4. 等待 relay 线程退出
+        if self._relay_thread and self._relay_thread.is_alive():
+            self._relay_thread.join(timeout=3)
+            self._relay_thread = None
+
+        # 5. 关闭 PCM pipe（如果 relay 没来得及关）
+        if self._pcm_pipe_server:
+            self._pcm_pipe_server.close()
+            self._pcm_pipe_server = None
+
+        logger.info(f"[RoomPlayer] ✓ 已销毁: {room_id}")
+
     def _init_audio_device_map(self) -> dict:
         """初始化音频设备 GUID 到设备名的映射表
         
@@ -799,8 +1057,10 @@ class MusicPlayer:
                     if not self.mpv_pipe_exists():
                         consecutive_errors += 1
                         if consecutive_errors > max_consecutive_errors:
-                            logger.warning("[事件监听] ⚠️ 无法连接 MPV 管道，停止事件监听")
-                            break
+                            logger.warning("[事件监听] ⚠️ 连续错误过多，等待 10 秒后重试...")
+                            consecutive_errors = 0
+                            time.sleep(10)
+                            continue
                         time.sleep(0.5)
                         continue
                     
@@ -825,6 +1085,8 @@ class MusicPlayer:
                                         except Exception as e:
                                             logger.error(f"[事件监听] ✗ 处理播放结束失败: {e}")
                                     elif reason == "error":
+                                        file_error = event_data.get("file_error", "unknown")
+                                        logger.warning(f"[事件监听] ⚠ 播放出错: {file_error}, 完整事件: {event_data}")
                                         # 播放出错，主动失效当前歌曲的缓存 URL，避免下次重复使用损坏的直链
                                         try:
                                             from models.url_cache import url_cache
@@ -1194,7 +1456,11 @@ class MusicPlayer:
         def _write():
             # Debug: 显示发送的命令
             logger.debug(f"mpv_command -> sending: {cmd_list} to pipe {self.pipe_name}")
-            
+
+            # PipePlayer 模式：额外日志
+            if self.mpv_cmd is None:
+                logger.info(f"[PipePlayer] 发送命令: {cmd_list[0] if cmd_list else 'N/A'}, 管道: {self.pipe_name}")
+
             # ✅ 对特定命令显示更详细的日志
             if cmd_list and len(cmd_list) > 0:
                 cmd_name = cmd_list[0]
@@ -1203,22 +1469,24 @@ class MusicPlayer:
                     logger.info(f"📂 [MPV 命令] loadfile: {file_url[:100]}{'...' if len(file_url) > 100 else ''}")
                     
                     # 显示当前 MPV 完整配置信息（包含运行时参数）
-                    runtime_audio_device = os.environ.get("MPV_AUDIO_DEVICE", "")
-                    mpv_display_cmd = self.mpv_cmd
-                    
-                    if runtime_audio_device:
-                        # 如果有运行时音频设备，显示完整命令
-                        import re
-                        mpv_display_cmd = re.sub(r'\s*--audio-device=[^\s]+', '', mpv_display_cmd)
-                        mpv_display_cmd = mpv_display_cmd.strip() + f" --audio-device={runtime_audio_device}"
-                    
-                    logger.info(f"   🎵 MPV 完整命令: {mpv_display_cmd}")
+                    if self.mpv_cmd:  # PipePlayer 没有 mpv_cmd，跳过此诊断块
+                        runtime_audio_device = os.environ.get("MPV_AUDIO_DEVICE", "")
+                        mpv_display_cmd = self.mpv_cmd
+
+                        if runtime_audio_device:
+                            # 如果有运行时音频设备，显示完整命令
+                            import re
+                            mpv_display_cmd = re.sub(r'\s*--audio-device=[^\s]+', '', mpv_display_cmd)
+                            mpv_display_cmd = mpv_display_cmd.strip() + f" --audio-device={runtime_audio_device}"
+
+                        logger.info(f"   🎵 MPV 完整命令: {mpv_display_cmd}")
                     
                     # 对于网络歌曲（YouTube等），显示额外的参数
                     is_network_url = file_url.startswith(('http://', 'https://'))
                     if is_network_url:
                         logger.info(f"   🌐 网络播放模式")
-                        logger.info(f"   📋 完整命令参数: {mpv_display_cmd} \"{file_url}\"")
+                        if self.mpv_cmd:
+                            logger.info(f"   📋 完整命令参数: {mpv_display_cmd} \"{file_url}\"")
                         # 显示 ytdl 相关属性
                         try:
                             ytdl_format = self.mpv_get("ytdl-format")
@@ -1298,19 +1566,27 @@ class MusicPlayer:
 
     def mpv_request(self, payload: dict):
         """向 MPV 发送请求并等待响应"""
-        with open(self.pipe_name, "r+b", 0) as f:
-            f.write((json.dumps(payload) + "\n").encode("utf-8"))
-            f.flush()
-            while True:
-                line = f.readline()
-                if not line:
-                    break
-                try:
-                    obj = json.loads(line.decode("utf-8", "ignore"))
-                except Exception:
-                    continue
-                if obj.get("request_id") == payload.get("request_id"):
-                    return obj
+        try:
+            with open(self.pipe_name, "r+b", 0) as f:
+                f.write((json.dumps(payload) + "\n").encode("utf-8"))
+                f.flush()
+                while True:
+                    line = f.readline()
+                    if not line:
+                        break
+                    try:
+                        obj = json.loads(line.decode("utf-8", "ignore"))
+                    except Exception:
+                        continue
+                    if obj.get("request_id") == payload.get("request_id"):
+                        return obj
+        except (OSError, IOError) as e:
+            if self.mpv_cmd is not None:
+                # 默认 PLAYER 管道错误应引起注意
+                logger.warning(f"[mpv_request] 管道错误 (pipe={self.pipe_name}): {e}")
+            else:
+                # PipePlayer 管道可能尚未就绪，降级为 debug
+                logger.debug(f"[mpv_request] PipePlayer 管道错误 (pipe={self.pipe_name}): {e}")
         return None
 
     def mpv_get(self, prop: str):

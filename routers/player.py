@@ -68,6 +68,10 @@ async def play(
         logger.info(f"   📌 类型: {song_type}")
         logger.info(f"   📌 时长: {duration}秒")
         logger.info(f"   📌 是否网络歌曲: {'✅ 是' if is_network_song else '❌ 否'}")
+        pipe = request.query_params.get('pipe', '')
+        logger.info(f"   📌 Pipe: {pipe or '(default)'}")
+        logger.info(f"   📌 Player: {'PipePlayer' if player.mpv_cmd is None else 'Default'}")
+        logger.info(f"   📌 管道路径: {player.pipe_name}")
         logger.info("=" * 60)
 
         if not url:
@@ -119,6 +123,21 @@ async def play(
         }
     except Exception as e:
         return error_response("[/play] 播放异常", exc=e, _logger=logger)
+
+
+@router.get("/debug/pipe-check")
+async def debug_pipe_check(
+    request: Request,
+    player: MusicPlayer = Depends(get_player_for_request),
+):
+    """诊断端点：检查管道状态"""
+    pipe = request.query_params.get('pipe', '')
+    return {
+        "pipe_param": pipe,
+        "pipe_name": player.pipe_name,
+        "is_pipe_player": player.mpv_cmd is None,
+        "pipe_exists": player.mpv_pipe_exists(),
+    }
 
 
 @router.post("/play_song")

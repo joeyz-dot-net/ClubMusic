@@ -42,6 +42,7 @@ from routers import history as history_router
 from routers import media as media_router
 from routers import settings as settings_router
 from routers import websocket as websocket_router
+from routers import room as room_router
 
 
 # ============================================
@@ -388,6 +389,17 @@ async def lifespan(app: FastAPI):
     # 关闭事件
     logger.info("应用正在关闭...")
 
+    # 关闭所有 RoomPlayer（自定义房间的 MPV 进程）
+    from routers.state import ROOM_PLAYERS, _room_players_lock
+    with _room_players_lock:
+        for pipe_name, rp in list(ROOM_PLAYERS.items()):
+            try:
+                rp.destroy_room_player()
+                logger.info(f"✅ 已销毁 RoomPlayer: {pipe_name}")
+            except Exception as e:
+                logger.warning(f"销毁 RoomPlayer 失败: {e}")
+        ROOM_PLAYERS.clear()
+
     try:
         if PLAYER and PLAYER.mpv_process:
             logger.info("正在关闭 MPV 进程...")
@@ -467,6 +479,7 @@ app.include_router(history_router.router)
 app.include_router(media_router.router)
 app.include_router(settings_router.router)
 app.include_router(websocket_router.router)
+app.include_router(room_router.router)
 
 
 # ============================================
