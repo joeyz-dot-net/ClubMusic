@@ -1204,6 +1204,12 @@ class MusicPlayerApp {
             // 刷新播放列表 UI
             this.renderPlaylist();
 
+            // 更新底部导航栏active状态为播放列表
+            const navItems = document.querySelectorAll('#bottomNav .nav-item');
+            navItems.forEach(item => item.classList.remove('active'));
+            const playlistNavItem = document.querySelector('#bottomNav .nav-item[data-tab="playlists"]');
+            if (playlistNavItem) playlistNavItem.classList.add('active');
+
             console.log('[应用] ✓ 已切换到歌单:', playlistId);
             
         } catch (error) {
@@ -1469,7 +1475,13 @@ class MusicPlayerApp {
                     modal.style.display = 'none';
                 }
             });
-            
+
+            // 隐藏歌单管理模态框
+            if (playlistsModal) {
+                playlistsModal.classList.remove('modal-visible');
+                playlistsModal.style.display = 'none';
+            }
+
             // 移除所有导航按钮的active状态
             navItems.forEach(item => item.classList.remove('active'));
             currentModal = null;
@@ -1635,6 +1647,17 @@ class MusicPlayerApp {
             historyNavBtn.addEventListener('click', async () => {
                 console.log('🕐 点击播放历史按钮');
                 await showPlaybackHistory();
+            });
+        }
+
+        // 歌单选择按钮点击处理
+        const playlistSelectBtn = document.getElementById('playlistSelectNavBtn');
+        if (playlistSelectBtn) {
+            playlistSelectBtn.addEventListener('click', () => {
+                console.log('📋 点击歌单选择按钮');
+                hideAllContent();
+                playlistSelectBtn.classList.add('active');
+                playlistsManagement.show();
             });
         }
 
