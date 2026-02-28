@@ -5,6 +5,7 @@ import { operationLock } from './operationLock.js';
 import { thumbnailManager, escapeHTML } from './utils.js';
 import { i18n } from './i18n.js';
 import { player } from './player.js';
+import { playLock } from './playLock.js';
 
 export class PlaylistManager {
     constructor() {
@@ -2112,6 +2113,11 @@ function showHistoryActionMenu(song, historyModal, removeFromHistoryFn, rerender
 // 立即播放：将歌曲插入队列顶部并播放
 async function handleHistoryPlayNow(song) {
     try {
+        // 播放准备锁：防止等待期间覆盖操作
+        if (!playLock.acquire(song.title)) {
+            return;
+        }
+
         const currentPlaylistId = playlistManager.getSelectedPlaylistId() || 'default';
 
         // 1. 将歌曲插入到队列顶部（index=0）
@@ -2132,6 +2138,8 @@ async function handleHistoryPlayNow(song) {
         // 3. 播放歌曲
         await api.play(song.url, song.title, song.type || 'local', 0);
 
+        playLock.release();
+
         // 4. 刷新播放列表 UI
         const container = document.getElementById('playListContainer');
         const currentStatus = window.app?.lastPlayStatus || { current_meta: null };
@@ -2145,6 +2153,7 @@ async function handleHistoryPlayNow(song) {
 
         Toast.success(`▶️ ${i18n.t('history.playNowSuccess')}: ${song.title}`);
     } catch (error) {
+        playLock.release();
         console.error('[历史-立即播放] 失败:', error);
         Toast.error('播放失败: ' + error.message);
     }

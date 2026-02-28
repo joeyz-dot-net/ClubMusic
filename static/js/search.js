@@ -5,6 +5,7 @@ import { buildTrackItemHTML } from './templates.js';
 import { localFiles, getNodeByPath, getDirCoverUrl, countFiles } from './local.js';
 import { i18n } from './i18n.js';
 import { escapeHTML } from './utils.js';
+import { playLock } from './playLock.js';
 
 export class SearchManager {
     constructor() {
@@ -625,17 +626,22 @@ export class SearchManager {
     async handlePlayNow(songData, isDirectory, btn) {
         try {
             const playlistId = this.getCurrentPlaylistId ? this.getCurrentPlaylistId() : this.currentPlaylistId;
-            
+
             if (isDirectory) {
                 Toast.warning(i18n.t('search.dirNotSupported'));
                 return;
             }
-            
+
+            // 播放准备锁：防止等待期间覆盖操作
+            if (!playLock.acquire(songData.title)) {
+                return;
+            }
+
             // 显示加载状态
             const originalHTML = btn.innerHTML;
             btn.innerHTML = '⏳';
             btn.disabled = true;
-            
+
             // 1. 将歌曲插入到队列顶部（index=0，当前播放的前面）
             const addResponse = await fetch('/playlist_add', {
                 method: 'POST',
@@ -646,17 +652,17 @@ export class SearchManager {
                     insert_index: 0  // 插入到顶部
                 })
             });
-            
+
             if (!addResponse.ok) {
                 throw new Error(i18n.t('search.addSongFailed'));
             }
-            
+
             // 2. 刷新播放列表数据
             const playlistManager = window.app?.modules?.playlistManager;
             if (playlistManager) {
                 await playlistManager.refreshAll();
             }
-            
+
             // 3. 立即播放这首歌
             await window.app.modules.player.play(
                 songData.url,
@@ -664,7 +670,9 @@ export class SearchManager {
                 songData.type,
                 0  // duration
             );
-            
+
+            playLock.release();
+
             // 4. 刷新UI显示
             const container = document.getElementById('playListContainer');
             const currentStatus = window.app?.lastPlayStatus || { current_meta: null };
@@ -676,11 +684,12 @@ export class SearchManager {
                     currentMeta: currentStatus.current_meta
                 });
             }
-            
+
             Toast.success(i18n.t('search.nowPlaying', { title: songData.title }));
             btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
-            
+
         } catch (error) {
+            playLock.release();
             console.error('[立即播放] 失败:', error);
             Toast.error(i18n.t('search.playFailed') + ': ' + error.message);
             btn.innerHTML = originalHTML;
