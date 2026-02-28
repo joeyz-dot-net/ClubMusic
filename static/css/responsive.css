@@ -544,6 +544,12 @@
         bottom: 0;
     }
 
+    /* 歌单管理模态框: 原 bottom: 64px, left: 0 */
+    .playlists-modal {
+        left: var(--sidebar-width);
+        bottom: 0;
+    }
+
     /* 排行榜模态框: 原 bottom: 64px */
     #rankingModal {
         left: var(--sidebar-width);
@@ -557,7 +563,7 @@
 
     /* ---- 全屏覆盖层覆盖整个视口含侧边栏 ---- */
     /* .full-player: iPad 优化在下方独立的 orientation 媒体查询中 */
-    /* .playlists-modal, .settings-panel, #debugModal, .select-playlist-modal, .toast 保持不变 */
+    /* .settings-panel, #debugModal, .select-playlist-modal, .toast 保持不变 */
 
     /* ---- 播放列表: 更宽屏幕允许更多空间 ---- */
     .playlist-track-item:not(.current-playing) .track-title {
@@ -941,6 +947,10 @@
     }
 
     body.npp-visible .history-modal {
+        right: var(--now-playing-width);
+    }
+
+    body.npp-visible .playlists-modal {
         right: var(--now-playing-width);
     }
 
