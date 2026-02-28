@@ -6,7 +6,7 @@ import { thumbnailManager, escapeHTML } from './utils.js';
 import { i18n } from './i18n.js';
 import { player } from './player.js';
 import { playLock } from './playLock.js';
-import { unavailableSongs } from './main.js';
+import { unavailableSongs } from './unavailable.js';
 
 export class PlaylistManager {
     constructor() {

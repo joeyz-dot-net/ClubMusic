@@ -17,11 +17,7 @@ import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
 import { ktvSync } from './ktv.js';
 import { playLock } from './playLock.js';
-
-// 不可用歌曲 URL 集合（session-only，刷新页面后清除）
-// 当后端跳过播放失败的歌曲时，将其 URL 添加到此集合中
-// playlist.js 会检查此集合来标记不可用歌曲
-export const unavailableSongs = new Set();
+import { unavailableSongs } from './unavailable.js';
 
 // ==========================================
 // 应用初始化
