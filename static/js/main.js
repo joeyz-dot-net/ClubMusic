@@ -540,7 +540,15 @@ class MusicPlayerApp {
     async initPlaylist() {
         try {
             await playlistManager.refreshAll();
-            
+
+            // 如果在自定义房间中且有房间播放列表，自动选择房间播放列表
+            if (api.roomId && playlistManager.roomPlaylist) {
+                const roomPlaylistId = playlistManager.roomPlaylist.id;
+                console.log('[初始化] 检测到自定义房间，自动选择房间播放列表:', roomPlaylistId);
+                playlistManager.setSelectedPlaylist(roomPlaylistId);
+                await playlistManager.loadCurrent();
+            }
+
             // ✅ 从 playlistManager 恢复当前选择歌单的 ID（从 localStorage 中已恢复）
             const savedId = playlistManager.getSelectedPlaylistId();
             this.currentPlaylistId = savedId;
@@ -1728,7 +1736,7 @@ class MusicPlayerApp {
             item.addEventListener('click', () => {
                 console.log('🖱️ 点击导航项:', tabName);
                 if (tabName === 'playlists') {
-                    this.switchSelectedPlaylist('default');
+                    this.switchSelectedPlaylist(playlistManager.getActiveDefaultId());
                     navigateTo('playlists');
                     return;
                 }

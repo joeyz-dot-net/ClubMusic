@@ -286,7 +286,11 @@ export class Player {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
 
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${location.host}/ws`;
+        let wsUrl = `${protocol}//${location.host}/ws`;
+        // 将 room_id 传递给 WebSocket，确保只接收本房间的状态推送
+        if (api.roomId) {
+            wsUrl += `?room_id=${encodeURIComponent(api.roomId)}`;
+        }
         console.log(`[WS] 连接到 ${wsUrl}`);
 
         try {

@@ -16,7 +16,7 @@ from models import MusicPlayer
 from routers.state import (
     ROOM_PLAYERS, _room_players_lock,
     PLAYLISTS_MANAGER, PLAYBACK_HISTORY,
-    _broadcast_from_thread, PLAYER,
+    _make_room_broadcast, PLAYER,
 )
 
 logger = logging.getLogger(__name__)
@@ -25,9 +25,12 @@ router = APIRouter()
 
 @router.post("/room/init")
 async def init_room(request: Request):
-    """为自定义房间创建 RoomPlayer + MPV + PCM Pipe。
+    """为自定义房间创建 RoomPlayer + 启动 MPV。
 
-    请求体: {"room_id": "testbots_ef36", "default_volume": 80}
+    MPV 通过 --ao-pcm-file 直接写入 ClubVoice 创建的 Named Pipe，
+    ClubMusic 不再管理 PCM 管道。
+
+    请求体: {"room_id": "testbots_ef36", "default_volume": 80, "pcm_pipe": "\\.\pipe\pcm-xxx"}
     返回: {"status": "ok", "ipc_pipe": "...", "pcm_pipe": "..."}
     """
     body = await request.json()
@@ -39,8 +42,8 @@ async def init_room(request: Request):
     ipc_pipe = rf'\\.\pipe\mpv-ipc-{room_id}'
 
     with _room_players_lock:
-        if ipc_pipe in ROOM_PLAYERS:
-            player = ROOM_PLAYERS[ipc_pipe]
+        if room_id in ROOM_PLAYERS:
+            player = ROOM_PLAYERS[room_id]
             pcm_pipe = getattr(player, '_pcm_pipe_name', '')
             logger.info(f"[Room] 房间已存在: {room_id}")
             return {"status": "ok", "ipc_pipe": ipc_pipe, "pcm_pipe": pcm_pipe, "existed": True}
@@ -51,12 +54,12 @@ async def init_room(request: Request):
         room_id=room_id,
         playlists_manager=PLAYLISTS_MANAGER,
         playback_history=PLAYBACK_HISTORY,
-        broadcast_from_thread=_broadcast_from_thread,
+        broadcast_from_thread=_make_room_broadcast(room_id),
         default_volume=default_volume,
         music_dir=PLAYER.music_dir,
     )
 
-    # 启动 MPV + PCM relay
+    # 启动 MPV（PCM 音频直接写入 ClubVoice 的 Named Pipe）
     ok = player.start_room_mpv()
     if not ok:
         logger.error(f"[Room] MPV 启动失败: {room_id}")
@@ -64,7 +67,7 @@ async def init_room(request: Request):
         return JSONResponse({"status": "error", "message": "MPV start failed"}, 500)
 
     with _room_players_lock:
-        ROOM_PLAYERS[ipc_pipe] = player
+        ROOM_PLAYERS[room_id] = player
 
     pcm_pipe = getattr(player, '_pcm_pipe_name', '')
     logger.info(f"[Room] ✓ 房间就绪: {room_id}, ipc={ipc_pipe}, pcm={pcm_pipe}")
@@ -74,10 +77,8 @@ async def init_room(request: Request):
 @router.delete("/room/{room_id}")
 async def destroy_room(room_id: str):
     """销毁自定义房间的 RoomPlayer。"""
-    ipc_pipe = rf'\\.\pipe\mpv-ipc-{room_id}'
-
     with _room_players_lock:
-        player = ROOM_PLAYERS.pop(ipc_pipe, None)
+        player = ROOM_PLAYERS.pop(room_id, None)
 
     if not player:
         return JSONResponse({"status": "error", "message": "room not found"}, 404)
@@ -93,15 +94,12 @@ async def room_status(room_id: str):
     ipc_pipe = rf'\\.\pipe\mpv-ipc-{room_id}'
 
     with _room_players_lock:
-        player = ROOM_PLAYERS.get(ipc_pipe)
+        player = ROOM_PLAYERS.get(room_id)
 
     if not player:
         return {"exists": False}
 
     mpv_running = player.mpv_process is not None and player.mpv_process.poll() is None
-    pcm_connected = False
-    if hasattr(player, '_pcm_pipe_server') and player._pcm_pipe_server:
-        pcm_connected = getattr(player._pcm_pipe_server, 'is_connected', False)
 
     return {
         "exists": True,
@@ -109,6 +107,5 @@ async def room_status(room_id: str):
         "ipc_pipe": ipc_pipe,
         "pcm_pipe": getattr(player, '_pcm_pipe_name', ''),
         "mpv_running": mpv_running,
-        "pcm_client_connected": pcm_connected,
         "pipe_exists": player.mpv_pipe_exists(),
     }
