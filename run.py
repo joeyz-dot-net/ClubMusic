@@ -159,33 +159,39 @@ def interactive_select_audio_device(mpv_path: str = "mpv", timeout: int = 10) ->
             print(f"       设备ID: {device_id}")
     
     print(f"\n⏱️  {timeout}秒后自动选择默认项: {default_name}{RESET}")
-    print(f"   💡 按任意键取消倒计时，继续等待输入")
     print("─" * 60)
-    
+
     # Windows 下使用 msvcrt 实现非阻塞按键检测
     import time
     if os.name == 'nt':
         import msvcrt
-        
-        print(f"\n请选择 [{default_choice}]: ", end="", flush=True)
-        
+
         input_chars = []
         start_time = time.time()
         countdown_cancelled = False
-        
+        last_remaining = timeout + 1  # 确保首次立即显示
+
         while True:
             elapsed = time.time() - start_time
-            
+            remaining = max(0, timeout - int(elapsed))
+
+            # 实时更新倒计时计数器
+            if not countdown_cancelled and remaining != last_remaining:
+                last_remaining = remaining
+                # 使用 \r 回到行首覆盖显示倒计时
+                countdown_line = f"\r⏳ [{remaining:2d}s] 请选择 [{default_choice}]: {''.join(input_chars)}"
+                print(countdown_line, end="", flush=True)
+
             # 检查是否有按键
             if msvcrt.kbhit():
                 char = msvcrt.getwch()
-                
+
                 # 如果还在倒计时中，任意按键取消倒计时
                 if not countdown_cancelled and elapsed < timeout:
                     countdown_cancelled = True
                     print(f"\n   ⏹️  倒计时已取消，请继续输入...")
                     print(f"\n请选择 [{default_choice}]: ", end="", flush=True)
-                
+
                 if char == '\r':  # Enter 键
                     print()  # 换行
                     break
@@ -194,17 +200,18 @@ def interactive_select_audio_device(mpv_path: str = "mpv", timeout: int = 10) ->
                 elif char == '\x08':  # Backspace
                     if input_chars:
                         input_chars.pop()
-                        # 清除屏幕上的字符
-                        print('\b \b', end="", flush=True)
+                        if countdown_cancelled:
+                            print('\b \b', end="", flush=True)
                 else:
                     input_chars.append(char)
-                    print(char, end="", flush=True)
-            
+                    if countdown_cancelled:
+                        print(char, end="", flush=True)
+
             # 超时检查（仅在未取消倒计时时生效）
             if not countdown_cancelled and elapsed >= timeout:
                 print()  # 换行
                 break
-            
+
             time.sleep(0.05)  # 避免 CPU 占用过高
         
         user_input = ''.join(input_chars).strip()
