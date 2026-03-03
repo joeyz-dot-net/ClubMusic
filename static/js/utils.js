@@ -264,9 +264,9 @@ export class ThumbnailManager {
         // 检查是否是 YouTube 缩略图
         if (url.includes('img.youtube.com/vi/')) {
             const baseUrl = url.substring(0, url.lastIndexOf('/'));
-            // 规范化：sddefault.jpg 仅存在于旧版 4:3 视频，历史数据中大量存在
-            // 将其重定向到 hqdefault.jpg（几乎所有视频都有）以消除 404
-            const normalizedFirst = url.endsWith('/sddefault.jpg')
+            // 规范化：sddefault.jpg 仅存在于旧版 4:3 视频，maxresdefault.jpg 对大量视频不存在
+            // 均重定向到 hqdefault.jpg（几乎所有视频都有）以消除批量 404
+            const normalizedFirst = (url.endsWith('/sddefault.jpg') || url.endsWith('/maxresdefault.jpg'))
                 ? baseUrl + '/hqdefault.jpg'
                 : url;
             return [
