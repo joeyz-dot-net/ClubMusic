@@ -167,7 +167,9 @@ class LocalSong(Song):
             return False
 
         try:
-            mpv_command_func(["loadfile", abs_file, "replace"])
+            if not mpv_command_func(["loadfile", abs_file, "replace"]):
+                logger.error(f"LocalSong.play: mpv loadfile 命令发送失败（管道不可用）")
+                return False
 
             # 添加到播放历史
             if save_to_history and add_to_history_func:
@@ -404,8 +406,10 @@ class StreamSong(Song):
             logger.info(f"📤 调用 mpv loadfile 播放网络歌曲...")
             logger.info(f"   📌 actual_url 长度: {len(actual_url)} 字符")
             logger.info(f"   📌 actual_url 前缀: {actual_url[:50]}..." if len(actual_url) > 50 else f"   📌 actual_url: {actual_url}")
-            
-            mpv_command_func(["loadfile", actual_url, "replace"])
+
+            if not mpv_command_func(["loadfile", actual_url, "replace"]):
+                logger.error(f"   ❌ mpv loadfile 命令发送失败（管道不可用）")
+                return False
             logger.info(f"   ✅ mpv loadfile 命令已发送")
 
             # 添加到播放历史

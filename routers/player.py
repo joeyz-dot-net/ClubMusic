@@ -141,7 +141,7 @@ async def play(
             except Exception as e:
                 logger.warning(f"[播放] 更新 current_index 失败: {e}")
 
-        await _broadcast_state()
+        await _broadcast_state(player)
         return {
             "status": "OK",
             "message": "播放成功",
@@ -280,7 +280,7 @@ async def next_track(
                     status_code=500
                 )
 
-        await _broadcast_state()
+        await _broadcast_state(player)
         return {
             "status": "OK",
             "current": player.current_meta,
@@ -369,7 +369,7 @@ async def prev_track(
                     status_code=500
                 )
 
-        await _broadcast_state()
+        await _broadcast_state(player)
         return {
             "status": "OK",
             "current": player.current_meta,
@@ -470,7 +470,7 @@ async def pause(
             status_text = "⏸️ 暂停" if new_paused else "▶️ 播放中"
             logger.info(f"[播放状态改变] {status_text} | 歌曲: {title}")
 
-        await _broadcast_state()
+        await _broadcast_state(player)
         return {"status": "OK", "paused": not paused}
     except Exception as e:
         return error_response("[/pause] 暂停/继续异常", exc=e, _logger=logger)

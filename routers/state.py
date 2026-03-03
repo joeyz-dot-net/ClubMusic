@@ -88,29 +88,61 @@ _main_loop = None
 # ==================== WebSocket 连接管理 ====================
 
 class ConnectionManager:
-    """管理所有活跃的 WebSocket 客户端连接"""
+    """管理所有活跃的 WebSocket 客户端连接，支持 per-room 分组"""
 
     def __init__(self):
         self.active_connections: set = set()
+        # room_id -> set[WebSocket]，None 表示默认播放器（dev/prod）
+        self._room_connections: dict = {}
+        # WebSocket -> room_id（反向映射，方便 disconnect 时查找）
+        self._ws_to_room: dict = {}
 
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, websocket: WebSocket, room_id: str = None):
         await websocket.accept()
         self.active_connections.add(websocket)
-        logger.info(f"[WS] 客户端连接，当前连接数: {len(self.active_connections)}")
+        # 按 room_id 分组
+        if room_id not in self._room_connections:
+            self._room_connections[room_id] = set()
+        self._room_connections[room_id].add(websocket)
+        self._ws_to_room[websocket] = room_id
+        room_label = room_id or '(default)'
+        logger.info(f"[WS] 客户端连接 room={room_label}，当前连接数: {len(self.active_connections)}")
 
     def disconnect(self, websocket: WebSocket):
         self.active_connections.discard(websocket)
+        room_id = self._ws_to_room.pop(websocket, None)
+        if room_id in self._room_connections:
+            self._room_connections[room_id].discard(websocket)
+            if not self._room_connections[room_id]:
+                del self._room_connections[room_id]
+        elif None in self._room_connections:
+            self._room_connections[None].discard(websocket)
         logger.info(f"[WS] 客户端断开，当前连接数: {len(self.active_connections)}")
 
     async def broadcast(self, message: dict):
-        """广播消息给所有连接的客户端，自动清理失效连接"""
+        """广播消息给默认房间（room_id=None）的客户端"""
+        await self.broadcast_to_room(None, message)
+
+    async def broadcast_to_room(self, room_id: str, message: dict):
+        """广播消息给指定 room 的客户端，自动清理失效连接"""
+        conns = self._room_connections.get(room_id, set())
+        if not conns:
+            return
         dead = set()
-        for conn in self.active_connections:
+        for conn in conns:
             try:
                 await conn.send_json(message)
             except Exception:
                 dead.add(conn)
-        self.active_connections -= dead
+        if dead:
+            conns -= dead
+            self.active_connections -= dead
+            for ws in dead:
+                self._ws_to_room.pop(ws, None)
+
+    def has_connections_for_room(self, room_id: str) -> bool:
+        """检查指定 room 是否有活跃连接"""
+        return bool(self._room_connections.get(room_id))
 
 
 ws_manager = ConnectionManager()
@@ -131,44 +163,82 @@ def mpv_get(property_name):
 
 # ==================== 状态消息和广播函数 ====================
 
-def _build_state_message() -> dict:
-    """构建要广播的状态消息（同步函数，可在任意线程调用）"""
+def _build_state_message(player: MusicPlayer = None) -> dict:
+    """构建要广播的状态消息（同步函数，可在任意线程调用）
+
+    Args:
+        player: 目标播放器实例。None 则使用全局默认 PLAYER。
+    """
+    p = player or PLAYER
     try:
         mpv_state = {
-            "paused": mpv_get("pause"),
-            "time_pos": mpv_get("time-pos"),
-            "duration": mpv_get("duration"),
-            "volume": mpv_get("volume"),
+            "paused": p.mpv_get("pause"),
+            "time_pos": p.mpv_get("time-pos"),
+            "duration": p.mpv_get("duration"),
+            "volume": p.mpv_get("volume"),
         }
     except Exception:
         mpv_state = {"paused": True, "time_pos": 0, "duration": 0, "volume": 50}
     return {
         "type": "state_update",
-        "current_meta": PLAYER.get_current_meta_snapshot(),
+        "current_meta": p.get_current_meta_snapshot(),
         "mpv_state": mpv_state,
-        "loop_mode": PLAYER.loop_mode,
-        "pitch_shift": PLAYER.pitch_shift,
-        "current_playlist_id": CURRENT_PLAYLIST_ID,
+        "loop_mode": p.loop_mode,
+        "pitch_shift": p.pitch_shift,
+        "current_playlist_id": get_current_playlist_id(p),
         "playlist_updated": True,
         "ts": time.time(),
         "server_time": time.time(),
     }
 
 
-async def _broadcast_state():
-    """广播当前状态给所有 WebSocket 客户端（必须在锁外调用）"""
-    if ws_manager.active_connections:
-        await ws_manager.broadcast(_build_state_message())
+async def _broadcast_state(player: MusicPlayer = None):
+    """广播当前状态给对应 room 的 WebSocket 客户端（必须在锁外调用）
+
+    Args:
+        player: 目标播放器。None 或默认 PLAYER → 广播给 room_id=None 的连接；
+                RoomPlayer → 广播给对应 room_id 的连接。
+    """
+    if not ws_manager.active_connections:
+        return
+    p = player or PLAYER
+    room_id = getattr(p, '_room_id', None)
+    msg = _build_state_message(p)
+    await ws_manager.broadcast_to_room(room_id, msg)
 
 
 def _broadcast_from_thread():
-    """从后台线程安全地触发 WebSocket 广播（线程安全入口）"""
+    """从后台线程安全地触发默认 PLAYER 的 WebSocket 广播（线程安全入口）"""
     if _main_loop is None or not ws_manager.active_connections:
         return
     try:
         asyncio.run_coroutine_threadsafe(_broadcast_state(), _main_loop)
     except Exception as e:
         logger.debug(f"[WS] 跨线程广播失败: {e}")
+
+
+def _make_room_broadcast(room_id: str):
+    """为 RoomPlayer 创建 room-specific 的广播回调（闭包）。
+
+    返回的函数签名与 _broadcast_from_thread 相同，可直接传给
+    MusicPlayer.set_external_deps(broadcast_from_thread=...)。
+    """
+    def _room_broadcast():
+        if _main_loop is None:
+            return
+        with _room_players_lock:
+            player = ROOM_PLAYERS.get(room_id)
+        if player is None:
+            return
+        if not ws_manager.has_connections_for_room(room_id):
+            return
+        try:
+            asyncio.run_coroutine_threadsafe(
+                _broadcast_state(player), _main_loop
+            )
+        except Exception as e:
+            logger.debug(f"[WS] 房间 {room_id} 跨线程广播失败: {e}")
+    return _room_broadcast
 
 
 # ==================== 统一错误响应 ====================
@@ -229,21 +299,42 @@ ROOM_PLAYERS: Dict[str, MusicPlayer] = {}
 _room_players_lock = threading.Lock()
 
 
+def get_player_for_room_id(room_id: str):
+    """根据 room_id 查找 RoomPlayer。
+
+    不存在时返回 None（不自动创建 PipePlayer），由调用方决定 fallback。
+    """
+    if not room_id:
+        return None
+    with _room_players_lock:
+        return ROOM_PLAYERS.get(room_id, None)
+
+
+# 房间管道前缀，用于识别房间管道模式
+_ROOM_IPC_PREFIX = r'\\.\pipe\mpv-ipc-'
+
+
 def get_player_for_pipe(pipe_name: str) -> MusicPlayer:
     """获取或创建指定管道的 Player 实例。
 
     无 pipe 或匹配默认管道 → 返回全局 PLAYER；
-    优先查 ROOM_PLAYERS（ClubMusic 管理的 MPV），再查/创建 PipePlayer。
+    房间管道模式（\\.\pipe\mpv-ipc-*）→ 按 room_id 查 ROOM_PLAYERS，不自动创建；
+    其他管道 → 查/创建 PipePlayer。
     """
     if not pipe_name or pipe_name == PLAYER.pipe_name:
         return PLAYER
 
-    # 优先查 ROOM_PLAYERS（ClubMusic 管理的 MPV）
-    with _room_players_lock:
-        if pipe_name in ROOM_PLAYERS:
-            return ROOM_PLAYERS[pipe_name]
+    # 房间管道模式：提取 room_id 查 ROOM_PLAYERS
+    if pipe_name.startswith(_ROOM_IPC_PREFIX):
+        room_id = pipe_name[len(_ROOM_IPC_PREFIX):]
+        with _room_players_lock:
+            if room_id in ROOM_PLAYERS:
+                return ROOM_PLAYERS[room_id]
+        # 房间管道但 RoomPlayer 不存在 → 不自动创建幻影 PipePlayer
+        logger.warning(f"[PipePool] 房间管道 {pipe_name} 无对应 RoomPlayer，回退默认播放器")
+        return PLAYER
 
-    # 兼容旧的 PipePlayer 池
+    # 非房间管道：兼容旧的 PipePlayer 池
     with _pipe_players_lock:
         if pipe_name in PIPE_PLAYERS:
             return PIPE_PLAYERS[pipe_name]
@@ -272,16 +363,24 @@ def get_current_playlist_id(player: MusicPlayer) -> str:
 
 
 def cleanup_pipe_player(pipe_name: str):
-    """清理指定管道的 Player（房间销毁时调用）。"""
-    # 先查 ROOM_PLAYERS
+    """清理指定管道的 Player（房间销毁时调用）。
+
+    支持 room_id 或完整管道路径作为参数。
+    """
+    # 尝试从管道路径提取 room_id
+    lookup_key = pipe_name
+    if pipe_name.startswith(_ROOM_IPC_PREFIX):
+        lookup_key = pipe_name[len(_ROOM_IPC_PREFIX):]
+
+    # 先查 ROOM_PLAYERS（以 room_id 为 key）
     with _room_players_lock:
-        room_player = ROOM_PLAYERS.pop(pipe_name, None)
+        room_player = ROOM_PLAYERS.pop(lookup_key, None)
     if room_player:
         room_player.destroy_room_player()
-        logger.info(f"[RoomPool] 已清理 RoomPlayer: {pipe_name}")
+        logger.info(f"[RoomPool] 已清理 RoomPlayer: {lookup_key}")
         return
 
-    # 再查 PIPE_PLAYERS
+    # 再查 PIPE_PLAYERS（以完整管道路径为 key）
     with _pipe_players_lock:
         player = PIPE_PLAYERS.pop(pipe_name, None)
     if player:

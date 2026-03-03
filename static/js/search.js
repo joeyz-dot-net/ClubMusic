@@ -476,14 +476,15 @@ export class SearchManager {
             if (playlistManager) {
                 playlistName = playlistManager.getCurrentName() || i18n.t('playlist.current');
                 playlistIcon = playlistManager.getCurrentPlaylistIcon() || '📥';
-                selectedPlaylistId = playlistManager.getSelectedPlaylistId() || 'default';
+                selectedPlaylistId = playlistManager.getSelectedPlaylistId() || playlistManager.getActiveDefaultId?.() || 'default';
             }
         } catch (err) {
             console.warn('[搜索菜单] 获取歌单信息失败:', err);
         }
 
         // 根据当前选择的歌单决定"添加到歌单"按钮的标签
-        const addToPlaylistLabel = selectedPlaylistId !== 'default'
+        const activeDefaultId = window.app?.modules?.playlistManager?.getActiveDefaultId?.() || 'default';
+        const addToPlaylistLabel = selectedPlaylistId !== activeDefaultId
             ? i18n.t('search.actionMenu.addToPlaylistNamed', { name: playlistName })
             : i18n.t('search.actionMenu.addToPlaylist');
 
@@ -560,8 +561,9 @@ export class SearchManager {
                         await this.handleAddToQueue(songData, isDirectory, button);
                     } else if (action === 'add-to-playlist') {
                         const playlistManager = window.app?.modules?.playlistManager;
-                        const selectedId = playlistManager?.getSelectedPlaylistId() || 'default';
-                        if (selectedId !== 'default') {
+                        const selectedId = playlistManager?.getSelectedPlaylistId() || playlistManager?.getActiveDefaultId?.() || 'default';
+                        const activeDefault = playlistManager?.getActiveDefaultId?.() || 'default';
+                        if (selectedId !== activeDefault) {
                             // 当前选择的不是默认歌单，直接添加到当前歌单
                             try {
                                 const result = await api.addToPlaylist({
@@ -785,7 +787,8 @@ export class SearchManager {
                     
                     // 获取歌单名称
                     let playlistName = i18n.t('nav.queue');
-                    if (playlistId !== 'default' && window.app && window.app.modules && window.app.modules.playlistManager) {
+                    const _activeDefault = window.app?.modules?.playlistManager?.getActiveDefaultId?.() || 'default';
+                    if (playlistId !== _activeDefault && window.app && window.app.modules && window.app.modules.playlistManager) {
                         const playlist = window.app.modules.playlistManager.playlists.find(p => p.id === playlistId);
                         if (playlist) {
                             playlistName = playlist.name;
@@ -855,7 +858,8 @@ export class SearchManager {
                 if (response.ok) {
                     // 获取歌单名称以显示在toast中
                     let playlistName = i18n.t('nav.queue');
-                    if (playlistId === 'default') {
+                    const _activeDefault2 = window.app?.modules?.playlistManager?.getActiveDefaultId?.() || 'default';
+                    if (playlistId === _activeDefault2) {
                         playlistName = i18n.t('nav.queue');
                     } else if (window.app && window.app.modules && window.app.modules.playlistManager) {
                         const playlist = window.app.modules.playlistManager.playlists.find(p => p.id === playlistId);
@@ -991,7 +995,8 @@ export class SearchManager {
 
                 // 获取歌单名称
                 let playlistName = i18n.t('nav.queue');
-                if (playlistId !== 'default' && window.app && window.app.modules && window.app.modules.playlistManager) {
+                const _activeDefault3 = window.app?.modules?.playlistManager?.getActiveDefaultId?.() || 'default';
+                if (playlistId !== _activeDefault3 && window.app && window.app.modules && window.app.modules.playlistManager) {
                     const playlist = window.app.modules.playlistManager.playlists.find(p => p.id === playlistId);
                     if (playlist) {
                         playlistName = playlist.name;

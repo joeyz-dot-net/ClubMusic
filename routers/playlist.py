@@ -91,6 +91,9 @@ async def list_playlists(
     playlists: Playlists = Depends(get_playlists),
 ):
     """获取所有歌单。当 pipe 指向 RoomPlayer 时，同时返回该房间的播放列表。"""
+    # 先判断是否为房间上下文，用于过滤全局默认歌单
+    room_pid = getattr(player, '_room_playlist_id', None)
+
     result_playlists = [
         {
             "id": pid,
@@ -101,10 +104,10 @@ async def list_playlists(
         }
         for pid, p in playlists._playlists.items()
         if not playlists.is_room_playlist(pid)
+        and not (room_pid and pid == DEFAULT_PLAYLIST_ID)
     ]
 
     # 当前请求来自房间客户端时，附带该房间的播放列表
-    room_pid = getattr(player, '_room_playlist_id', None)
     if room_pid:
         room_pl = playlists.get_playlist(room_pid)
         if room_pl:
@@ -468,7 +471,7 @@ async def remove_song_from_playlist(
                 elif index < player.current_index:
                     player.current_index -= 1
 
-        await _broadcast_state()
+        await _broadcast_state(player)
         return JSONResponse({"status": "OK", "message": "删除成功"})
 
     except Exception as e:
@@ -649,7 +652,7 @@ async def playlist_remove(
             elif index < player.current_index:
                 player.current_index -= 1
 
-        await _broadcast_state()
+        await _broadcast_state(player)
         return JSONResponse({"status": "OK", "message": "删除成功"})
 
     except Exception as e:
@@ -684,7 +687,7 @@ async def playlist_clear(
                 playlist.updated_at = time.time()
                 playlists.save()
 
-        await _broadcast_state()
+        await _broadcast_state(player)
         return JSONResponse({"status": "OK", "message": "清空成功"})
     except Exception as e:
         return error_response("[/playlist_clear] 清空队列异常", exc=e, _logger=logger)

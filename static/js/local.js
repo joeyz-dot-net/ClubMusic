@@ -144,7 +144,7 @@ export const localFiles = {
     treeEl: null,
     contentEl: null,
     searchInput: null,
-    getPlaylistId: () => 'default',
+    getPlaylistId: () => window.app?.modules?.playlistManager?.getActiveDefaultId?.() || 'default',
     fullTree: null,
     searchQuery: '',
     onSongAdded: null,
@@ -345,7 +345,8 @@ export const localFiles = {
             if (response.ok) {
                 // 获取歌单名称以显示在toast中
                 let playlistName = i18n.t('nav.queue');
-                if (playlistId === 'default') {
+                const _localActiveDefault = window.app?.modules?.playlistManager?.getActiveDefaultId?.() || 'default';
+                if (playlistId === _localActiveDefault) {
                     playlistName = i18n.t('nav.queue');
                 } else if (window.app && window.app.modules && window.app.modules.playlistManager) {
                     const playlist = window.app.modules.playlistManager.playlists.find(p => p.id === playlistId);

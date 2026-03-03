@@ -86,7 +86,7 @@ export class PlaylistsManagement {
             return;
         }
 
-        const playlists = (playlistManager.playlists || []).filter(p => p.id !== 'default');
+        const playlists = (playlistManager.playlists || []).filter(p => p.id !== playlistManager.getActiveDefaultId());
         console.log('📋 渲染歌单列表，共', playlists.length, '个歌单');
 
         this.modalBody.innerHTML = '';
@@ -126,15 +126,15 @@ export class PlaylistsManagement {
 
             // 歌单图标
             const icons = ['🎵', '🎧', '🎸', '🎹', '🎤', '🎼', '🎺', '🥁'];
-            const icon = isRoom ? '🎤' : (playlist.id === 'default' ? '⭐' : icons[index % icons.length]);
+            const icon = isRoom ? '🎤' : (playlist.id === playlistManager.getActiveDefaultId() ? '⭐' : icons[index % icons.length]);
 
             // badge
             const badgeHTML = isRoom
                 ? `<span class="default-badge room-badge">${i18n.t('playlists.roomBadge')}</span>`
-                : (playlist.id === 'default' ? `<span class="default-badge">${i18n.t('playlists.defaultBadge')}</span>` : '');
+                : (playlist.id === playlistManager.getActiveDefaultId() ? `<span class="default-badge">${i18n.t('playlists.defaultBadge')}</span>` : '');
 
             // 房间歌单不显示编辑和删除按钮
-            const showActions = playlist.id !== 'default' && !isRoom;
+            const showActions = playlist.id !== playlistManager.getActiveDefaultId() && !isRoom;
 
             item.innerHTML = `
                 <div class="playlist-icon" style="background: ${gradient}">
@@ -209,7 +209,7 @@ export class PlaylistsManagement {
             });
 
             // 编辑歌单名称
-            if (playlist.id !== 'default' && !isRoom) {
+            if (playlist.id !== playlistManager.getActiveDefaultId() && !isRoom) {
                 const editBtn = item.querySelector('.playlist-action-btn.edit');
                 if (editBtn) {
                     editBtn.addEventListener('click', async (e) => {
@@ -236,7 +236,7 @@ export class PlaylistsManagement {
             }
 
             // 删除歌单
-            if (playlist.id !== 'default' && !isRoom) {
+            if (playlist.id !== playlistManager.getActiveDefaultId() && !isRoom) {
                 const deleteBtn = item.querySelector('.playlist-action-btn.delete');
                 if (deleteBtn) {
                     deleteBtn.addEventListener('click', async (e) => {

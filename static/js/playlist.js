@@ -85,10 +85,10 @@ export class PlaylistManager {
     async delete(id) {
         const result = await api.deletePlaylist(id);
         await this.loadAll(); // 重新加载
-        // ✅ 如果删除的是当前选择的歌单，重置为 'default'
+        // ✅ 如果删除的是当前选择的歌单，重置为播放队列
         if (this.selectedPlaylistId === id) {
-            console.log('[歌单管理] 被删除的歌单是当前选择，重置为 default');
-            this.setSelectedPlaylist('default');
+            console.log('[歌单管理] 被删除的歌单是当前选择，重置为播放队列');
+            this.setSelectedPlaylist(this.getActiveDefaultId());
         }
         return result;
     }
@@ -147,7 +147,7 @@ export class PlaylistManager {
         // 根据当前选择的歌单使用不同的API
         let result;
         try {
-            if (this.selectedPlaylistId === 'default') {
+            if (this.selectedPlaylistId === this.getActiveDefaultId()) {
                 // 默认歌单使用旧的API (针对当前播放的歌单)
                 result = await api.removeFromPlaylist(index);
             } else {
@@ -204,12 +204,21 @@ export class PlaylistManager {
         return this.currentPlaylistName;
     }
 
+    // 获取当前上下文的"播放队列"歌单ID
+    // 房间上下文返回房间歌单ID，否则返回 'default'
+    getActiveDefaultId() {
+        if (this.roomPlaylist) {
+            return this.roomPlaylist.id;
+        }
+        return 'default';
+    }
+
     // 获取当前歌单图标
     getCurrentPlaylistIcon() {
         const selectedId = this.selectedPlaylistId;
 
-        // 默认歌单使用星星图标
-        if (selectedId === 'default') {
+        // 默认歌单（或房间歌单作为播放队列）使用星星图标
+        if (selectedId === this.getActiveDefaultId()) {
             return '⭐';
         }
 
@@ -288,7 +297,7 @@ async function addAllSongsToDefault(playlist, selectedPlaylistId) {
         return;
     }
     
-    if (selectedPlaylistId === 'default') {
+    if (selectedPlaylistId === playlistManager.getActiveDefaultId()) {
         Toast.error('❌ 当前已是默认歌单');
         return;
     }
@@ -297,7 +306,7 @@ async function addAllSongsToDefault(playlist, selectedPlaylistId) {
         loading.show(i18n.t('playlist.addingAll', { count: playlist.length }));
         
         // 获取默认歌单以检查重复
-        const defaultPlaylist = playlistManager.playlists.find(p => p.id === 'default');
+        const defaultPlaylist = playlistManager.playlists.find(p => p.id === playlistManager.getActiveDefaultId());
         if (!defaultPlaylist) {
             Toast.error('❌ 默认歌单不存在');
             loading.hide();
@@ -345,7 +354,7 @@ async function addAllSongsToDefault(playlist, selectedPlaylistId) {
                 
                 // 调用 API 添加到默认歌单
                 const result = await api.addToPlaylist({
-                    playlist_id: 'default',
+                    playlist_id: playlistManager.getActiveDefaultId(),
                     song: song,
                     insert_index: insertIndex + addedCount  // 按顺序插入
                 });
@@ -416,20 +425,20 @@ export async function playSongFromSelectedPlaylist(song, onPlay) {
             selectedPlaylistId: selectedPlaylistId
         });
         
-        // ✅ 情况 A: 当前选择 === 默认歌单 → 直接播放
-        if (selectedPlaylistId === 'default') {
-            console.log('[播放列表] ✓ 当前选择是默认歌单，直接播放');
+        // ✅ 情况 A: 当前选择 === 播放队列 → 直接播放
+        if (selectedPlaylistId === playlistManager.getActiveDefaultId()) {
+            console.log('[播放列表] ✓ 当前选择是播放队列，直接播放');
             if (onPlay) {
                 onPlay(song);
             }
         } else {
-            // ✅ 情况 B: 当前选择 ≠ 默认歌单 → 仅添加到默认歌单下一曲位置，不播放
-            console.log('[播放列表] ⚠️ 当前选择不是默认歌单，添加到队列但不播放');
-            
-            // 获取默认歌单
-            const defaultPlaylist = playlistManager.playlists.find(p => p.id === 'default');
+            // ✅ 情况 B: 当前选择 ≠ 播放队列 → 仅添加到播放队列下一曲位置，不播放
+            console.log('[播放列表] ⚠️ 当前选择不是播放队列，添加到队列但不播放');
+
+            // 获取播放队列歌单
+            const defaultPlaylist = playlistManager.playlists.find(p => p.id === playlistManager.getActiveDefaultId());
             if (!defaultPlaylist) {
-                Toast.error('❌ 默认歌单不存在');
+                Toast.error('❌ 播放队列不存在');
                 return;
             }
             
@@ -456,7 +465,7 @@ export async function playSongFromSelectedPlaylist(song, onPlay) {
                 
                 // 调用 API 添加到默认歌单
                 const result = await api.addToPlaylist({
-                    playlist_id: 'default',
+                    playlist_id: playlistManager.getActiveDefaultId(),
                     song: song,
                     insert_index: insertIndex
                 });
@@ -521,7 +530,7 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
     if (!toolbarContainer) return;
     toolbarContainer.innerHTML = '';
 
-    if (selectedPlaylistId === 'default') {
+    if (selectedPlaylistId === playlistManager.getActiveDefaultId()) {
         const appTheme = getCurrentAppTheme();
         const colors = getThemeColors(appTheme);
 
@@ -640,7 +649,7 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
         toolbarContainer.appendChild(headerContainer);
     }
 
-    if (selectedPlaylistId !== 'default') {
+    if (selectedPlaylistId !== playlistManager.getActiveDefaultId()) {
         const appTheme = getCurrentAppTheme();
         const colors = getThemeColors(appTheme);
 
@@ -740,7 +749,7 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
         });
         returnBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            playlistManager.setSelectedPlaylist('default');
+            playlistManager.setSelectedPlaylist(playlistManager.getActiveDefaultId());
             await playlistManager.loadCurrent();
             renderPlaylistUI({ container, onPlay, currentMeta });
             console.log('[歌单切换] 已返回默认歌单（队列）');
@@ -813,7 +822,7 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
                 try {
                     await api.delete(`/playlists/${selectedPlaylistId}`);
                     Toast.success(i18n.t('playlists.deleteSuccess'));
-                    playlistManager.setSelectedPlaylist('default');
+                    playlistManager.setSelectedPlaylist(playlistManager.getActiveDefaultId());
                     await playlistManager.refreshAll();
                     renderPlaylistUI({ container, onPlay, currentMeta });
                 } catch (err) {
@@ -857,7 +866,7 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
     let playlist = [];
     let playlistName = i18n.t('playlist.current');
     
-    if (selectedPlaylistId === 'default') {
+    if (selectedPlaylistId === playlistManager.getActiveDefaultId()) {
         // 显示默认歌单（当前播放队列）
         playlist = playlistManager.getCurrent();
         playlistName = playlistManager.getCurrentName();
@@ -942,7 +951,7 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
         });
         
         // 添加10首随即歌曲
-        if (selectedPlaylistId === 'default') {
+        if (selectedPlaylistId === playlistManager.getActiveDefaultId()) {
             const randomBtn = document.createElement('button');
             randomBtn.style.cssText = `
                 background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
@@ -972,7 +981,7 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
                     let allSongs = [];
                     // 从所有歌单收集（排除default）
                     playlistManager.playlists.forEach(pl => {
-                        if (pl.id !== 'default' && Array.isArray(pl.songs)) {
+                        if (pl.id !== playlistManager.getActiveDefaultId() && Array.isArray(pl.songs)) {
                             allSongs = allSongs.concat(pl.songs);
                         }
                     });
@@ -1021,7 +1030,7 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
                     // 批量添加到默认歌单
                     for (let i = 0; i < randomSongs.length; i++) {
                         await api.addToPlaylist({
-                            playlist_id: 'default',
+                            playlist_id: playlistManager.getActiveDefaultId(),
                             song: randomSongs[i],
                             insert_index: i
                         });
@@ -1230,7 +1239,7 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
             }
             
             // ✅ 点击歌曲：根据当前选择的歌单决定行为
-            if (selectedPlaylistId === 'default') {
+            if (selectedPlaylistId === playlistManager.getActiveDefaultId()) {
                 // 默认歌单：移动到顶部并播放
                 await moveToTopAndPlay(song, index, onPlay, { container, onPlay, currentMeta });
             } else {
@@ -1846,7 +1855,7 @@ async function showSelectPlaylistModal(song, historyModal) {
                 
                 // 歌单图标（与歌单管理列表保持一致）
                 const icons = ['🎵', '🎧', '🎸', '🎹', '🎤', '🎼', '🎺', '🥁'];
-                const icon = playlist.id === 'default' ? '⭐' : icons[index % icons.length];
+                const icon = playlist.id === playlistManager.getActiveDefaultId() ? '⭐' : icons[index % icons.length];
                 
                 // 创建图标容器
                 const iconEl = document.createElement('div');
@@ -2139,7 +2148,7 @@ async function handleHistoryPlayNow(song) {
             return;
         }
 
-        const currentPlaylistId = playlistManager.getSelectedPlaylistId() || 'default';
+        const currentPlaylistId = playlistManager.getSelectedPlaylistId() || playlistManager.getActiveDefaultId();
 
         // 1. 将歌曲插入到队列顶部（index=0）
         const addResult = await api.addToPlaylist({
@@ -2183,7 +2192,7 @@ async function handleHistoryPlayNow(song) {
 // 添加到下一首：插入到当前播放歌曲之后
 async function handleHistoryAddToNext(song) {
     try {
-        const currentPlaylistId = playlistManager.getSelectedPlaylistId() || 'default';
+        const currentPlaylistId = playlistManager.getSelectedPlaylistId() || playlistManager.getActiveDefaultId();
 
         const result = await api.addToPlaylist({
             playlist_id: currentPlaylistId,

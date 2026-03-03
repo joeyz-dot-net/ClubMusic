@@ -138,7 +138,8 @@ export class RankingManager {
                 if (url && title) {
                     try {
                         // 添加到默认播放列表的下一曲位置
-                        const response = await api.addSongToPlaylistTop('default', {
+                        const _rankActiveDefault = window.app?.modules?.playlistManager?.getActiveDefaultId?.() || 'default';
+                        const response = await api.addSongToPlaylistTop(_rankActiveDefault, {
                             url: url,
                             title: title,
                             type: type,

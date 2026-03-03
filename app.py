@@ -196,6 +196,10 @@ def auto_fill_and_play_if_idle():
             logger.debug(f"[自动填充] 收集歌单数量: {len(pls)}")
             for pl in pls:
                 try:
+                    pid = getattr(pl, 'id', '')
+                    # 跳过房间临时歌单，避免房间歌曲泄漏到全局自动填充
+                    if pid and PLAYLISTS_MANAGER.is_room_playlist(pid):
+                        continue
                     if not getattr(pl, "songs", None):
                         continue
                     for s in pl.songs:

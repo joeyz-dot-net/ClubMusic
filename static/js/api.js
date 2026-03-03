@@ -26,8 +26,9 @@ export class MusicAPI {
         this.baseURL = baseURL;
         this.defaultTimeout = 15000;
 
-        // 读取 URL 中的 pipe 参数（用于多房间 PipePlayer 路由）
+        // 读取 URL 中的 room_id 或 pipe 参数（用于多房间 Player 路由）
         const urlParams = new URLSearchParams(window.location.search);
+        this.roomId = urlParams.get('room_id') || '';
         this.pipeParam = urlParams.get('pipe') || '';
 
         // 防抖包装（先到先得 Leading Debounce）
@@ -39,8 +40,14 @@ export class MusicAPI {
         this._debouncedPause = makeLeadingDebounce(this._rawPause.bind(this), 500);
     }
 
-    // 将 pipe 参数附加到 URL（多房间支持）
+    // 将 room_id 或 pipe 参数附加到 URL（多房间支持）
     _appendPipe(url) {
+        // 优先使用 room_id（URL 安全，无编码问题）
+        if (this.roomId) {
+            const sep = url.includes('?') ? '&' : '?';
+            return `${url}${sep}room_id=${encodeURIComponent(this.roomId)}`;
+        }
+        // 向后兼容 pipe 参数
         if (!this.pipeParam) return url;
         const sep = url.includes('?') ? '&' : '?';
         return `${url}${sep}pipe=${encodeURIComponent(this.pipeParam)}`;

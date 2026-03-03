@@ -25,6 +25,7 @@ from routers.state import (
     _player_lock,
     ws_manager,
     get_player_for_pipe,
+    get_player_for_room_id,
 )
 from models import MusicPlayer, Playlists, HitRank, PlayHistory
 
@@ -35,14 +36,26 @@ def get_player() -> MusicPlayer:
 
 
 def get_player_for_request(request: Request) -> MusicPlayer:
-    """根据请求中的 pipe 参数返回对应的 Player 实例。
+    """根据请求参数返回对应的 Player 实例。
 
-    pipe 查询参数存在 → 返回/创建 PipePlayer；
-    无 pipe 参数 → 返回默认 PLAYER 单例（向后兼容）。
+    优先使用 room_id 参数（URL 安全，无编码问题）；
+    向后兼容 pipe 参数；
+    无参数 → 返回默认 PLAYER 单例。
     """
+    # 优先：room_id 参数（新方式，由 ClubVoice iframe 传递）
+    room_id = request.query_params.get('room_id', None)
+    if room_id:
+        player = get_player_for_room_id(room_id)
+        if player:
+            return player
+        # RoomPlayer 不存在（可能尚未创建或已销毁）→ 回退默认播放器
+        return PLAYER
+
+    # 向后兼容：pipe 参数（旧方式）
     pipe = request.query_params.get('pipe', None)
     if pipe:
         return get_player_for_pipe(pipe)
+
     return PLAYER
 
 
