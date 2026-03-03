@@ -279,11 +279,11 @@ async function moveToTopAndPlay(song, currentIndex, onPlay, rerenderArgs) {
             onPlay(song);
         }
         
-        // 重新渲染列表
+        // 重新渲染列表（使用 song 作为 currentMeta 以立即高亮已点击的歌曲）
         if (rerenderArgs) {
-            renderPlaylistUI(rerenderArgs);
+            renderPlaylistUI({ ...rerenderArgs, currentMeta: song });
         }
-        
+
     } catch (error) {
         console.error('[播放列表] 操作失败:', error);
         Toast.error('操作失败: ' + error.message);

@@ -288,6 +288,7 @@ class MusicPlayerApp {
 
         // 手动切歌时设置标志，避免重复的 loadCurrent() 网络请求
         player.on('prev', () => { this._skipNextLoadCurrent = true; });
+        player.on('play', () => { this._skipNextLoadCurrent = true; });
 
         // 监听暂停事件
         player.on('pause', () => {

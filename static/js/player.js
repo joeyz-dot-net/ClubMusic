@@ -58,12 +58,20 @@ export class Player {
     async play(url, title, type = 'local', duration = 0) {
         try {
             const result = await api.play(url, title, type, duration);
-            
+
             // 记录当前播放的URL
             this.currentPlayingUrl = url;
-            
+
+            // 立即更新状态缓存（与 next/prev 保持一致），无需等待下次轮询或 WebSocket
+            if (result?.status === 'OK' && result?.current && this.status) {
+                this.updateStatus({
+                    ...this.status,
+                    current_meta: result.current,
+                });
+            }
+
             this.emit('play', { url, title, type });
-            
+
             return result;
         } catch (error) {
             console.error('[Player.play] 播放异常:', error);
