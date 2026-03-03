@@ -1086,10 +1086,12 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
         item.dataset.index = index;
 
         // 为本地歌曲生成封面URL
-        let coverUrl = song.thumbnail_url || '';
-        if (!coverUrl && song.type !== 'youtube' && song.url) {
-            // 本地歌曲：使用 /cover/ 接口获取封面
-            coverUrl = `/cover/${encodeURIComponent(song.url)}`;
+        let coverUrl = '';
+        if (song.type !== 'youtube' && song.url) {
+            // 本地歌曲：始终使用 /cover/ 接口（支持内嵌封面、目录封面、占位图回退）
+            coverUrl = `/cover/${song.url.split('/').map(encodeURIComponent).join('/')}`;
+        } else {
+            coverUrl = song.thumbnail_url || '';
         }
 
         const cover = document.createElement('div');

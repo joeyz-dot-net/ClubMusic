@@ -388,8 +388,6 @@ async def get_status(
 ):
     """获取播放器状态"""
     try:
-        from routers.media import _get_cover_from_directory, _extract_embedded_cover_bytes
-
         current_pid = get_current_playlist_id(player)
         playlist = playlists.get_playlist(current_pid)
 
@@ -405,25 +403,10 @@ async def get_status(
             logger.debug(f"获取 MPV 状态失败 (MPV 可能未运行): {e}")
 
         current_meta = dict(player.current_meta) if player.current_meta else {}
-        if current_meta.get("type") == "local" and not current_meta.get("thumbnail_url"):
+        if current_meta.get("type") == "local":
             url = current_meta.get("url", "")
             if url:
-                if os.path.isabs(url):
-                    abs_path = url
-                else:
-                    abs_path = os.path.join(player.music_dir, url)
-
-                has_cover = False
-                if os.path.isfile(abs_path):
-                    if _get_cover_from_directory(abs_path):
-                        has_cover = True
-                    else:
-                        cover_bytes = _extract_embedded_cover_bytes(abs_path)
-                        if cover_bytes:
-                            has_cover = True
-
-                if has_cover:
-                    current_meta["thumbnail_url"] = f"/cover/{quote(url, safe='')}"
+                current_meta["thumbnail_url"] = f"/cover/{quote(url, safe='/')}"
 
         return {
             "status": "OK",

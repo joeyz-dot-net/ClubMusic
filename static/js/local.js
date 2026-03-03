@@ -12,7 +12,7 @@ const pendingAdds = new Set();
 export const getDirCoverUrl = (dir) => {
     // 优先使用目录中的第一个文件
     if (dir.files && dir.files.length > 0) {
-        return `/cover/${encodeURIComponent(dir.files[0].rel)}`;
+        return `/cover/${dir.files[0].rel.split('/').map(encodeURIComponent).join('/')}`;
     }
     // 或者递归查找子目录中的第一个文件
     if (dir.dirs && dir.dirs.length > 0) {
@@ -107,7 +107,7 @@ const buildCurrentDirHTML = (node, path) => {
     if (files.length > 0) {
         html += '<div class="local-songs-list">';
         files.forEach((file, index) => {
-            const coverUrl = `/cover/${encodeURIComponent(file.rel)}`;
+            const coverUrl = `/cover/${file.rel.split('/').map(encodeURIComponent).join('/')}`;
             html += buildSongItemHTML(file, coverUrl, index + 1);
         });
         html += '</div>';

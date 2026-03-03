@@ -128,7 +128,8 @@ async def get_cover(file_path: str, player: MusicPlayer = Depends(get_player_for
         # 路径穿越保护：确保路径在 music_dir 内
         music_dir_abs = os.path.normpath(os.path.abspath(player.music_dir))
         abs_path_resolved = os.path.normpath(os.path.abspath(abs_path))
-        if not abs_path_resolved.startswith(music_dir_abs + os.sep) and abs_path_resolved != music_dir_abs:
+        music_dir_prefix = music_dir_abs if music_dir_abs.endswith(os.sep) else music_dir_abs + os.sep
+        if not abs_path_resolved.startswith(music_dir_prefix) and abs_path_resolved != music_dir_abs:
             raise HTTPException(status_code=403, detail="Forbidden: path outside music directory")
 
         # 目录：查找封面文件
