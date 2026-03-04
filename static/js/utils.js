@@ -213,6 +213,26 @@ export class EventEmitter {
 }
 
 // ==========================================
+// 缩略图工具函数
+// ==========================================
+
+/**
+ * 规范化 YouTube 缩略图 URL，将高概率 404 的质量替换为 hqdefault
+ * - maxresdefault.jpg → hqdefault.jpg（仅高清视频有）
+ * - sddefault.jpg     → hqdefault.jpg（仅旧版 4:3 视频有）
+ * @param {string} url
+ * @returns {string}
+ */
+export function normalizeThumbnailUrl(url) {
+    if (!url || typeof url !== 'string') return url;
+    if (!url.includes('img.youtube.com/vi/')) return url;
+    if (url.endsWith('/maxresdefault.jpg') || url.endsWith('/sddefault.jpg')) {
+        return url.substring(0, url.lastIndexOf('/')) + '/hqdefault.jpg';
+    }
+    return url;
+}
+
+// ==========================================
 // 缩略图管理器 - 统一处理 YouTube 缩略图降级
 // ==========================================
 

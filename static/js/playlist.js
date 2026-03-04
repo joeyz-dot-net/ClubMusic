@@ -1634,7 +1634,7 @@ export async function showPlaybackHistory() {
                 const getThumbnailFallbacks = (url) => {
                     if (url && url.includes('img.youtube.com/vi/')) {
                         const baseUrl = url.substring(0, url.lastIndexOf('/'));
-                        const normalizedFirst = url.endsWith('/sddefault.jpg')
+                        const normalizedFirst = (url.endsWith('/sddefault.jpg') || url.endsWith('/maxresdefault.jpg'))
                             ? baseUrl + '/hqdefault.jpg'
                             : url;
                         return [normalizedFirst, baseUrl + '/mqdefault.jpg', baseUrl + '/default.jpg'];

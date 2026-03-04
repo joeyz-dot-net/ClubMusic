@@ -1,7 +1,7 @@
 // 通用模板构建函数
 // 用于在多处复用统一的歌曲列表项结构
 
-import { thumbnailManager, escapeHTML } from './utils.js';
+import { thumbnailManager, escapeHTML, normalizeThumbnailUrl } from './utils.js';
 import { i18n } from './i18n.js';
 
 export function buildTrackItemHTML({
@@ -13,7 +13,7 @@ export function buildTrackItemHTML({
     isCover = false  // ✅ 新增：是否为目录
 } = {}) {
     const title = song.title || i18n.t('track.unknown');
-    const cover = song.thumbnail_url || '';
+    const cover = normalizeThumbnailUrl(song.thumbnail_url || '');
 
     // ✅ 目录类型处理
     const isDirectory = song.is_directory || song.type === 'directory' || isCover;
