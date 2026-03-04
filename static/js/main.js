@@ -1584,7 +1584,7 @@ class MusicPlayerApp {
                     tab.style.display = 'none';
                 }
             });
-            
+
             // 隐藏所有模态框
             Object.values(modals).forEach(modal => {
                 if (modal) {
@@ -1597,6 +1597,20 @@ class MusicPlayerApp {
             if (playlistsModal) {
                 playlistsModal.classList.remove('modal-visible');
                 playlistsModal.style.display = 'none';
+            }
+
+            // 隐藏历史模态框
+            const historyModal = document.getElementById('historyModal');
+            if (historyModal) {
+                historyModal.classList.remove('modal-visible');
+                historyModal.style.display = 'none';
+            }
+
+            // 关闭设置面板（直接隐藏DOM，不触发closePanel的恢复逻辑）
+            const settingsPanel = document.getElementById('settingsPanel');
+            if (settingsPanel && settingsPanel.style.display !== 'none') {
+                settingsPanel.style.display = 'none';
+                document.body.style.overflow = '';
             }
 
             // 移除所有导航按钮的active状态
@@ -1763,6 +1777,8 @@ class MusicPlayerApp {
         if (historyNavBtn) {
             historyNavBtn.addEventListener('click', async () => {
                 console.log('🕐 点击播放历史按钮');
+                hideAllContent();
+                historyNavBtn.classList.add('active');
                 await showPlaybackHistory();
             });
         }
