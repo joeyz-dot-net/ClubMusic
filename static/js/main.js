@@ -711,7 +711,7 @@ class MusicPlayerApp {
                         }, 300);
                     }
                 }
-            });
+            }, { passive: true });
 
             // iPad 旋转时重置展开模式，防止布局错乱 + 更新 NPP 面板
             if (isIPad()) {
@@ -907,21 +907,14 @@ class MusicPlayerApp {
             // 添加拖拽功能
             let isDragging = false;
             
-            const startDrag = (e) => {
-                if (playLock.isPreparing()) return;
-                isDragging = true;
-                this.elements.fullPlayerProgressBar.classList.add('dragging');
-                handleDrag(e);
-            };
-            
             const handleDrag = (e) => {
                 if (!isDragging) return;
-                
+
                 e.preventDefault();
                 const rect = this.elements.fullPlayerProgressBar.getBoundingClientRect();
                 const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
                 const percent = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
-                
+
                 // 实时更新进度条显示
                 if (this.elements.fullPlayerProgressFill) {
                     this.elements.fullPlayerProgressFill.style.width = percent + '%';
@@ -929,38 +922,46 @@ class MusicPlayerApp {
                 if (this.elements.fullPlayerProgressThumb) {
                     this.elements.fullPlayerProgressThumb.style.left = percent + '%';
                 }
-                
+
                 // 更新时间显示
                 const status = player.getStatus();
                 if (status?.mpv?.duration && this.elements.fullPlayerCurrentTime) {
                     const currentTime = (percent / 100) * status.mpv.duration;
                     this.elements.fullPlayerCurrentTime.textContent = formatTime(currentTime);
                 }
-                
+
                 // 实时seek到拖拽位置（拖拽中实时播放）
                 player.seek(percent).catch(err => {
                     console.warn('实时seek失败:', err);
                 });
             };
-            
+
             const endDrag = (e) => {
                 if (!isDragging) return;
                 isDragging = false;
                 this.elements.fullPlayerProgressBar.classList.remove('dragging');
-                
-                // 拖拽结束，位置已经在handleDrag中更新了，这里只需清理状态
-                // 不需要再次seek
+                // 拖拽结束，移除 document 级别监听器
+                document.removeEventListener('mousemove', handleDrag);
+                document.removeEventListener('mouseup', endDrag);
+                document.removeEventListener('touchmove', handleDrag);
+                document.removeEventListener('touchend', endDrag);
             };
-            
-            // 鼠标事件
+
+            const startDrag = (e) => {
+                if (playLock.isPreparing()) return;
+                isDragging = true;
+                this.elements.fullPlayerProgressBar.classList.add('dragging');
+                // 仅在拖拽期间注册 document 级别监听器，避免全局 scroll-blocking
+                document.addEventListener('mousemove', handleDrag);
+                document.addEventListener('mouseup', endDrag);
+                document.addEventListener('touchmove', handleDrag, { passive: false });
+                document.addEventListener('touchend', endDrag, { passive: true });
+                handleDrag(e);
+            };
+
+            // 鼠标/触摸事件 — 仅在元素上监听 start，document 级别监听器在拖拽时动态注册
             this.elements.fullPlayerProgressBar.addEventListener('mousedown', startDrag);
-            document.addEventListener('mousemove', handleDrag);
-            document.addEventListener('mouseup', endDrag);
-            
-            // 触摸事件（移动端）
             this.elements.fullPlayerProgressBar.addEventListener('touchstart', startDrag, { passive: false });
-            document.addEventListener('touchmove', handleDrag, { passive: false });
-            document.addEventListener('touchend', endDrag, { passive: true });
         }
 
         // 完整播放器的音量控制
