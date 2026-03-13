@@ -92,6 +92,21 @@ def _init_default_settings_ini():
             config.set('backup', key, val)
             changed = True
 
+    # 补充 [auto_fill] 节或其中缺失的键
+    if not config.has_section('auto_fill'):
+        config.add_section('auto_fill')
+        changed = True
+    auto_fill_defaults = {
+        'enabled':          'true',
+        'source_playlists': 'true',
+        'source_history':   'true',
+        'source_local':     'true',
+    }
+    for key, val in auto_fill_defaults.items():
+        if not config.has_option('auto_fill', key):
+            config.set('auto_fill', key, val)
+            changed = True
+
     if changed:
         try:
             with open(config_file, 'w', encoding='utf-8') as f:
@@ -119,6 +134,22 @@ def auto_fill_and_play_if_idle():
     import time
     import random
     import re
+    import configparser
+
+    # 读取 [auto_fill] 配置
+    _config = configparser.ConfigParser()
+    _config.read("settings.ini", encoding="utf-8")
+
+    auto_fill_enabled = _config.getboolean('auto_fill', 'enabled', fallback=True)
+    source_playlists = _config.getboolean('auto_fill', 'source_playlists', fallback=True)
+    source_history = _config.getboolean('auto_fill', 'source_history', fallback=True)
+    source_local = _config.getboolean('auto_fill', 'source_local', fallback=True)
+
+    if not auto_fill_enabled:
+        logger.info("[自动填充] 自动填充已禁用（settings.ini auto_fill.enabled=false）")
+        return
+
+    logger.info(f"[自动填充] 来源配置: 歌单={source_playlists}, 历史={source_history}, 本地={source_local}")
 
     def build_youtube_url_from_id(video_id: str):
         if not video_id:
@@ -188,87 +219,93 @@ def auto_fill_and_play_if_idle():
             return None
 
     def get_all_available_songs():
-        """收集所有歌单（包含非default与default）和本地文件树，确保包含网络歌曲"""
+        """根据 settings.ini [auto_fill] 配置收集歌曲来源"""
         all_songs = []
 
-        try:
-            pls = PLAYLISTS_MANAGER.get_all()
-            logger.debug(f"[自动填充] 收集歌单数量: {len(pls)}")
-            for pl in pls:
-                try:
-                    pid = getattr(pl, 'id', '')
-                    # 跳过房间临时歌单，避免房间歌曲泄漏到全局自动填充
-                    if pid and PLAYLISTS_MANAGER.is_room_playlist(pid):
-                        continue
-                    if not getattr(pl, "songs", None):
-                        continue
-                    for s in pl.songs:
-                        norm = normalize_song_item(s)
-                        if norm and norm.get("url"):
-                            all_songs.append(norm)
-                except Exception as e:
-                    logger.debug(f"[自动填充] 处理歌单 {getattr(pl,'id', '??')} 的歌曲失败: {e}")
-        except Exception as e:
-            logger.warning(f"[自动填充] 收集歌单歌曲失败: {e}")
-
-        # 从播放历史中补充网络歌曲（YouTube / stream / http）
-        try:
-            history_items = []
+        # 来源1: 用户歌单（排除 default 和 room_ 歌单）
+        if source_playlists:
             try:
-                history_items = PLAYBACK_HISTORY.get_all() if hasattr(PLAYBACK_HISTORY, 'get_all') else []
-            except Exception as he:
-                logger.debug(f"[自动填充] 读取播放历史失败: {he}")
+                pls = PLAYLISTS_MANAGER.get_all()
+                logger.debug(f"[自动填充] 收集歌单数量: {len(pls)}")
+                for pl in pls:
+                    try:
+                        pid = getattr(pl, 'id', '')
+                        # 跳过 default 歌单和房间临时歌单
+                        if pid == DEFAULT_PLAYLIST_ID:
+                            continue
+                        if pid and PLAYLISTS_MANAGER.is_room_playlist(pid):
+                            continue
+                        if not getattr(pl, "songs", None):
+                            continue
+                        for s in pl.songs:
+                            norm = normalize_song_item(s)
+                            if norm and norm.get("url"):
+                                all_songs.append(norm)
+                    except Exception as e:
+                        logger.debug(f"[自动填充] 处理歌单 {getattr(pl,'id', '??')} 的歌曲失败: {e}")
+            except Exception as e:
+                logger.warning(f"[自动填充] 收集歌单歌曲失败: {e}")
 
-            for h in history_items:
+        # 来源2: 播放历史中的网络歌曲（YouTube / stream / http）
+        if source_history:
+            try:
+                history_items = []
                 try:
-                    if not h:
-                        continue
-                    url = h.get('url') if isinstance(h, dict) else None
-                    typ = (h.get('type') if isinstance(h, dict) else None) or ''
-                    if not url:
-                        continue
-                    url = str(url).strip()
-                    if typ in ('youtube', 'stream') or url.startswith('http'):
-                        song_entry = {
-                            'url': url,
-                            'title': h.get('title') if isinstance(h, dict) else os.path.basename(url),
-                            'type': typ or ('youtube' if 'youtube' in url.lower() or 'youtu.be' in url.lower() else 'stream'),
-                            'duration': h.get('duration', 0) if isinstance(h, dict) else 0,
-                            'thumbnail_url': h.get('thumbnail_url') if isinstance(h, dict) else None
-                        }
-                        all_songs.append(song_entry)
-                except Exception as e:
-                    logger.debug(f"[自动填充] 处理播放历史项失败: {e}")
-        except Exception:
-            pass
+                    history_items = PLAYBACK_HISTORY.get_all() if hasattr(PLAYBACK_HISTORY, 'get_all') else []
+                except Exception as he:
+                    logger.debug(f"[自动填充] 读取播放历史失败: {he}")
 
-        # 本地文件树补充（不覆盖已有同url条目）
-        def collect_local(node):
-            items = []
-            if not node:
+                for h in history_items:
+                    try:
+                        if not h:
+                            continue
+                        url = h.get('url') if isinstance(h, dict) else None
+                        typ = (h.get('type') if isinstance(h, dict) else None) or ''
+                        if not url:
+                            continue
+                        url = str(url).strip()
+                        if typ in ('youtube', 'stream') or url.startswith('http'):
+                            song_entry = {
+                                'url': url,
+                                'title': h.get('title') if isinstance(h, dict) else os.path.basename(url),
+                                'type': typ or ('youtube' if 'youtube' in url.lower() or 'youtu.be' in url.lower() else 'stream'),
+                                'duration': h.get('duration', 0) if isinstance(h, dict) else 0,
+                                'thumbnail_url': h.get('thumbnail_url') if isinstance(h, dict) else None
+                            }
+                            all_songs.append(song_entry)
+                    except Exception as e:
+                        logger.debug(f"[自动填充] 处理播放历史项失败: {e}")
+            except Exception:
+                pass
+
+        # 来源3: 本地文件树
+        if source_local:
+            def collect_local(node):
+                items = []
+                if not node:
+                    return items
+                files = node.get("files") or []
+                for f in files:
+                    rel = f.get("rel") or f.get("path") or None
+                    name = f.get("name") or None
+                    if rel:
+                        items.append({
+                            "url": rel,
+                            "title": os.path.splitext(name or rel)[0],
+                            "type": "local",
+                            "duration": 0,
+                            "thumbnail_url": None
+                        })
+                for d in (node.get("dirs") or []):
+                    items.extend(collect_local(d))
                 return items
-            files = node.get("files") or []
-            for f in files:
-                rel = f.get("rel") or f.get("path") or None
-                name = f.get("name") or None
-                if rel:
-                    items.append({
-                        "url": rel,
-                        "title": os.path.splitext(name or rel)[0],
-                        "type": "local",
-                        "duration": 0,
-                        "thumbnail_url": None
-                    })
-            for d in (node.get("dirs") or []):
-                items.extend(collect_local(d))
-            return items
 
-        try:
-            tree = getattr(PLAYER, "local_file_tree", None)
-            if tree:
-                all_songs.extend(collect_local(tree))
-        except Exception as e:
-            logger.debug(f"[自动填充] 收集本地文件失败: {e}")
+            try:
+                tree = getattr(PLAYER, "local_file_tree", None)
+                if tree:
+                    all_songs.extend(collect_local(tree))
+            except Exception as e:
+                logger.debug(f"[自动填充] 收集本地文件失败: {e}")
 
         # 去重并保持首个出现顺序；确保网络歌曲保留
         seen = set()
