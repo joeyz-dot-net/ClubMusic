@@ -438,7 +438,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="ClubMusic",
     description="ClubMusic - 网页音乐播放器",
-    version="2.0.0",
+    version=settings_router.APP_VERSION,
     lifespan=lifespan
 )
 

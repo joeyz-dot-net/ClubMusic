@@ -59,6 +59,9 @@ export const settingsManager = {
             // 加载 UI 配置（从服务器）
             await this.loadUIConfig();
 
+            // 加载版本号
+            await this.loadVersion();
+
             // 应用主题
             this.applyTheme();
             
@@ -142,6 +145,22 @@ export const settingsManager = {
             }
         } catch (error) {
             console.error('[设置] Schema加载失败:', error);
+        }
+    },
+
+    /**
+     * 从服务器加载版本号
+     */
+    async loadVersion() {
+        try {
+            const response = await fetch('/version');
+            const result = await response.json();
+            if (result.status === 'OK' && result.version) {
+                const el = document.getElementById('appVersionText');
+                if (el) el.textContent = `ClubMusic v${result.version}`;
+            }
+        } catch (error) {
+            console.error('[设置] 版本号加载失败:', error);
         }
     },
 

@@ -28,6 +28,14 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+APP_VERSION = "2.0.0"
+
+
+@router.get("/version")
+async def get_version():
+    """返回应用版本号"""
+    return {"status": "OK", "version": APP_VERSION}
+
 
 @router.get("/settings")
 async def get_user_settings():
