@@ -26,6 +26,8 @@ from routers.state import (
     ws_manager,
     get_player_for_pipe,
     get_player_for_room_id,
+    ROOM_HISTORIES,
+    touch_room_activity,
 )
 from models import MusicPlayer, Playlists, HitRank, PlayHistory
 
@@ -47,6 +49,7 @@ def get_player_for_request(request: Request) -> MusicPlayer:
     if room_id:
         player = get_player_for_room_id(room_id)
         if player:
+            touch_room_activity(room_id)
             return player
         # RoomPlayer 不存在（可能尚未创建或已销毁）→ 回退默认播放器
         return PLAYER
@@ -69,14 +72,19 @@ def get_rank() -> HitRank:
     return RANK_MANAGER
 
 
-def get_playback_history() -> PlayHistory:
-    """提供播放历史单例"""
+def get_playback_history(request: Request) -> PlayHistory:
+    """提供播放历史实例（房间独立）"""
+    player = get_player_for_request(request)
+    room_id = getattr(player, '_room_id', None)
+    if room_id and room_id in ROOM_HISTORIES:
+        return ROOM_HISTORIES[room_id]
     return PLAYBACK_HISTORY
 
 
-def get_player_lock():
-    """提供播放器线程锁（RLock）"""
-    return _player_lock
+def get_player_lock(request: Request):
+    """提供播放器线程锁（房间独立 RLock）"""
+    player = get_player_for_request(request)
+    return player._lock
 
 
 def get_ws_manager():

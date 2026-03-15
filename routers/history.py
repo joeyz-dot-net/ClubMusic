@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
 from models import MusicPlayer
-from routers.dependencies import get_player
+from routers.dependencies import get_player_for_request
 from routers.state import error_response
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ router = APIRouter()
 
 
 @router.get("/playback_history")
-async def get_playback_history(player: MusicPlayer = Depends(get_player)):
+async def get_playback_history(player: MusicPlayer = Depends(get_player_for_request)):
     """获取播放历史"""
     try:
         history = player.playback_history.get_all()
@@ -36,7 +36,7 @@ async def get_playback_history(player: MusicPlayer = Depends(get_player)):
 
 
 @router.get("/playback_history_merged")
-async def get_playback_history_merged(player: MusicPlayer = Depends(get_player)):
+async def get_playback_history_merged(player: MusicPlayer = Depends(get_player_for_request)):
     """获取已合并的播放历史 - 相同URL只显示一次，最后播放时间降序排列"""
     try:
         raw_history = player.playback_history.get_all()
@@ -68,7 +68,7 @@ async def get_playback_history_merged(player: MusicPlayer = Depends(get_player))
 
 
 @router.post("/song_add_to_history")
-async def song_add_to_history(request: Request, player: MusicPlayer = Depends(get_player)):
+async def song_add_to_history(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
     """新增一条播放历史记录"""
     try:
         payload = {}
@@ -104,7 +104,7 @@ async def song_add_to_history(request: Request, player: MusicPlayer = Depends(ge
 
 
 @router.post("/playback_history_delete")
-async def delete_playback_history(request: Request, player: MusicPlayer = Depends(get_player)):
+async def delete_playback_history(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
     """删除单条播放历史记录"""
     try:
         payload = {}

@@ -107,6 +107,19 @@ def _init_default_settings_ini():
             config.set('auto_fill', key, val)
             changed = True
 
+    # 补充 [room] 节或其中缺失的键
+    if not config.has_section('room'):
+        config.add_section('room')
+        changed = True
+    room_defaults = {
+        'max_rooms':       '10',
+        'idle_timeout':    '3600',
+    }
+    for key, val in room_defaults.items():
+        if not config.has_option('room', key):
+            config.set('room', key, val)
+            changed = True
+
     if changed:
         try:
             with open(config_file, 'w', encoding='utf-8') as f:
@@ -410,6 +423,56 @@ def auto_fill_and_play_if_idle():
 
 
 # ============================================
+# 空闲房间自动清理
+# ============================================
+
+def _start_idle_room_monitor():
+    """后台线程：定期检查并清理空闲超时的房间。"""
+    import time as _time
+    import configparser as _cfgparser
+
+    _cfg = _cfgparser.ConfigParser()
+    _cfg.read("settings.ini", encoding="utf-8")
+    idle_timeout = _cfg.getint("room", "idle_timeout", fallback=3600)
+
+    if idle_timeout <= 0:
+        logger.info("[RoomMonitor] 空闲清理已禁用 (idle_timeout <= 0)")
+        return
+
+    def _monitor():
+        logger.info(f"[RoomMonitor] 空闲房间清理线程已启动 (timeout={idle_timeout}s)")
+        while True:
+            try:
+                _time.sleep(60)  # 每分钟检查一次
+                now = _time.time()
+                from routers.state import (
+                    ROOM_PLAYERS, _room_players_lock,
+                    ROOM_LAST_ACTIVITY, ROOM_HISTORIES,
+                )
+                # 收集超时房间
+                expired = []
+                with _room_players_lock:
+                    for room_id in list(ROOM_PLAYERS.keys()):
+                        last = ROOM_LAST_ACTIVITY.get(room_id, 0)
+                        if now - last > idle_timeout:
+                            expired.append(room_id)
+
+                for room_id in expired:
+                    with _room_players_lock:
+                        player = ROOM_PLAYERS.pop(room_id, None)
+                    if player:
+                        player.destroy_room_player()
+                        ROOM_HISTORIES.pop(room_id, None)
+                        ROOM_LAST_ACTIVITY.pop(room_id, None)
+                        logger.info(f"[RoomMonitor] 已清理空闲房间: {room_id}")
+            except Exception as e:
+                logger.error(f"[RoomMonitor] 异常: {e}")
+                _time.sleep(10)
+
+    threading.Thread(target=_monitor, daemon=True, name="RoomIdleMonitor").start()
+
+
+# ============================================
 # 定义应用生命周期处理
 # ============================================
 
@@ -425,21 +488,26 @@ async def lifespan(app: FastAPI):
     from models.backup import backup_manager as _backup_manager
     _backup_manager.start()
 
+    # 启动空闲房间清理线程
+    _start_idle_room_monitor()
+
     yield  # 应用运行期间
 
     # 关闭事件
     logger.info("应用正在关闭...")
 
     # 关闭所有 RoomPlayer（自定义房间的 MPV 进程）
-    from routers.state import ROOM_PLAYERS, _room_players_lock
+    from routers.state import ROOM_PLAYERS, _room_players_lock, ROOM_HISTORIES, ROOM_LAST_ACTIVITY
     with _room_players_lock:
-        for pipe_name, rp in list(ROOM_PLAYERS.items()):
+        for room_id, rp in list(ROOM_PLAYERS.items()):
             try:
                 rp.destroy_room_player()
-                logger.info(f"✅ 已销毁 RoomPlayer: {pipe_name}")
+                logger.info(f"[Shutdown] 已销毁 RoomPlayer: {room_id}")
             except Exception as e:
                 logger.warning(f"销毁 RoomPlayer 失败: {e}")
         ROOM_PLAYERS.clear()
+    ROOM_HISTORIES.clear()
+    ROOM_LAST_ACTIVITY.clear()
 
     try:
         if PLAYER and PLAYER.mpv_process:

@@ -298,6 +298,27 @@ _pipe_players_lock = threading.Lock()
 ROOM_PLAYERS: Dict[str, MusicPlayer] = {}
 _room_players_lock = threading.Lock()
 
+# 房间独立播放历史（room_id → PlayHistory）
+from models import PlayHistory
+ROOM_HISTORIES: Dict[str, PlayHistory] = {}
+
+# 房间最后活跃时间（room_id → timestamp），用于空闲清理
+ROOM_LAST_ACTIVITY: Dict[str, float] = {}
+
+# 正在创建中的房间 ID 集合（防止并发创建竞态）
+_creating_rooms: set = set()
+
+# 房间最大数量（从 settings.ini [room] 读取，默认 10）
+import configparser as _cfgparser
+_room_cfg = _cfgparser.ConfigParser()
+_room_cfg.read("settings.ini", encoding="utf-8")
+ROOM_MAX: int = _room_cfg.getint("room", "max_rooms", fallback=10)
+
+
+def touch_room_activity(room_id: str):
+    """更新房间最后活跃时间戳"""
+    ROOM_LAST_ACTIVITY[room_id] = time.time()
+
 
 def get_player_for_room_id(room_id: str):
     """根据 room_id 查找 RoomPlayer。
@@ -331,7 +352,7 @@ def get_player_for_pipe(pipe_name: str) -> MusicPlayer:
             if room_id in ROOM_PLAYERS:
                 return ROOM_PLAYERS[room_id]
         # 房间管道但 RoomPlayer 不存在 → 不自动创建幻影 PipePlayer
-        logger.warning(f"[PipePool] 房间管道 {pipe_name} 无对应 RoomPlayer，回退默认播放器")
+        logger.info(f"[PipePool] 房间管道 {pipe_name} 无对应 RoomPlayer（可能房间未创建或已过期），回退默认播放器")
         return PLAYER
 
     # 非房间管道：兼容旧的 PipePlayer 池
