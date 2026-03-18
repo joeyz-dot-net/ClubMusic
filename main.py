@@ -30,7 +30,7 @@ def disable_uvicorn_access_logs():
 
 def get_mpv_audio_devices(mpv_path: str = "mpv") -> list:
     """获取 MPV 支持的 WASAPI 音频设备列表
-    
+
     返回: [(device_id, device_name), ...]
     """
     devices = []
@@ -47,7 +47,7 @@ def get_mpv_audio_devices(mpv_path: str = "mpv") -> list:
                 print(f"[警告] mpv 可执行文件不存在: {mpv_path}")
                 print(f"[提示] 请确保 mpv.exe 位于 bin 目录或系统 PATH 中")
                 return devices
-        
+
         result = subprocess.run(
             [mpv_path, "--audio-device=help"],
             capture_output=True,
@@ -55,233 +55,232 @@ def get_mpv_audio_devices(mpv_path: str = "mpv") -> list:
             timeout=10,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
         )
-        
+
         output = result.stdout + result.stderr
-        
+
         # 解析 wasapi 设备
         # 格式: 'wasapi/{guid}' (Device Name)
         pattern = r"'(wasapi/\{[^}]+\})'\s+\(([^)]+)\)"
         matches = re.findall(pattern, output)
-        
+
         for device_id, device_name in matches:
             devices.append((device_id, device_name))
-            
+
     except Exception as e:
         print(f"[警告] 获取音频设备列表失败: {e}")
-    
+
     return devices
 
 
 def interactive_select_audio_device(mpv_path: str = "mpv", timeout: int = 10) -> str:
-    """交互式选择音频输出设备
-    
+    """交互式选择音频输出设备（使用上下键选择）
+
     参数:
         mpv_path: mpv 可执行文件路径
         timeout: 超时时间（秒），超时后使用默认值
-    
+
     返回:
         设备ID (device_id 或 'auto')
     """
+    import time
+
+    # ANSI 颜色码
+    GREEN = '\033[92m'
+    CYAN = '\033[96m'
+    DIM = '\033[2m'
+    BOLD = '\033[1m'
+    RESET = '\033[0m'
+
     print("\n" + "╔" + "═" * 58 + "╗")
     print("║" + " " * 18 + "🎧 音频输出设备选择" + " " * 18 + "║")
     print("╚" + "═" * 58 + "╝")
-    
+
     devices = get_mpv_audio_devices(mpv_path)
-    
+
     if not devices:
         print("\n❌ 未检测到音频设备，将使用系统默认")
         print("─" * 60)
         return "auto"
-    
-    # 默认优先选择 2ch CABLE 虚拟音频设备
-    # 新策略：优先选择 CABLE-B（或显示包含 VB-Audio Virtual Cable B 的设备），
-    # 不优先任何名称中包含 "16ch" 的设备（但仍列出供用户选择）。
-    default_choice = 0
-    default_name = "系统默认设备"
+
+    # 构建选项列表: [(display_name, device_id_or_auto), ...]
+    options = [("系统默认设备 (auto)", "auto")]
+    for device_id, device_name in devices:
+        options.append((device_name, device_id))
+
+    # 默认优先选择 CABLE 虚拟音频设备
+    default_index = 0  # 默认: 系统默认设备
 
     def is_16ch(name: str) -> bool:
         return "16ch" in (name or "").lower()
 
     # 优先级 1: CABLE-B Input 或包含 VB-Audio Virtual Cable B
-    for idx, (device_id, device_name) in enumerate(devices, 1):
+    for idx, (device_id, device_name) in enumerate(devices):
         if is_16ch(device_name):
             continue
         if "CABLE-B Input" in device_name or "vb-audio virtual cable b" in device_name.lower():
-            default_choice = idx
-            default_name = device_name
-            print(f"\n✅ 默认选择: {device_name} (优先级1: CABLE-B / VB-Audio B)")
+            default_index = idx + 1  # +1 因为 options[0] 是 "系统默认"
             break
 
-    # 优先级 2: CABLE-A Input（作为退路，仍避免包含 16ch 的设备）
-    if default_choice == 0:
-        for idx, (device_id, device_name) in enumerate(devices, 1):
+    # 优先级 2: CABLE-A Input
+    if default_index == 0:
+        for idx, (device_id, device_name) in enumerate(devices):
             if is_16ch(device_name):
                 continue
             if "CABLE-A Input" in device_name:
-                default_choice = idx
-                default_name = device_name
-                print(f"\n✅ 默认选择: {device_name} (优先级2: CABLE-A Input)")
+                default_index = idx + 1
                 break
 
-    # 优先级 3: 通用 CABLE Input（仍优先不含 16ch 的设备）
-    if default_choice == 0:
-        for idx, (device_id, device_name) in enumerate(devices, 1):
+    # 优先级 3: 通用 CABLE Input
+    if default_index == 0:
+        for idx, (device_id, device_name) in enumerate(devices):
             if is_16ch(device_name):
                 continue
             if "CABLE" in device_name and "Input" in device_name:
-                default_choice = idx
-                default_name = device_name
-                print(f"\n✅ 默认选择: {device_name} (优先级3: 通用 CABLE Input)")
+                default_index = idx + 1
                 break
-    
-    # ANSI 颜色码
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    CYAN = '\033[96m'
-    BOLD = '\033[1m'
-    RESET = '\033[0m'
-    
-    print(f"\n检测到 {CYAN}{len(devices)}{RESET} 个音频设备:\n")
-    
-    # 显示选项 [0]
-    if default_choice == 0:
-        print(f"  {GREEN}{BOLD}► [0] 系统默认设备 (auto) ✓{RESET}")
-    else:
-        print(f"  [0] 系统默认设备 (auto)")
-    
-    for idx, (device_id, device_name) in enumerate(devices, 1):
-        # 高亮默认选项
-        if idx == default_choice:
-            print(f"  {GREEN}{BOLD}► [{idx}] {device_name} ✓{RESET}")
-            print(f"       {CYAN}设备ID: {device_id}{RESET}")
-        else:
-            print(f"  [{idx}] {device_name}")
-            print(f"       设备ID: {device_id}")
-    
-    print(f"\n⏱️  {timeout}秒后自动选择默认项: {default_name}{RESET}")
-    print("─" * 60)
 
-    # Windows 下使用 msvcrt 实现非阻塞按键检测
-    import time
+    selected_index = default_index
+    total_options = len(options)
+
+    def render_menu(sel_idx, remaining=None):
+        """渲染选择菜单（每行自带清行，支持原地重绘）"""
+        for i, (name, dev_id) in enumerate(options):
+            if i == sel_idx:
+                print(f"\033[2K  {GREEN}{BOLD}► {name}{RESET}")
+            else:
+                print(f"\033[2K    {DIM}{name}{RESET}")
+
+        # 底部提示行（不换行，光标停在本行末尾）
+        if remaining is not None:
+            print(f"\033[2K  {DIM}↑↓ 选择  Enter 确认  [{remaining}s 后自动选择]{RESET}", end="", flush=True)
+        else:
+            print(f"\033[2K  {DIM}↑↓ 选择  Enter 确认{RESET}", end="", flush=True)
+
+    def move_to_menu_top():
+        """光标回到菜单第一行（从提示行上移 total_options 行）"""
+        if total_options > 0:
+            print(f"\033[{total_options}F", end="", flush=True)
+
+    print(f"\n检测到 {CYAN}{len(devices)}{RESET} 个音频设备:\n")
+
+    # 首次渲染
+    render_menu(selected_index, remaining=timeout)
+
+    # ── 键盘输入循环 ──
     if os.name == 'nt':
         import msvcrt
 
-        input_chars = []
         start_time = time.time()
         countdown_cancelled = False
-        last_remaining = timeout + 1  # 确保首次立即显示
+        last_remaining = timeout + 1
 
         while True:
             elapsed = time.time() - start_time
             remaining = max(0, timeout - int(elapsed))
 
-            # 实时更新倒计时计数器
+            # 更新倒计时显示
             if not countdown_cancelled and remaining != last_remaining:
                 last_remaining = remaining
-                # 使用 \r 回到行首覆盖显示倒计时
-                countdown_line = f"\r⏳ [{remaining:2d}s] 请选择 [{default_choice}]: {''.join(input_chars)}"
-                print(countdown_line, end="", flush=True)
+                move_to_menu_top()
+                render_menu(selected_index, remaining=remaining)
 
-            # 检查是否有按键
             if msvcrt.kbhit():
                 char = msvcrt.getwch()
 
-                # 如果还在倒计时中，任意按键取消倒计时
-                if not countdown_cancelled and elapsed < timeout:
+                # 任意按键取消倒计时
+                if not countdown_cancelled:
                     countdown_cancelled = True
-                    print(f"\n   ⏹️  倒计时已取消，请继续输入...")
-                    print(f"\n请选择 [{default_choice}]: ", end="", flush=True)
 
-                if char == '\r':  # Enter 键
-                    print()  # 换行
+                if char in ('\xe0', '\x00'):
+                    # 特殊键前缀，读取第二个字节
+                    arrow = msvcrt.getwch()
+                    if arrow == 'H':  # 上
+                        selected_index = (selected_index - 1) % total_options
+                    elif arrow == 'P':  # 下
+                        selected_index = (selected_index + 1) % total_options
+                    # 重绘
+                    move_to_menu_top()
+                    render_menu(selected_index, remaining=None if countdown_cancelled else remaining)
+                elif char == '\r':  # Enter
                     break
                 elif char == '\x03':  # Ctrl+C
                     raise KeyboardInterrupt
-                elif char == '\x08':  # Backspace
-                    if input_chars:
-                        input_chars.pop()
-                        if countdown_cancelled:
-                            print('\b \b', end="", flush=True)
-                else:
-                    input_chars.append(char)
-                    if countdown_cancelled:
-                        print(char, end="", flush=True)
 
-            # 超时检查（仅在未取消倒计时时生效）
+            # 超时自动选择
             if not countdown_cancelled and elapsed >= timeout:
-                print()  # 换行
                 break
 
-            time.sleep(0.05)  # 避免 CPU 占用过高
-        
-        user_input = ''.join(input_chars).strip()
-        choice = user_input if user_input else str(default_choice)
+            time.sleep(0.03)
     else:
-        # 非 Windows 系统使用原来的线程方式
-        selected = [None]
-        countdown_active = [True]
-        
-        def get_input():
-            try:
-                user_input = input(f"\n请选择 [{default_choice}]: ").strip()
-                countdown_active[0] = False
-                selected[0] = user_input if user_input else str(default_choice)
-            except EOFError:
-                countdown_active[0] = False
-                selected[0] = str(default_choice)
-        
-        input_thread = threading.Thread(target=get_input, daemon=True)
-        input_thread.start()
-        input_thread.join(timeout=timeout)
-        
-        choice = selected[0] if selected[0] is not None else str(default_choice)
-    
-    try:
-        choice_num = int(choice)
-        if choice_num == 0:
-            GREEN = '\033[92m'
-            BOLD = '\033[1m'
-            RESET = '\033[0m'
-            print(f"\n{GREEN}{BOLD}✅ 已选择: 系统默认设备 (auto){RESET}")
-            return "auto"
-        elif 1 <= choice_num <= len(devices):
-            device_id, device_name = devices[choice_num - 1]
-            GREEN = '\033[92m'
-            CYAN = '\033[96m'
-            BOLD = '\033[1m'
-            RESET = '\033[0m'
-            print(f"\n{GREEN}{BOLD}✅ 已选择: {device_name}{RESET}")
-            print(f"   {CYAN}完整设备ID: {device_id}{RESET}")
-            return device_id
-        else:
-            # 无效选择，使用默认
-            if default_choice > 0:
-                device_id, device_name = devices[default_choice - 1]
-                print(f"\n❌ 无效选择 '{choice}'，使用默认: {device_name}")
-                print(f"   完整设备ID: {device_id}")
-                return device_id
-            else:
-                print(f"\n❌ 无效选择 '{choice}'，使用系统默认设备")
-                return "auto"
-    except ValueError:
-        # 解析失败，使用默认
-        if default_choice > 0:
-            device_id, device_name = devices[default_choice - 1]
-            print(f"\n❌ 无效选择 '{choice}'，使用默认: {device_name}")
-            print(f"   完整设备ID: {device_id}")
-            return device_id
-        else:
-            print(f"\n❌ 无效选择 '{choice}'，使用系统默认设备")
-            return "auto"
+        # 非 Windows: 使用 tty/termios 读取原始输入
+        import select
+        try:
+            import tty
+            import termios
+            fd = sys.stdin.fileno()
+            old_settings = termios.tcgetattr(fd)
+            tty.setraw(fd)
+
+            start_time = time.time()
+            countdown_cancelled = False
+            last_remaining = timeout + 1
+
+            while True:
+                elapsed = time.time() - start_time
+                remaining = max(0, timeout - int(elapsed))
+
+                if not countdown_cancelled and remaining != last_remaining:
+                    last_remaining = remaining
+                    move_to_menu_top()
+                    render_menu(selected_index, remaining=remaining)
+
+                # 使用 select 实现非阻塞读取
+                rlist, _, _ = select.select([sys.stdin], [], [], 0.03)
+                if rlist:
+                    char = sys.stdin.read(1)
+
+                    if not countdown_cancelled:
+                        countdown_cancelled = True
+
+                    if char == '\x1b':
+                        # 可能是转义序列
+                        next1 = sys.stdin.read(1)
+                        if next1 == '[':
+                            next2 = sys.stdin.read(1)
+                            if next2 == 'A':  # 上
+                                selected_index = (selected_index - 1) % total_options
+                            elif next2 == 'B':  # 下
+                                selected_index = (selected_index + 1) % total_options
+                            move_to_menu_top()
+                            render_menu(selected_index, remaining=None if countdown_cancelled else remaining)
+                    elif char in ('\r', '\n'):  # Enter
+                        break
+                    elif char == '\x03':  # Ctrl+C
+                        raise KeyboardInterrupt
+
+                if not countdown_cancelled and elapsed >= timeout:
+                    break
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+    # ── 输出最终选择 ──
+    # 清除菜单区域，显示最终结果
+    move_to_menu_top()
+    chosen_name, chosen_id = options[selected_index]
+    print(f"\033[2K  {GREEN}{BOLD}✅ 已选择: {chosen_name}{RESET}")
+    # 清除剩余的旧菜单行
+    for _ in range(total_options):
+        print("\033[2K")
+    return chosen_id
 
 
 def update_mpv_cmd_with_device(config: configparser.ConfigParser, device_id: str) -> str:
     """更新 mpv_cmd 配置，添加音频设备参数
-    
+
     参数:
         config: 配置解析器
         device_id: 设备ID，'auto' 表示使用系统默认
-    
+
     返回:
         更新后的 mpv_cmd
     """
@@ -290,13 +289,13 @@ def update_mpv_cmd_with_device(config: configparser.ConfigParser, device_id: str
         app_dir = os.path.dirname(sys.executable)
     else:
         app_dir = os.path.dirname(os.path.abspath(__file__))
-    
+
     bin_mpv = os.path.join(app_dir, "bin", "mpv.exe")
-    
+
     # 获取现有的 mpv_cmd 配置并展开 ${bin_dir}
     mpv_cmd = config.get("app", "mpv_cmd", fallback="")
     mpv_cmd = mpv_cmd.replace("${bin_dir}", "bin")
-    
+
     # 如果 bin 目录存在 mpv.exe，强制使用它，保留其他参数
     if os.path.exists(bin_mpv):
         if mpv_cmd:
@@ -310,14 +309,14 @@ def update_mpv_cmd_with_device(config: configparser.ConfigParser, device_id: str
     elif not mpv_cmd:
         # 如果没有配置且 bin 目录也没有，使用默认值
         mpv_cmd = "mpv --idle=yes"
-    
+
     # 移除现有的 --audio-device 参数
     mpv_cmd = re.sub(r'\s*--audio-device=[^\s]+', '', mpv_cmd)
-    
+
     # 如果不是 auto，添加设备参数
     if device_id != "auto":
         mpv_cmd = mpv_cmd.strip() + f" --audio-device={device_id}"
-    
+
     return mpv_cmd
 
 
@@ -348,10 +347,10 @@ def main():
     import signal
     import atexit
     from pathlib import Path
-    
+
     # 注册退出时清理函数
     atexit.register(cleanup_on_exit)
-    
+
     # 处理 Ctrl+C 信号
     def signal_handler(sig, frame):
         print("\n\n⚠️  收到中断信号，正在清理...")
@@ -359,47 +358,47 @@ def main():
         # 使用 os._exit(0) 避免 SystemExit 异常导致的 traceback
         import os
         os._exit(0)
-    
+
     signal.signal(signal.SIGINT, signal_handler)
     if hasattr(signal, 'SIGTERM'):
         signal.signal(signal.SIGTERM, signal_handler)
-    
+
     # 确保 stdout 使用 UTF-8 编码（Windows 兼容性）
     if sys.stdout.encoding != "utf-8":
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-    
+
     # 导入日志模块
     from models.logger import setup_logging, logger
-    
+
     # 设置日志
     setup_logging()
-    
+
     # 禁用 uvicorn 访问日志
     disable_uvicorn_access_logs()
-    
+
     print("\n" + "=" * 60)
     print("🎵 ClubMusic 启动中...")
     print("=" * 60)
-    
+
     # 加载配置文件
     config = configparser.ConfigParser()
     config_file = Path("settings.ini")
     if config_file.exists():
         config.read(config_file, encoding="utf-8")
-    
+
     # 【第一步】交互式选择音频设备
     # 获取主程序目录
     if getattr(sys, 'frozen', False):
         app_dir = os.path.dirname(sys.executable)
     else:
         app_dir = os.path.dirname(os.path.abspath(__file__))
-    
+
     bin_dir = os.path.join(app_dir, "bin")
     bin_mpv = os.path.join(bin_dir, "mpv.exe")
-    
+
     logger.info(f"主程序目录: {app_dir}")
     logger.info(f"检查 MPV 路径: {bin_mpv}")
-    
+
     # 确定实际使用的 mpv 路径（优先使用 bin 目录）
     if os.path.exists(bin_mpv):
         mpv_path = bin_mpv
@@ -416,26 +415,26 @@ def main():
             logger.warning(f"  - 检查路径: {bin_mpv}")
             logger.warning(f"  - 系统 PATH 也未找到")
             mpv_path = "mpv"  # 使用默认值，让后续代码处理
-    
+
     # 从配置文件读取启动超时时间
     startup_timeout = config.getint("app", "startup_timeout", fallback=10)
     selected_device = interactive_select_audio_device(mpv_path=mpv_path, timeout=startup_timeout)
-    
+
     # 更新 mpv_cmd 配置
     if not config.has_section("app"):
         config.add_section("app")
-    
+
     new_mpv_cmd = update_mpv_cmd_with_device(config, selected_device)
     config.set("app", "mpv_cmd", new_mpv_cmd)
     print(f"\n[配置] MPV 命令已更新")
-    
+
     if selected_device != "auto":
         os.environ["MPV_AUDIO_DEVICE"] = selected_device
-    
+
     # 显示完整设备名称和设备ID
     device_display = '系统默认 (auto)'
     device_id_display = 'N/A'
-    
+
     if selected_device != 'auto':
         # 尝试获取完整设备名称
         devices = get_mpv_audio_devices(mpv_path)
@@ -448,7 +447,7 @@ def main():
         if device_id_display == 'N/A':
             device_display = selected_device
             device_id_display = selected_device
-    
+
     print("\n" + "=" * 60)
     print("✅ 启动配置完成")
     print("=" * 60)
@@ -457,16 +456,16 @@ def main():
     if selected_device != 'auto':
         print(f"      设备ID: {device_id_display}")
     print("\n" + "=" * 60 + "\n")
-    
+
     # 导入 FastAPI 应用实例
     from app import app as fastapi_app
-    
+
     # 启动 FastAPI 服务器
     import uvicorn
-    
+
     server_host = config.get("app", "server_host", fallback="0.0.0.0")
     server_port = config.getint("app", "server_port", fallback=80)
-    
+
     uvicorn.run(
         fastapi_app,
         host=server_host,

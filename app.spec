@@ -27,8 +27,11 @@ hiddenimports = [
     'models.playlists',
     'models.rank',
     'models.local_playlist',
-    'models.stream',
-    'models.apis',
+    'models.logger',
+    'models.backup',
+    'models.url_cache',
+    'models.pcm_pipe',
+    'models.settings',
 ]
 
 # 收集 fastapi、uvicorn、starlette 的所有必要文件

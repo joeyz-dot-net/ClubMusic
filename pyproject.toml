@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 [project]
 # 项目元数据
 name = "clubmusic"
-version = "1.3.0"
+version = "2.0.0"
 description = "全栈网页音乐播放器 - FastAPI 后端 + ES6 前端 + MPV 播放引擎"
 readme = "README.md"
 authors = [
