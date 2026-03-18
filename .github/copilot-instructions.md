@@ -245,7 +245,8 @@ python app.py
 **Port**: 9000 (default, configurable in [settings.ini](../settings.ini)).
 
 **What happens**:
-- `run.py`: Enumerates audio devices → updates `settings.ini` → launches `app.py`
+- `main.py`: Enumerates audio devices → updates `settings.ini` → launches `app.py` (unified entry point for dev and PyInstaller)
+- `run.py`: Thin wrapper that imports and calls `main.main()` (kept for backward compatibility)
 - `app.py`: Mounts routers → starts MPV event listener → starts backup thread → runs Uvicorn on configured port
 - Frontend: Connects via WebSocket for real-time updates, falls back to `/status` polling
 
@@ -280,7 +281,7 @@ python app.py
 
 **Critical**: External tools (`bin/mpv.exe`, `bin/yt-dlp.exe`) must exist alongside the exe—they're NOT bundled into `_MEIPASS`. These are resolved via `_get_app_dir()` in [models/player.py](../models/player.py).
 
-**Entry Point**: [main.py](../main.py) (not app.py) — wraps UTF-8 encoding setup for Windows console.
+**Entry Point**: [main.py](../main.py) (not app.py) — unified entry point for both development (`python main.py`) and PyInstaller packaging. `run.py` is a thin wrapper for backward compatibility.
 
 ### Deploy to Remote Server
 ```powershell

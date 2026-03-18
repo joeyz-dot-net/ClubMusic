@@ -182,9 +182,9 @@ http://localhost:9000
 
 | 文件 | 说明 |
 |------|------|
-| `run.py` | 启动器，音频设备选择（带实时倒计时），启动 FastAPI |
+| `main.py` | 启动器，音频设备选择（带实时倒计时），启动 FastAPI（开发与打包统一入口） |
+| `run.py` | `main.py` 的薄包装，保留向后兼容（`python run.py` 等同于 `python main.py`） |
 | `app.py` | FastAPI 主应用，路由挂载、生命周期管理、中间件、空闲自动填充线程 |
-| `main.py` | PyInstaller 入口点，UTF-8 编码包装 |
 | `routers/state.py` | 全局单例状态、WebSocket 管理器、RoomPlayer 池 |
 | `routers/dependencies.py` | 依赖注入提供函数（含多房间路由支持） |
 | `routers/player.py` | 播放器控制路由（play、pause、seek、loop、pitch） |
