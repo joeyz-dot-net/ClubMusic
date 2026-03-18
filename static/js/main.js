@@ -141,6 +141,8 @@ class MusicPlayerApp {
             fullPlayerCurrentTime: document.getElementById('fullPlayerCurrentTime'),
             fullPlayerDuration: document.getElementById('fullPlayerDuration'),
             fullPlayerExpand: document.getElementById('fullPlayerExpand'),
+            fullPlayerShuffle: document.getElementById('fullPlayerShuffle'),
+            fullPlayerLoop: document.getElementById('fullPlayerLoop'),
             fullPlayerPitchDown: document.getElementById('fullPlayerPitchDown'),
             fullPlayerPitchDisplay: document.getElementById('fullPlayerPitchDisplay'),
             fullPlayerPitchUp: document.getElementById('fullPlayerPitchUp'),
@@ -327,23 +329,24 @@ class MusicPlayerApp {
         const buttons = [
             this.elements.loopBtn,
             this.elements.nowPlayingRepeatBtn,
+            this.elements.fullPlayerLoop,
         ];
 
         // 循环模式: 0=不循环, 1=单曲循环, 2=全部循环
         const loopModeText = [i18n.t('player.loop.off'), i18n.t('player.loop.single'), i18n.t('player.loop.all')];
         const loopModeEmoji = ['↻', '🔂', '🔁'];
-        
+
         // 只在循环模式实际改变时输出日志
         if (loopMode !== this.lastUILoopMode) {
             console.log('[循环模式] 已更新至:', loopModeText[loopMode]);
             this.lastUILoopMode = loopMode;
         }
-        
+
         buttons.forEach(btn => {
             if (btn) {
                 // 更新文本内容和样式
                 const emoji = loopModeEmoji[loopMode] || '↻';
-                
+
                 // 处理文本按钮（底部loopBtn）
                 if (btn.id === 'loopBtn') {
                     btn.textContent = emoji;
@@ -352,7 +355,7 @@ class MusicPlayerApp {
                     const title = loopModeText[loopMode];
                     btn.setAttribute('data-mode', loopMode);
                 }
-                
+
                 // 添加/移除active类以显示视觉反馈
                 if (loopMode === 0) {
                     btn.classList.remove('loop-active');
@@ -361,11 +364,42 @@ class MusicPlayerApp {
                     btn.classList.add('loop-active');
                     btn.style.opacity = '1';
                 }
-                
+
                 // 更新title属性
                 btn.title = i18n.t('player.loop.title', { mode: loopModeText[loopMode] });
+
+                // 全屏循环按钮：单曲循环时显示 "1" 徽章
+                if (btn.id === 'fullPlayerLoop') {
+                    let badge = btn.querySelector('.loop-badge');
+                    if (loopMode === 1) {
+                        if (!badge) {
+                            badge = document.createElement('span');
+                            badge.className = 'loop-badge';
+                            btn.appendChild(badge);
+                        }
+                        badge.textContent = '1';
+                    } else if (badge) {
+                        badge.remove();
+                    }
+                }
             }
         });
+    }
+
+    // 更新随机播放按钮的视觉状态
+    updateShuffleButtonUI(shuffleMode) {
+        const btn = this.elements.fullPlayerShuffle;
+        if (!btn) return;
+
+        if (shuffleMode) {
+            btn.classList.add('shuffle-active');
+            btn.style.opacity = '1';
+            btn.title = i18n.t('player.shuffle.on');
+        } else {
+            btn.classList.remove('shuffle-active');
+            btn.style.opacity = '0.5';
+            btn.title = i18n.t('player.shuffle.off');
+        }
     }
 
     // 更新升降调控件的视觉状态
@@ -840,6 +874,18 @@ class MusicPlayerApp {
                 player.cycleLoop();
             });
         }
+        if (this.elements.fullPlayerLoop) {
+            this.elements.fullPlayerLoop.addEventListener('click', () => {
+                if (playLock.isPreparing()) return;
+                player.cycleLoop();
+            });
+        }
+        if (this.elements.fullPlayerShuffle) {
+            this.elements.fullPlayerShuffle.addEventListener('click', () => {
+                if (playLock.isPreparing()) return;
+                player.toggleShuffle();
+            });
+        }
         if (this.elements.fullPlayerPitchDown) {
             this.elements.fullPlayerPitchDown.addEventListener('click', () => {
                 if (playLock.isPreparing()) return;
@@ -1213,6 +1259,11 @@ class MusicPlayerApp {
         // 更新循环按钮状态（从status中获取最新的循环模式）
         if (status && status.loop_mode !== undefined) {
             this.updateLoopButtonUI(status.loop_mode);
+        }
+
+        // 更新随机播放按钮状态
+        if (status && status.shuffle_mode !== undefined) {
+            this.updateShuffleButtonUI(status.shuffle_mode);
         }
 
         // 更新 Now Playing 侧边面板 (iPad 横屏)

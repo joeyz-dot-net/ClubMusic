@@ -157,6 +157,14 @@ export class Player {
         return result;
     }
 
+    // 随机播放模式
+    async toggleShuffle() {
+        const result = await api.shuffle();
+        const shuffleMode = result.shuffle_mode !== undefined ? result.shuffle_mode : false;
+        this.emit('shuffleChange', shuffleMode);
+        return result;
+    }
+
     // 音调控制（KTV升降调）
     async setPitch(semitones) {
         const result = await api.setPitch(semitones);

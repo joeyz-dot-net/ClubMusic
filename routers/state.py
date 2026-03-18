@@ -184,6 +184,7 @@ def _build_state_message(player: MusicPlayer = None) -> dict:
         "current_meta": p.get_current_meta_snapshot(),
         "mpv_state": mpv_state,
         "loop_mode": p.loop_mode,
+        "shuffle_mode": getattr(p, 'shuffle_mode', False),
         "pitch_shift": p.pitch_shift,
         "current_playlist_id": get_current_playlist_id(p),
         "playlist_updated": True,

@@ -91,6 +91,9 @@ const translations = {
         'player.loop.single': '单曲循环',
         'player.loop.all': '全部循环',
         'player.loop.title': '循环模式: {mode}',
+        'player.shuffle.on': '随机播放: 开启',
+        'player.shuffle.off': '随机播放: 关闭',
+        'player.shuffle.title': '随机播放',
         'player.notPlaying': '未播放',
         'player.skippedSongs': '已跳过 {count} 首不可用歌曲',
 
@@ -307,6 +310,9 @@ const translations = {
         'player.loop.single': 'Single Loop',
         'player.loop.all': 'Loop All',
         'player.loop.title': 'Loop mode: {mode}',
+        'player.shuffle.on': 'Shuffle: On',
+        'player.shuffle.off': 'Shuffle: Off',
+        'player.shuffle.title': 'Shuffle',
         'player.notPlaying': 'Not playing',
         'player.skippedSongs': 'Skipped {count} unavailable song(s)',
 
@@ -523,6 +529,9 @@ const translations = {
         'player.loop.single': '單曲循環',
         'player.loop.all': '全部循環',
         'player.loop.title': '循環模式: {mode}',
+        'player.shuffle.on': '隨機播放: 開啟',
+        'player.shuffle.off': '隨機播放: 關閉',
+        'player.shuffle.title': '隨機播放',
         'player.notPlaying': '未播放',
         'player.skippedSongs': '已跳過 {count} 首不可用歌曲',
 

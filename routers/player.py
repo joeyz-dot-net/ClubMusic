@@ -503,6 +503,20 @@ async def set_loop_mode(request: Request, player: MusicPlayer = Depends(get_play
         return error_response("[/loop] 设置循环模式异常", exc=e, _logger=logger)
 
 
+@router.post("/shuffle")
+async def set_shuffle_mode(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
+    """设置随机播放模式"""
+    try:
+        player.toggle_shuffle_mode()
+
+        mode_text = "🔀 随机播放" if player.shuffle_mode else "➡️ 顺序播放"
+        logger.info(f"[播放状态改变] 随机模式: {mode_text}")
+
+        return {"status": "OK", "shuffle_mode": player.shuffle_mode}
+    except Exception as e:
+        return error_response("[/shuffle] 设置随机模式异常", exc=e, _logger=logger)
+
+
 @router.post("/pitch")
 async def set_pitch_shift(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
     """设置音调偏移（KTV升降调，-6 到 +6 个半音）"""

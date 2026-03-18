@@ -242,6 +242,7 @@ class MusicPlayer:
         self.current_index = -1
         self.current_meta = {}
         self.loop_mode = 0  # 0=不循环, 1=单曲循环, 2=全部循环
+        self.shuffle_mode = False  # False=顺序播放, True=随机播放
         self.pitch_shift = 0  # 音调偏移（-6 到 +6 个半音），0=原调
         self._last_play_time = 0
         self._prev_index = None
@@ -363,6 +364,7 @@ class MusicPlayer:
         instance.current_index = -1
         instance.current_meta = {}
         instance.loop_mode = 0
+        instance.shuffle_mode = False
         instance.pitch_shift = 0
         instance._last_play_time = 0
         instance._prev_index = None
@@ -1032,14 +1034,16 @@ class MusicPlayer:
 
         说明：
         - 此方法被后台事件监听线程调用（detect end-file 事件）
-        - 直接在后端完成自动播放逻辑：删除当前歌曲+播放下一首
+        - 直接在后端完成自动播放逻辑
         - 前端只负责状态显示，不再参与自动播放控制
-        - 删除当前播放的歌曲（通过URL匹配），然后播放列表顶部
+        - 根据 loop_mode 和 shuffle_mode 决定播放行为
 
-        实现完整的后端控制自动播放流程
+        loop_mode: 0=不循环（删除已播歌曲，播下一首）
+                   1=单曲循环（重新播放当前歌曲）
+                   2=全部循环（已播歌曲移到队尾，播下一首）
+        shuffle_mode: True=播放下一首前随机打乱队列
         """
         try:
-            # 使用注入的外部依赖（由 set_external_deps 提供，无需循环导入 routers.state）
             playlists_mgr = self._ext_playlists_manager
             default_pid = self._ext_default_playlist_id
             ext_history = self._ext_playback_history
@@ -1053,71 +1057,38 @@ class MusicPlayer:
             auto_play_success = False
 
             with self._lock:
-                # 获取默认歌单（当前播放队列）
                 default_playlist = playlists_mgr.get_playlist(default_pid)
                 if not default_playlist or len(default_playlist.songs) == 0:
                     logger.info(f"[自动播放] ⚠️ 歌单 '{default_pid}' 为空，停止自动播放")
                     return
 
-                # 删除当前播放的歌曲（通过URL匹配）
                 current_playing_url = self.current_meta.get("url") or self.current_meta.get("rel") or self.current_meta.get("raw_url")
                 current_playing_title = self.current_meta.get("title") or "未知歌曲"
-                removed_index = -1
 
-                if current_playing_url:
-                    # 根据URL查找并删除当前播放的歌曲
-                    for idx, song in enumerate(default_playlist.songs):
-                        song_url = song.get("url") if isinstance(song, dict) else str(song)
-                        if song_url == current_playing_url:
-                            removed_index = idx
-                            break
+                # === 单曲循环模式：重新播放当前歌曲 ===
+                if self.loop_mode == 1:
+                    logger.info(f"[自动播放] 🔂 单曲循环: 重新播放 {current_playing_title}")
 
-                if removed_index >= 0:
-                    # 找到了匹配的歌曲，删除它
-                    removed_song = default_playlist.songs.pop(removed_index)
-                    default_playlist.updated_at = time.time()
-                    playlists_mgr.save()
+                    # 从歌单中查找当前歌曲的完整数据
+                    song_data = None
+                    if current_playing_url:
+                        for s in default_playlist.songs:
+                            s_url = s.get("url") if isinstance(s, dict) else str(s)
+                            if s_url == current_playing_url:
+                                song_data = s
+                                break
+                    if song_data is None:
+                        song_data = dict(self.current_meta)
 
-                    song_title = removed_song.get('title') if isinstance(removed_song, dict) else str(removed_song)
-                    logger.info(f"[自动播放] ✓ 已删除播放完毕的歌曲 (索引{removed_index}): {song_title}")
-                else:
-                    # 未找到匹配的歌曲，默认删除第一首
-                    logger.warning(f"[自动播放] ⚠️ 未找到匹配的歌曲 ({current_playing_url})，删除列表第一首")
-                    if len(default_playlist.songs) > 0:
-                        removed_song = default_playlist.songs.pop(0)
-                        default_playlist.updated_at = time.time()
-                        playlists_mgr.save()
-                        song_title = removed_song.get('title') if isinstance(removed_song, dict) else str(removed_song)
-                        logger.info(f"[自动播放] ✓ 已删除列表第一首: {song_title}")
-
-                # 播放下一首（删除后的第一首），跳过失败歌曲（最多5首）
-                MAX_SKIP = 5
-                for attempt in range(MAX_SKIP):
-                    if not default_playlist.songs:
-                        break
-
-                    next_song = default_playlist.songs[0]
-
-                    if isinstance(next_song, dict):
-                        url = next_song.get("url")
-                        title = next_song.get("title") or url
-                        song_type = next_song.get("type", "local")
-                        duration = next_song.get("duration", 0)
-                    else:
-                        url = str(next_song)
-                        title = os.path.basename(url)
-                        song_type = "local"
-                        duration = 0
+                    url = song_data.get("url") if isinstance(song_data, dict) else str(song_data)
+                    title = song_data.get("title", current_playing_title) if isinstance(song_data, dict) else current_playing_title
+                    song_type = song_data.get("type", "local") if isinstance(song_data, dict) else "local"
+                    duration = song_data.get("duration", 0) if isinstance(song_data, dict) else 0
 
                     if not url:
-                        skipped = default_playlist.songs.pop(0)
-                        default_playlist.songs.append(skipped)
-                        logger.warning(f"[自动播放] 跳过数据不完整的歌曲 ({attempt+1}/{MAX_SKIP}): {title}")
-                        continue
+                        logger.warning("[自动播放] ⚠️ 单曲循环但无法获取歌曲URL")
+                        return
 
-                    logger.info(f"[自动播放] ▶️ 尝试播放下一首 ({attempt+1}/{MAX_SKIP}): {title}")
-
-                    # 根据歌曲类型创建Song对象并播放
                     if song_type == "youtube" or (url and str(url).startswith("http")):
                         from models.song import StreamSong
                         song = StreamSong(stream_url=url, title=title, duration=duration)
@@ -1125,46 +1096,136 @@ class MusicPlayer:
                         from models.song import LocalSong
                         song = LocalSong(file_path=url, title=title)
 
-                    # 播放歌曲
                     add_history_func = ext_history.add_to_history if ext_history else self.add_to_playback_history
                     success = song.play(
                         mpv_command_func=self.mpv_command,
                         mpv_pipe_exists_func=self.mpv_pipe_exists,
                         ensure_mpv_func=self.ensure_mpv,
                         add_to_history_func=add_history_func,
-                        save_to_history=True,
+                        save_to_history=False,
                         music_dir=self.music_dir
                     )
 
                     if success:
-                        # 更新当前播放元数据
                         self.current_meta = song.to_dict()
-                        self.current_index = 0  # 重置为第一首
                         self._last_play_time = time.time()
                         auto_play_success = True
-                        logger.info(f"[自动播放] ✅ 自动播放成功: {title}")
-                        # 预获取下一曲直链
-                        self._prefetch_next_song_url()
-                        break
+                        logger.info(f"[自动播放] ✅ 单曲循环成功: {title}")
                     else:
-                        # 播放失败：移到队尾保留，继续尝试下一首
-                        skipped = default_playlist.songs.pop(0)
-                        default_playlist.songs.append(skipped)
-                        logger.warning(f"[自动播放] 跳过失败歌曲 ({attempt+1}/{MAX_SKIP}): {title}")
+                        logger.error(f"[自动播放] ❌ 单曲循环播放失败: {title}")
 
-                # 无论成功失败都保存
-                default_playlist.updated_at = time.time()
-                playlists_mgr.save()
+                else:
+                    # === 非单曲循环：处理当前歌曲（删除或移到队尾） ===
+                    removed_index = -1
+                    if current_playing_url:
+                        for idx, s in enumerate(default_playlist.songs):
+                            s_url = s.get("url") if isinstance(s, dict) else str(s)
+                            if s_url == current_playing_url:
+                                removed_index = idx
+                                break
 
-                if not auto_play_success and not default_playlist.songs:
-                    logger.info("[自动播放] ℹ️ 播放列表已空，停止自动播放")
-                    # 清空当前播放信息
-                    self.current_meta = {}
-                    self.current_index = -1
-                elif not auto_play_success:
-                    logger.error(f"[自动播放] ❌ 连续 {MAX_SKIP} 首播放失败")
+                    if self.loop_mode == 2:
+                        # 全部循环：将当前歌曲移到队尾
+                        if removed_index >= 0:
+                            moved_song = default_playlist.songs.pop(removed_index)
+                            default_playlist.songs.append(moved_song)
+                            song_title = moved_song.get('title') if isinstance(moved_song, dict) else str(moved_song)
+                            logger.info(f"[自动播放] 🔁 全部循环: 已将 {song_title} 移到队尾")
+                        elif len(default_playlist.songs) > 0:
+                            moved_song = default_playlist.songs.pop(0)
+                            default_playlist.songs.append(moved_song)
+                            song_title = moved_song.get('title') if isinstance(moved_song, dict) else str(moved_song)
+                            logger.info(f"[自动播放] 🔁 全部循环: 已将 {song_title} 移到队尾")
+                    else:
+                        # 不循环 (loop_mode == 0)：删除当前歌曲
+                        if removed_index >= 0:
+                            removed_song = default_playlist.songs.pop(removed_index)
+                            song_title = removed_song.get('title') if isinstance(removed_song, dict) else str(removed_song)
+                            logger.info(f"[自动播放] ✓ 已删除播放完毕的歌曲 (索引{removed_index}): {song_title}")
+                        elif len(default_playlist.songs) > 0:
+                            removed_song = default_playlist.songs.pop(0)
+                            song_title = removed_song.get('title') if isinstance(removed_song, dict) else str(removed_song)
+                            logger.info(f"[自动播放] ✓ 已删除列表第一首: {song_title}")
 
-            # 锁外广播（_build_state_message 需要读 MPV 管道，不能在锁内执行）
+                    default_playlist.updated_at = time.time()
+                    playlists_mgr.save()
+
+                    # 随机播放：打乱剩余队列顺序
+                    if self.shuffle_mode and len(default_playlist.songs) > 1:
+                        import random
+                        random.shuffle(default_playlist.songs)
+                        default_playlist.updated_at = time.time()
+                        playlists_mgr.save()
+                        logger.info("[自动播放] 🔀 随机模式: 已重新排列队列")
+
+                    # 播放下一首（队首），跳过失败歌曲（最多5首）
+                    MAX_SKIP = 5
+                    for attempt in range(MAX_SKIP):
+                        if not default_playlist.songs:
+                            break
+
+                        next_song = default_playlist.songs[0]
+
+                        if isinstance(next_song, dict):
+                            url = next_song.get("url")
+                            title = next_song.get("title") or url
+                            song_type = next_song.get("type", "local")
+                            duration = next_song.get("duration", 0)
+                        else:
+                            url = str(next_song)
+                            title = os.path.basename(url)
+                            song_type = "local"
+                            duration = 0
+
+                        if not url:
+                            skipped = default_playlist.songs.pop(0)
+                            default_playlist.songs.append(skipped)
+                            logger.warning(f"[自动播放] 跳过数据不完整的歌曲 ({attempt+1}/{MAX_SKIP}): {title}")
+                            continue
+
+                        logger.info(f"[自动播放] ▶️ 尝试播放下一首 ({attempt+1}/{MAX_SKIP}): {title}")
+
+                        if song_type == "youtube" or (url and str(url).startswith("http")):
+                            from models.song import StreamSong
+                            song = StreamSong(stream_url=url, title=title, duration=duration)
+                        else:
+                            from models.song import LocalSong
+                            song = LocalSong(file_path=url, title=title)
+
+                        add_history_func = ext_history.add_to_history if ext_history else self.add_to_playback_history
+                        success = song.play(
+                            mpv_command_func=self.mpv_command,
+                            mpv_pipe_exists_func=self.mpv_pipe_exists,
+                            ensure_mpv_func=self.ensure_mpv,
+                            add_to_history_func=add_history_func,
+                            save_to_history=True,
+                            music_dir=self.music_dir
+                        )
+
+                        if success:
+                            self.current_meta = song.to_dict()
+                            self.current_index = 0
+                            self._last_play_time = time.time()
+                            auto_play_success = True
+                            logger.info(f"[自动播放] ✅ 自动播放成功: {title}")
+                            self._prefetch_next_song_url()
+                            break
+                        else:
+                            skipped = default_playlist.songs.pop(0)
+                            default_playlist.songs.append(skipped)
+                            logger.warning(f"[自动播放] 跳过失败歌曲 ({attempt+1}/{MAX_SKIP}): {title}")
+
+                    default_playlist.updated_at = time.time()
+                    playlists_mgr.save()
+
+                    if not auto_play_success and not default_playlist.songs:
+                        logger.info("[自动播放] ℹ️ 播放列表已空，停止自动播放")
+                        self.current_meta = {}
+                        self.current_index = -1
+                    elif not auto_play_success:
+                        logger.error(f"[自动播放] ❌ 连续 {MAX_SKIP} 首播放失败")
+
+            # 锁外广播
             if auto_play_success and self._ext_broadcast_from_thread:
                 self._ext_broadcast_from_thread()
 
@@ -1675,6 +1736,15 @@ class MusicPlayer:
         """
         self.loop_mode = (self.loop_mode + 1) % 3
         return self.loop_mode
+
+    def toggle_shuffle_mode(self) -> bool:
+        """切换随机播放模式: False=顺序播放 <-> True=随机播放
+
+        返回:
+          bool: 当前随机播放状态
+        """
+        self.shuffle_mode = not self.shuffle_mode
+        return self.shuffle_mode
 
     def set_pitch_shift(self, semitones: int) -> bool:
         """设置音调偏移（KTV升降调），范围 -6 到 +6 个半音。

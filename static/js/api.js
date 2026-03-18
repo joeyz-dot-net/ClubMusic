@@ -215,6 +215,10 @@ export class MusicAPI {
         return this.post('/loop', {});
     }
 
+    async shuffle() {
+        return this.post('/shuffle', {});
+    }
+
     async setPitch(semitones) {
         return this.post('/pitch', { semitones });
     }

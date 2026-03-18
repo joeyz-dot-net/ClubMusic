@@ -2143,6 +2143,42 @@ button:active { transform: scale(0.98); }
     transform: scale(0.95);
 }
 
+/* 播放模式控件（随机/循环） */
+.full-player-playmode-control {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.full-player-shuffle,
+.full-player-loop {
+    opacity: 0.5;
+    position: relative;
+    transition: opacity 0.2s ease;
+}
+
+.full-player-shuffle.shuffle-active,
+.full-player-loop.loop-active {
+    opacity: 1;
+}
+
+.full-player-shuffle.shuffle-active svg,
+.full-player-loop.loop-active svg {
+    stroke: var(--accent-color, #1db954);
+}
+
+.full-player-loop .loop-badge {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 8px;
+    font-weight: 700;
+    pointer-events: none;
+    line-height: 1;
+    color: var(--accent-color, #1db954);
+}
+
 /* KTV 控件垂直容器 */
 .full-player-ktv-controls {
     display: flex;
