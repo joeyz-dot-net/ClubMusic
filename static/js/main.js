@@ -306,6 +306,10 @@ class MusicPlayerApp {
             this.updateLoopButtonUI(loopMode);
         });
 
+        player.on('shuffleChange', (shuffleMode) => {
+            this.updateShuffleButtonUI(shuffleMode);
+        });
+
         // 监听音调变化
         player.on('pitchChange', (pitchShift) => {
             this.updatePitchUI(pitchShift);

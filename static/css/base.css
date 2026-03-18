@@ -2107,25 +2107,20 @@ button:active { transform: scale(0.98); }
 
 .full-player-center-controls {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    gap: 16px;
     flex: 1;
     min-width: 0;
-}
-
-.full-player-playback-row {
-    display: flex;
-    align-items: center;
-    gap: 16px;
 }
 
 .full-player-volume {
     display: flex;
     align-items: center;
     gap: 12px;
-    width: 100%;
+    padding: 0 24px 16px;
     max-width: 400px;
+    margin: 0 auto;
 }
 
 .full-player-volume svg {

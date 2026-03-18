@@ -141,39 +141,23 @@
 						</button>
 					</div>
 				</div>
-				<!-- 中列：播放控制 + 音量 -->
+				<!-- 中列：播放控制 -->
 				<div class="full-player-center-controls">
-					<div class="full-player-playback-row">
-						<button class="full-player-control-btn full-player-prev" id="fullPlayerPrev" title="上一首" data-i18n-title="player.prev">
-							<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-								<path d="M16 6h2v12h-2V6zM8 12l8.5-6v12L8 12z"/>
-							</svg>
-						</button>
-						<button class="full-player-control-btn full-player-play-pause" id="fullPlayerPlayPause" title="播放/暂停" data-i18n-title="player.playPause">
-							<svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
-								<path d="M8 5v14l11-7z"/>
-							</svg>
-						</button>
-						<button class="full-player-control-btn full-player-next" id="fullPlayerNext" title="下一首" data-i18n-title="player.next">
-							<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-								<path d="M6 6h2v12H6V6zm10 6l-8.5 6V6L16 12z"/>
-							</svg>
-						</button>
-					</div>
-					<div class="full-player-volume">
-						<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-							<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+					<button class="full-player-control-btn full-player-prev" id="fullPlayerPrev" title="上一首" data-i18n-title="player.prev">
+						<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+							<path d="M16 6h2v12h-2V6zM8 12l8.5-6v12L8 12z"/>
 						</svg>
-						<div class="full-player-volume-slider">
-							<input type="range" id="fullPlayerVolumeSlider" min="1" max="100" value="50" />
-							<div id="fullPlayerVolumeDisplay" class="volume-display" style="display:none;">
-								<span class="volume-value">50</span>
-							</div>
-						</div>
-						<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-							<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+					</button>
+					<button class="full-player-control-btn full-player-play-pause" id="fullPlayerPlayPause" title="播放/暂停" data-i18n-title="player.playPause">
+						<svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
+							<path d="M8 5v14l11-7z"/>
 						</svg>
-					</div>
+					</button>
+					<button class="full-player-control-btn full-player-next" id="fullPlayerNext" title="下一首" data-i18n-title="player.next">
+						<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+							<path d="M6 6h2v12H6V6zm10 6l-8.5 6V6L16 12z"/>
+						</svg>
+					</button>
 				</div>
 				<!-- 右列：KTV 控件 -->
 				<div class="full-player-ktv-controls">
@@ -188,6 +172,22 @@
 						<button class="full-player-control-btn full-player-offset-btn" id="fullPlayerOffsetUp" title="视频提前 0.2 秒" data-i18n-title="player.videoAdvance">＋</button>
 					</div>
 				</div>
+			</div>
+
+			<!-- Volume Control -->
+			<div class="full-player-volume">
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+					<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+				</svg>
+				<div class="full-player-volume-slider">
+					<input type="range" id="fullPlayerVolumeSlider" min="1" max="100" value="50" />
+					<div id="fullPlayerVolumeDisplay" class="volume-display" style="display:none;">
+						<span class="volume-value">50</span>
+					</div>
+				</div>
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+					<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+				</svg>
 			</div>
 
 		</div>

@@ -186,7 +186,7 @@ async def next_track(
     playback_history: PlayHistory = Depends(get_playback_history),
     player_lock=Depends(get_player_lock),
 ):
-    """播放下一首（删除当前曲并播放队首）"""
+    """播放下一首（根据 loop_mode / shuffle_mode 决定行为）"""
     try:
         with player_lock:
             current_pid = get_current_playlist_id(player)
@@ -210,27 +210,47 @@ async def next_track(
                         removed_index = idx
                         break
 
-            if removed_index >= 0:
-                removed_song = songs.pop(removed_index)
-                playlist.updated_at = time.time()
-                song_title = removed_song.get("title") if isinstance(removed_song, dict) else str(removed_song)
-                logger.info(f"[/next] 已删除当前曲 (索引{removed_index}): {song_title}")
+            # 根据 loop_mode 处理当前歌曲
+            if player.loop_mode == 2:
+                # 全部循环：移到队尾
+                if removed_index >= 0:
+                    moved_song = songs.pop(removed_index)
+                    songs.append(moved_song)
+                    song_title = moved_song.get("title") if isinstance(moved_song, dict) else str(moved_song)
+                    logger.info(f"[/next] 🔁 全部循环: 已将 {song_title} 移到队尾")
+                else:
+                    moved_song = songs.pop(0)
+                    songs.append(moved_song)
+                    song_title = moved_song.get("title") if isinstance(moved_song, dict) else str(moved_song)
+                    logger.info(f"[/next] 🔁 全部循环: 已将 {song_title} 移到队尾")
             else:
-                logger.warning(f"[/next] 未找到当前曲 ({current_playing_url})，删除列表第一首")
-                removed_song = songs.pop(0)
-                playlist.updated_at = time.time()
-                song_title = removed_song.get("title") if isinstance(removed_song, dict) else str(removed_song)
-                logger.info(f"[/next] 已删除第一首: {song_title}")
+                # 不循环 / 单曲循环：删除当前曲（单曲循环下手动下一首 = 跳过）
+                if removed_index >= 0:
+                    removed_song = songs.pop(removed_index)
+                    song_title = removed_song.get("title") if isinstance(removed_song, dict) else str(removed_song)
+                    logger.info(f"[/next] 已删除当前曲 (索引{removed_index}): {song_title}")
+                elif songs:
+                    removed_song = songs.pop(0)
+                    song_title = removed_song.get("title") if isinstance(removed_song, dict) else str(removed_song)
+                    logger.info(f"[/next] 已删除第一首: {song_title}")
 
+            playlist.updated_at = time.time()
             playlists.save()
 
             if not songs:
-                logger.info("[/next] 删除后队列已空，停止播放")
+                logger.info("[/next] 队列已空，停止播放")
                 player.current_meta = {}
                 player.current_index = -1
                 return {"status": "EMPTY", "message": "队列已空"}
 
-            # 跳过循环：最多尝试 MAX_SKIP 首，失败的移到队尾保留
+            # 随机模式：从队列随机选一首放到队首
+            if player.shuffle_mode and len(songs) > 1:
+                import random
+                pick = random.randint(0, len(songs) - 1)
+                songs.insert(0, songs.pop(pick))
+                logger.info(f"[/next] 🔀 随机模式: 随机选中第{pick}首")
+
+            # 播放队首，跳过失败歌曲（最多5首）
             MAX_SKIP = 5
             skipped_songs = []
             success = False
