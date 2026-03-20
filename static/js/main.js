@@ -653,103 +653,161 @@ class MusicPlayerApp {
             // 拖拽返回逻辑
             let dragStart = { x: 0, y: 0 };
             let isDragging = false;
+            let activePointerId = null;
             let startOpacity = 1;
             let isPhoneLandscape = false; // iPhone 横屏时使用水平滑动
             // iPad 屏幕更大，增大阈值防止误触
             const dragThreshold = isIPad() ? 120 : 80;
+            const dragBlockSelector = [
+                'button',
+                'input',
+                'select',
+                'textarea',
+                'label',
+                'a',
+                'iframe',
+                '.full-player-progress-section',
+                '.full-player-controls-grid',
+                '.full-player-volume'
+            ].join(', ');
 
-            this.elements.fullPlayer.addEventListener('touchstart', (e) => {
-                dragStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            const resetDragStyles = () => {
+                this.elements.fullPlayer.style.transition = '';
+                this.elements.fullPlayer.style.transform = '';
+                this.elements.fullPlayer.style.opacity = '';
+            };
+
+            const removeDragListeners = () => {
+                document.removeEventListener('pointermove', handlePointerMove);
+                document.removeEventListener('pointerup', handlePointerEnd);
+                document.removeEventListener('pointercancel', handlePointerCancel);
+            };
+
+            const setLandscapeMode = () => {
+                isPhoneLandscape = window.matchMedia('(orientation: landscape) and (max-height: 500px)').matches;
+            };
+
+            const isBlockedDragTarget = (target) => {
+                if (!(target instanceof Element)) return false;
+                return Boolean(target.closest(dragBlockSelector));
+            };
+
+            const startFullPlayerDrag = (clientX, clientY) => {
+                dragStart = { x: clientX, y: clientY };
                 isDragging = true;
                 startOpacity = 1;
-                // 在触摸开始时判断是否为 iPhone 横屏
-                isPhoneLandscape = window.matchMedia('(orientation: landscape) and (max-height: 500px)').matches;
+                setLandscapeMode();
+
                 // 忽略距左边缘 30px 内的触摸（避免与 iOS 返回手势冲突）
                 if (isPhoneLandscape && dragStart.x < 30) {
                     isDragging = false;
+                    return false;
                 }
-            }, { passive: true });
 
-            this.elements.fullPlayer.addEventListener('touchmove', (e) => {
+                return true;
+            };
+
+            const applyDragMotion = (clientX, clientY) => {
                 if (!isDragging) return;
 
-                if (isPhoneLandscape) {
-                    // iPhone 横屏: 水平右滑关闭
-                    const currentX = e.touches[0].clientX;
-                    const deltaX = currentX - dragStart.x;
-                    if (deltaX > 0) {
-                        const opacity = Math.max(0.3, 1 - (deltaX / 300));
-                        this.elements.fullPlayer.style.transform = `translateX(${deltaX}px)`;
-                        this.elements.fullPlayer.style.opacity = opacity;
-                    }
-                } else {
-                    // 竖屏/iPad: 垂直下滑关闭
-                    const currentY = e.touches[0].clientY;
-                    const deltaY = currentY - dragStart.y;
-                    if (deltaY > 0) {
-                        const opacity = Math.max(0.3, 1 - (deltaY / 300));
-                        this.elements.fullPlayer.style.transform = `translateY(${deltaY}px)`;
-                        this.elements.fullPlayer.style.opacity = opacity;
-                    }
-                }
-            }, { passive: true });
+                const delta = isPhoneLandscape
+                    ? Math.max(0, clientX - dragStart.x)
+                    : Math.max(0, clientY - dragStart.y);
+                const opacity = Math.max(0.3, startOpacity - (delta / 300));
 
-            this.elements.fullPlayer.addEventListener('touchend', (e) => {
+                this.elements.fullPlayer.style.transform = isPhoneLandscape
+                    ? `translateX(${delta}px)`
+                    : `translateY(${delta}px)`;
+                this.elements.fullPlayer.style.opacity = opacity;
+            };
+
+            const animateDragReset = () => {
+                this.elements.fullPlayer.style.transition = 'all 0.3s ease-out';
+                this.elements.fullPlayer.style.transform = isPhoneLandscape ? 'translateX(0)' : 'translateY(0)';
+                this.elements.fullPlayer.style.opacity = '1';
+
+                setTimeout(() => {
+                    this.elements.fullPlayer.style.transition = '';
+                }, 300);
+            };
+
+            const animateDragClose = () => {
+                this.elements.fullPlayer.style.transition = 'all 0.3s ease-out';
+                this.elements.fullPlayer.style.transform = isPhoneLandscape ? 'translateX(100%)' : 'translateY(100%)';
+                this.elements.fullPlayer.style.opacity = '0';
+
+                setTimeout(() => {
+                    resetDragStyles();
+                    goBackToNav();
+                }, 300);
+            };
+
+            const finishFullPlayerDrag = (clientX, clientY) => {
                 if (!isDragging) return;
+
+                const delta = isPhoneLandscape
+                    ? clientX - dragStart.x
+                    : clientY - dragStart.y;
+
                 isDragging = false;
 
-                if (isPhoneLandscape) {
-                    // iPhone 横屏: 水平判断
-                    const endX = e.changedTouches[0].clientX;
-                    const deltaX = endX - dragStart.x;
-
-                    if (deltaX > dragThreshold) {
-                        this.elements.fullPlayer.style.transition = 'all 0.3s ease-out';
-                        this.elements.fullPlayer.style.transform = 'translateX(100%)';
-                        this.elements.fullPlayer.style.opacity = '0';
-
-                        setTimeout(() => {
-                            this.elements.fullPlayer.style.transition = '';
-                            this.elements.fullPlayer.style.transform = '';
-                            this.elements.fullPlayer.style.opacity = '';
-                            goBackToNav();
-                        }, 300);
-                    } else {
-                        this.elements.fullPlayer.style.transition = 'all 0.3s ease-out';
-                        this.elements.fullPlayer.style.transform = 'translateX(0)';
-                        this.elements.fullPlayer.style.opacity = '1';
-
-                        setTimeout(() => {
-                            this.elements.fullPlayer.style.transition = '';
-                        }, 300);
-                    }
+                if (delta > dragThreshold) {
+                    animateDragClose();
                 } else {
-                    // 竖屏/iPad: 垂直判断
-                    const endY = e.changedTouches[0].clientY;
-                    const deltaY = endY - dragStart.y;
-
-                    if (deltaY > dragThreshold) {
-                        this.elements.fullPlayer.style.transition = 'all 0.3s ease-out';
-                        this.elements.fullPlayer.style.transform = 'translateY(100%)';
-                        this.elements.fullPlayer.style.opacity = '0';
-
-                        setTimeout(() => {
-                            this.elements.fullPlayer.style.transition = '';
-                            this.elements.fullPlayer.style.transform = '';
-                            this.elements.fullPlayer.style.opacity = '';
-                            goBackToNav();
-                        }, 300);
-                    } else {
-                        this.elements.fullPlayer.style.transition = 'all 0.3s ease-out';
-                        this.elements.fullPlayer.style.transform = 'translateY(0)';
-                        this.elements.fullPlayer.style.opacity = '1';
-
-                        setTimeout(() => {
-                            this.elements.fullPlayer.style.transition = '';
-                        }, 300);
-                    }
+                    animateDragReset();
                 }
-            }, { passive: true });
+            };
+
+            const handlePointerMove = (e) => {
+                if (!isDragging || e.pointerId !== activePointerId) return;
+                e.preventDefault();
+                applyDragMotion(e.clientX, e.clientY);
+            };
+
+            const cleanupPointerDrag = () => {
+                removeDragListeners();
+
+                if (activePointerId !== null && this.elements.fullPlayer.hasPointerCapture?.(activePointerId)) {
+                    this.elements.fullPlayer.releasePointerCapture(activePointerId);
+                }
+
+                activePointerId = null;
+            };
+
+            const handlePointerEnd = (e) => {
+                if (!isDragging || e.pointerId !== activePointerId) return;
+                cleanupPointerDrag();
+                finishFullPlayerDrag(e.clientX, e.clientY);
+            };
+
+            const handlePointerCancel = (e) => {
+                if (!isDragging || e.pointerId !== activePointerId) return;
+                isDragging = false;
+                cleanupPointerDrag();
+                animateDragReset();
+            };
+
+            this.elements.fullPlayer.addEventListener('pointerdown', (e) => {
+                if (activePointerId !== null) return;
+                if (e.pointerType === 'mouse' && e.button !== 0) return;
+                if (isBlockedDragTarget(e.target)) return;
+                if (!this.elements.fullPlayer.classList.contains('show')) return;
+
+                if (!startFullPlayerDrag(e.clientX, e.clientY)) {
+                    return;
+                }
+
+                activePointerId = e.pointerId;
+                document.addEventListener('pointermove', handlePointerMove, { passive: false });
+                document.addEventListener('pointerup', handlePointerEnd);
+                document.addEventListener('pointercancel', handlePointerCancel);
+
+                if (this.elements.fullPlayer.setPointerCapture) {
+                    this.elements.fullPlayer.setPointerCapture(e.pointerId);
+                }
+
+                e.preventDefault();
+            });
 
             // iPad 旋转时重置展开模式，防止布局错乱 + 更新 NPP 面板
             if (isIPad()) {
