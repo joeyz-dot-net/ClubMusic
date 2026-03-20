@@ -787,8 +787,44 @@ class MusicPlayerApp {
                 animateDragReset();
             };
 
+            this.elements.fullPlayer.addEventListener('touchstart', (e) => {
+                if (isBlockedDragTarget(e.target)) return;
+                if (!this.elements.fullPlayer.classList.contains('show')) return;
+
+                const touch = e.touches[0];
+                if (!touch) return;
+
+                startFullPlayerDrag(touch.clientX, touch.clientY);
+            }, { passive: true });
+
+            this.elements.fullPlayer.addEventListener('touchmove', (e) => {
+                if (!isDragging || activePointerId !== null) return;
+
+                const touch = e.touches[0];
+                if (!touch) return;
+
+                e.preventDefault();
+                applyDragMotion(touch.clientX, touch.clientY);
+            }, { passive: false });
+
+            this.elements.fullPlayer.addEventListener('touchend', (e) => {
+                if (!isDragging || activePointerId !== null) return;
+
+                const touch = e.changedTouches[0];
+                if (!touch) return;
+
+                finishFullPlayerDrag(touch.clientX, touch.clientY);
+            }, { passive: true });
+
+            this.elements.fullPlayer.addEventListener('touchcancel', () => {
+                if (!isDragging || activePointerId !== null) return;
+                isDragging = false;
+                animateDragReset();
+            }, { passive: true });
+
             this.elements.fullPlayer.addEventListener('pointerdown', (e) => {
                 if (activePointerId !== null) return;
+                if (e.pointerType === 'touch') return;
                 if (e.pointerType === 'mouse' && e.button !== 0) return;
                 if (isBlockedDragTarget(e.target)) return;
                 if (!this.elements.fullPlayer.classList.contains('show')) return;
