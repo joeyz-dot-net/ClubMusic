@@ -315,6 +315,29 @@ class MusicPlayer:
         with self._lock:
             return dict(self.current_meta) if self.current_meta else {}
 
+    def _infer_stream_type(self, url: str) -> str:
+        normalized_url = (url or "").lower()
+        if "youtube.com" in normalized_url or "youtu.be" in normalized_url:
+            return "youtube"
+        return "stream"
+
+    def _build_current_meta(self, song: Song, **extra_fields) -> dict:
+        current_meta = song.to_dict()
+        url = current_meta.get("url", "")
+        song_type = current_meta.get("type", "local")
+
+        if url:
+            current_meta.setdefault("rel", url)
+            if song_type != "local":
+                current_meta.setdefault("raw_url", url)
+
+        current_meta.setdefault("title", current_meta.get("name") or "")
+        current_meta.setdefault("name", current_meta.get("title") or "")
+        current_meta.setdefault("artist", current_meta.get("title") or "")
+
+        current_meta.update(extra_fields)
+        return current_meta
+
     def set_external_deps(self, playlists_manager, default_playlist_id,
                           playback_history, broadcast_from_thread):
         """注入外部依赖，消除对 routers.state 的循环导入。
@@ -1107,7 +1130,7 @@ class MusicPlayer:
                     )
 
                     if success:
-                        self.current_meta = song.to_dict()
+                        self.current_meta = self._build_current_meta(song)
                         self._last_play_time = time.time()
                         auto_play_success = True
                         logger.info(f"[自动播放] ✅ 单曲循环成功: {title}")
@@ -1203,7 +1226,7 @@ class MusicPlayer:
                         )
 
                         if success:
-                            self.current_meta = song.to_dict()
+                            self.current_meta = self._build_current_meta(song)
                             self.current_index = 0
                             self._last_play_time = time.time()
                             auto_play_success = True
@@ -2075,13 +2098,12 @@ class MusicPlayer:
             raise
 
         self.current_index = idx
-        self.current_meta = {
-            "abs_path": abs_file,
-            "rel": rel,
-            "index": idx,
-            "ts": int(time.time()),
-            "name": os.path.basename(rel),
-        }
+        self.current_meta = self._build_current_meta(
+            LocalSong(rel, os.path.basename(rel)),
+            abs_path=abs_file,
+            rel=rel,
+            index=idx,
+        )
         self._last_play_time = time.time()  # 记录播放开始时间
 
         # 添加到播放历史（存储相对路径，以便 /play 接口使用）
@@ -2168,15 +2190,13 @@ class MusicPlayer:
 
             # 初始化 CURRENT_META：保留 raw_url，并使用占位名（避免将原始 URL 直接显示给用户）
             # 同时准备 media_title 字段供客户端优先显示
-            self.current_meta = {
-                "abs_path": url,
-                "rel": url,
-                "index": -1,
-                "ts": int(time.time()),
-                "name": "加载中…",
-                "raw_url": url,
-                "media_title": None,
-            }
+            self.current_meta = self._build_current_meta(
+                StreamSong(url, "加载中…", stream_type=self._infer_stream_type(url)),
+                abs_path=url,
+                rel=url,
+                index=-1,
+                media_title=None,
+            )
 
             # 检测是否为播放列表 URL
             is_playlist = False
@@ -2431,7 +2451,7 @@ class MusicPlayer:
             logger.info(f"[MusicPlayer.play] ✅ song.play() 返回成功")
 
             # 更新当前播放的元数据
-            self.current_meta = song.to_dict()
+            self.current_meta = self._build_current_meta(song)
             self._last_play_time = time.time()
             logger.info(f"[MusicPlayer.play] 已更新 current_meta: duration={self.current_meta.get('duration', 'N/A')}")
             logger.debug(f"已更新 current_meta: {self.current_meta}")

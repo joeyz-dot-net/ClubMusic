@@ -171,7 +171,7 @@ export class PlaylistManager {
 
     // 调整当前播放列表顺序
     async reorder(fromIndex, toIndex) {
-        const result = await api.reorderPlaylist(fromIndex, toIndex);
+        const result = await api.reorderPlaylist(this.selectedPlaylistId, fromIndex, toIndex);
         if (result.status === 'OK') {
             // 后端已更新，重新加载以保持一致
             await this.loadCurrent();
