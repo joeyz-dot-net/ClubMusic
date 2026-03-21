@@ -2211,25 +2211,21 @@ if (document.readyState === 'loading') {
 
 // 导出供调试使用
 window.MusicPlayerApp = app;
-window.app = {
-    ...app,
-    // 显式导出关键方法，确保可以被外部调用
-    playSong: app.playSong.bind(app),
-    renderPlaylist: app.renderPlaylist.bind(app),
-    player,      // 播放器对象
-    settingsManager,  // 设置管理器
-    modules: {
-        api,
-        player,
-        playlistManager,
-        volumeControl,
-        searchManager,
-        themeManager,
-        settingsManager,
-        navManager
-    },
-
+app.playSong = app.playSong.bind(app);
+app.renderPlaylist = app.renderPlaylist.bind(app);
+app.player = player;
+app.settingsManager = settingsManager;
+app.modules = {
+    api,
+    player,
+    playlistManager,
+    volumeControl,
+    searchManager,
+    themeManager,
+    settingsManager,
+    navManager
 };
+window.app = app;
 
 console.log('💡 模块化音乐播放器已加载');
 console.log('💡 输入 app.diagnose.printHelp() 查看诊断命令');
