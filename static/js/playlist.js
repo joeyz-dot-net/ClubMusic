@@ -973,6 +973,15 @@ function createHistorySearchInput({ appTheme, colors }) {
     return searchInput;
 }
 
+function createCenteredEmptyMessage(message) {
+    const empty = document.createElement('div');
+    empty.style.padding = '20px';
+    empty.style.textAlign = 'center';
+    empty.style.color = '#999';
+    empty.textContent = message;
+    return empty;
+}
+
 function bindPlaylistItemDelegates(container) {
     if (!container || container._playlistItemClickHandler) {
         return;
@@ -1606,7 +1615,7 @@ export async function showPlaybackHistory() {
             return;
         }
         
-        historyList.innerHTML = '';
+        historyList.replaceChildren();
 
         // 获取应用主题
         const appTheme = getCurrentAppTheme();
@@ -1640,16 +1649,16 @@ export async function showPlaybackHistory() {
 
         // 渲染过滤后的历史列表
         function renderFilteredHistory(filterText) {
-            historyList.innerHTML = '';
+            historyList.replaceChildren();
             const query = (filterText || '').trim().toLowerCase();
             const filtered = query
                 ? allHistory.filter(item => (item.title || '').toLowerCase().includes(query))
                 : allHistory;
 
             if (filtered.length === 0) {
-                historyList.innerHTML = `<div style="padding: 20px; text-align: center; color: #999;">${
+                historyList.appendChild(createCenteredEmptyMessage(
                     query ? i18n.t('history.noResults') : i18n.t('history.empty')
-                }</div>`;
+                ));
             } else {
                 filtered.forEach(item => {
                     historyList.appendChild(renderHistoryItem(item));
@@ -1878,13 +1887,13 @@ async function showSelectPlaylistModal(song, historyModal) {
         const colors = getThemeColors(appTheme);
         
         // 清空模态框内容
-        selectPlaylistModalBody.innerHTML = '';
+        selectPlaylistModalBody.replaceChildren();
         
         // 获取所有歌单
         const playlists = playlistManager.getAll();
         
         if (!playlists || playlists.length === 0) {
-            selectPlaylistModalBody.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">暂无歌单</div>';
+            selectPlaylistModalBody.appendChild(createCenteredEmptyMessage(i18n.t('playlists.empty')));
         } else {
             // 为每个歌单创建选项
             playlists.forEach((playlist, index) => {
