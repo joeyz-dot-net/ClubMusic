@@ -4,6 +4,8 @@
  */
 
 import { api } from './api.js';
+import { player } from './player.js';
+import { unavailableSongs } from './unavailable.js';
 
 export class KTVSync {
     constructor() {
@@ -125,14 +127,29 @@ export class KTVSync {
             console.error('[KTV] 视频无法播放，自动跳过下一首');
             this._failedVideoId = this.currentVideoId;  // 记住失败的ID，防止重试
             this.disableVideoMode();  // 立即清理视频模式状态
-            void api.next().then((response) => {
-                if (response?._error || (response?.status && response.status !== 'OK' && response.status !== 'EMPTY')) {
-                    console.error('[KTV] 自动跳过失败:', response?.error || response?.message || response);
-                }
+            void player.next().then((result) => {
+                this._markSkippedSongs(result);
             }).catch((error) => {
-                console.error('[KTV] 自动跳过失败:', error);
+                this._markSkippedSongs(error?.result || error);
+                if (error?.result?.status === 'EMPTY') {
+                    console.warn('[KTV] 自动跳过结束：队列为空');
+                    return;
+                }
+                console.error('[KTV] 自动跳过失败:', error?.message || error);
             });
         }
+    }
+
+    _markSkippedSongs(result) {
+        const payload = result?.result || result;
+        if (!payload?.skipped_songs?.length) {
+            return;
+        }
+        payload.skipped_songs.forEach((song) => {
+            if (song?.url) {
+                unavailableSongs.add(song.url);
+            }
+        });
     }
 
     /**
