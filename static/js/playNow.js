@@ -38,13 +38,19 @@ export async function executePlayNow({ song, addToQueueTop, refreshPlaylist, add
     try {
         const addResult = await addToQueueTop();
         const wasAlreadyQueued = Boolean(addResult?.duplicate);
+        let refreshError = null;
 
         if (!wasAlreadyQueued && (addResult?._error || addResult?.status !== 'OK')) {
             throw createPlayNowError(addResult, addFailedMessage);
         }
 
         if (!wasAlreadyQueued && typeof refreshPlaylist === 'function') {
-            await refreshPlaylist();
+            try {
+                await refreshPlaylist();
+            } catch (error) {
+                refreshError = error;
+                console.warn('[PlayNow] 播放前刷新队列失败，继续播放:', error);
+            }
         }
 
         await player.play(song.url, song.title, song.type || 'local', 0);
@@ -52,6 +58,7 @@ export async function executePlayNow({ song, addToQueueTop, refreshPlaylist, add
         return {
             skipped: false,
             wasAlreadyQueued,
+            refreshError,
             currentMeta: getCurrentPlayNowMeta(),
             addResult
         };

@@ -3,10 +3,10 @@ import { api } from './api.js?v=2';
 import { Toast, formatTime, searchLoading } from './ui.js';
 import { buildTrackItemElement } from './templates.js';
 import { localFiles, getNodeByPath, getDirCoverUrl, countFiles } from './local.js';
-import { playlistManager, renderPlaylistUI } from './playlist.js';
+import { playlistManager, renderPlaylistUI } from './playlist.js?v=2';
 import { i18n } from './i18n.js';
 import { escapeHTML, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js';
-import { executePlayNow, rerenderQueueWithCurrentMeta } from './playNow.js';
+import { executePlayNow, rerenderQueueWithCurrentMeta } from './playNow.js?v=2';
 import { getCurrentPlaybackMeta } from './playbackState.js';
 
 const SEARCH_SUCCESS_ICON_MARKUP = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
@@ -574,6 +574,54 @@ export class SearchManager {
         Toast.warning(message);
     }
 
+    renderPlaylistFromCache() {
+        const container = document.getElementById('playListContainer');
+        if (!container) {
+            return false;
+        }
+
+        renderPlaylistUI({
+            container,
+            onPlay: (song) => window.app?.playSong(song),
+            currentMeta: getCurrentPlaybackMeta()
+        });
+        return true;
+    }
+
+    async refreshPlaylistView({ logPrefix = '[搜索]', successLogMessage = '' } = {}) {
+        try {
+            await playlistManager.refreshAll();
+            if (!this.renderPlaylistFromCache()) {
+                throw new Error('playlist container unavailable');
+            }
+            if (successLogMessage) {
+                console.log(successLogMessage);
+            }
+            return true;
+        } catch (err) {
+            console.warn(`${logPrefix} 刷新播放列表失败:`, err);
+        }
+
+        try {
+            if (this.refreshPlaylist) {
+                await this.refreshPlaylist();
+                console.log(`${logPrefix} 已通过应用回退刷新播放列表`);
+                return true;
+            }
+
+            if (this.renderPlaylistFromCache()) {
+                console.log(`${logPrefix} 已通过缓存回退重绘播放列表`);
+                return true;
+            }
+
+            throw new Error('playlist container unavailable');
+        } catch (fallbackErr) {
+            console.warn(`${logPrefix} 回退刷新失败:`, fallbackErr);
+            Toast.warning(i18n.t('playlist.opFailed'));
+            return false;
+        }
+    }
+
     setActiveSearchTab(container, tabName) {
         if (!container) return;
 
@@ -750,9 +798,9 @@ export class SearchManager {
                 setTimeout(() => {
                     // ✅ 仅刷新播放列表显示，保持当前选择的歌单
                     if (this.refreshPlaylist) {
-                        this.refreshPlaylist();
+                        void this.refreshPlaylist();
                     } else {
-                        document.dispatchEvent(new CustomEvent('playlist:refresh'));
+                        this.renderPlaylistFromCache();
                     }
 
                     if (typeof this.closeModalCallback === 'function') {
@@ -1130,7 +1178,7 @@ export class SearchManager {
                                 Toast.error(i18n.t('search.addFailed') + ': ' + err.message);
                             }
                         } else {
-                            const { showSelectPlaylistModal } = await import('./playlist.js');
+                            const { showSelectPlaylistModal } = await import('./playlist.js?v=2');
                             await showSelectPlaylistModal(songData, null);
                         }
                     } else if (action === 'add-all-to-playlist') {
@@ -1277,33 +1325,10 @@ export class SearchManager {
                             btn.disabled = false;
                         }
                         
-                        // ✅【关键】刷新播放列表显示 - 直接调用 renderPlaylistUI 确保立即显示
-                        try {
-                            const playlistManager = window.app?.modules?.playlistManager;
-                            if (playlistManager) {
-                                await playlistManager.refreshAll();
-                            }
-                            
-                            const container = document.getElementById('playListContainer');
-                                const currentMeta = getCurrentPlaybackMeta();
-                            if (container && playlistManager) {
-                                const { renderPlaylistUI } = await import('./playlist.js');
-                                renderPlaylistUI({
-                                    container,
-                                    onPlay: (s) => window.app?.playSong(s),
-                                        currentMeta
-                                });
-                                console.log('[搜索] ✓ 播放列表已刷新 - ' + addedCount + ' 首歌曲');
-                            }
-                        } catch (err) {
-                            console.warn('[搜索] 刷新播放列表失败:', err);
-                            // 回退方案
-                            if (this.refreshPlaylist) {
-                                await this.refreshPlaylist();
-                            } else {
-                                document.dispatchEvent(new CustomEvent('playlist:refresh'));
-                            }
-                        }
+                        await this.refreshPlaylistView({
+                            logPrefix: '[搜索]',
+                            successLogMessage: '[搜索] ✓ 播放列表已刷新 - ' + addedCount + ' 首歌曲'
+                        });
                     } catch (error) {
                         console.error('添加目录歌曲失败:', error);
                         Toast.error(i18n.t('search.addDirFailed') + ': ' + error.message);
@@ -1337,33 +1362,10 @@ export class SearchManager {
                     setElementMarkup(btn, SEARCH_SUCCESS_ICON_MARKUP);
                     btn.disabled = true;
                     
-                    // ✅【关键】刷新播放列表显示 - 直接调用 renderPlaylistUI 确保立即显示
-                    try {
-                        const playlistManager = window.app?.modules?.playlistManager;
-                        if (playlistManager) {
-                            await playlistManager.refreshAll();
-                        }
-
-                        const container = document.getElementById('playListContainer');
-                        const currentMeta = getCurrentPlaybackMeta();
-                        if (container && playlistManager) {
-                            const { renderPlaylistUI } = await import('./playlist.js');
-                            renderPlaylistUI({
-                                container,
-                                onPlay: (s) => window.app?.playSong(s),
-                                currentMeta
-                            });
-                            console.log('[搜索] ✓ 播放列表已刷新 - 已添加单曲');
-                        }
-                    } catch (err) {
-                        console.warn('[搜索] 刷新播放列表失败:', err);
-                        // 回退方案
-                        if (this.refreshPlaylist) {
-                            await this.refreshPlaylist();
-                        } else {
-                            document.dispatchEvent(new CustomEvent('playlist:refresh'));
-                        }
-                    }
+                    await this.refreshPlaylistView({
+                        logPrefix: '[搜索]',
+                        successLogMessage: '[搜索] ✓ 播放列表已刷新 - 已添加单曲'
+                    });
                 } else {
                     // 重复歌曲使用警告提示
                     if (response?.duplicate) {
@@ -1475,33 +1477,10 @@ export class SearchManager {
                         failedCount
                     });
 
-                    // 刷新播放列表显示
-                    try {
-                        const playlistManager = window.app?.modules?.playlistManager;
-                        if (playlistManager) {
-                            await playlistManager.refreshAll();
-                        }
-
-                        const container = document.getElementById('playListContainer');
-                        const currentMeta = getCurrentPlaybackMeta();
-                        if (container && playlistManager) {
-                            const { renderPlaylistUI } = await import('./playlist.js');
-                            renderPlaylistUI({
-                                container,
-                                onPlay: (s) => window.app?.playSong(s),
-                                currentMeta
-                            });
-                            console.log('[批量添加] ✓ 播放列表已刷新');
-                        }
-                    } catch (err) {
-                        console.warn('[批量添加] 刷新播放列表失败:', err);
-                        // 回退方案
-                        if (this.refreshPlaylist) {
-                            await this.refreshPlaylist();
-                        } else {
-                            document.dispatchEvent(new CustomEvent('playlist:refresh'));
-                        }
-                    }
+                    await this.refreshPlaylistView({
+                        logPrefix: '[批量添加]',
+                        successLogMessage: '[批量添加] ✓ 播放列表已刷新'
+                    });
                 } catch (error) {
                     searchLoading.hide();
                     console.error('[批量添加] 添加失败:', error);

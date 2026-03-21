@@ -3,10 +3,10 @@
 
 import { api } from './api.js?v=2';
 import { player } from './player.js';
-import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js';
+import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=2';
 import { playlistsManagement } from './playlists-management.js';
 import { volumeControl } from './volume.js';
-import { searchManager } from './search.js?v=3';
+import { searchManager } from './search.js?v=5';
 import { themeManager } from './themeManager.js';
 import { debug } from './debug.js';
 import { Toast, formatTime } from './ui.js';

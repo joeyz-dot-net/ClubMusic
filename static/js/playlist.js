@@ -6,7 +6,7 @@ import { thumbnailManager, escapeHTML, focusFirstFocusable, openOverlayActionMen
 import { i18n } from './i18n.js';
 import { player } from './player.js';
 import { unavailableSongs } from './unavailable.js';
-import { executePlayNow, rerenderQueueWithCurrentMeta } from './playNow.js';
+import { executePlayNow, rerenderQueueWithCurrentMeta } from './playNow.js?v=2';
 import { getCurrentPlaybackStatus } from './playbackState.js';
 
 export class PlaylistManager {
