@@ -7,6 +7,7 @@ import { i18n } from './i18n.js';
 import { player } from './player.js';
 import { unavailableSongs } from './unavailable.js';
 import { executePlayNow, rerenderQueueWithCurrentMeta } from './playNow.js';
+import { getCurrentPlaybackStatus } from './playbackState.js';
 
 export class PlaylistManager {
     constructor() {
@@ -2244,7 +2245,7 @@ async function closeHistoryModal(historyModal) {
                 }
             } catch (err) {
                 console.warn('[历史] 获取最新播放状态失败:', err);
-                currentStatus = window.app?.lastPlayStatus || { current_meta: null };
+                currentStatus = getCurrentPlaybackStatus();
             }
 
             if (container) {

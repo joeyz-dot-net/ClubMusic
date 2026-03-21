@@ -7,6 +7,7 @@ import { playlistManager, renderPlaylistUI } from './playlist.js';
 import { i18n } from './i18n.js';
 import { escapeHTML, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js';
 import { executePlayNow, rerenderQueueWithCurrentMeta } from './playNow.js';
+import { getCurrentPlaybackMeta } from './playbackState.js';
 
 const SEARCH_SUCCESS_ICON_MARKUP = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
 
@@ -1244,13 +1245,13 @@ export class SearchManager {
                             }
                             
                             const container = document.getElementById('playListContainer');
-                            const currentStatus = window.app?.lastPlayStatus || { current_meta: null };
+                                const currentMeta = getCurrentPlaybackMeta();
                             if (container && playlistManager) {
                                 const { renderPlaylistUI } = await import('./playlist.js');
                                 renderPlaylistUI({
                                     container,
                                     onPlay: (s) => window.app?.playSong(s),
-                                    currentMeta: currentStatus.current_meta
+                                        currentMeta
                                 });
                                 console.log('[搜索] ✓ 播放列表已刷新 - ' + addedCount + ' 首歌曲');
                             }
@@ -1304,13 +1305,13 @@ export class SearchManager {
                         }
 
                         const container = document.getElementById('playListContainer');
-                        const currentStatus = window.app?.lastPlayStatus || { current_meta: null };
+                        const currentMeta = getCurrentPlaybackMeta();
                         if (container && playlistManager) {
                             const { renderPlaylistUI } = await import('./playlist.js');
                             renderPlaylistUI({
                                 container,
                                 onPlay: (s) => window.app?.playSong(s),
-                                currentMeta: currentStatus.current_meta
+                                currentMeta
                             });
                             console.log('[搜索] ✓ 播放列表已刷新 - 已添加单曲');
                         }
@@ -1430,13 +1431,13 @@ export class SearchManager {
                         }
 
                         const container = document.getElementById('playListContainer');
-                        const currentStatus = window.app?.lastPlayStatus || { current_meta: null };
+                        const currentMeta = getCurrentPlaybackMeta();
                         if (container && playlistManager) {
                             const { renderPlaylistUI } = await import('./playlist.js');
                             renderPlaylistUI({
                                 container,
                                 onPlay: (s) => window.app?.playSong(s),
-                                currentMeta: currentStatus.current_meta
+                                currentMeta
                             });
                             console.log('[批量添加] ✓ 播放列表已刷新');
                         }

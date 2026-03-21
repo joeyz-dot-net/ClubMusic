@@ -2201,12 +2201,18 @@ class MusicPlayerApp {
 // 创建全局应用实例
 const app = new MusicPlayerApp();
 
+async function startApp() {
+    await themeManager.init();
+    await app.init();
+}
+
 // DOM 加载完成后初始化
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => app.init());
+    document.addEventListener('DOMContentLoaded', () => {
+        void startApp();
+    });
 } else {
-    await themeManager.init();
-       app.init();
+    void startApp();
 }
 
 // 导出供调试使用

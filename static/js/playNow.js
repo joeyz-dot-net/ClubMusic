@@ -1,5 +1,6 @@
 import { player } from './player.js';
 import { playLock } from './playLock.js';
+import { getCurrentPlaybackMeta } from './playbackState.js';
 
 function createPlayNowError(result, fallbackMessage) {
     const message = result?.error || result?.message || fallbackMessage;
@@ -11,7 +12,7 @@ function createPlayNowError(result, fallbackMessage) {
 }
 
 export function getCurrentPlayNowMeta() {
-    return player.status?.current_meta || window.app?.lastPlayStatus?.current_meta || null;
+    return getCurrentPlaybackMeta();
 }
 
 export function rerenderQueueWithCurrentMeta(renderPlaylistUI) {
