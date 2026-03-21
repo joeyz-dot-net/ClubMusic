@@ -808,13 +808,15 @@ export class SearchManager {
     }
 
     // 渲染搜索结果
-    renderSearchResults(localResults, youtubeResults, searchQuery = this.lastQuery) {
+    renderSearchResults(localResults, youtubeResults, searchQuery = this.lastQuery, options = {}) {
         const searchModalBody = document.getElementById('searchModalBody');
         if (!searchModalBody) return;
 
         const fullLocalResults = localResults || [];
         const fullYoutubeResults = youtubeResults || [];
-        const displayedYoutubeResults = fullYoutubeResults.slice(0, this.youtubeLoadState.maxResultsStep);
+        const requestedYoutubeDisplayCount = options.youtubeDisplayCount ?? this.youtubeLoadState.maxResultsStep;
+        const displayedYoutubeCount = Math.max(0, Math.min(requestedYoutubeDisplayCount, fullYoutubeResults.length));
+        const displayedYoutubeResults = fullYoutubeResults.slice(0, displayedYoutubeCount);
 
         // 保存当前显示结果与总结果
         this.currentSearchResults = {
@@ -859,7 +861,7 @@ export class SearchManager {
             return fragment;
         };
 
-        const defaultTab = fullYoutubeResults.length > 0 ? 'youtube' : 'local';
+        const defaultTab = options.preferredTab || (fullYoutubeResults.length > 0 ? 'youtube' : 'local');
 
         const tabs = document.createElement('div');
         tabs.className = 'search-tabs';
@@ -1684,10 +1686,17 @@ export class SearchManager {
 
     // 退出目录视图，恢复搜索结果
     restoreSearchResults() {
+        const activeTab = document.querySelector('.search-tab.active');
+        const preferredTab = activeTab?.getAttribute('data-tab') || 'local';
         this.dirNavState = { isActive: false, breadcrumb: [] };
         this.renderSearchResults(
-            this.currentSearchResults.local,
-            this.currentSearchResults.youtube
+            this.totalSearchResults.local,
+            this.totalSearchResults.youtube,
+            this.lastQuery,
+            {
+                preferredTab,
+                youtubeDisplayCount: this.currentSearchResults.youtube.length
+            }
         );
     }
 }

@@ -705,9 +705,11 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
                 const confirmed = await ConfirmModal.show({ title: i18n.t('playlist.clearPlaylistConfirm', { name: playlistName }), type: 'danger' });
                 if (confirmed) {
                     try {
-                        await api.delete(`/playlists/${selectedPlaylistId}`);
-                        Toast.success(i18n.t('playlists.deleteSuccess'));
-                        playlistManager.setSelectedPlaylist(playlistManager.getActiveDefaultId());
+                        const response = await api.clearPlaylist(selectedPlaylistId);
+                        if (response?._error || response?.status !== 'OK') {
+                            throw new Error(response?.error || response?.message || i18n.t('playlist.clearFailed'));
+                        }
+                        Toast.success(i18n.t('playlist.clearPlaylistSucceed', { name: playlistName }));
                         await playlistManager.refreshAll();
                         renderPlaylistUI({ container, onPlay, currentMeta });
                     } catch (err) {

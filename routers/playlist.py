@@ -12,6 +12,7 @@ routers/playlist.py - 歌单管理和主页路由
   POST /playlist_add
   POST /playlists/{id}/add_next
   POST /playlists/{id}/add_top
+    POST /playlists/{id}/clear
   GET  /playlist
   DELETE /playlists/{id}
   POST /playlists/{id}/remove
@@ -424,6 +425,49 @@ async def delete_playlist(playlist_id: str, playlists: Playlists = Depends(get_p
             )
     except Exception as e:
         return error_response("[DELETE /playlists/{id}] 删除歌单异常", exc=e, _logger=logger)
+
+
+@router.post("/playlists/{playlist_id}/clear")
+async def clear_playlist(
+    playlist_id: str,
+    player: MusicPlayer = Depends(get_player_for_request),
+    playlists: Playlists = Depends(get_playlists),
+    player_lock=Depends(get_player_lock),
+):
+    """清空指定歌单内容，保留歌单本身"""
+    try:
+        if playlist_id == DEFAULT_PLAYLIST_ID:
+            return JSONResponse(
+                {"status": "ERROR", "error": "默认歌单请使用清空队列接口"},
+                status_code=400
+            )
+
+        if playlists.is_room_playlist(playlist_id):
+            return JSONResponse(
+                {"status": "ERROR", "error": "房间播放列表不可清空"},
+                status_code=400
+            )
+
+        playlist = playlists.get_playlist(playlist_id)
+        if not playlist:
+            return JSONResponse(
+                {"status": "ERROR", "error": "歌单不存在"},
+                status_code=404
+            )
+
+        with player_lock:
+            playlist.songs = []
+            playlist.updated_at = time.time()
+            playlists.save()
+
+            if playlist_id == get_current_playlist_id(player):
+                player.current_index = -1
+                player.current_meta = None
+
+        await _broadcast_state(player)
+        return {"status": "OK", "message": "清空成功"}
+    except Exception as e:
+        return error_response("[POST /playlists/{id}/clear] 清空歌单异常", exc=e, _logger=logger)
 
 
 @router.post("/playlists/{playlist_id}/remove")

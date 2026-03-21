@@ -249,6 +249,10 @@ export class MusicAPI {
         return this.delete(`/playlists/${id}`);
     }
 
+    async clearPlaylist(id) {
+        return this.post(`/playlists/${id}/clear`, {});
+    }
+
     async updatePlaylist(id, data) {
         return this.put(`/playlists/${id}`, data);
     }
