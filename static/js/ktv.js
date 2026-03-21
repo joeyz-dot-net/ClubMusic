@@ -394,9 +394,17 @@ export class KTVSync {
         if (!this.player || !this.playerReady || this.isSyncing) return;
 
         try {
-            const serverTime = mpvState.time_pos || 0;
+            const rawServerTime = mpvState.time_pos ?? mpvState.time ?? 0;
+            const serverTime = Number(rawServerTime);
+            if (!Number.isFinite(serverTime)) {
+                return;
+            }
+
             const isPaused = mpvState.paused !== false;
-            const targetTime = serverTime + this.videoOffset;  // 应用视频偏移量
+            const targetTime = Math.max(0, serverTime + this.videoOffset);  // 应用视频偏移量
+            if (!Number.isFinite(targetTime)) {
+                return;
+            }
 
             // 获取当前播放器状态
             const playerState = this.player.getPlayerState();
@@ -415,8 +423,17 @@ export class KTVSync {
             // 同步时间位置（每1秒最多同步一次）
             const now = Date.now();
             if (now - this.lastSyncTime > 1000) {
-                const videoTime = this.player.getCurrentTime();
+                const videoTime = Number(this.player.getCurrentTime());
+                if (!Number.isFinite(videoTime)) {
+                    this.lastSyncTime = now;
+                    return;
+                }
+
                 const drift = Math.abs(videoTime - targetTime);
+                if (!Number.isFinite(drift)) {
+                    this.lastSyncTime = now;
+                    return;
+                }
 
                 // 记录偏差指标
                 this.metrics.driftSum += drift;
@@ -448,11 +465,14 @@ export class KTVSync {
      * 获取同步指标（用于调试）
      */
     getMetrics() {
+        const avgDrift = this.metrics.driftCount > 0
+            ? (this.metrics.driftSum / this.metrics.driftCount)
+            : 0;
+        const maxDrift = Number.isFinite(this.metrics.maxDrift) ? this.metrics.maxDrift : 0;
+
         return {
-            avgDrift: this.metrics.driftCount > 0
-                ? (this.metrics.driftSum / this.metrics.driftCount).toFixed(3)
-                : 0,
-            maxDrift: this.metrics.maxDrift.toFixed(3),
+            avgDrift: Number.isFinite(avgDrift) ? avgDrift.toFixed(3) : '0.000',
+            maxDrift: maxDrift.toFixed(3),
             syncCount: this.metrics.syncCount,
             totalChecks: this.metrics.driftCount
         };
