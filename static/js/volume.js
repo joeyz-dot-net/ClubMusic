@@ -14,6 +14,13 @@ export class VolumeControl {
         this.silent = false;  // 静默模式标志
     }
 
+    _ensureSuccess(result, fallbackMessage) {
+        if (!result || result?._error || (result?.status && result.status !== 'OK')) {
+            throw new Error(result?.error || result?.message || fallbackMessage);
+        }
+        return result;
+    }
+
     // 初始化音量控制
     init(sliderElement, displayElement = null, options = {}) {
         this.slider = sliderElement;
@@ -172,7 +179,7 @@ export class VolumeControl {
 
         this.throttleTimer = setTimeout(async () => {
             try {
-                const result = await api.setVolume(value);
+                const result = this._ensureSuccess(await api.setVolume(value), '设置音量失败');
                 if (result.status === 'OK') {
                     if (!this.silent && isDebugMode()) {
                         console.log('[音量] 已设置:', value);
@@ -183,6 +190,7 @@ export class VolumeControl {
                 if (!this.silent) {
                     console.error('[音量] 设置失败:', error.message);
                 }
+                void this.loadVolume();
             }
         }, 200);
     }

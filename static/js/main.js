@@ -652,7 +652,7 @@ class MusicPlayerApp {
         if (this.elements.playPauseBtn) {
             this.elements.playPauseBtn.addEventListener('click', () => {
                 if (playLock.isPreparing()) return;
-                player.togglePlayPause();
+                void this.togglePlayPause();
             });
         }
 
@@ -903,7 +903,7 @@ class MusicPlayerApp {
         if (this.elements.fullPlayerPlayPause) {
             this.elements.fullPlayerPlayPause.addEventListener('click', () => {
                 if (playLock.isPreparing()) return;
-                player.togglePlayPause();
+                void this.togglePlayPause();
             });
         }
 
@@ -1159,7 +1159,7 @@ class MusicPlayerApp {
         if (this.elements.nppPlayPause) {
             this.elements.nppPlayPause.addEventListener('click', () => {
                 if (playLock.isPreparing()) return;
-                player.togglePlayPause();
+                void this.togglePlayPause();
             });
         }
         if (this.elements.nppNext) {
@@ -1562,9 +1562,14 @@ class MusicPlayerApp {
     }
 
     // 播放/暂停
-    togglePlayPause() {
+    async togglePlayPause() {
         if (playLock.isPreparing()) return;
-        player.togglePlayPause();
+        try {
+            await player.togglePlayPause();
+        } catch (err) {
+            console.error('[播放/暂停] 错误:', err);
+            Toast.error(i18n.t('player.playFailed'));
+        }
     }
 
     // 下一首

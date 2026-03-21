@@ -2193,11 +2193,15 @@ async function handleHistoryPlayNow(song) {
             insert_index: 0
         });
 
+        if (addResult?._error || addResult?.status !== 'OK') {
+            throw new Error(addResult?.error || addResult?.message || '添加到播放队列失败');
+        }
+
         // 2. 刷新播放列表数据
         await playlistManager.refreshAll();
 
         // 3. 播放歌曲
-        await api.play(song.url, song.title, song.type || 'local', 0);
+        await player.play(song.url, song.title, song.type || 'local', 0);
 
         playLock.release();
 

@@ -54,10 +54,41 @@ export class Player {
         callbacks.forEach(cb => cb(data));
     }
 
+    _createApiError(result, fallbackMessage) {
+        const message = result?.error || result?.message || fallbackMessage;
+        const error = new Error(message);
+        if (result && typeof result === 'object') {
+            error.result = result;
+        }
+        return error;
+    }
+
+    _ensureSuccess(result, fallbackMessage, { allowStatuses = [] } = {}) {
+        const status = result?.status;
+        if (!result || result?._error || (status && status !== 'OK' && !allowStatuses.includes(status))) {
+            throw this._createApiError(result, fallbackMessage);
+        }
+        return result;
+    }
+
+    _applyStatus(status, fallbackMessage = '获取播放器状态失败') {
+        const validStatus = this._ensureSuccess(status, fallbackMessage);
+        this.updateStatus(validStatus);
+        return validStatus;
+    }
+
+    async refreshStatus(fallbackMessage = '获取播放器状态失败') {
+        const status = await api.getStatus();
+        return this._applyStatus(status, fallbackMessage);
+    }
+
     // 播放控制
     async play(url, title, type = 'local', duration = 0) {
         try {
-            const result = await api.play(url, title, type, duration);
+            const result = this._ensureSuccess(
+                await api.play(url, title, type, duration),
+                '播放失败'
+            );
 
             // 记录当前播放的URL
             this.currentPlayingUrl = url;
@@ -80,7 +111,7 @@ export class Player {
     }
     
     async pause() {
-        const result = await api.pause();
+        const result = this._ensureSuccess(await api.pause(), '暂停失败');
         this.emit('pause');
         return result;
     }
@@ -113,11 +144,10 @@ export class Player {
 
     async togglePlayPause() {
         // 后端 /pause 已是切换语义
-        const result = await api.pause();
+        const result = this._ensureSuccess(await api.pause(), '播放状态切换失败');
         // 尽力刷新状态，避免UI卡住
         try {
-            const status = await api.getStatus();
-            this.updateStatus(status);
+            const status = await this.refreshStatus();
             // 恢复播放时，发送当前歌曲元数据
             if (!result?.paused) {
                 const meta = status?.current_meta || {};
@@ -131,13 +161,24 @@ export class Player {
         } catch (err) {
             console.warn('刷新状态失败:', err);
         }
+
+        if (!result?.paused) {
+            const meta = this.status?.current_meta || {};
+            this.emit('play', {
+                url: meta.url || meta.rel,
+                title: meta.title || meta.name,
+                type: meta.type
+            });
+            return result;
+        }
+
         this.emit(result?.paused ? 'pause' : 'play');
         return result;
     }
 
     // 音量控制
     async setVolume(value) {
-        const result = await api.setVolume(value);
+        const result = this._ensureSuccess(await api.setVolume(value), '设置音量失败');
         this.emit('volumeChange', value);
         return result;
     }
@@ -198,8 +239,7 @@ export class Player {
             }
 
             try {
-                const status = await api.getStatus();
-                this.updateStatus(status);
+                await this.refreshStatus();
             } catch (error) {
                 console.error('状态轮询失败:', error);
             }
@@ -284,8 +324,7 @@ export class Player {
         console.log('[Player] 标签页恢复可见，重启轮询');
         // 立即获取最新状态
         try {
-            const status = await api.getStatus();
-            this.updateStatus(status);
+            await this.refreshStatus();
         } catch (err) {
             console.warn('[Player] 恢复时获取状态失败:', err);
         }
