@@ -24,6 +24,41 @@ export const settingsManager = {
     // 用于存储 player 实例引用
     player: null,
     schema: {},
+
+    setButtonGroupValue(groupId, value) {
+        const group = document.getElementById(groupId);
+        if (!group) return;
+
+        group.querySelectorAll('.settings-btn').forEach((btn) => {
+            btn.classList.toggle('active', btn.dataset.value === value);
+        });
+    },
+
+    getButtonGroupValue(groupId, fallback = null) {
+        const group = document.getElementById(groupId);
+        if (!group) return fallback;
+
+        const activeButton = group.querySelector('.settings-btn.active');
+        return activeButton?.dataset.value || fallback;
+    },
+
+    updateSettingsButtonTexts(groupId, translations) {
+        const group = document.getElementById(groupId);
+        if (!group) return;
+
+        Object.entries(translations).forEach(([value, copy]) => {
+            const button = group.querySelector(`.settings-btn[data-value="${value}"]`);
+            if (!button) return;
+
+            const label = button.querySelector('.btn-label');
+            if (label) {
+                label.textContent = copy.label;
+            }
+
+            button.title = copy.title;
+            button.setAttribute('aria-label', copy.title);
+        });
+    },
     
     /**
      * 获取设置对象（从 localStorage）
@@ -223,26 +258,14 @@ export const settingsManager = {
         const themeGroup = document.getElementById('themeSetting');
         if (themeGroup) {
             const currentTheme = settings.theme || 'auto';
-            themeGroup.querySelectorAll('.settings-btn').forEach(btn => {
-                if (btn.dataset.value === currentTheme) {
-                    btn.classList.add('active');
-                } else {
-                    btn.classList.remove('active');
-                }
-            });
+            this.setButtonGroupValue('themeSetting', currentTheme);
         }
         
         // 语言按钮组
         const langGroup = document.getElementById('languageSetting');
         if (langGroup) {
             const currentLang = settings.language || 'auto';
-            langGroup.querySelectorAll('.settings-btn').forEach(btn => {
-                if (btn.dataset.value === currentLang) {
-                    btn.classList.add('active');
-                } else {
-                    btn.classList.remove('active');
-                }
-            });
+            this.setButtonGroupValue('languageSetting', currentLang);
         }
 
         // UI 配置 - YouTube控件开关
@@ -466,32 +489,55 @@ export const settingsManager = {
         // 更新设置标题
         const title = document.querySelector('.settings-title');
         if (title) title.textContent = i18n.t('settings.title', language);
+
+        const closeBtn = document.getElementById('settingsCloseBtn');
+        if (closeBtn) {
+            const closeText = i18n.t('modal.close', language);
+            closeBtn.title = closeText;
+            closeBtn.setAttribute('aria-label', closeText);
+        }
         
         // 更新外观设置章节
         const appearanceSection = document.querySelectorAll('.section-title')[0];
         if (appearanceSection) appearanceSection.textContent = i18n.t('settings.appearance', language);
-        
-        // 更新主题选项 (HTML顺序: auto, dark, light)
-        const themeSelect = document.getElementById('themeSetting');
-        if (themeSelect) {
-            const options = themeSelect.querySelectorAll('option');
-            if (options[0]) options[0].textContent = i18n.t('settings.theme.auto', language);
-            if (options[1]) options[1].textContent = i18n.t('settings.theme.dark', language);
-            if (options[2]) options[2].textContent = i18n.t('settings.theme.light', language);
-        }
+
+        this.updateSettingsButtonTexts('themeSetting', {
+            auto: {
+                label: i18n.t('settings.theme.auto', language),
+                title: i18n.t('settings.theme.auto', language)
+            },
+            dark: {
+                label: i18n.t('settings.theme.dark', language),
+                title: i18n.t('settings.theme.dark', language)
+            },
+            light: {
+                label: i18n.t('settings.theme.light', language),
+                title: i18n.t('settings.theme.light', language)
+            }
+        });
         
         // 更新语言标签
         const langLabel = document.querySelectorAll('.settings-label')[1];
         if (langLabel) langLabel.textContent = i18n.t('settings.language', language);
-        
-        // 更新语言选项
-        const langSelect = document.getElementById('languageSetting');
-        if (langSelect) {
-            const options = langSelect.querySelectorAll('option');
-            if (options[0]) options[0].textContent = i18n.t('settings.language.auto', language);
-            if (options[1]) options[1].textContent = i18n.t('settings.language.zh', language);
-            if (options[2]) options[2].textContent = i18n.t('settings.language.en', language);
-        }
+
+        this.updateSettingsButtonTexts('languageSetting', {
+            auto: {
+                label: i18n.t('settings.language.auto', language),
+                title: i18n.t('settings.language.auto', language)
+            },
+            zh: {
+                label: i18n.t('settings.language.zh', language),
+                title: i18n.t('settings.language.zh', language)
+            },
+            'zh-TW': {
+                label: i18n.t('settings.language.zh-TW', language),
+                title: i18n.t('settings.language.zh-TW', language)
+            },
+            en: {
+                label: i18n.t('settings.language.en', language),
+                title: i18n.t('settings.language.en', language)
+            }
+        });
     },
     
     /**
@@ -504,8 +550,8 @@ export const settingsManager = {
             
             // 收集表单数据
             const updates = {
-                theme: document.getElementById('themeSetting')?.value || 'dark',
-                language: document.getElementById('languageSetting')?.value || 'auto'
+                theme: this.getButtonGroupValue('themeSetting', 'dark'),
+                language: this.getButtonGroupValue('languageSetting', 'auto')
             };
             
             // 发送到服务器
@@ -568,8 +614,8 @@ export const settingsManager = {
             const themeEl = document.getElementById('themeSetting');
             const languageEl = document.getElementById('languageSetting');
             
-            if (themeEl) themeEl.value = defaults.theme;
-            if (languageEl) languageEl.value = defaults.language;
+            if (themeEl) this.setButtonGroupValue('themeSetting', defaults.theme);
+            if (languageEl) this.setButtonGroupValue('languageSetting', defaults.language);
             
             console.log('[DEBUG] 表单元素已重置为默认值');
             

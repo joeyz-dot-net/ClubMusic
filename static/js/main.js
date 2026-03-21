@@ -10,7 +10,7 @@ import { searchManager } from './search.js';
 import { themeManager } from './themeManager.js';
 import { debug } from './debug.js';
 import { Toast, formatTime } from './ui.js';
-import { focusFirstFocusable, isMobile, isIPad, ThumbnailManager } from './utils.js';
+import { focusFirstFocusable, isMobile, isIPad, ThumbnailManager, trapFocusInContainer } from './utils.js';
 import { localFiles } from './local.js';
 import { settingsManager } from './settingsManager.js';
 import { navManager } from './navManager.js';
@@ -1848,11 +1848,35 @@ class MusicPlayerApp {
                 // 调试模态框
                 const modal = modals.debug;
                 if (modal) {
+                    modal._previousActiveElement = document.activeElement;
                     modal.style.display = 'flex';
+                    modal.classList.add('modal-visible');
                     currentModal = modal;
+
+                    if (!modal._keydownHandler) {
+                        modal._keydownHandler = (event) => {
+                            if (modal.style.display === 'none') {
+                                return;
+                            }
+
+                            if (event.key === 'Escape') {
+                                event.preventDefault();
+                                const closeButton = modal.querySelector('#debugModalClose');
+                                if (closeButton) {
+                                    closeButton.click();
+                                }
+                                return;
+                            }
+
+                            trapFocusInContainer(event, modal);
+                        };
+                    }
+
+                    document.addEventListener('keydown', modal._keydownHandler);
                     setTimeout(() => {
                         this.refreshDebugInfo();
                         updateModalZIndex();
+                        focusFirstFocusable(modal, '#debugModalClose');
                     }, 100);
                 }
             }
@@ -1961,6 +1985,14 @@ class MusicPlayerApp {
                 hideAllContent();
                 playlistSelectBtn.classList.add('active');
                 playlistsManagement.show();
+            });
+        }
+
+        const playlistsDebugBtn = document.getElementById('playlistsDebugBtn');
+        if (playlistsDebugBtn) {
+            playlistsDebugBtn.addEventListener('click', () => {
+                console.log('🐛 点击调试面板按钮');
+                navigateTo('debug');
             });
         }
 
@@ -2096,68 +2128,32 @@ class MusicPlayerApp {
         // 调试模态框关闭 - 支持点击背景和关闭按钮
         const debugModal = modals.debug;
         if (debugModal) {
+            const closeDebugModal = () => {
+                if (debugModal._keydownHandler) {
+                    document.removeEventListener('keydown', debugModal._keydownHandler);
+                }
+
+                debugModal.classList.remove('modal-visible');
+
+                if (Array.isArray(this.navigationStack) && this.navigationStack[this.navigationStack.length - 1] === 'debug') {
+                    navigateBack();
+                    return;
+                }
+
+                debugModal.style.display = 'none';
+                updateModalZIndex();
+            };
+
             debugModal.addEventListener('click', (e) => {
                 if (e.target === debugModal) {
-                    debugModal.style.display = 'none';
-                    // 更新z-index
-                    updateModalZIndex();
-                    // 移除active状态
-                    navItems.forEach(item => {
-                        if (item.getAttribute('data-tab') === 'debug') {
-                            item.classList.remove('active');
-                        }
-                    });
-                    // ✅ 直接显示播放列表而不是调用navigateBack
-                    setTimeout(() => {
-                        this.navigationStack.pop();  // 弹出当前栏目
-                        if (this.elements.playlist) {
-                            this.elements.playlist.style.display = 'block';
-                            setTimeout(() => {
-                                this.elements.playlist.classList.add('tab-visible');
-                            }, 10);
-                        }
-                        if (this.elements.tree) {
-                            this.elements.tree.classList.remove('tab-visible');
-                            this.elements.tree.style.display = 'none';
-                        }
-                        const playlistsNavBtn = navItems[0];
-                        if (playlistsNavBtn) {
-                            playlistsNavBtn.classList.add('active');
-                        }
-                    }, 100);
+                    closeDebugModal();
                 }
             });
             
             const debugModalClose = document.getElementById('debugModalClose');
             if (debugModalClose) {
                 debugModalClose.addEventListener('click', () => {
-                    debugModal.style.display = 'none';
-                    // 更新z-index
-                    updateModalZIndex();
-                    // 移除active状态
-                    navItems.forEach(item => {
-                        if (item.getAttribute('data-tab') === 'debug') {
-                            item.classList.remove('active');
-                        }
-                    });
-                    // ✅ 直接显示播放列表而不是调用navigateBack
-                    setTimeout(() => {
-                        this.navigationStack.pop();  // 弹出当前栏目
-                        if (this.elements.playlist) {
-                            this.elements.playlist.style.display = 'block';
-                            setTimeout(() => {
-                                this.elements.playlist.classList.add('tab-visible');
-                            }, 10);
-                        }
-                        if (this.elements.tree) {
-                            this.elements.tree.classList.remove('tab-visible');
-                            this.elements.tree.style.display = 'none';
-                        }
-                        const playlistsNavBtn = navItems[0];
-                        if (playlistsNavBtn) {
-                            playlistsNavBtn.classList.add('active');
-                        }
-                    }, 100);
+                    closeDebugModal();
                 });
             }
         }
