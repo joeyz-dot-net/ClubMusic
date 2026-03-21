@@ -3,6 +3,8 @@ import { api } from './api.js?v=2';
 import { settingsManager } from './settingsManager.js?v=3';
 import { operationLock } from './operationLock.js';
 
+const STATUS_TIME_EPSILON = 0.001;
+
 export class Player {
     constructor() {
         this.status = null;
@@ -13,6 +15,8 @@ export class Player {
         this._hiddenByVisibility = false;  // 标签页隐藏标志
         this._lastPollIntervalMs = 5000;  // 记住轮询间隔以便恢复
         this.clockOffset = 0; // 客户端与服务器的时钟偏移（秒）: client_time - server_time
+        this._lastServerTime = 0;
+        this._minAcceptedServerTime = 0;
 
         // WebSocket 相关
         this.ws = null;
@@ -84,8 +88,44 @@ export class Player {
 
     _applyStatus(status, fallbackMessage = '获取播放器状态失败') {
         const validStatus = this._ensureSuccess(status, fallbackMessage);
-        this.updateStatus(validStatus);
+        this.updateStatus(validStatus, { source: 'poll' });
         return validStatus;
+    }
+
+    _estimateServerNow() {
+        return Date.now() / 1000 - this.clockOffset;
+    }
+
+    _markLocalStatusBarrier() {
+        this._minAcceptedServerTime = Math.max(
+            this._minAcceptedServerTime,
+            this._estimateServerNow()
+        );
+    }
+
+    _shouldAcceptServerStatus(status, source) {
+        if (!status?.server_time || source === 'local') {
+            return true;
+        }
+
+        const serverTime = status.server_time;
+        if (serverTime < this._lastServerTime - STATUS_TIME_EPSILON) {
+            console.warn(`[Player] 忽略过期${source}状态:`, {
+                serverTime,
+                lastServerTime: this._lastServerTime,
+            });
+            return false;
+        }
+
+        if (serverTime < this._minAcceptedServerTime - STATUS_TIME_EPSILON) {
+            console.warn(`[Player] 忽略早于本地操作的${source}状态:`, {
+                serverTime,
+                minAcceptedServerTime: this._minAcceptedServerTime,
+            });
+            return false;
+        }
+
+        return true;
     }
 
     async refreshStatus(fallbackMessage = '获取播放器状态失败') {
@@ -106,10 +146,11 @@ export class Player {
 
             // 立即更新状态缓存（与 next/prev 保持一致），无需等待下次轮询或 WebSocket
             if (result?.status === 'OK' && result?.current && this.status) {
+                this._markLocalStatusBarrier();
                 this.updateStatus({
                     ...this.status,
                     current_meta: result.current,
-                });
+                }, { source: 'local' });
             }
 
             this.emit('play', { url, title, type });
@@ -131,10 +172,11 @@ export class Player {
         const result = this._ensureSuccess(await api.next(), '下一首播放失败');
         // 利用响应中的 current_meta 立即更新 UI，无需等待下次 1000ms 轮询
         if (result?.status === 'OK' && result?.current && this.status) {
+            this._markLocalStatusBarrier();
             this.updateStatus({
                 ...this.status,
                 current_meta: result.current,
-            });
+            }, { source: 'local' });
         }
         this.emit('next', result);
         return result;
@@ -144,10 +186,11 @@ export class Player {
         const result = this._ensureSuccess(await api.prev(), '上一首播放失败');
         // 利用响应中的 current_meta 立即更新 UI，无需等待下次 1000ms 轮询
         if (result?.status === 'OK' && result?.current && this.status) {
+            this._markLocalStatusBarrier();
             this.updateStatus({
                 ...this.status,
                 current_meta: result.current,
-            });
+            }, { source: 'local' });
         }
         this.emit('prev', result);
         return result;
@@ -430,7 +473,7 @@ export class Player {
             mpv_state: msg.mpv_state,
             server_time: msg.server_time,
         };
-        this.updateStatus(newStatus);
+        this.updateStatus(newStatus, { source: 'ws' });
 
         // 若歌单有变更，触发歌单刷新事件（避免在用户操作期间刷新）
         if (msg.playlist_updated) {
@@ -460,9 +503,20 @@ export class Player {
 
     // ==================== 状态管理 ====================
 
-    updateStatus(status) {
+    updateStatus(status, { source = 'unknown' } = {}) {
+        if (!this._shouldAcceptServerStatus(status, source)) {
+            return this.status;
+        }
+
         const oldStatus = this.status;
         this.status = status;
+
+        if (status?.server_time) {
+            this._lastServerTime = Math.max(this._lastServerTime, status.server_time);
+            if (status.server_time >= this._minAcceptedServerTime - STATUS_TIME_EPSILON) {
+                this._minAcceptedServerTime = 0;
+            }
+        }
 
         // 计算客户端与服务器的时钟偏移（用于修正历史记录时间戳显示）
         if (status?.server_time) {

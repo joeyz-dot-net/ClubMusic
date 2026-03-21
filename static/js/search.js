@@ -3,11 +3,11 @@ import { api } from './api.js?v=2';
 import { Toast, formatTime, searchLoading } from './ui.js';
 import { buildTrackItemElement } from './templates.js';
 import { localFiles, getNodeByPath, getDirCoverUrl, countFiles } from './local.js?v=4';
-import { playlistManager, renderPlaylistUI } from './playlist.js?v=6';
+import { playlistManager, renderPlaylistUI } from './playlist.js?v=7';
 import { i18n } from './i18n.js';
 import { escapeHTML, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js';
-import { executePlayNow, rerenderQueueWithCurrentMeta } from './playNow.js?v=3';
-import { getCurrentPlaybackMeta } from './playbackState.js?v=2';
+import { executePlayNow, rerenderQueueWithCurrentMeta } from './playNow.js?v=4';
+import { getCurrentPlaybackMeta } from './playbackState.js?v=3';
 
 const SEARCH_SUCCESS_ICON_MARKUP = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
 
@@ -1178,7 +1178,7 @@ export class SearchManager {
                                 Toast.error(i18n.t('search.addFailed') + ': ' + err.message);
                             }
                         } else {
-                            const { showSelectPlaylistModal } = await import('./playlist.js?v=6');
+                            const { showSelectPlaylistModal } = await import('./playlist.js?v=7');
                             await showSelectPlaylistModal(songData, null);
                         }
                     } else if (action === 'add-all-to-playlist') {
