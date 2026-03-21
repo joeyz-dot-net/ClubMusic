@@ -11,13 +11,27 @@ function makeLeadingDebounce(fn, waitMs) {
     let lastPromise = null;
     return function(...args) {
         const now = Date.now();
-        if (now - lastCallTime >= waitMs) {
-            lastCallTime = now;
-            lastPromise = fn(...args);
+        if (lastPromise && now - lastCallTime < waitMs) {
+            console.log(`[Debounce] 操作在 ${waitMs}ms 内重复，已忽略`);
             return lastPromise;
         }
-        console.log(`[Debounce] 操作在 ${waitMs}ms 内重复，已忽略`);
-        return lastPromise || Promise.resolve({});
+
+        lastCallTime = now;
+        lastPromise = Promise.resolve(fn(...args))
+            .then((result) => {
+                if (result?._error || result?.status === 'ERROR') {
+                    lastCallTime = 0;
+                    lastPromise = null;
+                }
+                return result;
+            })
+            .catch((error) => {
+                lastCallTime = 0;
+                lastPromise = null;
+                throw error;
+            });
+
+        return lastPromise;
     };
 }
 

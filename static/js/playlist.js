@@ -1243,9 +1243,15 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
                         };
                         let fileTree = null;
                         try {
-                            const treeResult = await api.get('/tree');
-                            fileTree = treeResult?.tree;
-                        } catch {}
+                            const treeResult = await api.getFileTree();
+                            if (!treeResult?._error && treeResult?.status === 'OK') {
+                                fileTree = treeResult.tree;
+                            } else {
+                                console.warn('[随机添加] 获取本地文件树失败:', treeResult?.error || treeResult?.message || treeResult);
+                            }
+                        } catch (err) {
+                            console.warn('[随机添加] 获取本地文件树异常:', err);
+                        }
                         if (fileTree) {
                             collectLocalSongs(fileTree, allSongs);
                         }
@@ -1266,18 +1272,41 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
                             return;
                         }
 
+                        const addedSongs = [];
+                        let failedCount = 0;
+
                         for (let i = 0; i < randomSongs.length; i++) {
-                            await api.addToPlaylist({
+                            const response = await api.addToPlaylist({
                                 playlist_id: playlistManager.getActiveDefaultId(),
                                 song: randomSongs[i],
                                 insert_index: i
                             });
+
+                            if (!response?._error && response?.status === 'OK') {
+                                addedSongs.push(randomSongs[i]);
+                            } else {
+                                failedCount += 1;
+                                console.warn('[随机添加] 添加歌曲失败:', randomSongs[i]?.title, response?.error || response?.message || response);
+                            }
                         }
+
                         await playlistManager.loadCurrent();
                         loading.hide();
-                        Toast.success(`已随机添加${randomSongs.length}首歌到队列`);
-                        if (randomSongs[0]) {
-                            window.app?.playSong(randomSongs[0]);
+
+                        if (addedSongs.length === 0) {
+                            Toast.error('随机添加失败: 没有歌曲成功加入队列');
+                            renderPlaylistUI({ container, onPlay, currentMeta });
+                            return;
+                        }
+
+                        if (failedCount > 0) {
+                            Toast.warning(`已随机添加${addedSongs.length}首歌到队列，${failedCount}首添加失败`);
+                        } else {
+                            Toast.success(`已随机添加${addedSongs.length}首歌到队列`);
+                        }
+
+                        if (addedSongs[0]) {
+                            window.app?.playSong(addedSongs[0]);
                         }
                         renderPlaylistUI({ container, onPlay, currentMeta });
                     } catch (err) {
