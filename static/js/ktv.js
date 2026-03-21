@@ -3,6 +3,8 @@
  * 负责在全屏播放器中显示YouTube视频，并与服务器音频同步
  */
 
+import { api } from './api.js';
+
 export class KTVSync {
     constructor() {
         this.videoContainer = document.getElementById('fullPlayerVideoContainer');
@@ -123,7 +125,13 @@ export class KTVSync {
             console.error('[KTV] 视频无法播放，自动跳过下一首');
             this._failedVideoId = this.currentVideoId;  // 记住失败的ID，防止重试
             this.disableVideoMode();  // 立即清理视频模式状态
-            fetch('/next', { method: 'POST' }).catch(e => console.error('[KTV] 自动跳过失败:', e));
+            void api.next().then((response) => {
+                if (response?._error || (response?.status && response.status !== 'OK' && response.status !== 'EMPTY')) {
+                    console.error('[KTV] 自动跳过失败:', response?.error || response?.message || response);
+                }
+            }).catch((error) => {
+                console.error('[KTV] 自动跳过失败:', error);
+            });
         }
     }
 

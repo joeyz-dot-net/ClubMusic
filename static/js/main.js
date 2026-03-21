@@ -1666,9 +1666,13 @@ class MusicPlayerApp {
     setVolumeDebounced(value) {
         clearTimeout(this._volumeDebounceTimer);
         this._volumeDebounceTimer = setTimeout(() => {
-            const form = new FormData();
-            form.append('value', value);
-            fetch('/volume', { method: 'POST', body: form }).catch(()=>{});
+            void api.setVolume(value).then((response) => {
+                if (response?._error || response?.status !== 'OK') {
+                    console.warn('[音量] 更新失败:', response?.error || response?.message || response);
+                }
+            }).catch((error) => {
+                console.warn('[音量] 更新失败:', error);
+            });
         }, 200);
     }
 
@@ -2002,35 +2006,23 @@ class MusicPlayerApp {
             // 先调用原始关闭方法
             originalClosePanel.call(this);
             
-            console.log('⚙️ 设置关闭，显示当前选择的歌单');
+            console.log('⚙️ 设置关闭，恢复到上一个栏目');
             
             // 移除设置按钮的active状态
             if (settingsBtn) settingsBtn.classList.remove('active');
             
-            // ✅ 直接显示播放列表，而不是调用 navigateBack()
             setTimeout(() => {
-                // 安全弹出导航栈（避免 navigationStack 未定义错误）
                 try {
-                    if (window.app && Array.isArray(window.app.navigationStack)) {
-                        window.app.navigationStack.pop();
-                    } else if (Array.isArray(navigationStack)) {
-                        navigationStack.pop();
+                    const stack = Array.isArray(window.app?.navigationStack) ? window.app.navigationStack : navigationStack;
+                    if (Array.isArray(stack) && stack[stack.length - 1] === 'settings') {
+                        navigateBack();
+                        return;
                     }
-                } catch (e) { console.warn('[导航] 无法弹出 navigationStack:', e); }
-
-                // 修复：settingsManager 的 this 不包含 UI 元素，使用全局 app.elements
-                const appElements = (window.app && window.app.elements) || (typeof app !== 'undefined' && app.elements) || null;
-                if (appElements && appElements.playlist) {
-                    appElements.playlist.style.display = 'block';
-                    setTimeout(() => {
-                        appElements.playlist.classList.add('tab-visible');
-                    }, 10);
-                }
-                if (appElements && appElements.tree) {
-                    appElements.tree.classList.remove('tab-visible');
-                    appElements.tree.style.display = 'none';
+                } catch (e) {
+                    console.warn('[导航] 无法恢复 settings 关闭前的栏目:', e);
                 }
 
+                showTab('playlists');
                 const playlistsNavBtn = navItems[0];
                 if (playlistsNavBtn) {
                     playlistsNavBtn.classList.add('active');

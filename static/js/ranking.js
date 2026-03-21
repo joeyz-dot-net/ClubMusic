@@ -4,6 +4,92 @@ import { Toast } from './ui.js';
 import { i18n } from './i18n.js';
 import { player } from './player.js';
 
+const RANKING_PLACEHOLDER_IMAGE = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22%3E%3Crect fill=%22%23ddd%22 width=%22100%22 height=%22100%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2240%22%3E🎵%3C/text%3E%3C/svg%3E';
+
+function createRankingEmptyElement() {
+    const empty = document.createElement('div');
+    empty.className = 'ranking-empty';
+
+    const icon = document.createElement('div');
+    icon.className = 'ranking-empty-icon';
+    icon.textContent = '📊';
+
+    const text = document.createElement('div');
+    text.className = 'ranking-empty-text';
+    text.textContent = i18n.t('ranking.empty');
+
+    empty.appendChild(icon);
+    empty.appendChild(text);
+    return empty;
+}
+
+function createRankingItemElement(item, index, formattedDate) {
+    const row = document.createElement('div');
+    row.className = 'ranking-item';
+
+    const rank = document.createElement('div');
+    rank.className = 'ranking-rank';
+
+    const number = document.createElement('span');
+    number.className = 'ranking-number';
+    number.textContent = String(index + 1);
+    rank.appendChild(number);
+
+    const thumbnail = document.createElement('div');
+    thumbnail.className = 'ranking-thumbnail';
+
+    const image = document.createElement('img');
+    image.src = item.thumbnail_url || RANKING_PLACEHOLDER_IMAGE;
+    image.alt = item.title || '未知歌曲';
+    image.className = 'ranking-thumbnail-img';
+    image.crossOrigin = 'anonymous';
+    thumbnail.appendChild(image);
+
+    const content = document.createElement('div');
+    content.className = 'ranking-content';
+
+    const title = document.createElement('div');
+    title.className = 'ranking-title';
+    title.textContent = item.title || '未知歌曲';
+
+    const meta = document.createElement('div');
+    meta.className = 'ranking-meta';
+
+    const count = document.createElement('span');
+    count.className = 'ranking-count';
+    count.textContent = String(item.play_count || 0);
+    meta.appendChild(count);
+
+    if (formattedDate) {
+        const date = document.createElement('span');
+        date.className = 'ranking-date';
+        date.textContent = formattedDate;
+        meta.appendChild(date);
+    }
+
+    content.appendChild(title);
+    content.appendChild(meta);
+
+    const play = document.createElement('div');
+    play.className = 'ranking-play';
+
+    const button = document.createElement('button');
+    button.className = 'ranking-play-btn';
+    button.type = 'button';
+    button.textContent = '▶';
+    button.dataset.url = item.url || '';
+    button.dataset.title = item.title || '';
+    button.dataset.type = item.type || 'local';
+    button.dataset.thumbnailUrl = item.thumbnail_url || '';
+    play.appendChild(button);
+
+    row.appendChild(rank);
+    row.appendChild(thumbnail);
+    row.appendChild(content);
+    row.appendChild(play);
+    return row;
+}
+
 export class RankingManager {
     constructor() {
         this.currentPeriod = 'all';
@@ -94,37 +180,15 @@ export class RankingManager {
         if (!body) return;
 
         if (!ranking || ranking.length === 0) {
-            body.innerHTML = `
-                <div class="ranking-empty">
-                    <div class="ranking-empty-icon">📊</div>
-                    <div class="ranking-empty-text">${i18n.t('ranking.empty')}</div>
-                </div>
-            `;
+            body.replaceChildren(createRankingEmptyElement());
             return;
         }
 
-        body.innerHTML = ranking.map((item, index) => `
-            <div class="ranking-item">
-                <div class="ranking-rank">
-                    <span class="ranking-number">${index + 1}</span>
-                </div>
-                <div class="ranking-thumbnail">
-                    <img src="${item.thumbnail_url || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22%3E%3Crect fill=%22%23ddd%22 width=%22100%22 height=%22100%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2240%22%3E🎵%3C/text%3E%3C/svg%3E'}" alt="${item.title || '未知歌曲'}" class="ranking-thumbnail-img" crossorigin="anonymous">
-                </div>
-                <div class="ranking-content">
-                    <div class="ranking-title">${item.title || '未知歌曲'}</div>
-                    <div class="ranking-meta">
-                        <span class="ranking-count">${item.play_count || 0}</span>
-                        ${item.last_played ? `<span class="ranking-date">${this.formatDate(item.last_played)}</span>` : ''}
-                    </div>
-                </div>
-                <div class="ranking-play">
-                    <button class="ranking-play-btn" data-url="${item.url || ''}" data-title="${item.title || ''}" data-type="${item.type || 'local'}" data-thumbnail_url="${item.thumbnail_url || ''}">
-                        ▶
-                    </button>
-                </div>
-            </div>
-        `).join('');
+        const fragment = document.createDocumentFragment();
+        ranking.forEach((item, index) => {
+            fragment.appendChild(createRankingItemElement(item, index, item.last_played ? this.formatDate(item.last_played) : ''));
+        });
+        body.replaceChildren(fragment);
 
         // 绑定播放按钮
         body.querySelectorAll('.ranking-play-btn').forEach(btn => {
@@ -133,7 +197,7 @@ export class RankingManager {
                 const url = btn.getAttribute('data-url');
                 const title = btn.getAttribute('data-title');
                 const type = btn.getAttribute('data-type');
-                const thumbnail_url = btn.getAttribute('data-thumbnail_url');
+                const thumbnail_url = btn.dataset.thumbnailUrl || '';
                 
                 if (url && title) {
                     try {
