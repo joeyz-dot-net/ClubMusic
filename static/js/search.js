@@ -1625,9 +1625,8 @@ export class SearchManager {
         // 确保树数据已加载
         if (!localFiles.fullTree) {
             try {
-                const res = await fetch('/tree');
-                if (!res.ok) throw new Error('获取文件树失败');
-                const data = await res.json();
+                const data = await api.getFileTree();
+                if (data?._error || data.status !== 'OK') throw new Error('获取文件树失败');
                 localFiles.fullTree = data.tree || null;
             } catch (e) {
                 Toast.error(i18n.t('search.cannotLoadDir'));

@@ -1,5 +1,6 @@
 // UI 工具函数和组件模块
 import { i18n } from './i18n.js';
+import { focusFirstFocusable, restoreFocus, trapFocusInContainer } from './utils.js';
 
 // 创建 DOM 元素的辅助函数
 export function createElement(tag, className = '', textContent = '') {
@@ -34,11 +35,11 @@ export class Toast {
         
         // 创建内容结构：图标 + 消息
         const icon = icons[type] || icons.info;
-        
-        toast.innerHTML = `
-            <div class="toast-icon">${icon}</div>
-            <div class="toast-message">${message}</div>
-        `;
+        const iconElement = createElement('div', 'toast-icon', icon);
+        const messageElement = createElement('div', 'toast-message', String(message ?? ''));
+
+        toast.appendChild(iconElement);
+        toast.appendChild(messageElement);
         
         document.body.appendChild(toast);
         
@@ -100,12 +101,17 @@ export class LoadingIndicator {
         });
 
         const spinner = createElement('div', 'spinner');
-        spinner.innerHTML = `
-            <div style="text-align: center; color: white;">
-                <div class="loading-spinner"></div>
-                <div style="margin-top: 12px;">${msg}</div>
-            </div>
-        `;
+        const content = createElement('div');
+        content.style.textAlign = 'center';
+        content.style.color = 'white';
+
+        const spinnerIndicator = createElement('div', 'loading-spinner');
+        const messageElement = createElement('div', '', String(msg));
+        messageElement.style.marginTop = '12px';
+
+        content.appendChild(spinnerIndicator);
+        content.appendChild(messageElement);
+        spinner.appendChild(content);
 
         this.overlay.appendChild(spinner);
         document.body.appendChild(this.overlay);
@@ -130,6 +136,8 @@ export class ConfirmModal {
         return new Promise((resolve) => {
             const overlay = createElement('div', 'custom-modal-overlay');
             const container = createElement('div', 'custom-modal-container');
+            const previousActiveElement = document.activeElement;
+            let closed = false;
 
             const typeColors = {
                 danger:  { btn: '#e53935', hover: '#c62828' },
@@ -138,34 +146,78 @@ export class ConfirmModal {
             };
             const colors = typeColors[type] || typeColors.info;
 
-            container.innerHTML = `
-                <div class="custom-modal-body">
-                    <div class="custom-modal-title">${title || ''}</div>
-                    ${message ? `<div class="custom-modal-message">${message}</div>` : ''}
-                </div>
-                <div class="custom-modal-footer">
-                    <button class="custom-modal-btn custom-modal-btn-cancel">${i18n.t('modal.cancel')}</button>
-                    <button class="custom-modal-btn custom-modal-btn-confirm ${type}"
-                        style="background:${colors.btn};"
-                        onmouseover="this.style.background='${colors.hover}'"
-                        onmouseout="this.style.background='${colors.btn}'"
-                    >${i18n.t('modal.confirm')}</button>
-                </div>
-            `;
+            overlay.setAttribute('role', 'presentation');
+            container.setAttribute('role', 'dialog');
+            container.setAttribute('aria-modal', 'true');
+            container.setAttribute('aria-label', String(title || i18n.t('modal.confirm')));
+
+            const body = createElement('div', 'custom-modal-body');
+            const titleElement = createElement('div', 'custom-modal-title', String(title || ''));
+            body.appendChild(titleElement);
+
+            if (message) {
+                const messageElement = createElement('div', 'custom-modal-message', String(message));
+                body.appendChild(messageElement);
+            }
+
+            const footer = createElement('div', 'custom-modal-footer');
+            const cancelButton = createElement('button', 'custom-modal-btn custom-modal-btn-cancel', i18n.t('modal.cancel'));
+            cancelButton.type = 'button';
+
+            const confirmButton = createElement('button', `custom-modal-btn custom-modal-btn-confirm ${type}`, i18n.t('modal.confirm'));
+            confirmButton.type = 'button';
+            confirmButton.style.background = colors.btn;
+            confirmButton.addEventListener('mouseenter', () => {
+                confirmButton.style.background = colors.hover;
+            });
+            confirmButton.addEventListener('mouseleave', () => {
+                confirmButton.style.background = colors.btn;
+            });
+
+            footer.appendChild(cancelButton);
+            footer.appendChild(confirmButton);
+            container.appendChild(body);
+            container.appendChild(footer);
 
             overlay.appendChild(container);
             document.body.appendChild(overlay);
-            setTimeout(() => overlay.classList.add('visible'), 10);
 
-            function close(result) {
+            const close = (result) => {
+                if (closed) return;
+                closed = true;
+                document.removeEventListener('keydown', handleKeydown);
                 overlay.classList.remove('visible');
-                setTimeout(() => { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 300);
+                setTimeout(() => {
+                    if (overlay.parentNode) {
+                        overlay.parentNode.removeChild(overlay);
+                    }
+                    restoreFocus(previousActiveElement);
+                }, 300);
                 resolve(result);
-            }
+            };
 
-            container.querySelector('.custom-modal-btn-cancel').addEventListener('click', () => close(false));
-            container.querySelector('.custom-modal-btn-confirm').addEventListener('click', () => close(true));
+            const handleKeydown = (event) => {
+                if (!document.body.contains(overlay)) {
+                    return;
+                }
+
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    close(false);
+                    return;
+                }
+
+                trapFocusInContainer(event, container);
+            };
+
+            cancelButton.addEventListener('click', () => close(false));
+            confirmButton.addEventListener('click', () => close(true));
             overlay.addEventListener('click', (e) => { if (e.target === overlay) close(false); });
+            document.addEventListener('keydown', handleKeydown);
+            setTimeout(() => {
+                overlay.classList.add('visible');
+                focusFirstFocusable(container, '.custom-modal-btn-cancel');
+            }, 10);
         });
     }
 }
@@ -181,40 +233,81 @@ export class InputModal {
         return new Promise((resolve) => {
             const overlay = createElement('div', 'custom-modal-overlay');
             const container = createElement('div', 'custom-modal-container');
+            const previousActiveElement = document.activeElement;
+            let closed = false;
 
-            container.innerHTML = `
-                <div class="custom-modal-body">
-                    <div class="custom-modal-title">${title || ''}</div>
-                    <input class="custom-modal-input" type="text"
-                        placeholder="${placeholder}"
-                        value="${defaultValue.replace(/"/g, '&quot;')}"
-                    />
-                </div>
-                <div class="custom-modal-footer">
-                    <button class="custom-modal-btn custom-modal-btn-cancel">${i18n.t('modal.cancel')}</button>
-                    <button class="custom-modal-btn custom-modal-btn-confirm info">${i18n.t('modal.confirm')}</button>
-                </div>
-            `;
+            overlay.setAttribute('role', 'presentation');
+            container.setAttribute('role', 'dialog');
+            container.setAttribute('aria-modal', 'true');
+            container.setAttribute('aria-label', String(title || i18n.t('modal.confirm')));
+
+            const body = createElement('div', 'custom-modal-body');
+            const titleElement = createElement('div', 'custom-modal-title', String(title || ''));
+            const input = createElement('input', 'custom-modal-input');
+            input.type = 'text';
+            input.placeholder = String(placeholder || '');
+            input.value = String(defaultValue || '');
+
+            body.appendChild(titleElement);
+            body.appendChild(input);
+
+            const footer = createElement('div', 'custom-modal-footer');
+            const cancelButton = createElement('button', 'custom-modal-btn custom-modal-btn-cancel', i18n.t('modal.cancel'));
+            cancelButton.type = 'button';
+            const confirmButton = createElement('button', 'custom-modal-btn custom-modal-btn-confirm info', i18n.t('modal.confirm'));
+            confirmButton.type = 'button';
+
+            footer.appendChild(cancelButton);
+            footer.appendChild(confirmButton);
+            container.appendChild(body);
+            container.appendChild(footer);
 
             overlay.appendChild(container);
             document.body.appendChild(overlay);
 
-            const input = container.querySelector('.custom-modal-input');
-            setTimeout(() => { overlay.classList.add('visible'); input.focus(); input.select(); }, 10);
-
-            function close(result) {
+            const close = (result) => {
+                if (closed) return;
+                closed = true;
+                document.removeEventListener('keydown', handleKeydown);
                 overlay.classList.remove('visible');
-                setTimeout(() => { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 300);
+                setTimeout(() => {
+                    if (overlay.parentNode) {
+                        overlay.parentNode.removeChild(overlay);
+                    }
+                    restoreFocus(previousActiveElement);
+                }, 300);
                 resolve(result);
-            }
+            };
 
-            container.querySelector('.custom-modal-btn-cancel').addEventListener('click', () => close(null));
-            container.querySelector('.custom-modal-btn-confirm').addEventListener('click', () => close(input.value));
-            input.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') close(input.value);
-                if (e.key === 'Escape') close(null);
-            });
+            const handleKeydown = (event) => {
+                if (!document.body.contains(overlay)) {
+                    return;
+                }
+
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    close(null);
+                    return;
+                }
+
+                if (event.key === 'Enter' && document.activeElement === input) {
+                    event.preventDefault();
+                    close(input.value);
+                    return;
+                }
+
+                trapFocusInContainer(event, container);
+            };
+
+            cancelButton.addEventListener('click', () => close(null));
+            confirmButton.addEventListener('click', () => close(input.value));
             overlay.addEventListener('click', (e) => { if (e.target === overlay) close(null); });
+            document.addEventListener('keydown', handleKeydown);
+            setTimeout(() => {
+                overlay.classList.add('visible');
+                focusFirstFocusable(container, '.custom-modal-input');
+                input.select();
+            }, 10);
         });
     }
 }

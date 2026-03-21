@@ -42,11 +42,10 @@ export class VolumeControl {
     // 从服务器加载默认音量配置
     async loadDefaultsFromServer() {
         try {
-            const response = await fetch('/volume/defaults');
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+            const data = await api.getVolumeDefaults();
+            if (data?._error) {
+                throw new Error(data.message || data.error || 'request failed');
             }
-            const data = await response.json();
             if (data.status === 'OK' && data.local_volume !== undefined) {
                 this.defaultLocalVolume = parseInt(data.local_volume) || 50;
                 this.currentVolume = this.defaultLocalVolume;

@@ -227,6 +227,10 @@ export class MusicAPI {
         return this.post('/volume', {});
     }
 
+    async getVolumeDefaults() {
+        return this.get('/volume/defaults');
+    }
+
     // 播放列表 API
     async getPlaylist(playlistId = null) {
         const url = playlistId ? `/playlist?playlist_id=${encodeURIComponent(playlistId)}` : '/playlist';
@@ -308,6 +312,10 @@ export class MusicAPI {
 
     async getDirectorySongs(directory) {
         return this.post('/get_directory_songs', { directory });
+    }
+
+    async getFileTree() {
+        return this.get('/tree');
     }
 
     // 播放历史 API

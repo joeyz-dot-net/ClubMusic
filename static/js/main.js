@@ -71,9 +71,32 @@ class MusicPlayerApp {
             await this.initPlaylist();
             
             // 5. 初始化歌单管理模块
-            playlistsManagement.init(async (playlistId) => {
-                await this.switchSelectedPlaylist(playlistId);
-            });
+            playlistsManagement.init(
+                async (playlistId) => {
+                    await this.switchSelectedPlaylist(playlistId);
+                },
+                () => {
+                    const navItems = document.querySelectorAll('#bottomNav .nav-item');
+                    navItems.forEach(item => item.classList.remove('active'));
+
+                    if (this.elements.playlist) {
+                        this.elements.playlist.style.display = 'block';
+                        setTimeout(() => {
+                            this.elements.playlist.classList.add('tab-visible');
+                        }, 10);
+                    }
+
+                    if (this.elements.tree) {
+                        this.elements.tree.classList.remove('tab-visible');
+                        this.elements.tree.style.display = 'none';
+                    }
+
+                    const playlistNavItem = document.querySelector('#bottomNav .nav-item[data-tab="playlists"]');
+                    if (playlistNavItem) {
+                        playlistNavItem.classList.add('active');
+                    }
+                }
+            );
             
             // 5.5 初始化设置管理器（绑定关闭按钮等事件）
             await settingsManager.init();
@@ -2063,51 +2086,9 @@ class MusicPlayerApp {
 
     // 设置模态框关闭事件
     setupModalClosing(playlistsModal, modals, navItems, navigateBack, updateModalZIndex) {
-        // 歌单模态框关闭 - 支持点击背景关闭
-        if (playlistsModal) {
-            playlistsModal.addEventListener('click', (e) => {
-                if (e.target === playlistsModal) {
-                    playlistsManagement.hide();
-                    // 关闭时更新z-index
-                    updateModalZIndex();
-                    // 移除active状态
-                    navItems.forEach(item => {
-                        if (item.getAttribute('data-tab') === 'playlists') {
-                            item.classList.remove('active');
-                        }
-                    });
-                    // 返回上一个栏目
-                    setTimeout(() => navigateBack(), 100);
-                }
-            });
-            
-            // 歌单模态框返回按钮
-            const playlistsBackBtn = document.getElementById('playlistsBackBtn');
-            if (playlistsBackBtn) {
-                playlistsBackBtn.addEventListener('click', () => {
-                    playlistsManagement.hide();
-                    // 关闭时更新z-index
-                    updateModalZIndex();
-                    // 移除active状态
-                    navItems.forEach(item => {
-                        if (item.getAttribute('data-tab') === 'playlists') {
-                            item.classList.remove('active');
-                        }
-                    });
-                    // 返回上一个栏目
-                    setTimeout(() => navigateBack(), 100);
-                });
-            }
-        }
-
         // 歌単 sticky header 点击打开歌单模态框
         document.addEventListener('open-playlists-modal', () => {
             if (playlistsModal) {
-                playlistsModal.style.display = 'block';
-                setTimeout(() => {
-                    playlistsModal.classList.add('modal-visible');
-                    updateModalZIndex();
-                }, 10);
                 playlistsManagement.show();
             }
         });

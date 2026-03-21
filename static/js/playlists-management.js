@@ -167,12 +167,14 @@ export class PlaylistsManagement {
         this.modalBody = null;
         this.modal = null;
         this.onPlaylistSwitchCallback = null;
+        this.onDismissCallback = null;
     }
 
-    init(onPlaylistSwitch = null) {
+    init(onPlaylistSwitch = null, onDismiss = null) {
         this.modalBody = document.getElementById('playlistsModalBody');
         this.modal = document.getElementById('playlistsModal');
         this.onPlaylistSwitchCallback = onPlaylistSwitch;
+        this.onDismissCallback = onDismiss;
         this.bindEvents();
     }
 
@@ -264,7 +266,7 @@ export class PlaylistsManagement {
             Toast.success(i18n.t('playlists.switchSuccess', { name: playlist.name }));
 
             console.log('[歌单管理] 步骤4: 隐藏模态框');
-            this.hide();
+            this.hide('select');
 
             setTimeout(() => {
                 if (this.onPlaylistSwitchCallback && typeof this.onPlaylistSwitchCallback === 'function') {
@@ -347,7 +349,7 @@ export class PlaylistsManagement {
         const playlistsCloseBtn = document.getElementById('playlistsCloseBtn');
         if (playlistsCloseBtn) {
             playlistsCloseBtn.addEventListener('click', () => {
-                this.hide();
+                this.hide('dismiss');
             });
         }
 
@@ -355,7 +357,7 @@ export class PlaylistsManagement {
         if (this.modal) {
             this.modal.addEventListener('click', (e) => {
                 if (e.target === this.modal) {
-                    this.hide();
+                    this.hide('dismiss');
                 }
             });
         }
@@ -373,7 +375,7 @@ export class PlaylistsManagement {
 
                     if (event.key === 'Escape') {
                         event.preventDefault();
-                        this.hide();
+                        this.hide('dismiss');
                         return;
                     }
 
@@ -391,7 +393,7 @@ export class PlaylistsManagement {
     }
 
     // 隐藏模态框
-    hide() {
+    hide(reason = 'dismiss') {
         if (this.modal) {
             console.log('[歌单管理] 隐藏模态框');
             this.modal.classList.remove('modal-visible');
@@ -402,6 +404,9 @@ export class PlaylistsManagement {
             setTimeout(() => {
                 this.modal.style.display = 'none';
                 restoreFocus(this.modal._previousActiveElement);
+                if (reason === 'dismiss' && typeof this.onDismissCallback === 'function') {
+                    this.onDismissCallback(reason);
+                }
                 console.log('[歌单管理] ✓ 模态框已隐藏');
             }, 100);
         }

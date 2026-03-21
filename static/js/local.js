@@ -174,13 +174,11 @@ export const localFiles = {
     async loadTree() {
         if (!this.contentEl) return;
         try {
-            const response = await fetch('/tree');
-            if (!response.ok) {
+            const data = await api.getFileTree();
+            if (data?._error) {
                 console.warn('获取本地文件树失败');
                 return;
             }
-
-            const data = await response.json();
             if (data.status === 'OK' && data.tree) {
                 this.fullTree = data.tree;
                 currentNavPath = [];
