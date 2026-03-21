@@ -110,6 +110,9 @@ function createPlaylistItemElement(playlist, index, selectedPlaylistId) {
 
     item.className = 'playlist-item' + (isSelected ? ' selected' : '');
     item.dataset.playlistId = playlist.id;
+    item.setAttribute('role', 'button');
+    item.setAttribute('tabindex', '0');
+    item.setAttribute('aria-pressed', String(isSelected));
 
     const iconEl = document.createElement('div');
     iconEl.className = 'playlist-icon';
@@ -178,42 +181,70 @@ export class PlaylistsManagement {
     }
 
     bindModalBodyDelegates() {
-        if (!this.modalBody || this.modalBody._delegatedClickHandler) {
+        if (!this.modalBody) {
             return;
         }
 
-        this.modalBody._delegatedClickHandler = async (event) => {
-            const item = event.target.closest('.playlist-item');
-            if (!item || !this.modalBody.contains(item)) {
-                return;
-            }
+        if (!this.modalBody._delegatedClickHandler) {
+            this.modalBody._delegatedClickHandler = async (event) => {
+                const item = event.target.closest('.playlist-item');
+                if (!item || !this.modalBody.contains(item)) {
+                    return;
+                }
 
-            const playlistId = item.dataset.playlistId;
-            const playlist = this.getRenderablePlaylists().find((playlistItem) => playlistItem.id === playlistId);
-            if (!playlist) {
-                return;
-            }
+                const playlistId = item.dataset.playlistId;
+                const playlist = this.getRenderablePlaylists().find((playlistItem) => playlistItem.id === playlistId);
+                if (!playlist) {
+                    return;
+                }
 
-            const editBtn = event.target.closest('.playlist-action-btn.edit');
-            if (editBtn) {
-                event.stopPropagation();
-                await this.handleEditPlaylist(playlist);
-                return;
-            }
+                const editBtn = event.target.closest('.playlist-action-btn.edit');
+                if (editBtn) {
+                    event.stopPropagation();
+                    await this.handleEditPlaylist(playlist);
+                    return;
+                }
 
-            const deleteBtn = event.target.closest('.playlist-action-btn.delete');
-            if (deleteBtn) {
-                event.stopPropagation();
-                await this.handleDeletePlaylist(playlist, item);
-                return;
-            }
+                const deleteBtn = event.target.closest('.playlist-action-btn.delete');
+                if (deleteBtn) {
+                    event.stopPropagation();
+                    await this.handleDeletePlaylist(playlist, item);
+                    return;
+                }
 
-            if (event.target.closest('.playlist-info')) {
                 await this.handleSwitchPlaylist(playlist);
-            }
-        };
+            };
 
-        this.modalBody.addEventListener('click', this.modalBody._delegatedClickHandler);
+            this.modalBody.addEventListener('click', this.modalBody._delegatedClickHandler);
+        }
+
+        if (!this.modalBody._delegatedKeydownHandler) {
+            this.modalBody._delegatedKeydownHandler = async (event) => {
+                if (event.target.closest('.playlist-action-btn')) {
+                    return;
+                }
+
+                if (event.key !== 'Enter' && event.key !== ' ') {
+                    return;
+                }
+
+                const item = event.target.closest('.playlist-item');
+                if (!item || !this.modalBody.contains(item)) {
+                    return;
+                }
+
+                const playlistId = item.dataset.playlistId;
+                const playlist = this.getRenderablePlaylists().find((playlistItem) => playlistItem.id === playlistId);
+                if (!playlist) {
+                    return;
+                }
+
+                event.preventDefault();
+                await this.handleSwitchPlaylist(playlist);
+            };
+
+            this.modalBody.addEventListener('keydown', this.modalBody._delegatedKeydownHandler);
+        }
     }
 
     async handleSwitchPlaylist(playlist) {

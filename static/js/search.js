@@ -354,6 +354,25 @@ function createYoutubeLoadMoreControls() {
     return fragment;
 }
 
+function formatSearchCount(count, limit) {
+    if (typeof limit === 'number' && limit > 0 && count >= limit) {
+        return `${limit}+`;
+    }
+    return String(count);
+}
+
+function updateSearchTabCounts({ localCount = 0, youtubeCount = 0, localLimit = 0, youtubeLimit = 0 } = {}) {
+    const localTab = document.querySelector('.search-tab[data-tab="local"]');
+    if (localTab) {
+        localTab.textContent = i18n.t('search.localTab', { count: formatSearchCount(localCount, localLimit) });
+    }
+
+    const youtubeTab = document.querySelector('.search-tab[data-tab="youtube"]');
+    if (youtubeTab) {
+        youtubeTab.textContent = i18n.t('search.networkTab', { count: formatSearchCount(youtubeCount, youtubeLimit) });
+    }
+}
+
 export class SearchManager {
     constructor() {
         this.searchHistory = [];
@@ -372,6 +391,10 @@ export class SearchManager {
             local: [],
             youtube: []
         };
+        this.totalSearchResults = {
+            local: [],
+            youtube: []
+        };
         // YouTube搜索加载状态追踪
         this.youtubeLoadState = {
             query: '',               // 当前搜索词
@@ -382,6 +405,7 @@ export class SearchManager {
             maxResultsStep: 20,      // 每次加载增量
             maxResultsLimit: 100     // 加载全部的最大值
         };
+        this.localResultsLimit = 20;
         this.karaokeMode = false;  // 伴奏模式开关
         // 目录导航状态（在搜索弹窗内浏览目录时使用）
         this.dirNavState = {
@@ -392,8 +416,8 @@ export class SearchManager {
         };
         this.loadHistory();
 
-        // 异步加载YouTube搜索配置
-        this.loadYoutubeSearchConfig();
+        // 异步加载搜索配置，供首次搜索前等待
+        this.searchConfigPromise = this.loadYoutubeSearchConfig();
     }
 
     async getQueueInsertIndex({ fallback = 1, minimum = 1, logPrefix = '[搜索]' } = {}) {
@@ -436,12 +460,15 @@ export class SearchManager {
     async loadYoutubeSearchConfig() {
         try {
             const config = await api.getYoutubeSearchConfig();
+            this.localResultsLimit = config.local_max_results || this.localResultsLimit;
             this.youtubeLoadState.maxResultsStep = config.page_size || 20;
             this.youtubeLoadState.maxResultsLimit = config.max_results || 100;
             console.log('[YouTube搜索配置] 加载成功:', config);
+            return config;
         } catch (error) {
             console.warn('[YouTube搜索配置] 加载失败，使用默认值:', error);
             // 保持默认值
+            return null;
         }
     }
 
@@ -725,6 +752,10 @@ export class SearchManager {
         
         if (!searchModalBody) return;
 
+        if (this.searchConfigPromise) {
+            await this.searchConfigPromise;
+        }
+
         const now = Date.now();
         if (this.isSearching) return; // 正在搜索时不叠加
         if (query === this.lastQuery && now - this.lastSearchAt < this.minInterval) {
@@ -752,11 +783,18 @@ export class SearchManager {
             if (!result || result.status !== 'OK') {
                 throw new Error(result?.error || i18n.t('search.loadMoreFailed'));
             }
+
+            if (typeof result.local_max_results === 'number') {
+                this.localResultsLimit = result.local_max_results;
+            }
+            if (typeof result.youtube_max_results === 'number') {
+                this.youtubeLoadState.maxResultsLimit = result.youtube_max_results;
+            }
             
             const localResults = result.local || [];
             const youtubeResults = result.youtube || [];
 
-            this.renderSearchResults(localResults, youtubeResults);
+            this.renderSearchResults(localResults, youtubeResults, actualQuery);
             
         } catch (error) {
             console.error('搜索失败:', error);
@@ -770,14 +808,22 @@ export class SearchManager {
     }
 
     // 渲染搜索结果
-    renderSearchResults(localResults, youtubeResults) {
+    renderSearchResults(localResults, youtubeResults, searchQuery = this.lastQuery) {
         const searchModalBody = document.getElementById('searchModalBody');
         if (!searchModalBody) return;
 
-        // 保存当前搜索结果
+        const fullLocalResults = localResults || [];
+        const fullYoutubeResults = youtubeResults || [];
+        const displayedYoutubeResults = fullYoutubeResults.slice(0, this.youtubeLoadState.maxResultsStep);
+
+        // 保存当前显示结果与总结果
         this.currentSearchResults = {
-            local: localResults || [],
-            youtube: youtubeResults || []
+            local: fullLocalResults,
+            youtube: displayedYoutubeResults
+        };
+        this.totalSearchResults = {
+            local: fullLocalResults,
+            youtube: fullYoutubeResults
         };
 
         const buildList = (items, type) => {
@@ -813,20 +859,20 @@ export class SearchManager {
             return fragment;
         };
 
-        const defaultTab = localResults.length > 0 ? 'local' : 'youtube';
+        const defaultTab = fullYoutubeResults.length > 0 ? 'youtube' : 'local';
 
         const tabs = document.createElement('div');
         tabs.className = 'search-tabs';
-        tabs.appendChild(createSearchTabButton('local', i18n.t('search.localTab', { count: localResults.length }), defaultTab === 'local'));
-        tabs.appendChild(createSearchTabButton('youtube', i18n.t('search.networkTab', { count: youtubeResults.length }), defaultTab === 'youtube'));
+        tabs.appendChild(createSearchTabButton('local', i18n.t('search.localTab', { count: fullLocalResults.length }), defaultTab === 'local'));
+        tabs.appendChild(createSearchTabButton('youtube', i18n.t('search.networkTab', { count: fullYoutubeResults.length }), defaultTab === 'youtube'));
 
         const panels = document.createElement('div');
         panels.className = 'search-tab-panels';
 
-        const localPanel = createSearchResultsPanel('local', buildList(localResults, 'local'), defaultTab === 'local');
-        const youtubePanel = createSearchResultsPanel('youtube', buildList(youtubeResults, 'youtube'), defaultTab === 'youtube');
+        const localPanel = createSearchResultsPanel('local', buildList(fullLocalResults, 'local'), defaultTab === 'local');
+        const youtubePanel = createSearchResultsPanel('youtube', buildList(displayedYoutubeResults, 'youtube'), defaultTab === 'youtube');
 
-        if (youtubeResults && youtubeResults.length > 0) {
+        if (fullYoutubeResults.length > displayedYoutubeResults.length) {
             youtubePanel.appendChild(createYoutubeLoadMoreControls());
         }
 
@@ -834,14 +880,19 @@ export class SearchManager {
         panels.appendChild(youtubePanel);
         searchModalBody.replaceChildren(tabs, panels);
 
-        // 初始化YouTube加载状态
-        if (youtubeResults && youtubeResults.length > 0) {
-            this.youtubeLoadState.query = this.lastQuery;
-            this.youtubeLoadState.displayedCount = youtubeResults.length;
-            this.youtubeLoadState.totalLoaded = youtubeResults.length;
-            this.youtubeLoadState.hasMore = youtubeResults.length >= this.youtubeLoadState.maxResultsStep;
-            this.youtubeLoadState.isLoading = false;
-        }
+        updateSearchTabCounts({
+            localCount: this.totalSearchResults.local.length,
+            youtubeCount: this.totalSearchResults.youtube.length,
+            localLimit: this.localResultsLimit,
+            youtubeLimit: this.youtubeLoadState.maxResultsLimit
+        });
+
+        // 初始化YouTube加载状态，确保 load more 延续当前实际查询词
+        this.youtubeLoadState.query = searchQuery;
+        this.youtubeLoadState.displayedCount = displayedYoutubeResults.length;
+        this.youtubeLoadState.totalLoaded = displayedYoutubeResults.length;
+        this.youtubeLoadState.hasMore = displayedYoutubeResults.length < fullYoutubeResults.length;
+        this.youtubeLoadState.isLoading = false;
 
         this.updateYoutubeLoadUI();
     }
@@ -1361,7 +1412,7 @@ export class SearchManager {
         }
 
         try {
-            const result = await api.searchSong(query.trim());
+            const result = await api.searchSong(query.trim(), this.youtubeLoadState.maxResultsLimit);
             this.addToHistory(query.trim());
             return result;
         } catch (error) {
@@ -1437,16 +1488,17 @@ export class SearchManager {
      */
     async loadMoreYoutubeResults(loadAll = false) {
         const state = this.youtubeLoadState;
+        const allYoutubeResults = this.totalSearchResults.youtube || [];
+        const totalAvailable = Math.min(allYoutubeResults.length, state.maxResultsLimit);
 
         // 防重复加载
         if (state.isLoading || !state.hasMore) return;
 
-        // 计算新的max_results
-        const newMaxResults = loadAll
-            ? state.maxResultsLimit
-            : state.totalLoaded + state.maxResultsStep;
+        const newDisplayCount = loadAll
+            ? totalAvailable
+            : Math.min(state.displayedCount + state.maxResultsStep, totalAvailable);
 
-        if (newMaxResults <= state.totalLoaded) {
+        if (newDisplayCount <= state.displayedCount) {
             state.hasMore = false;
             this.updateYoutubeLoadUI();
             return;
@@ -1456,20 +1508,7 @@ export class SearchManager {
             state.isLoading = true;
             this.updateYoutubeLoadUI();
 
-            // 调用API
-            const result = await api.searchSong(state.query, newMaxResults);
-
-            if (result.status !== 'OK') {
-                throw new Error(result.error || i18n.t('search.loadMoreFailed'));
-            }
-
-            const newResults = result.youtube || [];
-
-            // 过滤出新结果
-            const existingUrls = new Set(
-                this.currentSearchResults.youtube.map(item => item.url)
-            );
-            const freshResults = newResults.filter(item => !existingUrls.has(item.url));
+            const freshResults = allYoutubeResults.slice(state.displayedCount, newDisplayCount);
 
             if (freshResults.length === 0) {
                 state.hasMore = false;
@@ -1477,14 +1516,17 @@ export class SearchManager {
             } else {
                 // 追加新结果
                 this.currentSearchResults.youtube.push(...freshResults);
-                state.totalLoaded = newResults.length;
+                state.totalLoaded = newDisplayCount;
                 state.displayedCount = this.currentSearchResults.youtube.length;
-
-                if (newResults.length < newMaxResults) {
-                    state.hasMore = false;
-                }
+                state.hasMore = state.displayedCount < totalAvailable;
 
                 this.appendYoutubeResults(freshResults);
+                updateSearchTabCounts({
+                    localCount: this.totalSearchResults.local.length,
+                    youtubeCount: this.totalSearchResults.youtube.length,
+                    localLimit: this.localResultsLimit,
+                    youtubeLimit: this.youtubeLoadState.maxResultsLimit
+                });
                 Toast.success(i18n.t('search.loadedMore', { count: freshResults.length }));
             }
 

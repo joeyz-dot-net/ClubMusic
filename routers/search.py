@@ -82,7 +82,9 @@ async def search_song(request: Request, player: MusicPlayer = Depends(get_player
         return {
             "status": "OK",
             "local": local_results,
-            "youtube": youtube_results
+            "youtube": youtube_results,
+            "local_max_results": player.local_search_max_results,
+            "youtube_max_results": player.youtube_search_max_results
         }
     except Exception as e:
         return error_response("[/search_song] 搜索异常", exc=e, _logger=logger)
@@ -92,6 +94,7 @@ async def search_song(request: Request, player: MusicPlayer = Depends(get_player
 async def get_youtube_search_config(player: MusicPlayer = Depends(get_player)):
     """获取YouTube搜索配置"""
     return {
+        "local_max_results": player.local_search_max_results,
         "page_size": min(20, player.youtube_search_max_results),
         "max_results": player.youtube_search_max_results
     }
