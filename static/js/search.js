@@ -540,6 +540,40 @@ export class SearchManager {
         return this.getSearchResultsForBatchAction(tabName).filter((item) => !item.is_directory && item.type !== 'directory');
     }
 
+    getPlaylistDisplayName(playlistId) {
+        const activeDefaultId = window.app?.modules?.playlistManager?.getActiveDefaultId?.() || 'default';
+        if (playlistId === activeDefaultId) {
+            return i18n.t('nav.queue');
+        }
+
+        const playlist = window.app?.modules?.playlistManager?.playlists?.find((item) => item.id === playlistId);
+        return playlist?.name || i18n.t('playlist.current');
+    }
+
+    notifyBulkAddResult({ successMessage, failureMessage, addedCount, skippedCount = 0, failedCount = 0 }) {
+        const duplicatesOnly = addedCount === 0 && skippedCount > 0 && failedCount === 0;
+        let message = (addedCount > 0 || duplicatesOnly) ? successMessage : failureMessage;
+
+        if (skippedCount > 0) {
+            message += i18n.t('playlist.addSkipped', { count: skippedCount });
+        }
+        if (failedCount > 0) {
+            message += i18n.t('playlist.addFailed', { count: failedCount });
+        }
+
+        if (addedCount > 0 && skippedCount === 0 && failedCount === 0) {
+            Toast.success(message);
+            return;
+        }
+
+        if (addedCount === 0 && failedCount > 0 && skippedCount === 0) {
+            Toast.error(message);
+            return;
+        }
+
+        Toast.warning(message);
+    }
+
     setActiveSearchTab(container, tabName) {
         if (!container) return;
 
@@ -1189,6 +1223,8 @@ export class SearchManager {
                         
                         // 将所有歌曲添加到歌单（保持原有顺序）
                         let addedCount = 0;
+                        let skippedCount = 0;
+                        let failedCount = 0;
                         let insertIndex = null;  // 第一首歌曲的插入位置
                         
                         for (let i = 0; i < songs.length; i++) {
@@ -1212,30 +1248,34 @@ export class SearchManager {
                                 if (!addResponse?._error && addResponse?.status === 'OK') {
                                     addedCount++;
                                     console.log(`[搜索] ✓ 添加歌曲 (${i+1}/${songs.length}): ${song.title} 在位置 ${currentInsertIndex}`);
+                                } else if (addResponse?.duplicate) {
+                                    skippedCount++;
+                                    console.warn(`[搜索] 跳过重复歌曲: ${song.title}`);
                                 } else {
+                                    failedCount++;
                                     console.warn(`[搜索] ✗ 添加歌曲失败: ${song.title}`, addResponse?.error || addResponse?.message || addResponse);
                                 }
                             } catch (err) {
+                                failedCount++;
                                 console.warn(`[搜索] 添加歌曲异常: ${err.message}`);
                             }
                         }
 
-                        if (addedCount === 0) {
-                            throw new Error(i18n.t('search.addDirFailed'));
-                        }
-                        
-                        // 获取歌单名称
-                        let playlistName = i18n.t('nav.queue');
-                        const _activeDefault = window.app?.modules?.playlistManager?.getActiveDefaultId?.() || 'default';
-                        if (playlistId !== _activeDefault && window.app && window.app.modules && window.app.modules.playlistManager) {
-                            const playlist = window.app.modules.playlistManager.playlists.find(p => p.id === playlistId);
-                            if (playlist) {
-                                playlistName = playlist.name;
-                            }
-                        }
+                        const playlistName = this.getPlaylistDisplayName(playlistId);
+                        this.notifyBulkAddResult({
+                            successMessage: i18n.t('search.addDirSuccess', { count: addedCount, name: playlistName }),
+                            failureMessage: i18n.t('search.addDirFailed'),
+                            addedCount,
+                            skippedCount,
+                            failedCount
+                        });
 
-                        Toast.success(i18n.t('search.addDirSuccess', { count: addedCount, name: playlistName }));
-                        setElementMarkup(btn, SEARCH_SUCCESS_ICON_MARKUP);
+                        if (addedCount > 0) {
+                            setElementMarkup(btn, SEARCH_SUCCESS_ICON_MARKUP);
+                        } else {
+                            restoreElementChildren(btn, originalContent);
+                            btn.disabled = false;
+                        }
                         
                         // ✅【关键】刷新播放列表显示 - 直接调用 renderPlaylistUI 确保立即显示
                         try {
@@ -1374,6 +1414,8 @@ export class SearchManager {
 
                     // 批量添加歌曲
                     let addedCount = 0;
+                    let skippedCount = 0;
+                    let failedCount = 0;
                     for (let i = 0; i < songs.length; i++) {
                         const song = songs[i];
                         const currentInsertIndex = insertIndex + i;
@@ -1392,12 +1434,27 @@ export class SearchManager {
 
                             if (!response?._error && response?.status === 'OK') {
                                 addedCount++;
-                                const progress = Math.round((addedCount / songs.length) * 100);
+                                const processedCount = addedCount + skippedCount + failedCount;
+                                const progress = Math.round((processedCount / songs.length) * 100);
                                 searchLoading.show(i18n.t('search.batchAddProgress', { done: addedCount, total: songs.length, pct: progress }));
+                            } else if (response?.duplicate) {
+                                skippedCount++;
+                                const processedCount = addedCount + skippedCount + failedCount;
+                                const progress = Math.round((processedCount / songs.length) * 100);
+                                searchLoading.show(i18n.t('search.batchAddProgress', { done: addedCount, total: songs.length, pct: progress }));
+                                console.warn('[批量添加] 跳过重复歌曲:', songData.title);
                             } else {
+                                failedCount++;
+                                const processedCount = addedCount + skippedCount + failedCount;
+                                const progress = Math.round((processedCount / songs.length) * 100);
+                                searchLoading.show(i18n.t('search.batchAddProgress', { done: addedCount, total: songs.length, pct: progress }));
                                 console.warn('[批量添加] 添加失败:', songData.title, response?.error || response?.message || response);
                             }
                         } catch (err) {
+                            failedCount++;
+                            const processedCount = addedCount + skippedCount + failedCount;
+                            const progress = Math.round((processedCount / songs.length) * 100);
+                            searchLoading.show(i18n.t('search.batchAddProgress', { done: addedCount, total: songs.length, pct: progress }));
                             console.warn('[批量添加] 添加歌曲异常:', err);
                         }
 
@@ -1408,20 +1465,15 @@ export class SearchManager {
                     searchLoading.hide();
 
                     // 获取歌单名称
-                    let playlistName = i18n.t('nav.queue');
-                    const _activeDefault3 = window.app?.modules?.playlistManager?.getActiveDefaultId?.() || 'default';
-                    if (playlistId !== _activeDefault3 && window.app && window.app.modules && window.app.modules.playlistManager) {
-                        const playlist = window.app.modules.playlistManager.playlists.find(p => p.id === playlistId);
-                        if (playlist) {
-                            playlistName = playlist.name;
-                        }
-                    }
+                    const playlistName = this.getPlaylistDisplayName(playlistId);
 
-                    if (addedCount === 0) {
-                        throw new Error(i18n.t('search.batchAddFailed'));
-                    }
-
-                    Toast.success(i18n.t('search.batchAddSuccess', { done: addedCount, total: songs.length, name: playlistName }));
+                    this.notifyBulkAddResult({
+                        successMessage: i18n.t('search.batchAddSuccess', { done: addedCount, total: songs.length, name: playlistName }),
+                        failureMessage: i18n.t('search.batchAddFailed'),
+                        addedCount,
+                        skippedCount,
+                        failedCount
+                    });
 
                     // 刷新播放列表显示
                     try {

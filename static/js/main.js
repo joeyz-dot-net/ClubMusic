@@ -6,7 +6,7 @@ import { player } from './player.js';
 import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js';
 import { playlistsManagement } from './playlists-management.js';
 import { volumeControl } from './volume.js';
-import { searchManager } from './search.js?v=2';
+import { searchManager } from './search.js?v=3';
 import { themeManager } from './themeManager.js';
 import { debug } from './debug.js';
 import { Toast, formatTime } from './ui.js';
