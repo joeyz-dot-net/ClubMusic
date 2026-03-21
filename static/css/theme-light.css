@@ -473,137 +473,20 @@ body.theme-light {
     -webkit-backdrop-filter: blur(12px) saturate(180%);
 }
 
-.modal-close, .ranking-modal-close, .history-modal-close, .local-songs-modal-close {
+.modal-close, .history-modal-close, .local-songs-modal-close {
     color: #4a5568;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.modal-close:hover, .ranking-modal-close:hover, .history-modal-close:hover, .local-songs-modal-close:hover {
+.modal-close:hover, .history-modal-close:hover, .local-songs-modal-close:hover {
     background: rgba(49, 130, 206, 0.08);
     color: #3182ce;
     transform: scale(1.05);
 }
 
-.modal-body, .ranking-modal-body {
+.modal-body {
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, rgba(247, 250, 252, 0.5) 100%);
     color: #1a202c;
-}
-
-/* 排行榜标签页 - 亮色主题 */
-.ranking-tabs {
-    border-bottom: 1px solid rgba(226, 232, 240, 0.6);
-    background: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(12px) saturate(180%);
-    -webkit-backdrop-filter: blur(12px) saturate(180%);
-}
-
-.ranking-tab {
-    border: 1px solid rgba(203, 213, 224, 0.6);
-    color: #718096;
-    background: rgba(247, 250, 252, 0.7);
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.ranking-tab:hover {
-    background: rgba(237, 242, 247, 0.95);
-    border-color: rgba(160, 174, 192, 0.7);
-    color: #4a5568;
-    transform: translateY(-1px);
-}
-
-.ranking-tab.active {
-    background: linear-gradient(135deg, #ffffff 0%, #f7fafc 100%);
-    border-color: #3182ce;
-    color: #3182ce;
-    font-weight: 600;
-    box-shadow: 0 2px 8px rgba(49, 130, 206, 0.15);
-}
-
-/* 排行榜项目 - 亮色主题 */
-.ranking-item {
-    background: rgba(255, 255, 255, 0.85);
-    border: 1px solid rgba(226, 232, 240, 0.7);
-    backdrop-filter: blur(8px) saturate(180%);
-    -webkit-backdrop-filter: blur(8px) saturate(180%);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.ranking-item:hover {
-    background: rgba(247, 250, 252, 0.95);
-    border-color: rgba(160, 174, 192, 0.5);
-    backdrop-filter: blur(10px) saturate(200%);
-    -webkit-backdrop-filter: blur(10px) saturate(200%);
-    box-shadow: 0 4px 12px rgba(49, 130, 206, 0.08);
-    transform: translateY(-2px);
-}
-
-.ranking-rank {
-    background: linear-gradient(135deg, #edf2f7 0%, #e2e8f0 100%);
-}
-
-/* Top 3 排名特殊样式 */
-.ranking-item:nth-child(1) .ranking-rank {
-    background: linear-gradient(135deg, #ffd700 0%, #ffed4e 50%, #ffd700 100%);
-    box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.4);
-}
-
-.ranking-item:nth-child(1) .ranking-number {
-    color: #744210;
-    font-weight: 700;
-}
-
-.ranking-item:nth-child(2) .ranking-rank {
-    background: linear-gradient(135deg, #e8e8e8 0%, #c0c0c0 50%, #e8e8e8 100%);
-    box-shadow: 0 2px 8px rgba(192, 192, 192, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.4);
-}
-
-.ranking-item:nth-child(2) .ranking-number {
-    color: #4a5568;
-    font-weight: 700;
-}
-
-.ranking-item:nth-child(3) .ranking-rank {
-    background: linear-gradient(135deg, #daa520 0%, #cd7f32 50%, #daa520 100%);
-    box-shadow: 0 2px 8px rgba(205, 127, 50, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-
-.ranking-item:nth-child(3) .ranking-number {
-    color: #ffffff;
-    font-weight: 700;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-}
-
-.ranking-number {
-    color: #2d3748;
-    font-weight: 600;
-}
-
-.ranking-title {
-    color: #1a202c;
-    font-weight: 500;
-}
-
-.ranking-meta {
-    color: #718096;
-}
-
-.ranking-count {
-    color: #a0aec0;
-    font-weight: 500;
-}
-
-.ranking-play-btn {
-    background: rgba(49, 130, 206, 0.08);
-    border: 1px solid rgba(49, 130, 206, 0.3);
-    color: #3182ce;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.ranking-play-btn:hover {
-    background: rgba(49, 130, 206, 0.15);
-    border-color: #3182ce;
-    transform: scale(1.05);
-    box-shadow: 0 2px 8px rgba(49, 130, 206, 0.2);
 }
 
 /* 搜索模态框 - 亮色主题 */

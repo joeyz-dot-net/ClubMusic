@@ -245,38 +245,17 @@ button:hover { background: var(--button-hover-bg); border-color: var(--button-ho
     border-bottom-color: var(--border-color);
 }
 
-.modal-close, .ranking-modal-close, .history-modal-close, .local-songs-modal-close {
+.modal-close, .history-modal-close, .local-songs-modal-close {
     color: var(--text-primary);
 }
 
-.modal-close:hover, .ranking-modal-close:hover, .history-modal-close:hover, .local-songs-modal-close:hover {
+.modal-close:hover, .history-modal-close:hover, .local-songs-modal-close:hover {
     background: #1a1a1a;
 }
 
-.modal-body, .ranking-modal-body {
+.modal-body {
     background: var(--bg-primary);
     color: var(--text-primary);
-}
-
-.ranking-tabs {
-    border-bottom-color: var(--border-color);
-}
-
-.ranking-tab {
-    border-color: #333;
-    color: #888;
-}
-
-.ranking-tab:hover {
-    background: #1a1a1a;
-    border-color: #444;
-    color: #fff;
-}
-
-.ranking-tab.active {
-    background: #fff;
-    border-color: #fff;
-    color: #0a0a0a;
 }
 
 .search-modal {
@@ -641,92 +620,6 @@ button:hover { background: var(--button-hover-bg); border-color: var(--button-ho
 
 .volume-slider-thumb {
     background: #fff;
-}
-
-.ranking-item {
-    background: #111;
-    border-color: #222;
-}
-
-.ranking-item:hover {
-    background: #1a1a1a;
-    border-color: #333;
-}
-
-.ranking-rank {
-    background: #1a1a1a;
-}
-
-/* Top 3 排名特殊样式 */
-.ranking-item:nth-child(1) .ranking-rank {
-    background: linear-gradient(135deg, #ffd700, #ffed4e);
-}
-
-.ranking-item:nth-child(1) .ranking-number {
-    color: #333;
-}
-
-.ranking-item:nth-child(2) .ranking-rank {
-    background: linear-gradient(135deg, #c0c0c0, #e8e8e8);
-}
-
-.ranking-item:nth-child(2) .ranking-number {
-    color: #333;
-}
-
-.ranking-item:nth-child(3) .ranking-rank {
-    background: linear-gradient(135deg, #cd7f32, #daa520);
-}
-
-.ranking-item:nth-child(3) .ranking-number {
-    color: #fff;
-}
-
-.ranking-number {
-    color: #fff;
-}
-
-.ranking-title {
-    color: #fff;
-}
-
-.ranking-meta {
-    color: #888;
-}
-
-.ranking-count {
-    color: #888;
-}
-
-.ranking-count::before {
-    color: #666;
-}
-
-.ranking-date {
-    color: #777;
-}
-
-.ranking-play-btn {
-    border-color: #333;
-    color: #888;
-}
-
-.ranking-play-btn:hover {
-    background: #1a1a1a;
-    border-color: #444;
-    color: #fff;
-}
-
-.ranking-empty {
-    color: #666;
-}
-
-.ranking-empty-icon {
-    opacity: 0.6;
-}
-
-.ranking-empty-text {
-    color: #888;
 }
 
 /* Now Playing Panel - Dark Theme */

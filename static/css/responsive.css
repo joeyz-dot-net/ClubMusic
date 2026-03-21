@@ -180,15 +180,14 @@
 
     /* ---- 模态框 ---- */
     .modal-header, .playlists-modal-header, .search-modal-header,
-    .history-modal-header, .ranking-modal-header {
+    .history-modal-header {
         padding: clamp(10px, 2.8vw, 12px);
     }
     .modal-title, .playlists-modal-header h2,
-    .search-modal-header h3, .history-modal-header h3,
-    .ranking-modal-header h3 {
+    .search-modal-header h3, .history-modal-header h3 {
         font-size: clamp(16px, 4.2vw, 18px);
     }
-    .modal-close, .ranking-modal-close, .history-modal-close,
+    .modal-close, .history-modal-close,
     .playlists-back-btn, .playlists-add-btn, .playlists-close-btn,
     .search-modal-back, .full-player-back, .now-playing-close {
         width: var(--modal-close-size);
@@ -196,7 +195,7 @@
         font-size: clamp(16px, 4.2vw, 20px);
     }
     .modal-body, .playlists-modal-body, .search-modal-body,
-    .history-modal-body, .ranking-modal-body {
+    .history-modal-body {
         padding: clamp(8px, 2.5vw, 12px);
         padding-bottom: clamp(60px, 16vw, 70px);
     }
@@ -279,19 +278,6 @@
         gap: clamp(3px, 1vw, 4px);
     }
     .breadcrumb-item { font-size: clamp(11px, 2.8vw, 14px); }
-
-    /* ---- 排行榜标签 ---- */
-    .ranking-tabs {
-        gap: clamp(4px, 1.3vw, 6px);
-        padding: clamp(8px, 2.5vw, 12px);
-        flex-wrap: wrap;
-    }
-    .ranking-tab {
-        padding: clamp(6px, 1.8vw, 8px);
-        font-size: clamp(11px, 2.8vw, 12px);
-        border-radius: 6px;
-        min-width: 48px;
-    }
 
     /* ---- Toast ---- */
     .toast {
@@ -549,17 +535,6 @@
     .playlists-modal {
         left: var(--sidebar-width);
         bottom: 0;
-    }
-
-    /* 排行榜模态框: 原 bottom: 64px */
-    #rankingModal {
-        left: var(--sidebar-width);
-        bottom: 0;
-        max-height: 100vh;
-    }
-
-    #rankingModal .modal-content {
-        max-height: 100vh;
     }
 
     /* ---- 全屏覆盖层覆盖整个视口含侧边栏 ---- */
@@ -931,8 +906,7 @@
     }
 
     .search-modal,
-    .history-modal,
-    #rankingModal {
+    .history-modal {
         transition: right 0.3s ease;
     }
 
@@ -952,10 +926,6 @@
     }
 
     body.npp-visible .playlists-modal {
-        right: var(--now-playing-width);
-    }
-
-    body.npp-visible #rankingModal {
         right: var(--now-playing-width);
     }
 

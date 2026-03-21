@@ -42,10 +42,6 @@ print("[Models] 加载 Player 模块...", end=" ", flush=True)
 from .player import MusicPlayer
 print("✓")
 
-print("[Models] 加载 Rank 模块...", end=" ", flush=True)
-from .rank import Rank, HitRank
-print("✓")
-
 print("[Models] 所有数据模型已加载完毕！")
 
 __all__ = [
@@ -58,8 +54,6 @@ __all__ = [
     "Playlist",
     "Playlists",
     "MusicPlayer",
-    "Rank",
-    "HitRank",
     "logger",
     "setup_logging",
     "get_logger",

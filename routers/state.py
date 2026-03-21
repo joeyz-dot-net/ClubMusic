@@ -26,7 +26,6 @@ from models import (
     LocalPlaylist,
     MusicPlayer,
     Playlists,
-    HitRank,
 )
 
 from models.settings import initialize_settings
@@ -53,8 +52,6 @@ PLAYER = MusicPlayer.initialize(data_dir=".")
 
 PLAYLISTS_MANAGER = Playlists()
 PLAYLISTS_MANAGER.load()
-
-RANK_MANAGER = HitRank()
 
 logger.info("\n✓ 所有模块初始化完成！\n")
 

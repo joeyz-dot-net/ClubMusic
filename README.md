@@ -198,7 +198,6 @@ http://localhost:9000
 | `models/playlists.py` | 多歌单管理，持久化 |
 | `models/song.py` | 歌曲数据结构，支持本地/YouTube |
 | `models/local_playlist.py` | 本地歌单类，限制仅本地歌曲 |
-| `models/rank.py` | 播放排行榜系统 |
 | `models/backup.py` | 定时备份管理器 |
 | `models/url_cache.py` | YouTube 直链 URL 缓存 |
 | `models/logger.py` | 日志配置、彩色格式化、文件轮转 |
@@ -258,7 +257,7 @@ http://localhost:9000
 - **多语言文本需同时添加 `zh`、`en` 和 `zh-TW` 键到 `i18n.js`**
 - **不要在前端实现自动下一曲逻辑**，避免与后端冲突
 - **`default` 歌单不可删除或重命名**，是系统关键默认歌单
-- **不要创建新的单例实例**，使用已有的 `PLAYER`、`PLAYLISTS_MANAGER`、`RANK_MANAGER`
+- **不要创建新的单例实例**，使用已有的 `PLAYER`、`PLAYLISTS_MANAGER`
 - **不要直接实例化前端类**，始终使用导出的单例（多实例 = 状态不同步）
 - 每个 `.py` 入口文件需包含 UTF-8 Windows 兼容处理
 

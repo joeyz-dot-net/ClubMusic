@@ -19,7 +19,6 @@ from fastapi import Request
 from routers.state import (
     PLAYER,
     PLAYLISTS_MANAGER,
-    RANK_MANAGER,
     PLAYBACK_HISTORY,
     SETTINGS,
     _player_lock,
@@ -29,7 +28,7 @@ from routers.state import (
     ROOM_HISTORIES,
     touch_room_activity,
 )
-from models import MusicPlayer, Playlists, HitRank, PlayHistory
+from models import MusicPlayer, Playlists, PlayHistory
 
 
 def get_player() -> MusicPlayer:
@@ -65,11 +64,6 @@ def get_player_for_request(request: Request) -> MusicPlayer:
 def get_playlists() -> Playlists:
     """提供 Playlists 管理器单例"""
     return PLAYLISTS_MANAGER
-
-
-def get_rank() -> HitRank:
-    """提供 HitRank 排行榜单例"""
-    return RANK_MANAGER
 
 
 def get_playback_history(request: Request) -> PlayHistory:

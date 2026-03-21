@@ -11,7 +11,7 @@
 |------|---------------|
 | **API Sync** | Backend routers (`routers/*.py`) + Frontend [static/js/api.js](../static/js/api.js) must match exactly. New route? Update BOTH. Field rename? Check both. Missing sync = silent failures. |
 | **FormData vs JSON** | **Player control** (`/play`, `/seek`, `/volume`, `/playlist_remove`): use `await request.form()`. **Data CRUD** (`/playlists`, `/playlist_reorder`, `/search_song`): use `await request.json()`. Wrong type = 400 errors. |
-| **Global Singletons** | `PLAYER`, `PLAYLISTS_MANAGER`, `RANK_MANAGER` initialized in [routers/state.py](../routers/state.py). Access via dependency injection (`routers/dependencies.py`) in routers—never create new instances. Duplication = state corruption. |
+| **Global Singletons** | `PLAYER` and `PLAYLISTS_MANAGER` are initialized in [routers/state.py](../routers/state.py). Access via dependency injection (`routers/dependencies.py`) in routers—never create new instances. Duplication = state corruption. |
 | **Persistence** | Call `PLAYLISTS_MANAGER.save()` after ANY playlist mutation. Forgetting = data loss on restart. |
 | **User Isolation** | Playlist selection stored in browser `localStorage.selectedPlaylistId`, NOT backend. Each tab/browser independent. Backend only validates existence via `/playlists/{id}/switch`. |
 | **UTF-8 Windows** | Every `.py` entry point needs UTF-8 wrapper (see [models/__init__.py#L6-11](../models/__init__.py)). Missing = Chinese chars garbled in logs. |
