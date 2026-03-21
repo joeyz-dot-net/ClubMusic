@@ -3,15 +3,15 @@
 
 import { api } from './api.js?v=2';
 import { player } from './player.js';
-import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=3';
-import { playlistsManagement } from './playlists-management.js?v=2';
+import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=4';
+import { playlistsManagement } from './playlists-management.js?v=3';
 import { volumeControl } from './volume.js';
-import { searchManager } from './search.js?v=6';
+import { searchManager } from './search.js?v=7';
 import { themeManager } from './themeManager.js';
 import { debug } from './debug.js';
 import { Toast, formatTime } from './ui.js';
 import { focusFirstFocusable, isMobile, isIPad, restoreFocus, ThumbnailManager, trapFocusInContainer } from './utils.js';
-import { localFiles } from './local.js?v=2';
+import { localFiles } from './local.js?v=3';
 import { settingsManager } from './settingsManager.js?v=3';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
@@ -1362,13 +1362,9 @@ class MusicPlayerApp {
     async switchSelectedPlaylist(playlistId) {
         try {
             console.log('[应用] 切换选择歌单:', playlistId);
-            
-            // 更新 playlistManager 的当前选择歌单
-            playlistManager.setSelectedPlaylist(playlistId);
-            this.currentPlaylistId = playlistId;
-            
-            // 重新加载所选歌单的数据
-            await playlistManager.loadCurrent();
+
+            await playlistManager.switch(playlistId);
+            this.currentPlaylistId = playlistManager.getSelectedPlaylistId();
             
             // 确保隐藏模态框，显示播放列表容器
             const playlistsModal = document.getElementById('playlistsModal');
@@ -1402,7 +1398,7 @@ class MusicPlayerApp {
             const playlistNavItem = document.querySelector('#bottomNav .nav-item[data-tab="playlists"]');
             if (playlistNavItem) playlistNavItem.classList.add('active');
 
-            console.log('[应用] ✓ 已切换到歌单:', playlistId);
+            console.log('[应用] ✓ 已切换到歌单:', this.currentPlaylistId);
             
         } catch (error) {
             console.error('[应用] 切换失败:', error);

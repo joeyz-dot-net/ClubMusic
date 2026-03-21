@@ -720,9 +720,14 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
                         if (response?._error || response?.status !== 'OK') {
                             throw new Error(response?.error || response?.message || i18n.t('playlist.clearFailed'));
                         }
-                        Toast.success(i18n.t('playlist.clearSucceed'));
-                        await playlistManager.loadCurrent();
-                        renderPlaylistUI({ container, onPlay, currentMeta });
+                        try {
+                            await playlistManager.loadCurrent();
+                            renderPlaylistUI({ container, onPlay, currentMeta });
+                            Toast.success(i18n.t('playlist.clearSucceed'));
+                        } catch (refreshError) {
+                            console.warn('[歌单] 队列已清空，但刷新失败:', refreshError);
+                            Toast.warning(`${i18n.t('playlist.clearSucceed')} (${i18n.t('playlist.opFailed')})`);
+                        }
                     } catch (err) {
                         console.error('清空队列失败:', err);
                         Toast.error(i18n.t('playlist.clearFailed') + ': ' + (err.message || err));
@@ -753,11 +758,15 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
         },
         onClick: async (e) => {
             e.stopPropagation();
-            playlistManager.setSelectedPlaylist(playlistManager.getActiveDefaultId());
-            await playlistManager.loadCurrent();
-            renderPlaylistUI({ container, onPlay, currentMeta });
-            console.log('[歌单切换] 已返回默认歌单（队列）');
-            Toast.success(i18n.t('playlist.returnedToQueue'));
+            try {
+                await playlistManager.switch(playlistManager.getActiveDefaultId());
+                renderPlaylistUI({ container, onPlay, currentMeta });
+                console.log('[歌单切换] 已返回默认歌单（队列）');
+                Toast.success(i18n.t('playlist.returnedToQueue'));
+            } catch (error) {
+                console.error('[歌单切换] 返回队列失败:', error);
+                Toast.error(i18n.t('player.switchFailed') + ': ' + (error.message || error));
+            }
         }
     });
 
@@ -802,9 +811,14 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
                         if (response?._error || response?.status !== 'OK') {
                             throw new Error(response?.error || response?.message || i18n.t('playlist.clearFailed'));
                         }
-                        Toast.success(i18n.t('playlist.clearPlaylistSucceed', { name: playlistName }));
-                        await playlistManager.refreshAll();
-                        renderPlaylistUI({ container, onPlay, currentMeta });
+                        try {
+                            await playlistManager.refreshAll();
+                            renderPlaylistUI({ container, onPlay, currentMeta });
+                            Toast.success(i18n.t('playlist.clearPlaylistSucceed', { name: playlistName }));
+                        } catch (refreshError) {
+                            console.warn('[歌单] 歌单已清空，但刷新失败:', refreshError);
+                            Toast.warning(`${i18n.t('playlist.clearPlaylistSucceed', { name: playlistName })} (${i18n.t('playlist.opFailed')})`);
+                        }
                     } catch (err) {
                         console.error('清空歌单失败:', err);
                         Toast.error(i18n.t('playlist.clearFailed') + ': ' + (err.message || err));
