@@ -92,7 +92,7 @@ export class MusicAPI {
         }
     }
 
-    async post(endpoint, data, { timeout } = {}) {
+    async post(endpoint, data, { timeout, quietHttpStatuses = [] } = {}) {
         try {
             const url = this._appendPipe(`${this.baseURL}${endpoint}`);
             const response = await this._fetchWithTimeout(url, {
@@ -102,7 +102,9 @@ export class MusicAPI {
             }, timeout);
             const result = await response.json();
             if (!response.ok) {
-                console.warn(`[API] POST ${endpoint} HTTP ${response.status}:`, result);
+                if (!quietHttpStatuses.includes(response.status)) {
+                    console.warn(`[API] POST ${endpoint} HTTP ${response.status}:`, result);
+                }
                 return { _error: true, status: response.status, ...result };
             }
             return result;
@@ -310,7 +312,7 @@ export class MusicAPI {
 
     // ✅ 新增：添加歌曲到歌单（支持指定插入位置）
     async addToPlaylist(data) {
-        return this.post('/playlist_add', data);
+        return this.post('/playlist_add', data, { quietHttpStatuses: [409] });
     }
 
     // 搜索 API

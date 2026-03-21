@@ -2325,12 +2325,12 @@ async function handleHistoryPlayNow(song) {
 
         // 4. 刷新播放列表 UI
         const container = document.getElementById('playListContainer');
-        const currentStatus = window.app?.lastPlayStatus || { current_meta: null };
+        const currentMeta = player.status?.current_meta || window.app?.lastPlayStatus?.current_meta || null;
         if (container) {
             renderPlaylistUI({
                 container,
                 onPlay: (s) => window.app?.playSong(s),
-                currentMeta: currentStatus.current_meta
+                currentMeta
             });
         }
 

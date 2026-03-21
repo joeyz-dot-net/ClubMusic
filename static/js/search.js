@@ -115,10 +115,7 @@ function createSearchActionMenuHeader(title) {
 function createPlayNowConfirmView() {
     const fragment = document.createDocumentFragment();
 
-    const content = document.createElement('div');
-    content.className = 'search-action-menu-content';
-
-    content.appendChild(createSearchActionMenuHeader(i18n.t('search.confirmPlayNow')));
+    fragment.appendChild(createSearchActionMenuHeader(i18n.t('search.confirmPlayNow')));
 
     const body = document.createElement('div');
     body.className = 'search-action-menu-body';
@@ -146,8 +143,7 @@ function createPlayNowConfirmView() {
     buttonRow.appendChild(confirmButton);
     body.appendChild(message);
     body.appendChild(buttonRow);
-    content.appendChild(body);
-    fragment.appendChild(content);
+    fragment.appendChild(body);
 
     return fragment;
 }
@@ -1170,13 +1166,15 @@ export class SearchManager {
 
             // 4. 刷新UI显示
             const container = document.getElementById('playListContainer');
-            const currentStatus = window.app?.lastPlayStatus || { current_meta: null };
+            const currentMeta = window.app?.modules?.player?.status?.current_meta
+                || window.app?.lastPlayStatus?.current_meta
+                || null;
             if (container) {
                 const { renderPlaylistUI } = await import('./playlist.js');
                 renderPlaylistUI({
                     container,
                     onPlay: (s) => window.app?.playSong(s),
-                    currentMeta: currentStatus.current_meta
+                    currentMeta
                 });
             }
 
