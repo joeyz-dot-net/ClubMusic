@@ -433,7 +433,9 @@ async def get_status(
             "current_meta": current_meta,
             "current_playlist_id": current_pid,
             "current_playlist_name": playlist.name if playlist else "--",
+            "current_index": getattr(player, "current_index", -1),
             "loop_mode": player.loop_mode,
+            "shuffle_mode": getattr(player, "shuffle_mode", False),
             "pitch_shift": player.pitch_shift,
             "mpv_state": mpv_state,
             "server_time": time.time()
@@ -447,7 +449,9 @@ async def get_status(
                 "current_meta": {},
                 "current_playlist_id": get_current_playlist_id(player) if player else DEFAULT_PLAYLIST_ID,
                 "current_playlist_name": "--",
+                "current_index": getattr(player, "current_index", -1) if player else -1,
                 "loop_mode": 0,
+                "shuffle_mode": getattr(player, "shuffle_mode", False) if player else False,
                 "pitch_shift": 0,
                 "mpv_state": {"paused": True, "time_pos": 0, "duration": 0, "volume": 50}
             },

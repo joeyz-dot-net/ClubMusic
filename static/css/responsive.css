@@ -34,6 +34,7 @@
         --fp-playbtn-size: clamp(50px, calc(32.55px + 5.45vw), 56px);
         /* Bottom nav height: 50px → 60px */
         --bottom-nav-h: clamp(50px, calc(20.91px + 9.09vw), 60px);
+        --content-bottom-space: calc(var(--bottom-nav-h) + 100px + max(0px, env(safe-area-inset-bottom)));
         /* Control button size: 32px → 44px */
         --control-btn-size: clamp(32px, calc(3.09px + 10.91vw), 44px);
         /* Nav icon font-size: 24px → 30px */

@@ -147,6 +147,79 @@ export async function copyToClipboard(text) {
     }
 }
 
+    const FOCUSABLE_SELECTOR = [
+        'a[href]',
+        'button:not([disabled])',
+        'textarea:not([disabled])',
+        'input:not([disabled]):not([type="hidden"])',
+        'select:not([disabled])',
+        '[tabindex]:not([tabindex="-1"])'
+    ].join(',');
+
+    export function getFocusableElements(container) {
+        if (!container) return [];
+
+        return Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR)).filter((element) => {
+            if (element.hasAttribute('disabled')) return false;
+            if (element.getAttribute('aria-hidden') === 'true') return false;
+            return element.offsetParent !== null || element === document.activeElement;
+        });
+    }
+
+    export function focusFirstFocusable(container, preferredSelector = null) {
+        if (!container) return null;
+
+        const preferred = preferredSelector ? container.querySelector(preferredSelector) : null;
+        if (preferred && typeof preferred.focus === 'function' && !preferred.disabled) {
+            preferred.focus();
+            return preferred;
+        }
+
+        const [firstFocusable] = getFocusableElements(container);
+        if (firstFocusable && typeof firstFocusable.focus === 'function') {
+            firstFocusable.focus();
+            return firstFocusable;
+        }
+
+        if (!container.hasAttribute('tabindex')) {
+            container.setAttribute('tabindex', '-1');
+        }
+        container.focus();
+        return container;
+    }
+
+    export function trapFocusInContainer(event, container) {
+        if (!container || event.key !== 'Tab') return;
+
+        const focusable = getFocusableElements(container);
+        if (focusable.length === 0) {
+            event.preventDefault();
+            focusFirstFocusable(container);
+            return;
+        }
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement;
+
+        if (event.shiftKey && active === first) {
+            event.preventDefault();
+            last.focus();
+            return;
+        }
+
+        if (!event.shiftKey && active === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    }
+
+    export function restoreFocus(target) {
+        if (target && typeof target.focus === 'function' && document.contains(target)) {
+            target.focus();
+        }
+    }
+
 // 延迟函数
 export function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));

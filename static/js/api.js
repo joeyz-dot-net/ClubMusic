@@ -306,6 +306,10 @@ export class MusicAPI {
         return this.get('/youtube_search_config');
     }
 
+    async getDirectorySongs(directory) {
+        return this.post('/get_directory_songs', { directory });
+    }
+
     // 播放历史 API
     async addSongToHistory({ url, title, type = 'local', thumbnail_url = '' }) {
         const formData = new FormData();

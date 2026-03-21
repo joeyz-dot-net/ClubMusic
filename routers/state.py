@@ -187,6 +187,7 @@ def _build_state_message(player: MusicPlayer = None) -> dict:
         "shuffle_mode": getattr(p, 'shuffle_mode', False),
         "pitch_shift": p.pitch_shift,
         "current_playlist_id": get_current_playlist_id(p),
+        "current_index": getattr(p, 'current_index', -1),
         "playlist_updated": True,
         "ts": time.time(),
         "server_time": time.time(),

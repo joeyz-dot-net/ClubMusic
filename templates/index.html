@@ -58,11 +58,11 @@
 			<div id="playListContainer" class="play-list-container"></div>
 		</div>
 		<!-- YouTube搜索结果模态框 -->
-		<div id="youtubeSearchModal" class="youtube-search-modal" style="display:none;">
+		<div id="youtubeSearchModal" class="youtube-search-modal" style="display:none;" role="dialog" aria-modal="true" data-i18n-aria="search.title">
 			<div class="youtube-search-modal-content">
 				<div class="youtube-search-modal-header">
 					<h3 data-i18n="search.title">搜索结果</h3>
-					<button class="youtube-search-modal-close" data-icon="✕">✕</button>
+					<button class="youtube-search-modal-close" type="button" data-icon="✕" data-i18n-aria="modal.close">✕</button>
 				</div>
 				<div class="youtube-search-modal-body">
 					<div id="youtubeSearchModalList" class="youtube-search-modal-list"></div>
@@ -180,7 +180,7 @@
 					<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
 				</svg>
 				<div class="full-player-volume-slider">
-					<input type="range" id="fullPlayerVolumeSlider" min="1" max="100" value="50" />
+					<input type="range" id="fullPlayerVolumeSlider" min="1" max="100" value="50" data-i18n-aria="player.volume" />
 					<div id="fullPlayerVolumeDisplay" class="volume-display" style="display:none;">
 						<span class="volume-value">50</span>
 					</div>
@@ -263,11 +263,11 @@
 	</nav>
 
 	<!-- History modal -->
-	<div id="historyModal" class="history-modal" style="display:none;">
+	<div id="historyModal" class="history-modal" style="display:none;" role="dialog" aria-modal="true" data-i18n-aria="search.history">
 		<div class="history-modal-content">
 			<div class="history-modal-header">
 				<h3 data-i18n="search.history">播放历史</h3>
-				<button class="history-modal-close" data-icon="✕">✕</button>
+				<button class="history-modal-close" type="button" data-icon="✕" data-i18n-aria="modal.close">✕</button>
 			</div>
 			<div class="history-modal-list" id="historyList"></div>
 		</div>
@@ -276,7 +276,7 @@
 
 
 	<!-- Search Modal -->
-	<div id="searchModal" class="search-modal" style="display:none;">
+	<div id="searchModal" class="search-modal" style="display:none;" role="dialog" aria-modal="true" data-i18n-aria="nav.search">
 		<div class="search-modal-overlay"></div>
 		<div class="search-modal-content">
 			<div class="search-modal-header">
@@ -289,8 +289,8 @@
 						<span class="toggle-off" data-i18n="search.karaoke">伴奏</span>
 					</span>
 				</label>
-				<input type="text" id="searchModalInput" class="search-modal-input" placeholder="搜索歌曲、艺术家..." data-i18n-placeholder="search.placeholder" autocomplete="off" />
-				<button class="search-modal-back" id="searchModalBack">✕</button>
+				<input type="text" id="searchModalInput" class="search-modal-input" placeholder="搜索歌曲、艺术家..." data-i18n-placeholder="search.placeholder" autocomplete="off" data-i18n-aria="search.placeholder" />
+				<button class="search-modal-back" id="searchModalBack" type="button" data-i18n-aria="modal.close">✕</button>
 			</div>
 			<div id="searchModalHistory" class="search-modal-history" style="display:none;">
 				<div id="searchModalHistoryList" class="search-modal-history-list"></div>
@@ -315,16 +315,16 @@
 
 	
 	<!-- 歌单选择模态框 -->
-	<div id="playlistsModal" class="playlists-modal" style="display:none;">
+	<div id="playlistsModal" class="playlists-modal" style="display:none;" role="dialog" aria-modal="true" data-i18n-aria="playlists.select">
 		<div class="playlists-modal-content">
 			<div class="playlists-modal-header">
 				<h2 data-i18n="playlists.select">选择歌单</h2>
-				<button class="playlists-add-btn" id="playlistsAddBtn">
+				<button class="playlists-add-btn" id="playlistsAddBtn" type="button" data-i18n-title="playlists.create" data-i18n-aria="playlists.create">
 					<svg width="24" height="24" viewBox="0 0 24 24">
 						<path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor"/>
 					</svg>
 				</button>
-				<button class="playlists-close-btn" id="playlistsCloseBtn">
+				<button class="playlists-close-btn" id="playlistsCloseBtn" type="button" data-i18n-aria="modal.close">
 					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<line x1="18" y1="6" x2="6" y2="18"></line>
 						<line x1="6" y1="6" x2="18" y2="18"></line>
@@ -338,11 +338,11 @@
 	</div>
 
 	<!-- 🆕 歌单选择模态框 - 用于添加歌曲到指定歌单 -->
-	<div id="selectPlaylistModal" class="select-playlist-modal" style="display:none;">
+	<div id="selectPlaylistModal" class="select-playlist-modal" style="display:none;" role="dialog" aria-modal="true" data-i18n-aria="playlists.select">
 		<div class="select-playlist-modal-content">
 			<div class="select-playlist-modal-header">
 				<h2 data-i18n="playlists.select">选择歌单</h2>
-				<button class="select-playlist-close-btn" id="selectPlaylistCloseBtn">
+				<button class="select-playlist-close-btn" id="selectPlaylistCloseBtn" type="button" data-i18n-aria="modal.close">
 					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<line x1="18" y1="6" x2="6" y2="18"></line>
 						<line x1="6" y1="6" x2="18" y2="18"></line>
@@ -353,7 +353,7 @@
 				<!-- 歌单列表将在这里动态生成 -->
 			</div>
 			<div class="select-playlist-modal-footer">
-				<button class="select-playlist-cancel-btn" id="selectPlaylistCancelBtn" data-i18n="modal.cancel">取消</button>
+				<button class="select-playlist-cancel-btn" id="selectPlaylistCancelBtn" type="button" data-i18n="modal.cancel">取消</button>
 			</div>
 		</div>
 	</div>

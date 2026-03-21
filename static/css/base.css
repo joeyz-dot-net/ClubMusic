@@ -3,6 +3,8 @@
 /* CSS Custom Properties */
 :root {
     --sidebar-width: 0px;
+    --bottom-nav-h: 64px;
+    --content-bottom-space: 160px;
 }
 
 /* 全局重置 */
@@ -44,7 +46,7 @@ body {
 /* 基础布局 */
 .tab-content { 
     padding: 16px; 
-    padding-bottom: 160px; 
+    padding-bottom: var(--content-bottom-space); 
     height: 100%; 
     overflow-y: auto;
     overflow-x: hidden;
@@ -58,7 +60,7 @@ body {
 /* 本地歌曲标签页 - 特殊布局以支持 sticky breadcrumb */
 #tree {
     padding: 0;
-    padding-bottom: 160px;
+    padding-bottom: var(--content-bottom-space);
     height: 100%;
     overflow-y: auto;
     overflow-x: hidden;
@@ -84,6 +86,15 @@ button {
     transition: all 0.2s;
 }
 button:active { transform: scale(0.98); }
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible {
+    outline: 2px solid var(--accent-color, #4a9eff);
+    outline-offset: 2px;
+}
 
 /* Modal 过渡动画 */
 .modal, .search-modal {
@@ -662,6 +673,7 @@ button:active { transform: scale(0.98); }
     word-break: break-word;
     line-height: 1.6;
     display: -webkit-box;
+    line-clamp: 3;
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     max-height: 110px;
@@ -736,7 +748,7 @@ button:active { transform: scale(0.98); }
     bottom: 0;
     left: 0;
     right: 0;
-    height: 64px;
+    height: var(--bottom-nav-h);
     border-top: 1px solid;
     display: flex;
     justify-content: space-around;
@@ -791,7 +803,7 @@ button:active { transform: scale(0.98); }
     top: 0;
     left: 0;
     right: 0;
-    bottom: 64px;
+    bottom: var(--bottom-nav-h);
     background: rgba(0, 0, 0, 0.4);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
@@ -1234,12 +1246,12 @@ button:active { transform: scale(0.98); }
 
 /* 排行榜 Modal - 不遮挡底部导航栏 */
 #rankingModal {
-    bottom: 64px;
-    max-height: calc(100vh - 64px);
+    bottom: var(--bottom-nav-h);
+    max-height: calc(100vh - var(--bottom-nav-h));
 }
 
 #rankingModal .modal-content {
-    max-height: calc(100vh - 64px);
+    max-height: calc(100vh - var(--bottom-nav-h));
 }
 
 #rankingModal .ranking-modal-header {
@@ -1277,9 +1289,9 @@ button:active { transform: scale(0.98); }
     top: 0;
     left: 0;
     right: 0;
-    bottom: 64px;
+    bottom: var(--bottom-nav-h);
     z-index: 999;
-    max-height: calc(100vh - 64px);
+    max-height: calc(100vh - var(--bottom-nav-h));
 }
 
 .search-modal-overlay {
@@ -1555,7 +1567,7 @@ button:active { transform: scale(0.98); }
     top: 0;
     left: 0;
     right: 0;
-    bottom: 64px;
+    bottom: var(--bottom-nav-h);
     z-index: 999;
     /* 毛玻璃效果 - 遮挡背景 */
     background: rgba(0, 0, 0, 0.4);
@@ -1603,6 +1615,11 @@ button:active { transform: scale(0.98); }
     gap: 8px;
 }
 
+.history-list-item:hover,
+.history-list-item:focus-visible {
+    background: var(--item-hover-bg, rgba(255, 255, 255, 0.08));
+}
+
 /* 播放历史搜索框 */
 .history-search-container input::placeholder {
     color: rgba(153, 153, 153, 0.8);
@@ -1610,10 +1627,6 @@ button:active { transform: scale(0.98); }
 
 [data-theme="light"] .history-search-container input::placeholder {
     color: rgba(100, 100, 100, 0.6);
-}
-
-/* YouTube搜索结果 */
-.youtube-search-results, .youtube-search-modal {
 }
 
 .youtube-search-modal-content {
@@ -1700,6 +1713,30 @@ button:active { transform: scale(0.98); }
 
 .play-list-action-btn:active {
     transform: scale(0.95);
+}
+
+.playlist-toolbar-btn {
+    background: var(--toolbar-btn-bg, rgba(255, 255, 255, 0.05));
+    border: 1.5px solid var(--toolbar-btn-border, rgba(255, 255, 255, 0.2));
+    color: var(--toolbar-btn-color, inherit);
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: none;
+}
+
+.playlist-toolbar-btn:hover,
+.playlist-toolbar-btn:focus-visible {
+    background: var(--toolbar-btn-hover-bg, var(--toolbar-btn-bg, rgba(255, 255, 255, 0.08)));
+    transform: var(--toolbar-btn-hover-transform, scale(1.05));
+    box-shadow: var(--toolbar-btn-hover-shadow, none);
+}
+
+.playlist-toolbar-btn:active {
+    transform: var(--toolbar-btn-active-transform, scale(0.96));
 }
 
 .play-list-container {
@@ -2723,6 +2760,11 @@ button:active { transform: scale(0.98); }
     overflow-y: auto;
     display: flex;
     flex-direction: column;
+}
+
+.select-playlist-item:hover,
+.select-playlist-item:focus-visible {
+    background: var(--item-hover-bg, rgba(255, 255, 255, 0.08));
 }
 
 .select-playlist-modal-footer {

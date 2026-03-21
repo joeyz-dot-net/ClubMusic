@@ -1,3 +1,4 @@
+import { api } from './api.js';
 import { Toast } from './ui.js';
 import { i18n } from './i18n.js';
 import { escapeHTML } from './utils.js';
@@ -322,8 +323,10 @@ export const localFiles = {
             // ✅ 计算正确的插入位置：从后端获取当前播放索引
             let insertIndex = 0;  // 默认插入位置为顶部
             try {
-                const response = await fetch('/status');
-                const status = await response.json();
+                const status = await api.getStatus();
+                if (status?._error) {
+                    throw new Error(status.error || status.message || 'status unavailable');
+                }
                 const currentIndex = status?.current_index ?? -1;
                 insertIndex = Math.max(0, currentIndex + 1);
                 console.log('[本地文件] 从后端获取当前播放索引:', { currentIndex, insertIndex });
@@ -332,17 +335,13 @@ export const localFiles = {
                 insertIndex = 0;
             }
 
-            const response = await fetch('/playlist_add', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    playlist_id: playlistId,
-                    song: songData,
-                    insert_index: insertIndex
-                })
+            const response = await api.addToPlaylist({
+                playlist_id: playlistId,
+                song: songData,
+                insert_index: insertIndex
             });
 
-            if (response.ok) {
+            if (!response?._error && response?.status === 'OK') {
                 // 获取歌单名称以显示在toast中
                 let playlistName = i18n.t('nav.queue');
                 const _localActiveDefault = window.app?.modules?.playlistManager?.getActiveDefaultId?.() || 'default';
@@ -361,12 +360,11 @@ export const localFiles = {
                     }, 500);
                 }
             } else {
-                const error = await response.json();
                 // 重复歌曲使用警告提示而不是错误
-                if (error.duplicate) {
+                if (response?.duplicate) {
                     Toast.warning(`${fileName} ${i18n.t('search.alreadyInList')}`);
                 } else {
-                    Toast.error(i18n.t('search.addFailed') + ': ' + (error.error || i18n.t('search.loadMoreFailed')));
+                    Toast.error(i18n.t('search.addFailed') + ': ' + (response?.error || response?.message || i18n.t('search.loadMoreFailed')));
                 }
             }
         } catch (error) {

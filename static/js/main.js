@@ -10,7 +10,7 @@ import { searchManager } from './search.js';
 import { themeManager } from './themeManager.js';
 import { debug } from './debug.js';
 import { Toast, formatTime } from './ui.js';
-import { isMobile, isIPad, ThumbnailManager } from './utils.js';
+import { focusFirstFocusable, isMobile, isIPad, ThumbnailManager } from './utils.js';
 import { localFiles } from './local.js';
 import { settingsManager } from './settingsManager.js';
 import { navManager } from './navManager.js';
@@ -1812,15 +1812,13 @@ class MusicPlayerApp {
                 // 搜索模态框
                 const modal = modals.search;
                 if (modal) {
+                    modal._previousActiveElement = document.activeElement;
                     modal.style.display = 'block';
                     currentModal = modal;
                     setTimeout(() => {
                         modal.classList.add('modal-visible');
                         updateModalZIndex();
-                        const searchInput = document.getElementById('searchModalInput');
-                        if (searchInput) {
-                            searchInput.focus();
-                        }
+                        focusFirstFocusable(modal, '#searchModalInput');
                     }, 10);
                 }
             } else if (tabName === 'debug') {
@@ -2183,56 +2181,44 @@ class MusicPlayerApp {
             }
         }
         
-        // 搜索栏目关闭时恢复之前的栏目
-        const searchModal = modals.search;
-        if (searchModal) {
-            const searchModalBack = document.getElementById('searchModalBack');
-            if (searchModalBack) {
-                searchModalBack.addEventListener('click', () => {
-                    console.log('🔍 搜索关闭，返回上一个栏目');
-                    
-                    // 移除样式
-                    searchModal.classList.remove('modal-visible');
-                    setTimeout(() => {
-                        searchModal.style.display = 'none';
-                        // 更新z-index
-                        updateModalZIndex();
-                    }, 300);
-                    
-                    // 移除active状态
-                    navItems.forEach(item => {
-                        if (item.getAttribute('data-tab') === 'search') {
-                            item.classList.remove('active');
-                        }
-                    });
-                    
-                    // ✅ 直接显示播放列表而不是调用navigateBack
-                    setTimeout(() => {
-                        this.navigationStack.pop();  // 弹出当前栏目
-                        if (this.elements.playlist) {
-                            this.elements.playlist.style.display = 'block';
-                            setTimeout(() => {
-                                this.elements.playlist.classList.add('tab-visible');
-                            }, 10);
-                        }
-                        if (this.elements.tree) {
-                            this.elements.tree.classList.remove('tab-visible');
-                            this.elements.tree.style.display = 'none';
-                        }
-                        const playlistsNavBtn = navItems[0];
-                        if (playlistsNavBtn) {
-                            playlistsNavBtn.classList.add('active');
-                        }
-                    }, 300);
-                });
-            }
-        }
-        
         // 初始化搜索功能
-        searchManager.initUI(() => this.currentPlaylistId, async () => {
-            await playlistManager.loadCurrent();
-            this.renderPlaylist();
-        });
+        searchManager.initUI(
+            () => this.currentPlaylistId,
+            async () => {
+                await playlistManager.loadCurrent();
+                this.renderPlaylist();
+            },
+            () => {
+                console.log('🔍 搜索关闭，返回上一个栏目');
+
+                updateModalZIndex();
+
+                navItems.forEach(item => {
+                    if (item.getAttribute('data-tab') === 'search') {
+                        item.classList.remove('active');
+                    }
+                });
+
+                if (Array.isArray(this.navigationStack) && this.navigationStack[this.navigationStack.length - 1] === 'search') {
+                    this.navigationStack.pop();
+                }
+
+                if (this.elements.playlist) {
+                    this.elements.playlist.style.display = 'block';
+                    setTimeout(() => {
+                        this.elements.playlist.classList.add('tab-visible');
+                    }, 10);
+                }
+                if (this.elements.tree) {
+                    this.elements.tree.classList.remove('tab-visible');
+                    this.elements.tree.style.display = 'none';
+                }
+                const playlistsNavBtn = navItems[0];
+                if (playlistsNavBtn) {
+                    playlistsNavBtn.classList.add('active');
+                }
+            }
+        );
         
         // 初始化调试面板
         this.initDebugPanel();

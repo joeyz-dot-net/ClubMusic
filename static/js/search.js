@@ -4,7 +4,7 @@ import { Toast, formatTime, searchLoading } from './ui.js';
 import { buildTrackItemHTML } from './templates.js';
 import { localFiles, getNodeByPath, getDirCoverUrl, countFiles } from './local.js';
 import { i18n } from './i18n.js';
-import { escapeHTML } from './utils.js';
+import { escapeHTML, restoreFocus, trapFocusInContainer } from './utils.js';
 import { playLock } from './playLock.js';
 
 export class SearchManager {
@@ -49,6 +49,42 @@ export class SearchManager {
         this.loadYoutubeSearchConfig();
     }
 
+    async getQueueInsertIndex({ fallback = 1, minimum = 1, logPrefix = '[搜索]' } = {}) {
+        try {
+            const status = await api.getStatus();
+            if (status?._error) {
+                throw new Error(status.error || status.message || 'status unavailable');
+            }
+
+            const currentIndex = status?.current_index ?? -1;
+            const insertIndex = Math.max(minimum, currentIndex + 1);
+            console.log(`${logPrefix} 从后端获取当前播放索引:`, { currentIndex, insertIndex });
+            return insertIndex;
+        } catch (err) {
+            console.warn(`${logPrefix} 无法获取后端状态，使用默认位置 ${fallback}:`, err);
+            return fallback;
+        }
+    }
+
+    async addSongToPlaylist(playlistId, song, insertIndex) {
+        return api.addToPlaylist({
+            playlist_id: playlistId,
+            song,
+            insert_index: insertIndex
+        });
+    }
+
+    setActiveSearchTab(container, tabName) {
+        if (!container) return;
+
+        container.querySelectorAll('.search-tab').forEach((tab) => {
+            tab.classList.toggle('active', tab.dataset.tab === tabName);
+        });
+        container.querySelectorAll('.search-results-panel').forEach((panel) => {
+            panel.classList.toggle('active', panel.dataset.panel === tabName);
+        });
+    }
+
     // 加载YouTube搜索配置
     async loadYoutubeSearchConfig() {
         try {
@@ -63,9 +99,10 @@ export class SearchManager {
     }
 
     // 初始化搜索UI
-    initUI(currentPlaylistIdGetter, refreshPlaylistCallback) {
+    initUI(currentPlaylistIdGetter, refreshPlaylistCallback, closeModalCallback = null) {
         this.getCurrentPlaylistId = currentPlaylistIdGetter;
         this.refreshPlaylist = refreshPlaylistCallback;
+        this.closeModalCallback = closeModalCallback;
         
         const searchModalBack = document.getElementById('searchModalBack');
         const searchModal = document.getElementById('searchModal');
@@ -74,6 +111,90 @@ export class SearchManager {
         const searchModalHistory = document.getElementById('searchModalHistory');
         const searchModalHistoryList = document.getElementById('searchModalHistoryList');
         const searchModalHistoryClear = document.getElementById('searchModalHistoryClear');
+
+        if (searchModalBody && !searchModalBody._delegatedClickHandler) {
+            searchModalBody._delegatedClickHandler = async (event) => {
+                const tab = event.target.closest('.search-tab');
+                if (tab && searchModalBody.contains(tab)) {
+                    this.setActiveSearchTab(searchModalBody, tab.dataset.tab);
+                    return;
+                }
+
+                const loadMoreBtn = event.target.closest('#youtubeLoadMoreBtn');
+                if (loadMoreBtn && searchModalBody.contains(loadMoreBtn)) {
+                    this.loadMoreYoutubeResults(false);
+                    return;
+                }
+
+                const loadAllBtn = event.target.closest('#youtubeLoadAllBtn');
+                if (loadAllBtn && searchModalBody.contains(loadAllBtn)) {
+                    this.loadMoreYoutubeResults(true);
+                    return;
+                }
+
+                const breadcrumbItem = event.target.closest('.search-breadcrumb-item[data-breadcrumb-index]');
+                if (breadcrumbItem && searchModalBody.contains(breadcrumbItem)) {
+                    const index = parseInt(breadcrumbItem.getAttribute('data-breadcrumb-index'), 10);
+                    this.navigateToBreadcrumb(index);
+                    return;
+                }
+
+                const dirCard = event.target.closest('.search-dir-card');
+                if (dirCard && searchModalBody.contains(dirCard)) {
+                    const dirUrl = dirCard.getAttribute('data-dir-url');
+                    const dirName = dirCard.getAttribute('data-dir-name');
+                    this.enterDirectory(dirUrl, dirName);
+                    return;
+                }
+
+                const addButton = event.target.closest('.search-result-add');
+                if (addButton && searchModalBody.contains(addButton)) {
+                    event.stopPropagation();
+                    const item = addButton.closest('.search-result-item');
+                    if (!item) return;
+
+                    const isDirectory = item.getAttribute('data-directory') === 'true' || item.getAttribute('data-type') === 'directory';
+                    this.showSearchActionMenu(addButton, item, isDirectory);
+                    return;
+                }
+
+                const directoryItem = event.target.closest('.search-result-item[data-directory="true"]');
+                if (directoryItem && searchModalBody.contains(directoryItem) && !event.target.closest('.track-menu-btn')) {
+                    const url = directoryItem.getAttribute('data-url');
+                    const title = directoryItem.getAttribute('data-title');
+                    this.enterDirectory(url, title);
+                }
+            };
+
+            searchModalBody.addEventListener('click', searchModalBody._delegatedClickHandler);
+        }
+
+        if (searchModalHistoryList && !searchModalHistoryList._delegatedClickHandler) {
+            searchModalHistoryList._delegatedClickHandler = async (event) => {
+                const deleteButton = event.target.closest('.search-history-delete');
+                if (deleteButton) {
+                    event.stopPropagation();
+                    const query = deleteButton.getAttribute('data-query');
+                    this.removeFromHistory(query);
+                    this.showSearchHistory();
+                    return;
+                }
+
+                const historyText = event.target.closest('.search-history-text');
+                if (!historyText) {
+                    return;
+                }
+
+                const query = historyText.getAttribute('data-query');
+                const input = document.getElementById('searchModalInput');
+                if (input) {
+                    input.value = query;
+                }
+                await this.performSearch(query);
+            };
+
+            searchModalHistoryList.addEventListener('click', searchModalHistoryList._delegatedClickHandler);
+        }
 
         // 伴奏模式开关
         const karaokeModeToggle = document.getElementById('karaokeModeToggle');
@@ -91,11 +212,14 @@ export class SearchManager {
         if (searchModalBack && searchModal) {
             const closeAndRefresh = async () => {
                 console.log('🔍 搜索关闭');
+
+                const previousActiveElement = searchModal._previousActiveElement;
                 
                 // 移除搜索栏目的active状态和样式
                 searchModal.classList.remove('modal-visible');
                 setTimeout(() => {
                     searchModal.style.display = 'none';
+                    restoreFocus(previousActiveElement);
                 }, 300);
                 
                 const navItems = document.querySelectorAll('.nav-item');
@@ -111,6 +235,10 @@ export class SearchManager {
                         this.refreshPlaylist();
                     } else {
                         document.dispatchEvent(new CustomEvent('playlist:refresh'));
+                    }
+
+                    if (typeof this.closeModalCallback === 'function') {
+                        this.closeModalCallback();
                     }
                     
                     // ✅ 显示歌单区域（不点击队列按钮，这样能保持当前选择的歌单）
@@ -128,12 +256,20 @@ export class SearchManager {
 
             searchModalBack.addEventListener('click', closeAndRefresh);
 
-            // Escape 键关闭搜索模态框
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape' && searchModal.classList.contains('modal-visible')) {
-                    closeAndRefresh();
-                }
-            });
+            if (!searchModal._keydownHandler) {
+                searchModal._keydownHandler = (e) => {
+                    if (!searchModal.classList.contains('modal-visible')) return;
+
+                    if (e.key === 'Escape') {
+                        e.preventDefault();
+                        closeAndRefresh();
+                        return;
+                    }
+
+                    trapFocusInContainer(e, searchModal);
+                };
+                document.addEventListener('keydown', searchModal._keydownHandler);
+            }
             
             // 点击背景关闭
             const searchModalOverlay = searchModal.querySelector('.search-modal-overlay');
@@ -227,28 +363,6 @@ export class SearchManager {
                 </div>
             `).join('')}
         `;
-        
-        // 绑定历史记录点击事件
-        searchModalHistoryList.querySelectorAll('.search-history-text').forEach(el => {
-            el.addEventListener('click', async () => {
-                const query = el.getAttribute('data-query');
-                const searchModalInput = document.getElementById('searchModalInput');
-                if (searchModalInput) {
-                    searchModalInput.value = query;
-                }
-                await this.performSearch(query);
-            });
-        });
-        
-        // 绑定删除按钮
-        searchModalHistoryList.querySelectorAll('.search-history-delete').forEach(el => {
-            el.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const query = el.getAttribute('data-query');
-                this.removeFromHistory(query);
-                this.showSearchHistory();
-            });
-        });
     }
 
     // 执行搜索
@@ -388,40 +502,6 @@ export class SearchManager {
             </div>
         `;
 
-        const tabs = searchModalBody.querySelectorAll('.search-tab');
-        const panels = searchModalBody.querySelectorAll('.search-results-panel');
-
-        const setActive = (tabName) => {
-            tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
-            panels.forEach(p => p.classList.toggle('active', p.dataset.panel === tabName));
-        };
-
-        tabs.forEach(tab => {
-            tab.addEventListener('click', () => setActive(tab.dataset.tab));
-        });
-
-        // 绑定添加按钮 - 显示操作菜单
-        searchModalBody.querySelectorAll('.search-result-add').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const item = e.target.closest('.search-result-item');
-                const isDirectory = item.getAttribute('data-directory') === 'true' || item.getAttribute('data-type') === 'directory';
-
-                // 显示操作菜单
-                this.showSearchActionMenu(e.target, item, isDirectory);
-            });
-        });
-
-        // 目录行整体点击 → 进入目录（操作按钮区域除外）
-        searchModalBody.querySelectorAll('.search-result-item[data-directory="true"]').forEach(item => {
-            item.addEventListener('click', (e) => {
-                if (e.target.closest('.track-menu-btn')) return;
-                const url = item.getAttribute('data-url');
-                const title = item.getAttribute('data-title');
-                this.enterDirectory(url, title);
-            });
-        });
-
         // 初始化YouTube加载状态
         if (youtubeResults && youtubeResults.length > 0) {
             this.youtubeLoadState.query = this.lastQuery;
@@ -429,18 +509,6 @@ export class SearchManager {
             this.youtubeLoadState.totalLoaded = youtubeResults.length;
             this.youtubeLoadState.hasMore = youtubeResults.length >= this.youtubeLoadState.maxResultsStep;
             this.youtubeLoadState.isLoading = false;
-        }
-
-        // 绑定YouTube加载按钮事件
-        const loadMoreBtn = document.getElementById('youtubeLoadMoreBtn');
-        const loadAllBtn = document.getElementById('youtubeLoadAllBtn');
-
-        if (loadMoreBtn) {
-            loadMoreBtn.addEventListener('click', () => this.loadMoreYoutubeResults(false));
-        }
-
-        if (loadAllBtn) {
-            loadAllBtn.addEventListener('click', () => this.loadMoreYoutubeResults(true));
         }
 
         this.updateYoutubeLoadUI();
@@ -529,70 +597,78 @@ export class SearchManager {
             menu.classList.remove('show');
             setTimeout(() => menu.remove(), 300);
         };
-        
-        // 绑定关闭按钮
-        const closeBtn = menu.querySelector('.search-action-menu-close');
-        closeBtn.addEventListener('click', closeMenu);
-        
-        // 点击背景关闭
-        menu.addEventListener('click', (e) => {
+
+        menu.addEventListener('click', async (e) => {
             if (e.target === menu) {
                 closeMenu();
+                return;
             }
-        });
-        
-        // 绑定菜单项事件
-        menu.querySelectorAll('.search-action-menu-item').forEach(menuItem => {
-            menuItem.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const action = menuItem.getAttribute('data-action');
 
-                if (action === 'play-now') {
-                    // 立即播放需要确认，切换菜单内容为确认视图
-                    this.showPlayNowConfirm(menu, songData, isDirectory, button, closeMenu);
-                    return;
-                }
-
+            if (e.target.closest('.search-action-menu-close')) {
                 closeMenu();
+                return;
+            }
 
-                // 等待动画完成后执行操作
-                setTimeout(async () => {
-                    if (action === 'add-to-queue') {
-                        await this.handleAddToQueue(songData, isDirectory, button);
-                    } else if (action === 'add-to-playlist') {
-                        const playlistManager = window.app?.modules?.playlistManager;
-                        const selectedId = playlistManager?.getSelectedPlaylistId() || playlistManager?.getActiveDefaultId?.() || 'default';
-                        const activeDefault = playlistManager?.getActiveDefaultId?.() || 'default';
-                        if (selectedId !== activeDefault) {
-                            // 当前选择的不是默认歌单，直接添加到当前歌单
-                            try {
-                                const result = await api.addToPlaylist({
-                                    playlist_id: selectedId,
-                                    song: songData
-                                });
-                                if (result.status === 'OK') {
-                                    const name = playlistManager.getCurrentName() || selectedId;
-                                    Toast.success(i18n.t('search.addSuccess', { name, title: songData.title }));
-                                    await playlistManager.refreshAll();
-                                } else if (result.duplicate) {
-                                    Toast.warning(`${songData.title} ${i18n.t('search.alreadyInList')}`);
-                                } else {
-                                    Toast.error(i18n.t('search.addFailed'));
-                                }
-                            } catch (err) {
-                                console.error('[搜索] 添加到歌单失败:', err);
+            const menuItem = e.target.closest('.search-action-menu-item');
+            if (!menuItem || !menu.contains(menuItem)) {
+                return;
+            }
+
+            e.stopPropagation();
+            const action = menuItem.getAttribute('data-action');
+
+            if (action === 'play-now') {
+                this.showPlayNowConfirm(menu, songData, isDirectory, button, closeMenu);
+                return;
+            }
+
+            if (action === 'confirm-cancel') {
+                closeMenu();
+                return;
+            }
+
+            if (action === 'confirm-play-now') {
+                closeMenu();
+                setTimeout(() => this.handlePlayNow(songData, isDirectory, button), 300);
+                return;
+            }
+
+            closeMenu();
+
+            setTimeout(async () => {
+                if (action === 'add-to-queue') {
+                    await this.handleAddToQueue(songData, isDirectory, button);
+                } else if (action === 'add-to-playlist') {
+                    const playlistManager = window.app?.modules?.playlistManager;
+                    const selectedId = playlistManager?.getSelectedPlaylistId() || playlistManager?.getActiveDefaultId?.() || 'default';
+                    const activeDefault = playlistManager?.getActiveDefaultId?.() || 'default';
+                    if (selectedId !== activeDefault) {
+                        try {
+                            const result = await api.addToPlaylist({
+                                playlist_id: selectedId,
+                                song: songData
+                            });
+                            if (result.status === 'OK') {
+                                const name = playlistManager.getCurrentName() || selectedId;
+                                Toast.success(i18n.t('search.addSuccess', { name, title: songData.title }));
+                                await playlistManager.refreshAll();
+                            } else if (result.duplicate) {
+                                Toast.warning(`${songData.title} ${i18n.t('search.alreadyInList')}`);
+                            } else {
                                 Toast.error(i18n.t('search.addFailed'));
                             }
-                        } else {
-                            // 默认歌单，显示歌单选择器
-                            const { showSelectPlaylistModal } = await import('./playlist.js');
-                            await showSelectPlaylistModal(songData, null);
+                        } catch (err) {
+                            console.error('[搜索] 添加到歌单失败:', err);
+                            Toast.error(i18n.t('search.addFailed'));
                         }
-                    } else if (action === 'add-all-to-playlist') {
-                        await this.handleAddAllToPlaylist(currentTab);
+                    } else {
+                        const { showSelectPlaylistModal } = await import('./playlist.js');
+                        await showSelectPlaylistModal(songData, null);
                     }
-                }, 300);
-            });
+                } else if (action === 'add-all-to-playlist') {
+                    await this.handleAddAllToPlaylist(currentTab);
+                }
+            }, 300);
         });
     }
 
@@ -609,23 +685,18 @@ export class SearchManager {
             <div class="search-action-menu-body">
                 <p class="play-now-confirm-msg">${i18n.t('search.confirmPlayNowMsg')}</p>
                 <div class="play-now-confirm-buttons">
-                    <button class="search-action-menu-item play-now-cancel">${i18n.t('modal.cancel')}</button>
-                    <button class="search-action-menu-item play-now-confirm">${i18n.t('search.confirmPlayNowBtn')}</button>
+                    <button class="search-action-menu-item play-now-cancel" data-action="confirm-cancel">${i18n.t('modal.cancel')}</button>
+                    <button class="search-action-menu-item play-now-confirm" data-action="confirm-play-now">${i18n.t('search.confirmPlayNowBtn')}</button>
                 </div>
             </div>
         `;
-        content.querySelector('.search-action-menu-close').addEventListener('click', closeMenu);
-        content.querySelector('.play-now-cancel').addEventListener('click', closeMenu);
-        content.querySelector('.play-now-confirm').addEventListener('click', () => {
-            closeMenu();
-            setTimeout(() => this.handlePlayNow(songData, isDirectory, btn), 300);
-        });
     }
     
     /**
      * 立即播放：将歌曲插入队列顶部并播放
      */
     async handlePlayNow(songData, isDirectory, btn) {
+        const originalHTML = btn.innerHTML;
         try {
             const playlistId = this.getCurrentPlaylistId ? this.getCurrentPlaylistId() : this.currentPlaylistId;
 
@@ -640,23 +711,14 @@ export class SearchManager {
             }
 
             // 显示加载状态
-            const originalHTML = btn.innerHTML;
             btn.innerHTML = '⏳';
             btn.disabled = true;
 
             // 1. 将歌曲插入到队列顶部（index=0，当前播放的前面）
-            const addResponse = await fetch('/playlist_add', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    playlist_id: playlistId,
-                    song: songData,
-                    insert_index: 0  // 插入到顶部
-                })
-            });
+            const addResponse = await this.addSongToPlaylist(playlistId, songData, 0);
 
-            if (!addResponse.ok) {
-                throw new Error(i18n.t('search.addSongFailed'));
+            if (addResponse?._error || addResponse?.status !== 'OK') {
+                throw new Error(addResponse?.error || addResponse?.message || i18n.t('search.addSongFailed'));
             }
 
             // 2. 刷新播放列表数据
@@ -717,17 +779,11 @@ export class SearchManager {
                 
                 try {
                     // 调用后端API获取目录下的所有歌曲
-                    const response = await fetch('/get_directory_songs', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ directory: songData.url })
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error(i18n.t('search.getDirFailed'));
+                    const result = await api.getDirectorySongs(songData.url);
+                    if (result?._error) {
+                        throw new Error(result.error || result.message || i18n.t('search.getDirFailed'));
                     }
-                    
-                    const result = await response.json();
+
                     if (result.status !== 'OK') {
                         throw new Error(result.error || i18n.t('search.getDirFailed'));
                     }
@@ -750,35 +806,23 @@ export class SearchManager {
                         try {
                             // 第一首歌曲时计算插入位置
                             if (i === 0) {
-                                try {
-                                    const status = await api.getStatus();
-                                    const currentIndex = status?.current_index ?? -1;
-                                    insertIndex = Math.max(1, currentIndex + 1);
-                                    console.log('[搜索] 计算插入位置:', insertIndex);
-                                } catch (err) {
-                                    console.warn('[搜索] 无法获取当前位置，使用默认位置 1', err);
-                                    insertIndex = 1;
-                                }
+                                insertIndex = await this.getQueueInsertIndex({
+                                    fallback: 1,
+                                    minimum: 1,
+                                    logPrefix: '[搜索]'
+                                });
                             }
                             
                             // 计算当前歌曲的插入位置（后续歌曲依次递增）
                             const currentInsertIndex = insertIndex + i;
                             
-                            const addResponse = await fetch('/playlist_add', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    playlist_id: playlistId,
-                                    song: song,
-                                    insert_index: currentInsertIndex
-                                })
-                            });
+                            const addResponse = await this.addSongToPlaylist(playlistId, song, currentInsertIndex);
                             
-                            if (addResponse.ok) {
+                            if (!addResponse?._error && addResponse?.status === 'OK') {
                                 addedCount++;
                                 console.log(`[搜索] ✓ 添加歌曲 (${i+1}/${songs.length}): ${song.title} 在位置 ${currentInsertIndex}`);
                             } else {
-                                console.warn(`[搜索] ✗ 添加歌曲失败: ${song.title}`);
+                                console.warn(`[搜索] ✗ 添加歌曲失败: ${song.title}`, addResponse?.error || addResponse?.message || addResponse);
                             }
                         } catch (err) {
                             console.warn(`[搜索] 添加歌曲异常: ${err.message}`);
@@ -833,29 +877,15 @@ export class SearchManager {
                 }
             } else {
                 // ✅ 文件处理：添加单个歌曲
-                let insertIndex = 1; // 声明并默认初始化，防止 ReferenceError
-                try {
-                    const statusResponse = await fetch('/status');
-                    const status = await statusResponse.json();
-                    const currentIndex = status?.current_index ?? -1;
-                    insertIndex = Math.max(1, currentIndex + 1);
-                    console.log('[搜索-单文件] 从后端获取当前播放索引:', { currentIndex, insertIndex });
-                } catch (err) {
-                    console.warn('[搜索-单文件] 无法获取后端状态，使用默认位置 1:', err);
-                    insertIndex = 1;
-                }
-
-                const response = await fetch('/playlist_add', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        playlist_id: playlistId,
-                        song: songData,
-                        insert_index: insertIndex
-                    })
+                const insertIndex = await this.getQueueInsertIndex({
+                    fallback: 1,
+                    minimum: 1,
+                    logPrefix: '[搜索-单文件]'
                 });
+
+                const response = await this.addSongToPlaylist(playlistId, songData, insertIndex);
                 
-                if (response.ok) {
+                if (!response?._error && response?.status === 'OK') {
                     // 获取歌单名称以显示在toast中
                     let playlistName = i18n.t('nav.queue');
                     const _activeDefault2 = window.app?.modules?.playlistManager?.getActiveDefaultId?.() || 'default';
@@ -899,12 +929,11 @@ export class SearchManager {
                         }
                     }
                 } else {
-                    const error = await response.json();
                     // 重复歌曲使用警告提示
-                    if (error.duplicate) {
+                    if (response?.duplicate) {
                         Toast.warning(`${songData.title} ${i18n.t('search.alreadyInList')}`);
                     } else {
-                        throw new Error(error.error || i18n.t('search.addFailed'));
+                        throw new Error(response?.error || response?.message || i18n.t('search.addFailed'));
                     }
                 }
             }
@@ -941,14 +970,11 @@ export class SearchManager {
 
             try {
                 // 获取当前播放位置
-                let insertIndex = 1;
-                try {
-                    const status = await api.getStatus();
-                    const currentIndex = status?.current_index ?? -1;
-                    insertIndex = Math.max(1, currentIndex + 1);
-                } catch (err) {
-                    console.warn('[批量添加] 无法获取当前位置，使用默认位置 1', err);
-                }
+                const insertIndex = await this.getQueueInsertIndex({
+                    fallback: 1,
+                    minimum: 1,
+                    logPrefix: '[批量添加]'
+                });
 
                 // 批量添加歌曲
                 let addedCount = 0;
@@ -966,22 +992,14 @@ export class SearchManager {
                             thumbnail_url: song.thumbnail_url || ''
                         };
 
-                        const response = await fetch('/playlist_add', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                playlist_id: playlistId,
-                                song: songData,
-                                insert_index: currentInsertIndex
-                            })
-                        });
+                        const response = await this.addSongToPlaylist(playlistId, songData, currentInsertIndex);
 
-                        if (response.ok) {
+                        if (!response?._error && response?.status === 'OK') {
                             addedCount++;
                             const progress = Math.round((addedCount / songs.length) * 100);
                             searchLoading.show(i18n.t('search.batchAddProgress', { done: addedCount, total: songs.length, pct: progress }));
                         } else {
-                            console.warn('[批量添加] 添加失败:', songData.title);
+                            console.warn('[批量添加] 添加失败:', songData.title, response?.error || response?.message || response);
                         }
                     } catch (err) {
                         console.warn('[批量添加] 添加歌曲异常:', err);
@@ -1306,8 +1324,6 @@ export class SearchManager {
                 ${contentHTML}
             </div>
         `;
-
-        this.bindDirViewEvents(searchModalBody);
     }
 
     // 生成面包屑 HTML
@@ -1372,36 +1388,6 @@ export class SearchManager {
         }
 
         return html;
-    }
-
-    // 绑定目录视图内的事件
-    bindDirViewEvents(container) {
-        // 面包屑点击（非末项）
-        container.querySelectorAll('.search-breadcrumb-item[data-breadcrumb-index]').forEach(el => {
-            el.addEventListener('click', () => {
-                const index = parseInt(el.getAttribute('data-breadcrumb-index'), 10);
-                this.navigateToBreadcrumb(index);
-            });
-        });
-
-        // 子目录卡片点击 → 进入子目录
-        container.querySelectorAll('.search-dir-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const dirUrl = card.getAttribute('data-dir-url');
-                const dirName = card.getAttribute('data-dir-name');
-                this.enterDirectory(dirUrl, dirName);
-            });
-        });
-
-        // 歌曲 add 按钮 → 复用现有操作菜单
-        container.querySelectorAll('.search-result-add').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const item = e.target.closest('.search-result-item');
-                if (!item) return;
-                this.showSearchActionMenu(e.target, item, false);
-            });
-        });
     }
 
     // 点击面包屑回退

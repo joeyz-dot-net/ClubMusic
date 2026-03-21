@@ -92,6 +92,7 @@ async def search_song(request: Request, player: MusicPlayer = Depends(get_player
 async def get_youtube_search_config(player: MusicPlayer = Depends(get_player)):
     """获取YouTube搜索配置"""
     return {
+        "page_size": min(20, player.youtube_search_max_results),
         "max_results": player.youtube_search_max_results
     }
 
