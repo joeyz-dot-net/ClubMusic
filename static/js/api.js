@@ -9,11 +9,28 @@
 function makeLeadingDebounce(fn, waitMs) {
     let lastCallTime = 0;
     let lastPromise = null;
+
+    const resetDebounceState = () => {
+        lastCallTime = 0;
+        lastPromise = null;
+    };
+
     return function(...args) {
         const now = Date.now();
         if (now - lastCallTime >= waitMs) {
             lastCallTime = now;
-            lastPromise = fn(...args);
+            lastPromise = Promise.resolve(fn(...args))
+                .then((result) => {
+                    const isErrorResult = !!(result && (result._error || result.status === 'ERROR'));
+                    if (isErrorResult) {
+                        resetDebounceState();
+                    }
+                    return result;
+                })
+                .catch((error) => {
+                    resetDebounceState();
+                    throw error;
+                });
             return lastPromise;
         }
         console.log(`[Debounce] 操作在 ${waitMs}ms 内重复，已忽略`);
