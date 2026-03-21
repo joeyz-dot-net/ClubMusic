@@ -20,6 +20,30 @@ export class PlaylistManager {
         console.log('[PlaylistManager] ℹ localStorage 中的完整值:', localStorage.getItem('selectedPlaylistId'));
     }
 
+    _getApiErrorMessage(result, fallbackMessage) {
+        if (!result) {
+            return fallbackMessage;
+        }
+
+        return result.error || result.message || result.detail || fallbackMessage;
+    }
+
+    _assertStatusOk(result, fallbackMessage) {
+        if (!result || result._error || result.status !== 'OK') {
+            throw new Error(this._getApiErrorMessage(result, fallbackMessage));
+        }
+
+        return result;
+    }
+
+    _assertPlaylistCreated(result, fallbackMessage) {
+        if (!result || result._error || !result.id || !result.name) {
+            throw new Error(this._getApiErrorMessage(result, fallbackMessage));
+        }
+
+        return result;
+    }
+
     // ✅ 新增：从 localStorage 读取保存的歌单ID
     _loadSelectedPlaylistFromStorage() {
         try {
@@ -39,11 +63,11 @@ export class PlaylistManager {
     // 加载当前播放队列（用户隔离：使用前端保存的 selectedPlaylistId）
     async loadCurrent() {
         // 使用前端独立维护的 selectedPlaylistId，每个浏览器独立
-        const result = await api.getPlaylist(this.selectedPlaylistId);
-        if (!result || result.status !== 'OK') {
-            console.warn('[歌单管理] loadCurrent: 无效的后端响应', result);
-            throw new Error('加载播放列表失败（后端响应无效）');
-        }
+        const result = this._assertStatusOk(
+            await api.getPlaylist(this.selectedPlaylistId),
+            '加载播放列表失败（后端响应无效）'
+        );
+
         if (Array.isArray(result.playlist)) {
             this.currentPlaylist = result.playlist;
             this.currentPlaylistName = result.playlist_name || i18n.t('playlist.current'); // 获取歌单名称
@@ -60,13 +84,15 @@ export class PlaylistManager {
 
     // 加载所有歌单
     async loadAll() {
-        const result = await api.getPlaylists();
-        if (result.status === 'OK') {
-            this.playlists = result.playlists || [];
-            this.roomPlaylist = this.playlists.find(p => p.is_room) || null;
-            return this.playlists;
+        const result = this._assertStatusOk(await api.getPlaylists(), '加载歌单列表失败');
+
+        if (!Array.isArray(result.playlists)) {
+            throw new Error('加载歌单列表失败（数据格式无效）');
         }
-        throw new Error('加载歌单列表失败');
+
+        this.playlists = result.playlists;
+        this.roomPlaylist = this.playlists.find(p => p.is_room) || null;
+        return this.playlists;
     }
 
     // 并行刷新当前播放列表和所有歌单
@@ -76,14 +102,14 @@ export class PlaylistManager {
 
     // 创建新歌单
     async create(name) {
-        const result = await api.createPlaylist(name);
+        const result = this._assertPlaylistCreated(await api.createPlaylist(name), '创建歌单失败');
         await this.loadAll(); // 重新加载
         return result;
     }
 
     // 删除歌单
     async delete(id) {
-        const result = await api.deletePlaylist(id);
+        const result = this._assertStatusOk(await api.deletePlaylist(id), '删除歌单失败');
         await this.loadAll(); // 重新加载
         // ✅ 如果删除的是当前选择的歌单，重置为播放队列
         if (this.selectedPlaylistId === id) {
@@ -95,18 +121,32 @@ export class PlaylistManager {
 
     // 更新歌单
     async update(id, data) {
-        const result = await api.updatePlaylist(id, data);
+        const result = this._assertStatusOk(await api.updatePlaylist(id, data), '更新歌单失败');
         await this.loadAll(); // 重新加载
         return result;
     }
 
     // 切换歌单（用户隔离：只验证后端歌单存在，不修改后端全局状态）
     async switch(id) {
-        // 先更新本地状态（确保 loadCurrent 使用正确的 ID）
+        const previousPlaylistId = this.selectedPlaylistId;
+        const result = this._assertStatusOk(await api.switchPlaylist(id), '切换歌单失败');
+
         this.setSelectedPlaylist(id);
-        const result = await api.switchPlaylist(id);
-        await this.loadCurrent(); // 重新加载当前队列
-        return result;
+
+        try {
+            await this.loadCurrent(); // 重新加载当前队列
+            return result;
+        } catch (error) {
+            this.setSelectedPlaylist(previousPlaylistId);
+
+            try {
+                await this.loadCurrent();
+            } catch (rollbackError) {
+                console.warn('[歌单管理] 回滚歌单选择失败:', rollbackError);
+            }
+
+            throw error;
+        }
     }
 
     // ✅ 新增：设置当前选择的歌单（并保存到 localStorage）

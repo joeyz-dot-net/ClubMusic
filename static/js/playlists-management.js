@@ -293,42 +293,32 @@ export class PlaylistsManagement {
 
     async handleSwitchPlaylist(playlist) {
         return this.runExclusiveModalAction('切换歌单', async () => {
-            const previousPlaylistId = playlistManager.getSelectedPlaylistId();
-
             operationLock.acquire('switch-playlist');
 
             try {
                 console.log('[歌单管理] 开始切换歌单:', playlist.id, playlist.name);
-                console.log('[歌单管理] 步骤1: 更新前端本地状态');
-                playlistManager.setSelectedPlaylist(playlist.id);
-
-                console.log('[歌单管理] 步骤2: 调用后端验证歌单');
+                console.log('[歌单管理] 步骤1: 调用播放器管理器切换歌单');
                 const switchResult = await playlistManager.switch(playlist.id);
                 console.log('[歌单管理] 后端验证结果:', switchResult);
 
-                if (!switchResult || switchResult._error || switchResult.status !== 'OK') {
-                    throw new Error(switchResult?.error || switchResult?.message || '切换歌单失败');
-                }
-
-                console.log('[歌单管理] 步骤3: 重新加载所有歌单数据');
+                console.log('[歌单管理] 步骤2: 重新加载所有歌单数据');
                 await playlistManager.loadAll();
 
                 console.log('[歌单管理] ✅ 歌单切换完成:', playlist.name);
                 Toast.success(i18n.t('playlists.switchSuccess', { name: playlist.name }));
 
-                console.log('[歌单管理] 步骤4: 隐藏模态框');
+                console.log('[歌单管理] 步骤3: 隐藏模态框');
                 this.hide('select');
 
                 setTimeout(() => {
                     if (this.onPlaylistSwitchCallback && typeof this.onPlaylistSwitchCallback === 'function') {
-                        console.log('[歌单管理] 步骤5: 触发回调函数，更新主界面显示');
+                        console.log('[歌单管理] 步骤4: 触发回调函数，更新主界面显示');
                         this.onPlaylistSwitchCallback(playlist.id, playlist.name);
                     }
                 }, 50);
 
                 return true;
             } catch (error) {
-                playlistManager.setSelectedPlaylist(previousPlaylistId);
                 this.render();
                 console.error('[歌单管理] 切换失败:', error);
                 Toast.error(i18n.t('playlists.switchFailed', { error: error.message }));
@@ -400,10 +390,7 @@ export class PlaylistsManagement {
                             return false;
                         }
 
-                        const createResult = await playlistManager.create(name.trim());
-                        if (!createResult || createResult._error || !createResult.id) {
-                            throw new Error(createResult?.error || createResult?.message || '创建歌单失败');
-                        }
+                        await playlistManager.create(name.trim());
 
                         Toast.success(i18n.t('playlists.createSuccess'));
                         this.render();
