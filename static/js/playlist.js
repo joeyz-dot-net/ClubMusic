@@ -982,6 +982,65 @@ function createCenteredEmptyMessage(message) {
     return empty;
 }
 
+function createHistoryActionMenuContent(song) {
+    const fragment = document.createDocumentFragment();
+
+    const content = document.createElement('div');
+    content.className = 'search-action-menu-content';
+
+    const header = document.createElement('div');
+    header.className = 'search-action-menu-header';
+
+    const title = document.createElement('div');
+    title.className = 'search-action-menu-title';
+    title.textContent = song.title || '---';
+
+    const closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.className = 'search-action-menu-close';
+    closeButton.textContent = '✕';
+
+    header.appendChild(title);
+    header.appendChild(closeButton);
+
+    const body = document.createElement('div');
+    body.className = 'search-action-menu-body';
+
+    const actions = [
+        { action: 'play-now', icon: '▶️', label: i18n.t('history.actionMenu.playNow') },
+        { action: 'add-to-next', icon: '⏭️', label: i18n.t('history.actionMenu.addToNext') },
+        { action: 'add-to-playlist', icon: '📋', label: i18n.t('history.actionMenu.addToPlaylist') },
+        { action: 'delete-record', icon: '🗑️', label: i18n.t('history.actionMenu.deleteRecord'), color: '#ff6b6b' }
+    ];
+
+    actions.forEach(({ action, icon, label, color }) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'search-action-menu-item';
+        button.dataset.action = action;
+        if (color) {
+            button.style.color = color;
+        }
+
+        const iconEl = document.createElement('span');
+        iconEl.className = 'icon';
+        iconEl.textContent = icon;
+
+        const labelEl = document.createElement('span');
+        labelEl.className = 'label';
+        labelEl.textContent = label;
+
+        button.appendChild(iconEl);
+        button.appendChild(labelEl);
+        body.appendChild(button);
+    });
+
+    content.appendChild(header);
+    content.appendChild(body);
+    fragment.appendChild(content);
+    return fragment;
+}
+
 function bindPlaylistItemDelegates(container) {
     if (!container || container._playlistItemClickHandler) {
         return;
@@ -2044,32 +2103,7 @@ async function closeHistoryModal(historyModal) {
 // 显示播放历史操作菜单（复用 search-action-menu 样式）
 function showHistoryActionMenu(song, historyModal, removeFromHistoryFn, rerenderCallback) {
     openOverlayActionMenu({
-        markup: `
-        <div class="search-action-menu-content">
-            <div class="search-action-menu-header">
-                <div class="search-action-menu-title">${escapeHTML(song.title || '---')}</div>
-                <button class="search-action-menu-close">✕</button>
-            </div>
-            <div class="search-action-menu-body">
-                <button class="search-action-menu-item" data-action="play-now">
-                    <span class="icon">▶️</span>
-                    <span class="label">${i18n.t('history.actionMenu.playNow')}</span>
-                </button>
-                <button class="search-action-menu-item" data-action="add-to-next">
-                    <span class="icon">⏭️</span>
-                    <span class="label">${i18n.t('history.actionMenu.addToNext')}</span>
-                </button>
-                <button class="search-action-menu-item" data-action="add-to-playlist">
-                    <span class="icon">📋</span>
-                    <span class="label">${i18n.t('history.actionMenu.addToPlaylist')}</span>
-                </button>
-                <button class="search-action-menu-item" data-action="delete-record" style="color: #ff6b6b;">
-                    <span class="icon">🗑️</span>
-                    <span class="label">${i18n.t('history.actionMenu.deleteRecord')}</span>
-                </button>
-            </div>
-        </div>
-        `,
+        content: createHistoryActionMenuContent(song),
         onMenuClick: (e, { menu, closeMenu }) => {
             const menuItem = e.target.closest('.search-action-menu-item');
             if (!menuItem || !menu.contains(menuItem)) {

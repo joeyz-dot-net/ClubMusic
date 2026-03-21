@@ -146,6 +146,60 @@ function createPlayNowConfirmView() {
     return fragment;
 }
 
+function createSearchActionMenuButton({ action, icon, label }) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'search-action-menu-item';
+    button.dataset.action = action;
+
+    const iconEl = document.createElement('span');
+    iconEl.className = 'icon';
+    iconEl.textContent = icon;
+
+    const labelEl = document.createElement('span');
+    labelEl.className = 'label';
+    labelEl.textContent = label;
+
+    button.appendChild(iconEl);
+    button.appendChild(labelEl);
+    return button;
+}
+
+function createSearchActionMenuContent({ title, addToPlaylistLabel, showAddToPlaylist, addAllLabel, playlistIcon }) {
+    const fragment = document.createDocumentFragment();
+    fragment.appendChild(createSearchActionMenuHeader(title));
+
+    const body = document.createElement('div');
+    body.className = 'search-action-menu-body';
+    body.appendChild(createSearchActionMenuButton({
+        action: 'play-now',
+        icon: '▶️',
+        label: i18n.t('search.actionMenu.playNow')
+    }));
+    body.appendChild(createSearchActionMenuButton({
+        action: 'add-to-queue',
+        icon: '➕',
+        label: i18n.t('search.actionMenu.addToQueue')
+    }));
+
+    if (showAddToPlaylist) {
+        body.appendChild(createSearchActionMenuButton({
+            action: 'add-to-playlist',
+            icon: '📋',
+            label: addToPlaylistLabel
+        }));
+    }
+
+    body.appendChild(createSearchActionMenuButton({
+        action: 'add-all-to-playlist',
+        icon: playlistIcon,
+        label: addAllLabel
+    }));
+
+    fragment.appendChild(body);
+    return fragment;
+}
+
 function createSearchBreadcrumbElement(breadcrumb) {
     const breadcrumbContainer = document.createElement('div');
     breadcrumbContainer.className = 'search-dir-breadcrumb';
@@ -946,32 +1000,13 @@ export class SearchManager {
             : i18n.t('search.actionMenu.addToPlaylist');
 
         const { menu } = openOverlayActionMenu({
-            markup: `
-            <div class="search-action-menu-content">
-                <div class="search-action-menu-header">
-                    <div class="search-action-menu-title">${escapeHTML(songData.title)}</div>
-                    <button class="search-action-menu-close">✕</button>
-                </div>
-                <div class="search-action-menu-body">
-                    <button class="search-action-menu-item" data-action="play-now">
-                        <span class="icon">▶️</span>
-                        <span class="label">${i18n.t('search.actionMenu.playNow')}</span>
-                    </button>
-                    <button class="search-action-menu-item" data-action="add-to-queue">
-                        <span class="icon">➕</span>
-                        <span class="label">${i18n.t('search.actionMenu.addToQueue')}</span>
-                    </button>
-                    ${!isDirectory ? `<button class="search-action-menu-item" data-action="add-to-playlist">
-                        <span class="icon">📋</span>
-                        <span class="label">${addToPlaylistLabel}</span>
-                    </button>` : ''}
-                    <button class="search-action-menu-item" data-action="add-all-to-playlist">
-                        <span class="icon">${playlistIcon}</span>
-                        <span class="label">${i18n.t('search.actionMenu.addAll', { count: resultCount, name: playlistName })}</span>
-                    </button>
-                </div>
-            </div>
-        `,
+            content: createSearchActionMenuContent({
+                title: songData.title,
+                addToPlaylistLabel,
+                showAddToPlaylist: !isDirectory,
+                addAllLabel: i18n.t('search.actionMenu.addAll', { count: resultCount, name: playlistName }),
+                playlistIcon
+            }),
             onMenuClick: async (e, { menu, closeMenu }) => {
                 const menuItem = e.target.closest('.search-action-menu-item');
                 if (!menuItem || !menu.contains(menuItem)) {

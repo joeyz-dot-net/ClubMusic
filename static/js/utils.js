@@ -222,7 +222,7 @@ export async function copyToClipboard(text) {
 
     export function openOverlayActionMenu({
         className = 'search-action-menu',
-        markup,
+        content,
         preferredSelector = '.search-action-menu-item, .search-action-menu-close',
         onMenuClick = null
     } = {}) {
@@ -230,7 +230,7 @@ export async function copyToClipboard(text) {
 
         const menu = document.createElement('div');
         menu.className = className;
-        menu.innerHTML = markup;
+        menu.replaceChildren(content || document.createDocumentFragment());
 
         const previousActiveElement = document.activeElement;
 
