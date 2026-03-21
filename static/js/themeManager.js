@@ -148,12 +148,3 @@ export class ThemeManager {
 
 // 创建全局实例
 export const themeManager = new ThemeManager();
-
-// 页面加载时立即初始化主题
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        themeManager.init();
-    });
-} else {
-    themeManager.init();
-}
