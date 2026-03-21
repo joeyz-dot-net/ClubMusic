@@ -582,13 +582,12 @@ class MusicPlayerApp {
         try {
             // 恢复播放状态
             try {
-                const status = await api.getStatus();
-                if (status && !status.paused) {
+                const status = await player.refreshStatus();
+                const paused = status?.mpv_state?.paused ?? status?.mpv?.paused ?? true;
+                if (!paused) {
                     console.log('[恢复状态] 音乐正在播放，保持播放状态');
-                    player.updateStatus(status);
-                } else if (status && status.paused) {
+                } else {
                     console.log('[恢复状态] 音乐已暂停');
-                    player.updateStatus(status);
                 }
             } catch (err) {
                 console.warn('[恢复状态] 无法恢复播放状态:', err);
@@ -910,75 +909,30 @@ class MusicPlayerApp {
         // 下一首
         if (this.elements.nextBtn) {
             this.elements.nextBtn.addEventListener('click', async () => {
-                if (!playLock.acquire(i18n.t('player.preparingNext'))) return;
-                try {
-                    const result = await player.next();
-                    this._handlePlayResult(result, i18n.t('player.nextFailed'));
-                } catch (err) {
-                    console.error('[下一首] 错误:', err);
-                    Toast.error(i18n.t('player.nextFailed'));
-                } finally {
-                    playLock.release();
-                }
+                await this.playNext();
             });
         }
         if (this.elements.fullPlayerNext) {
             this.elements.fullPlayerNext.addEventListener('click', async () => {
-                if (!playLock.acquire(i18n.t('player.preparingNext'))) return;
-                try {
-                    const result = await player.next();
-                    this._handlePlayResult(result, i18n.t('player.nextFailed'));
-                } catch (err) {
-                    console.error('[下一首] 错误:', err);
-                    Toast.error(i18n.t('player.nextFailed'));
-                } finally {
-                    playLock.release();
-                }
+                await this.playNext();
             });
         }
         if (this.elements.miniNextBtn) {
             this.elements.miniNextBtn.addEventListener('click', async (e) => {
                 e.stopPropagation(); // 阻止事件冒泡，避免触发打开全屏播放器
-                if (!playLock.acquire(i18n.t('player.preparingNext'))) return;
-                try {
-                    const result = await player.next();
-                    this._handlePlayResult(result, i18n.t('player.nextFailed'));
-                } catch (err) {
-                    console.error('[下一首] 错误:', err);
-                    Toast.error(i18n.t('player.nextFailed'));
-                } finally {
-                    playLock.release();
-                }
+                await this.playNext();
             });
         }
 
         // 上一首
         if (this.elements.prevBtn) {
             this.elements.prevBtn.addEventListener('click', async () => {
-                if (!playLock.acquire(i18n.t('player.preparingPrev'))) return;
-                try {
-                    const result = await player.prev();
-                    this._handlePlayResult(result, i18n.t('player.prevFailed'));
-                } catch (err) {
-                    console.error('[上一首] 错误:', err);
-                    Toast.error(i18n.t('player.prevFailed'));
-                } finally {
-                    playLock.release();
-                }
+                await this.playPrev();
             });
         }
         if (this.elements.fullPlayerPrev) {
             this.elements.fullPlayerPrev.addEventListener('click', async () => {
-                if (!playLock.acquire(i18n.t('player.preparingPrev'))) return;
-                try {
-                    const result = await player.prev();
-                    this._handlePlayResult(result, i18n.t('player.prevFailed'));
-                } catch (err) {
-                    console.error('[上一首] 错误:', err);
-                    Toast.error(i18n.t('player.prevFailed'));
-                } finally {
-                    playLock.release();
-                }
+                await this.playPrev();
             });
         }
 
@@ -986,37 +940,37 @@ class MusicPlayerApp {
         if (this.elements.loopBtn) {
             this.elements.loopBtn.addEventListener('click', () => {
                 if (playLock.isPreparing()) return;
-                player.cycleLoop();
+                void this.runPlayerAction(() => player.cycleLoop(), '循环模式');
             });
         }
         if (this.elements.nowPlayingRepeatBtn) {
             this.elements.nowPlayingRepeatBtn.addEventListener('click', () => {
                 if (playLock.isPreparing()) return;
-                player.cycleLoop();
+                void this.runPlayerAction(() => player.cycleLoop(), '循环模式');
             });
         }
         if (this.elements.fullPlayerLoop) {
             this.elements.fullPlayerLoop.addEventListener('click', () => {
                 if (playLock.isPreparing()) return;
-                player.cycleLoop();
+                void this.runPlayerAction(() => player.cycleLoop(), '循环模式');
             });
         }
         if (this.elements.fullPlayerShuffle) {
             this.elements.fullPlayerShuffle.addEventListener('click', () => {
                 if (playLock.isPreparing()) return;
-                player.toggleShuffle();
+                void this.runPlayerAction(() => player.toggleShuffle(), '随机播放');
             });
         }
         if (this.elements.fullPlayerPitchDown) {
             this.elements.fullPlayerPitchDown.addEventListener('click', () => {
                 if (playLock.isPreparing()) return;
-                player.pitchDown();
+                void this.runPlayerAction(() => player.pitchDown(), '降调');
             });
         }
         if (this.elements.fullPlayerPitchUp) {
             this.elements.fullPlayerPitchUp.addEventListener('click', () => {
                 if (playLock.isPreparing()) return;
-                player.pitchUp();
+                void this.runPlayerAction(() => player.pitchUp(), '升调');
             });
         }
 
@@ -1164,30 +1118,12 @@ class MusicPlayerApp {
         }
         if (this.elements.nppNext) {
             this.elements.nppNext.addEventListener('click', async () => {
-                if (!playLock.acquire(i18n.t('player.preparingNext'))) return;
-                try {
-                    const result = await player.next();
-                    this._handlePlayResult(result, i18n.t('player.nextFailed'));
-                } catch (err) {
-                    console.error('[NPP Next] Error:', err);
-                    Toast.error(i18n.t('player.nextFailed'));
-                } finally {
-                    playLock.release();
-                }
+                await this.playNext();
             });
         }
         if (this.elements.nppPrev) {
             this.elements.nppPrev.addEventListener('click', async () => {
-                if (!playLock.acquire(i18n.t('player.preparingPrev'))) return;
-                try {
-                    const result = await player.prev();
-                    this._handlePlayResult(result, i18n.t('player.prevFailed'));
-                } catch (err) {
-                    console.error('[NPP Prev] Error:', err);
-                    Toast.error(i18n.t('player.prevFailed'));
-                } finally {
-                    playLock.release();
-                }
+                await this.playPrev();
             });
         }
 
@@ -1540,24 +1476,22 @@ class MusicPlayerApp {
         }
     }
 
-    /**
-     * 处理 next/prev 返回结果中的跳过歌曲信息
-     * api.js 返回 {_error: true} 而非 throw，需要显式检查
-     * @param {Object} result - player.next() 或 player.prev() 的返回值
-     * @param {string} errorMsg - 错误时的 Toast 消息
-     */
-    _handlePlayResult(result, errorMsg) {
-        if (result?._error) {
-            if (result.skipped_songs) {
-                result.skipped_songs.forEach(s => { if (s.url) unavailableSongs.add(s.url); });
-                this.renderPlaylist();
-            }
-            throw new Error(result.error || errorMsg);
-        }
-        if (result?.skipped_songs?.length > 0) {
-            result.skipped_songs.forEach(s => { if (s.url) unavailableSongs.add(s.url); });
+    _applySkippedSongs(result) {
+        const payload = result?.result || result;
+        if (payload?.skipped_songs?.length > 0) {
+            payload.skipped_songs.forEach(s => { if (s.url) unavailableSongs.add(s.url); });
             this.renderPlaylist();
-            Toast.warning(i18n.t('player.skippedSongs', { count: result.skipped_songs.length }));
+            Toast.warning(i18n.t('player.skippedSongs', { count: payload.skipped_songs.length }));
+        }
+    }
+
+    async runPlayerAction(action, context, errorMessage = i18n.t('playlist.opFailed')) {
+        try {
+            return await action();
+        } catch (err) {
+            console.error(`[${context}] 错误:`, err);
+            Toast.error(errorMessage);
+            return null;
         }
     }
 
@@ -1577,8 +1511,9 @@ class MusicPlayerApp {
         if (!playLock.acquire(i18n.t('player.preparingNext'))) return;
         try {
             const result = await player.next();
-            this._handlePlayResult(result, i18n.t('player.nextFailed'));
+            this._applySkippedSongs(result);
         } catch (err) {
+            this._applySkippedSongs(err);
             console.error('[下一首] 错误:', err);
             Toast.error(i18n.t('player.nextFailed'));
         } finally {
@@ -1591,8 +1526,9 @@ class MusicPlayerApp {
         if (!playLock.acquire(i18n.t('player.preparingPrev'))) return;
         try {
             const result = await player.prev();
-            this._handlePlayResult(result, i18n.t('player.prevFailed'));
+            this._applySkippedSongs(result);
         } catch (err) {
+            this._applySkippedSongs(err);
             console.error('[上一首] 错误:', err);
             Toast.error(i18n.t('player.prevFailed'));
         } finally {
@@ -1693,7 +1629,7 @@ class MusicPlayerApp {
         const percent = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
         
         // 将百分比发送到后端 /seek
-        player.seek(percent);
+        void this.runPlayerAction(() => player.seek(percent), '迷你播放器进度跳转');
     }
 
     // 处理全屏播放器进度条点击
@@ -1704,7 +1640,7 @@ class MusicPlayerApp {
         const percent = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
         
         // 将百分比发送到后端 /seek
-        player.seek(percent);
+        void this.runPlayerAction(() => player.seek(percent), '全屏播放器进度跳转');
     }
 
     // 处理搜索

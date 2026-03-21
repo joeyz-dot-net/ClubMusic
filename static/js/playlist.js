@@ -322,6 +322,9 @@ async function addAllSongsToDefault(playlist, selectedPlaylistId) {
         let insertIndex = 1;  // 🔧 默认插入位置改为 1（第一首之后，而不是顶部）
         try {
             const status = await api.getStatus();
+            if (status?._error) {
+                throw new Error(status.error || status.message || 'status unavailable');
+            }
             const currentIndex = status?.current_index ?? -1;
             insertIndex = Math.max(1, currentIndex + 1);  // 最小插入位置是 1
             console.log('[批量添加] 从后端获取当前播放索引:', {currentIndex, insertIndex});
@@ -452,6 +455,9 @@ export async function playSongFromSelectedPlaylist(song, onPlay) {
                 let insertIndex = 1;  // 🔧 默认插入位置改为 1（第一首之后，而不是顶部）
                 try {
                     const status = await api.getStatus();
+                    if (status?._error) {
+                        throw new Error(status.error || status.message || 'status unavailable');
+                    }
                     const currentIndex = status?.current_index ?? -1;
                     insertIndex = Math.max(1, currentIndex + 1);  // 最小插入位置是 1
                     console.log('[播放列表] 从后端获取当前播放索引:', { currentIndex, insertIndex });
@@ -1932,6 +1938,9 @@ async function addSongToChosenPlaylist({ playlistId, song, playlistItem, playlis
         let insertIndex = 1;
         try {
             const status = await api.getStatus();
+            if (status?._error) {
+                throw new Error(status.error || status.message || 'status unavailable');
+            }
             const currentIndex = status?.current_index ?? -1;
             insertIndex = Math.max(1, currentIndex + 1);
             console.log('[歌单选择] 从后端获取当前播放索引:', { currentIndex, insertIndex });
@@ -2121,7 +2130,7 @@ async function closeHistoryModal(historyModal) {
             let currentStatus = { current_meta: null };
             try {
                 const latestStatus = await api.getStatus();
-                if (latestStatus && latestStatus.current_meta) {
+                if (!latestStatus?._error && latestStatus?.current_meta) {
                     currentStatus = latestStatus;
                 }
             } catch (err) {

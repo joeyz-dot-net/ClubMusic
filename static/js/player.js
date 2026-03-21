@@ -117,7 +117,7 @@ export class Player {
     }
 
     async next() {
-        const result = await api.next();
+        const result = this._ensureSuccess(await api.next(), '下一首播放失败');
         // 利用响应中的 current_meta 立即更新 UI，无需等待下次 1000ms 轮询
         if (result?.status === 'OK' && result?.current && this.status) {
             this.updateStatus({
@@ -130,7 +130,7 @@ export class Player {
     }
 
     async prev() {
-        const result = await api.prev();
+        const result = this._ensureSuccess(await api.prev(), '上一首播放失败');
         // 利用响应中的 current_meta 立即更新 UI，无需等待下次 1000ms 轮询
         if (result?.status === 'OK' && result?.current && this.status) {
             this.updateStatus({
@@ -185,14 +185,14 @@ export class Player {
 
     // 进度控制
     async seek(percent) {
-        const result = await api.seek(percent);
+        const result = this._ensureSuccess(await api.seek(percent), '跳转失败');
         this.emit('seek', percent);
         return result;
     }
 
     // 循环模式
     async cycleLoop() {
-        const result = await api.loop();
+        const result = this._ensureSuccess(await api.loop(), '循环模式切换失败');
         const loopMode = result.loop_mode !== undefined ? result.loop_mode : result;
         this.emit('loopChange', loopMode);
         return result;
@@ -200,7 +200,7 @@ export class Player {
 
     // 随机播放模式
     async toggleShuffle() {
-        const result = await api.shuffle();
+        const result = this._ensureSuccess(await api.shuffle(), '随机播放切换失败');
         const shuffleMode = result.shuffle_mode !== undefined ? result.shuffle_mode : false;
         this.emit('shuffleChange', shuffleMode);
         return result;
@@ -208,7 +208,7 @@ export class Player {
 
     // 音调控制（KTV升降调）
     async setPitch(semitones) {
-        const result = await api.setPitch(semitones);
+        const result = this._ensureSuccess(await api.setPitch(semitones), '音调调整失败');
         const pitchShift = result.pitch_shift !== undefined ? result.pitch_shift : semitones;
         this.emit('pitchChange', pitchShift);
         return result;
