@@ -468,10 +468,26 @@ export class SearchManager {
             // breadcrumb 格式：[{name: '搜索结果', url: null}, {name: 'Jazz', url: 'Albums/Jazz'}, ...]
             // url: null 表示 sentinel（搜索结果入口）
         };
+        this.bulkPlaylistActionInFlight = false;
         this.loadHistory();
 
         // 异步加载搜索配置，供首次搜索前等待
         this.searchConfigPromise = this.loadYoutubeSearchConfig();
+    }
+
+    async runExclusiveBulkPlaylistAction(actionName, action) {
+        if (this.bulkPlaylistActionInFlight) {
+            console.log(`[搜索] ${actionName} 已在进行中，忽略重复触发`);
+            return false;
+        }
+
+        this.bulkPlaylistActionInFlight = true;
+        try {
+            await action();
+            return true;
+        } finally {
+            this.bulkPlaylistActionInFlight = false;
+        }
     }
 
     async getQueueInsertIndex({ fallback = 1, minimum = 1, logPrefix = '[搜索]' } = {}) {
@@ -1157,116 +1173,118 @@ export class SearchManager {
             const playlistId = this.getCurrentPlaylistId ? this.getCurrentPlaylistId() : this.currentPlaylistId;
             
             if (isDirectory) {
-                // ✅ 目录处理：添加整个目录下的所有歌曲
-                console.log('[搜索] 添加整个目录:', songData.url);
-                
-                // 显示加载状态
-                const originalContent = snapshotElementChildren(btn);
-                setElementText(btn, i18n.t('search.loadingDir'));
-                btn.disabled = true;
-                
-                try {
-                    // 调用后端API获取目录下的所有歌曲
-                    const result = await api.getDirectorySongs(songData.url);
-                    if (result?._error) {
-                        throw new Error(result.error || result.message || i18n.t('search.getDirFailed'));
-                    }
+                return this.runExclusiveBulkPlaylistAction('目录添加', async () => {
+                    // ✅ 目录处理：添加整个目录下的所有歌曲
+                    console.log('[搜索] 添加整个目录:', songData.url);
+                    
+                    // 显示加载状态
+                    const originalContent = snapshotElementChildren(btn);
+                    setElementText(btn, i18n.t('search.loadingDir'));
+                    btn.disabled = true;
+                    
+                    try {
+                        // 调用后端API获取目录下的所有歌曲
+                        const result = await api.getDirectorySongs(songData.url);
+                        if (result?._error) {
+                            throw new Error(result.error || result.message || i18n.t('search.getDirFailed'));
+                        }
 
-                    if (result.status !== 'OK') {
-                        throw new Error(result.error || i18n.t('search.getDirFailed'));
-                    }
-                    
-                    const songs = result.songs || [];
-                    if (songs.length === 0) {
-                        Toast.warning(i18n.t('search.noMusicInDir'));
-                        restoreElementChildren(btn, originalContent);
-                        btn.disabled = false;
-                        return;
-                    }
-                    
-                    // 将所有歌曲添加到歌单（保持原有顺序）
-                    let addedCount = 0;
-                    let insertIndex = null;  // 第一首歌曲的插入位置
-                    
-                    for (let i = 0; i < songs.length; i++) {
-                        const song = songs[i];
+                        if (result.status !== 'OK') {
+                            throw new Error(result.error || i18n.t('search.getDirFailed'));
+                        }
                         
+                        const songs = result.songs || [];
+                        if (songs.length === 0) {
+                            Toast.warning(i18n.t('search.noMusicInDir'));
+                            restoreElementChildren(btn, originalContent);
+                            btn.disabled = false;
+                            return;
+                        }
+                        
+                        // 将所有歌曲添加到歌单（保持原有顺序）
+                        let addedCount = 0;
+                        let insertIndex = null;  // 第一首歌曲的插入位置
+                        
+                        for (let i = 0; i < songs.length; i++) {
+                            const song = songs[i];
+                            
+                            try {
+                                // 第一首歌曲时计算插入位置
+                                if (i === 0) {
+                                    insertIndex = await this.getQueueInsertIndex({
+                                        fallback: 1,
+                                        minimum: 1,
+                                        logPrefix: '[搜索]'
+                                    });
+                                }
+                                
+                                // 计算当前歌曲的插入位置（后续歌曲依次递增）
+                                const currentInsertIndex = insertIndex + i;
+                                
+                                const addResponse = await this.addSongToPlaylist(playlistId, song, currentInsertIndex);
+                                
+                                if (!addResponse?._error && addResponse?.status === 'OK') {
+                                    addedCount++;
+                                    console.log(`[搜索] ✓ 添加歌曲 (${i+1}/${songs.length}): ${song.title} 在位置 ${currentInsertIndex}`);
+                                } else {
+                                    console.warn(`[搜索] ✗ 添加歌曲失败: ${song.title}`, addResponse?.error || addResponse?.message || addResponse);
+                                }
+                            } catch (err) {
+                                console.warn(`[搜索] 添加歌曲异常: ${err.message}`);
+                            }
+                        }
+
+                        if (addedCount === 0) {
+                            throw new Error(i18n.t('search.addDirFailed'));
+                        }
+                        
+                        // 获取歌单名称
+                        let playlistName = i18n.t('nav.queue');
+                        const _activeDefault = window.app?.modules?.playlistManager?.getActiveDefaultId?.() || 'default';
+                        if (playlistId !== _activeDefault && window.app && window.app.modules && window.app.modules.playlistManager) {
+                            const playlist = window.app.modules.playlistManager.playlists.find(p => p.id === playlistId);
+                            if (playlist) {
+                                playlistName = playlist.name;
+                            }
+                        }
+
+                        Toast.success(i18n.t('search.addDirSuccess', { count: addedCount, name: playlistName }));
+                        setElementMarkup(btn, SEARCH_SUCCESS_ICON_MARKUP);
+                        
+                        // ✅【关键】刷新播放列表显示 - 直接调用 renderPlaylistUI 确保立即显示
                         try {
-                            // 第一首歌曲时计算插入位置
-                            if (i === 0) {
-                                insertIndex = await this.getQueueInsertIndex({
-                                    fallback: 1,
-                                    minimum: 1,
-                                    logPrefix: '[搜索]'
-                                });
+                            const playlistManager = window.app?.modules?.playlistManager;
+                            if (playlistManager) {
+                                await playlistManager.refreshAll();
                             }
                             
-                            // 计算当前歌曲的插入位置（后续歌曲依次递增）
-                            const currentInsertIndex = insertIndex + i;
-                            
-                            const addResponse = await this.addSongToPlaylist(playlistId, song, currentInsertIndex);
-                            
-                            if (!addResponse?._error && addResponse?.status === 'OK') {
-                                addedCount++;
-                                console.log(`[搜索] ✓ 添加歌曲 (${i+1}/${songs.length}): ${song.title} 在位置 ${currentInsertIndex}`);
-                            } else {
-                                console.warn(`[搜索] ✗ 添加歌曲失败: ${song.title}`, addResponse?.error || addResponse?.message || addResponse);
+                            const container = document.getElementById('playListContainer');
+                            const currentStatus = window.app?.lastPlayStatus || { current_meta: null };
+                            if (container && playlistManager) {
+                                const { renderPlaylistUI } = await import('./playlist.js');
+                                renderPlaylistUI({
+                                    container,
+                                    onPlay: (s) => window.app?.playSong(s),
+                                    currentMeta: currentStatus.current_meta
+                                });
+                                console.log('[搜索] ✓ 播放列表已刷新 - ' + addedCount + ' 首歌曲');
                             }
                         } catch (err) {
-                            console.warn(`[搜索] 添加歌曲异常: ${err.message}`);
+                            console.warn('[搜索] 刷新播放列表失败:', err);
+                            // 回退方案
+                            if (this.refreshPlaylist) {
+                                await this.refreshPlaylist();
+                            } else {
+                                document.dispatchEvent(new CustomEvent('playlist:refresh'));
+                            }
                         }
+                    } catch (error) {
+                        console.error('添加目录歌曲失败:', error);
+                        Toast.error(i18n.t('search.addDirFailed') + ': ' + error.message);
+                        restoreElementChildren(btn, originalContent);
+                        btn.disabled = false;
                     }
-
-                    if (addedCount === 0) {
-                        throw new Error(i18n.t('search.addDirFailed'));
-                    }
-                    
-                    // 获取歌单名称
-                    let playlistName = i18n.t('nav.queue');
-                    const _activeDefault = window.app?.modules?.playlistManager?.getActiveDefaultId?.() || 'default';
-                    if (playlistId !== _activeDefault && window.app && window.app.modules && window.app.modules.playlistManager) {
-                        const playlist = window.app.modules.playlistManager.playlists.find(p => p.id === playlistId);
-                        if (playlist) {
-                            playlistName = playlist.name;
-                        }
-                    }
-
-                    Toast.success(i18n.t('search.addDirSuccess', { count: addedCount, name: playlistName }));
-                    setElementMarkup(btn, SEARCH_SUCCESS_ICON_MARKUP);
-                    
-                    // ✅【关键】刷新播放列表显示 - 直接调用 renderPlaylistUI 确保立即显示
-                    try {
-                        const playlistManager = window.app?.modules?.playlistManager;
-                        if (playlistManager) {
-                            await playlistManager.refreshAll();
-                        }
-                        
-                        const container = document.getElementById('playListContainer');
-                        const currentStatus = window.app?.lastPlayStatus || { current_meta: null };
-                        if (container && playlistManager) {
-                            const { renderPlaylistUI } = await import('./playlist.js');
-                            renderPlaylistUI({
-                                container,
-                                onPlay: (s) => window.app?.playSong(s),
-                                currentMeta: currentStatus.current_meta
-                            });
-                            console.log('[搜索] ✓ 播放列表已刷新 - ' + addedCount + ' 首歌曲');
-                        }
-                    } catch (err) {
-                        console.warn('[搜索] 刷新播放列表失败:', err);
-                        // 回退方案
-                        if (this.refreshPlaylist) {
-                            await this.refreshPlaylist();
-                        } else {
-                            document.dispatchEvent(new CustomEvent('playlist:refresh'));
-                        }
-                    }
-                } catch (error) {
-                    console.error('添加目录歌曲失败:', error);
-                    Toast.error(i18n.t('search.addDirFailed') + ': ' + error.message);
-                    restoreElementChildren(btn, originalContent);
-                    btn.disabled = false;
-                }
+                });
             } else {
                 // ✅ 文件处理：添加单个歌曲
                 const insertIndex = await this.getQueueInsertIndex({
@@ -1355,101 +1373,103 @@ export class SearchManager {
                 return;
             }
 
-            // 显示加载提示
-            Toast.info(i18n.t('search.batchAddInfo', { count: songs.length }));
-            searchLoading.show(i18n.t('search.batchAddLoading', { count: songs.length }));
+            await this.runExclusiveBulkPlaylistAction('批量添加', async () => {
+                // 显示加载提示
+                Toast.info(i18n.t('search.batchAddInfo', { count: songs.length }));
+                searchLoading.show(i18n.t('search.batchAddLoading', { count: songs.length }));
 
-            try {
-                // 获取当前播放位置
-                const insertIndex = await this.getQueueInsertIndex({
-                    fallback: 1,
-                    minimum: 1,
-                    logPrefix: '[批量添加]'
-                });
+                try {
+                    // 获取当前播放位置
+                    const insertIndex = await this.getQueueInsertIndex({
+                        fallback: 1,
+                        minimum: 1,
+                        logPrefix: '[批量添加]'
+                    });
 
-                // 批量添加歌曲
-                let addedCount = 0;
-                for (let i = 0; i < songs.length; i++) {
-                    const song = songs[i];
-                    const currentInsertIndex = insertIndex + i;
+                    // 批量添加歌曲
+                    let addedCount = 0;
+                    for (let i = 0; i < songs.length; i++) {
+                        const song = songs[i];
+                        const currentInsertIndex = insertIndex + i;
 
+                        try {
+                            // 准备歌曲数据
+                            const songData = {
+                                url: song.url,
+                                title: song.title || song.name || i18n.t('track.unknown'),
+                                type: song.type || 'local',
+                                duration: song.duration || 0,
+                                thumbnail_url: song.thumbnail_url || ''
+                            };
+
+                            const response = await this.addSongToPlaylist(playlistId, songData, currentInsertIndex);
+
+                            if (!response?._error && response?.status === 'OK') {
+                                addedCount++;
+                                const progress = Math.round((addedCount / songs.length) * 100);
+                                searchLoading.show(i18n.t('search.batchAddProgress', { done: addedCount, total: songs.length, pct: progress }));
+                            } else {
+                                console.warn('[批量添加] 添加失败:', songData.title, response?.error || response?.message || response);
+                            }
+                        } catch (err) {
+                            console.warn('[批量添加] 添加歌曲异常:', err);
+                        }
+
+                        // 避免请求过于频繁
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                    }
+
+                    searchLoading.hide();
+
+                    // 获取歌单名称
+                    let playlistName = i18n.t('nav.queue');
+                    const _activeDefault3 = window.app?.modules?.playlistManager?.getActiveDefaultId?.() || 'default';
+                    if (playlistId !== _activeDefault3 && window.app && window.app.modules && window.app.modules.playlistManager) {
+                        const playlist = window.app.modules.playlistManager.playlists.find(p => p.id === playlistId);
+                        if (playlist) {
+                            playlistName = playlist.name;
+                        }
+                    }
+
+                    if (addedCount === 0) {
+                        throw new Error(i18n.t('search.batchAddFailed'));
+                    }
+
+                    Toast.success(i18n.t('search.batchAddSuccess', { done: addedCount, total: songs.length, name: playlistName }));
+
+                    // 刷新播放列表显示
                     try {
-                        // 准备歌曲数据
-                        const songData = {
-                            url: song.url,
-                            title: song.title || song.name || i18n.t('track.unknown'),
-                            type: song.type || 'local',
-                            duration: song.duration || 0,
-                            thumbnail_url: song.thumbnail_url || ''
-                        };
+                        const playlistManager = window.app?.modules?.playlistManager;
+                        if (playlistManager) {
+                            await playlistManager.refreshAll();
+                        }
 
-                        const response = await this.addSongToPlaylist(playlistId, songData, currentInsertIndex);
-
-                        if (!response?._error && response?.status === 'OK') {
-                            addedCount++;
-                            const progress = Math.round((addedCount / songs.length) * 100);
-                            searchLoading.show(i18n.t('search.batchAddProgress', { done: addedCount, total: songs.length, pct: progress }));
-                        } else {
-                            console.warn('[批量添加] 添加失败:', songData.title, response?.error || response?.message || response);
+                        const container = document.getElementById('playListContainer');
+                        const currentStatus = window.app?.lastPlayStatus || { current_meta: null };
+                        if (container && playlistManager) {
+                            const { renderPlaylistUI } = await import('./playlist.js');
+                            renderPlaylistUI({
+                                container,
+                                onPlay: (s) => window.app?.playSong(s),
+                                currentMeta: currentStatus.current_meta
+                            });
+                            console.log('[批量添加] ✓ 播放列表已刷新');
                         }
                     } catch (err) {
-                        console.warn('[批量添加] 添加歌曲异常:', err);
+                        console.warn('[批量添加] 刷新播放列表失败:', err);
+                        // 回退方案
+                        if (this.refreshPlaylist) {
+                            await this.refreshPlaylist();
+                        } else {
+                            document.dispatchEvent(new CustomEvent('playlist:refresh'));
+                        }
                     }
-
-                    // 避免请求过于频繁
-                    await new Promise(resolve => setTimeout(resolve, 50));
+                } catch (error) {
+                    searchLoading.hide();
+                    console.error('[批量添加] 添加失败:', error);
+                    Toast.error(i18n.t('search.batchAddFailed') + ': ' + error.message);
                 }
-
-                searchLoading.hide();
-
-                // 获取歌单名称
-                let playlistName = i18n.t('nav.queue');
-                const _activeDefault3 = window.app?.modules?.playlistManager?.getActiveDefaultId?.() || 'default';
-                if (playlistId !== _activeDefault3 && window.app && window.app.modules && window.app.modules.playlistManager) {
-                    const playlist = window.app.modules.playlistManager.playlists.find(p => p.id === playlistId);
-                    if (playlist) {
-                        playlistName = playlist.name;
-                    }
-                }
-
-                if (addedCount === 0) {
-                    throw new Error(i18n.t('search.batchAddFailed'));
-                }
-
-                Toast.success(i18n.t('search.batchAddSuccess', { done: addedCount, total: songs.length, name: playlistName }));
-
-                // 刷新播放列表显示
-                try {
-                    const playlistManager = window.app?.modules?.playlistManager;
-                    if (playlistManager) {
-                        await playlistManager.refreshAll();
-                    }
-
-                    const container = document.getElementById('playListContainer');
-                    const currentStatus = window.app?.lastPlayStatus || { current_meta: null };
-                    if (container && playlistManager) {
-                        const { renderPlaylistUI } = await import('./playlist.js');
-                        renderPlaylistUI({
-                            container,
-                            onPlay: (s) => window.app?.playSong(s),
-                            currentMeta: currentStatus.current_meta
-                        });
-                        console.log('[批量添加] ✓ 播放列表已刷新');
-                    }
-                } catch (err) {
-                    console.warn('[批量添加] 刷新播放列表失败:', err);
-                    // 回退方案
-                    if (this.refreshPlaylist) {
-                        await this.refreshPlaylist();
-                    } else {
-                        document.dispatchEvent(new CustomEvent('playlist:refresh'));
-                    }
-                }
-            } catch (error) {
-                searchLoading.hide();
-                console.error('[批量添加] 添加失败:', error);
-                Toast.error(i18n.t('search.batchAddFailed') + ': ' + error.message);
-            }
+            });
         } catch (error) {
             console.error('[批量添加] 处理失败:', error);
             Toast.error(i18n.t('playlist.opFailed') + ': ' + error.message);

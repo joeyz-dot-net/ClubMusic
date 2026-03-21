@@ -602,8 +602,30 @@ function createToolbarActionButton({
         button.textContent = content;
     }
     button.title = title;
-    button.addEventListener('click', onClick);
+    bindGuardedActionClick(button, onClick);
     return button;
+}
+
+function bindGuardedActionClick(button, onClick) {
+    button.addEventListener('click', async (event) => {
+        if (button._actionInFlight) {
+            return;
+        }
+
+        button._actionInFlight = true;
+        button.disabled = true;
+        button.setAttribute('aria-busy', 'true');
+
+        try {
+            await onClick?.(event);
+        } finally {
+            button._actionInFlight = false;
+            if (button.isConnected) {
+                button.disabled = false;
+                button.removeAttribute('aria-busy');
+            }
+        }
+    });
 }
 
 // 播放列表顶部工具栏渲染（独立于列表容器，支持 sticky 定位）
@@ -821,7 +843,7 @@ function createEmptyActionButton({
         button.textContent = content;
     }
     button.title = title;
-    button.addEventListener('click', onClick);
+    bindGuardedActionClick(button, onClick);
     return button;
 }
 
@@ -1219,14 +1241,6 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
                 hoverShadow: '0 8px 24px rgba(67, 233, 123, 0.45)',
                 onClick: async (e) => {
                     e.stopPropagation();
-                    if (container._randomAddInFlight) {
-                        return;
-                    }
-
-                    container._randomAddInFlight = true;
-                    randomBtn.disabled = true;
-                    randomBtn.setAttribute('aria-busy', 'true');
-
                     try {
                         loading.show('🎲 正在随机添加10首歌...');
                         await playlistManager.loadAll();
@@ -1320,12 +1334,6 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
                     } catch (err) {
                         loading.hide();
                         Toast.error('随机添加失败: ' + (err.message || err));
-                    } finally {
-                        container._randomAddInFlight = false;
-                        if (randomBtn.isConnected) {
-                            randomBtn.disabled = false;
-                            randomBtn.removeAttribute('aria-busy');
-                        }
                     }
                 }
             });
