@@ -149,6 +149,20 @@ export class PlaylistManager {
         }
     }
 
+    async addSong(playlistId, song, insertIndex = null) {
+        const result = await api.addToPlaylist({
+            playlist_id: playlistId,
+            song,
+            insert_index: insertIndex
+        });
+
+        if (result?.duplicate) {
+            return result;
+        }
+
+        return this._assertStatusOk(result, '添加到歌单失败');
+    }
+
     // ✅ 新增：设置当前选择的歌单（并保存到 localStorage）
     setSelectedPlaylist(playlistId) {
         this.selectedPlaylistId = playlistId;
@@ -399,11 +413,11 @@ async function addAllSongsToDefault(playlist, selectedPlaylistId) {
                 }
                 
                 // 调用 API 添加到默认歌单
-                const result = await api.addToPlaylist({
-                    playlist_id: playlistManager.getActiveDefaultId(),
-                    song: song,
-                    insert_index: insertIndex + addedCount  // 按顺序插入
-                });
+                const result = await playlistManager.addSong(
+                    playlistManager.getActiveDefaultId(),
+                    song,
+                    insertIndex + addedCount  // 按顺序插入
+                );
                 
                 if (result.status === 'OK') {
                     console.log(`[批量添加] [${addedCount + 1}/${playlist.length}] ✓ ${song.title}`);
@@ -513,14 +527,14 @@ export async function playSongFromSelectedPlaylist(song, onPlay) {
                 }
                 
                 // 调用 API 添加到默认歌单
-                const result = await api.addToPlaylist({
-                    playlist_id: playlistManager.getActiveDefaultId(),
-                    song: song,
-                    insert_index: insertIndex
-                });
-                
-                if (result.status !== 'OK') {
-                    Toast.error('添加失败: ' + result.error);
+                const result = await playlistManager.addSong(
+                    playlistManager.getActiveDefaultId(),
+                    song,
+                    insertIndex
+                );
+
+                if (result?.duplicate) {
+                    console.log('[播放列表] 歌曲已在默认歌单，跳过添加');
                     return;
                 }
                 
@@ -1341,11 +1355,11 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
                         let failedCount = 0;
 
                         for (let i = 0; i < randomSongs.length; i++) {
-                            const response = await api.addToPlaylist({
-                                playlist_id: playlistManager.getActiveDefaultId(),
-                                song: randomSongs[i],
-                                insert_index: i
-                            });
+                            const response = await playlistManager.addSong(
+                                playlistManager.getActiveDefaultId(),
+                                randomSongs[i],
+                                i
+                            );
 
                             if (!response?._error && response?.status === 'OK') {
                                 addedSongs.push(randomSongs[i]);
@@ -1993,6 +2007,7 @@ function installModalKeyHandler(modal, onClose) {
 
 function showManagedModal(modal, { display = 'block', preferredSelector = null } = {}) {
     modal._previousActiveElement = document.activeElement;
+    modal.setAttribute('aria-hidden', 'false');
     modal.style.display = display;
     setTimeout(() => {
         modal.classList.add('modal-visible');
@@ -2009,6 +2024,7 @@ async function closeManagedModal(modal, { afterClose = null } = {}) {
 
     await new Promise((resolve) => setTimeout(resolve, 300));
     modal.style.display = 'none';
+    modal.setAttribute('aria-hidden', 'true');
 
     if (typeof afterClose === 'function') {
         await afterClose();
@@ -2046,14 +2062,10 @@ async function addSongToChosenPlaylist({ playlistId, song, playlistItem, playlis
             insertIndex = 1;
         }
 
-        const addResult = await api.addToPlaylist({
-            playlist_id: playlistId,
-            song,
-            insert_index: insertIndex
-        });
+        const addResult = await playlistManager.addSong(playlistId, song, insertIndex);
 
-        if (addResult.status !== 'OK') {
-            throw new Error(addResult.error || addResult.message || '添加失败');
+        if (addResult?.duplicate) {
+            throw new Error('该歌曲已存在于当前播放序列');
         }
 
         if (checkMark) {
@@ -2280,6 +2292,8 @@ function showHistoryActionMenu(song, historyModal, removeFromHistoryFn, rerender
 // 立即播放：将歌曲插入队列顶部并播放
 async function handleHistoryPlayNow(song) {
     try {
+        let wasAlreadyQueued = false;
+
         // 播放准备锁：防止等待期间覆盖操作
         if (!playLock.acquire(song.title)) {
             return;
@@ -2288,23 +2302,21 @@ async function handleHistoryPlayNow(song) {
         const currentPlaylistId = playlistManager.getSelectedPlaylistId() || playlistManager.getActiveDefaultId();
 
         // 1. 将歌曲插入到队列顶部（index=0）
-        const addResult = await api.addToPlaylist({
-            playlist_id: currentPlaylistId,
-            song: {
-                url: song.url,
-                title: song.title,
-                type: song.type || 'local',
-                thumbnail_url: song.thumbnail_url || ''
-            },
-            insert_index: 0
-        });
+        const addResult = await playlistManager.addSong(currentPlaylistId, {
+            url: song.url,
+            title: song.title,
+            type: song.type || 'local',
+            thumbnail_url: song.thumbnail_url || ''
+        }, 0);
 
-        if (addResult?._error || addResult?.status !== 'OK') {
-            throw new Error(addResult?.error || addResult?.message || '添加到播放队列失败');
+        if (addResult?.duplicate) {
+            wasAlreadyQueued = true;
         }
 
         // 2. 刷新播放列表数据
-        await playlistManager.refreshAll();
+        if (!wasAlreadyQueued) {
+            await playlistManager.refreshAll();
+        }
 
         // 3. 播放歌曲
         await player.play(song.url, song.title, song.type || 'local', 0);
@@ -2335,14 +2347,11 @@ async function handleHistoryAddToNext(song) {
     try {
         const currentPlaylistId = playlistManager.getSelectedPlaylistId() || playlistManager.getActiveDefaultId();
 
-        const result = await api.addToPlaylist({
-            playlist_id: currentPlaylistId,
-            song: {
-                url: song.url,
-                title: song.title,
-                type: song.type || 'local',
-                thumbnail_url: song.thumbnail_url || ''
-            }
+        const result = await playlistManager.addSong(currentPlaylistId, {
+            url: song.url,
+            title: song.title,
+            type: song.type || 'local',
+            thumbnail_url: song.thumbnail_url || ''
         });
 
         if (result.status === 'OK') {

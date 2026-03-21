@@ -7,6 +7,7 @@ import { Toast } from './ui.js';
 import { themeManager } from './themeManager.js';
 import { i18n } from './i18n.js';
 import { api } from './api.js';
+import { focusFirstFocusable, restoreFocus, trapFocusInContainer } from './utils.js';
 
 export const settingsManager = {
     // 默认设置
@@ -759,8 +760,31 @@ export const settingsManager = {
     openPanel() {
         const panel = document.getElementById('settingsPanel');
         if (panel) {
+            panel._previousActiveElement = document.activeElement;
+            panel.setAttribute('aria-hidden', 'false');
             panel.style.display = 'block';
             document.body.style.overflow = 'hidden';
+
+            if (!panel._keydownHandler) {
+                panel._keydownHandler = (event) => {
+                    if (panel.style.display === 'none') {
+                        return;
+                    }
+
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        this.closePanel();
+                        return;
+                    }
+
+                    trapFocusInContainer(event, panel);
+                };
+            }
+
+            document.addEventListener('keydown', panel._keydownHandler);
+            setTimeout(() => {
+                focusFirstFocusable(panel, '#settingsCloseBtn');
+            }, 10);
             console.log('[设置] 打开设置面板');
         }
     },
@@ -771,8 +795,13 @@ export const settingsManager = {
     closePanel() {
         const panel = document.getElementById('settingsPanel');
         if (panel) {
+            if (panel._keydownHandler) {
+                document.removeEventListener('keydown', panel._keydownHandler);
+            }
             panel.style.display = 'none';
+            panel.setAttribute('aria-hidden', 'true');
             document.body.style.overflow = '';
+            restoreFocus(panel._previousActiveElement);
             console.log('[设置] 关闭设置面板');
         }
     },

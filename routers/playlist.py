@@ -33,6 +33,7 @@ from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse, HTMLResponse
 
 from models import MusicPlayer, Playlists
+from models.playlists import sanitize_playlist_name
 from routers.dependencies import get_player_for_request, get_playlists, get_player_lock
 from routers.state import (
     DEFAULT_PLAYLIST_ID, CURRENT_PLAYLIST_ID,
@@ -128,7 +129,7 @@ async def create_playlist_restful(request: Request, playlists: Playlists = Depen
     """创建新歌单 (RESTful API)"""
     try:
         data = await request.json()
-        name = data.get("name", "新歌单").strip()
+        name = sanitize_playlist_name(data.get("name", "新歌单"), fallback="")
 
         if not name:
             return error_response("歌单名称不能为空", 400)
@@ -148,7 +149,10 @@ async def create_playlist(request: Request, playlists: Playlists = Depends(get_p
     """创建新歌单"""
     try:
         data = await request.json()
-        name = data.get("name", "新歌单").strip()
+        name = sanitize_playlist_name(data.get("name", "新歌单"), fallback="")
+
+        if not name:
+            return error_response("歌单名称不能为空", 400)
 
         playlist = playlists.create_playlist(name)
         return {
@@ -538,7 +542,7 @@ async def update_playlist(playlist_id: str, data: dict, playlists: Playlists = D
                 status_code=400
             )
 
-        new_name = data.get('name', '').strip()
+        new_name = sanitize_playlist_name(data.get('name', ''), fallback='')
         if not new_name:
             return JSONResponse(
                 {"status": "ERROR", "error": "歌单名称不能为空"},

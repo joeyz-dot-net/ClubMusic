@@ -1,4 +1,5 @@
 import { api } from './api.js';
+import { playlistManager } from './playlist.js';
 import { Toast } from './ui.js';
 import { i18n } from './i18n.js';
 
@@ -462,13 +463,9 @@ export const localFiles = {
                 insertIndex = 0;
             }
 
-            const response = await api.addToPlaylist({
-                playlist_id: playlistId,
-                song: songData,
-                insert_index: insertIndex
-            });
+            const response = await playlistManager.addSong(playlistId, songData, insertIndex);
 
-            if (!response?._error && response?.status === 'OK') {
+            if (response?.status === 'OK') {
                 // 获取歌单名称以显示在toast中
                 let playlistName = i18n.t('nav.queue');
                 const _localActiveDefault = window.app?.modules?.playlistManager?.getActiveDefaultId?.() || 'default';
@@ -486,17 +483,12 @@ export const localFiles = {
                         this.onSongAdded();
                     }, 500);
                 }
-            } else {
-                // 重复歌曲使用警告提示而不是错误
-                if (response?.duplicate) {
-                    Toast.warning(`${fileName} ${i18n.t('search.alreadyInList')}`);
-                } else {
-                    Toast.error(i18n.t('search.addFailed') + ': ' + (response?.error || response?.message || i18n.t('search.loadMoreFailed')));
-                }
+            } else if (response?.duplicate) {
+                Toast.warning(`${fileName} ${i18n.t('search.alreadyInList')}`);
             }
         } catch (error) {
             console.error('添加文件失败:', error);
-            Toast.error(i18n.t('search.addFailed'));
+            Toast.error(i18n.t('search.addFailed') + ': ' + error.message);
         } finally {
             // 延迟移除防抖标记，防止快速连续点击
             setTimeout(() => {

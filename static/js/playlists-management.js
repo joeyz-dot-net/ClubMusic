@@ -433,6 +433,7 @@ export class PlaylistsManagement {
     show() {
         if (this.modal) {
             this.modal._previousActiveElement = document.activeElement;
+            this.modal.setAttribute('aria-hidden', 'false');
             this.modal.style.display = 'flex';
 
             if (!this._handleModalKeydown) {
@@ -473,6 +474,7 @@ export class PlaylistsManagement {
             // 缩短延迟，确保回调执行后模态框已隐藏
             setTimeout(() => {
                 this.modal.style.display = 'none';
+                this.modal.setAttribute('aria-hidden', 'true');
                 restoreFocus(this.modal._previousActiveElement);
                 if (reason === 'dismiss' && typeof this.onDismissCallback === 'function') {
                     this.onDismissCallback(reason);

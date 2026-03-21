@@ -3,6 +3,7 @@ import { api } from './api.js';
 import { Toast, formatTime, searchLoading } from './ui.js';
 import { buildTrackItemElement } from './templates.js';
 import { localFiles, getNodeByPath, getDirCoverUrl, countFiles } from './local.js';
+import { playlistManager } from './playlist.js';
 import { i18n } from './i18n.js';
 import { escapeHTML, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js';
 import { playLock } from './playLock.js';
@@ -113,7 +114,11 @@ function createSearchActionMenuHeader(title) {
 
 function createPlayNowConfirmView() {
     const fragment = document.createDocumentFragment();
-    fragment.appendChild(createSearchActionMenuHeader(i18n.t('search.confirmPlayNow')));
+
+    const content = document.createElement('div');
+    content.className = 'search-action-menu-content';
+
+    content.appendChild(createSearchActionMenuHeader(i18n.t('search.confirmPlayNow')));
 
     const body = document.createElement('div');
     body.className = 'search-action-menu-body';
@@ -141,7 +146,8 @@ function createPlayNowConfirmView() {
     buttonRow.appendChild(confirmButton);
     body.appendChild(message);
     body.appendChild(buttonRow);
-    fragment.appendChild(body);
+    content.appendChild(body);
+    fragment.appendChild(content);
 
     return fragment;
 }
@@ -167,7 +173,11 @@ function createSearchActionMenuButton({ action, icon, label }) {
 
 function createSearchActionMenuContent({ title, addToPlaylistLabel, showAddToPlaylist, addAllLabel, playlistIcon }) {
     const fragment = document.createDocumentFragment();
-    fragment.appendChild(createSearchActionMenuHeader(title));
+
+    const content = document.createElement('div');
+    content.className = 'search-action-menu-content';
+
+    content.appendChild(createSearchActionMenuHeader(title));
 
     const body = document.createElement('div');
     body.className = 'search-action-menu-body';
@@ -196,7 +206,8 @@ function createSearchActionMenuContent({ title, addToPlaylistLabel, showAddToPla
         label: addAllLabel
     }));
 
-    fragment.appendChild(body);
+    content.appendChild(body);
+    fragment.appendChild(content);
     return fragment;
 }
 
@@ -333,6 +344,19 @@ function createSearchResultsPanel(panelName, contentNode, isActive) {
         panel.appendChild(contentNode);
     }
     return panel;
+}
+
+function resetScrollPosition(container) {
+    if (!container) {
+        return;
+    }
+
+    if (typeof container.scrollTo === 'function') {
+        container.scrollTo({ top: 0, behavior: 'auto' });
+        return;
+    }
+
+    container.scrollTop = 0;
 }
 
 function createYoutubeLoadMoreControls() {
@@ -508,11 +532,7 @@ export class SearchManager {
     }
 
     async addSongToPlaylist(playlistId, song, insertIndex) {
-        return api.addToPlaylist({
-            playlist_id: playlistId,
-            song,
-            insert_index: insertIndex
-        });
+        return playlistManager.addSong(playlistId, song, insertIndex);
     }
 
     getSearchResultsForBatchAction(tabName) {
@@ -532,6 +552,8 @@ export class SearchManager {
         container.querySelectorAll('.search-results-panel').forEach((panel) => {
             panel.classList.toggle('active', panel.dataset.panel === tabName);
         });
+
+        resetScrollPosition(container);
     }
 
     // 加载YouTube搜索配置
@@ -681,6 +703,7 @@ export class SearchManager {
                 
                 // 移除搜索栏目的active状态和样式
                 searchModal.classList.remove('modal-visible');
+                searchModal.setAttribute('aria-hidden', 'true');
                 setTimeout(() => {
                     searchModal.style.display = 'none';
                     restoreFocus(previousActiveElement);
@@ -808,6 +831,7 @@ export class SearchManager {
         if (history.length === 0) {
             searchModalHistory.style.display = 'none';
             searchModalBody.replaceChildren(createSearchEmptyState(i18n.t('search.inputPrompt')));
+            resetScrollPosition(searchModalBody);
             return;
         }
         
@@ -821,6 +845,7 @@ export class SearchManager {
         });
 
         searchModalHistoryList.replaceChildren(fragment);
+        resetScrollPosition(searchModalBody);
     }
 
     // 执行搜索
@@ -877,6 +902,7 @@ export class SearchManager {
         } catch (error) {
             console.error('搜索失败:', error);
             searchModalBody.replaceChildren(createSearchErrorState(i18n.t('search.failed', { error: error.message })));
+            resetScrollPosition(searchModalBody);
         } finally {
             // 隐藏全屏加载动画
             searchLoading.hide();
@@ -959,6 +985,7 @@ export class SearchManager {
         panels.appendChild(localPanel);
         panels.appendChild(youtubePanel);
         searchModalBody.replaceChildren(tabs, panels);
+        resetScrollPosition(searchModalBody);
 
         updateSearchTabCounts({
             localCount: this.totalSearchResults.local.length,
@@ -1059,22 +1086,17 @@ export class SearchManager {
                         const activeDefault = playlistManager?.getActiveDefaultId?.() || 'default';
                         if (selectedId !== activeDefault) {
                             try {
-                                const result = await api.addToPlaylist({
-                                    playlist_id: selectedId,
-                                    song: songData
-                                });
-                                if (result.status === 'OK') {
+                                const result = await this.addSongToPlaylist(selectedId, songData, null);
+                                if (result?.status === 'OK') {
                                     const name = playlistManager.getCurrentName() || selectedId;
                                     Toast.success(i18n.t('search.addSuccess', { name, title: songData.title }));
                                     await playlistManager.refreshAll();
                                 } else if (result.duplicate) {
                                     Toast.warning(`${songData.title} ${i18n.t('search.alreadyInList')}`);
-                                } else {
-                                    Toast.error(i18n.t('search.addFailed'));
                                 }
                             } catch (err) {
                                 console.error('[搜索] 添加到歌单失败:', err);
-                                Toast.error(i18n.t('search.addFailed'));
+                                Toast.error(i18n.t('search.addFailed') + ': ' + err.message);
                             }
                         } else {
                             const { showSelectPlaylistModal } = await import('./playlist.js');
@@ -1103,6 +1125,7 @@ export class SearchManager {
         const originalContent = snapshotElementChildren(btn);
         try {
             const playlistId = this.getCurrentPlaylistId ? this.getCurrentPlaylistId() : this.currentPlaylistId;
+            let wasAlreadyQueued = false;
 
             if (isDirectory) {
                 Toast.warning(i18n.t('search.dirNotSupported'));
@@ -1121,13 +1144,17 @@ export class SearchManager {
             // 1. 将歌曲插入到队列顶部（index=0，当前播放的前面）
             const addResponse = await this.addSongToPlaylist(playlistId, songData, 0);
 
-            if (addResponse?._error || addResponse?.status !== 'OK') {
+            if (addResponse?.duplicate) {
+                wasAlreadyQueued = true;
+            }
+
+            if (!wasAlreadyQueued && addResponse?.status !== 'OK') {
                 throw new Error(addResponse?.error || addResponse?.message || i18n.t('search.addSongFailed'));
             }
 
             // 2. 刷新播放列表数据
             const playlistManager = window.app?.modules?.playlistManager;
-            if (playlistManager) {
+            if (playlistManager && !wasAlreadyQueued) {
                 await playlistManager.refreshAll();
             }
 
@@ -1738,6 +1765,7 @@ export class SearchManager {
         dirView.appendChild(createSearchDirContentElement(node));
 
         searchModalBody.replaceChildren(dirView);
+        resetScrollPosition(searchModalBody);
     }
 
     // 点击面包屑回退

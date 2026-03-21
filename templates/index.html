@@ -58,10 +58,10 @@
 			<div id="playListContainer" class="play-list-container"></div>
 		</div>
 		<!-- YouTube搜索结果模态框 -->
-		<div id="youtubeSearchModal" class="youtube-search-modal" style="display:none;" role="dialog" aria-modal="true" data-i18n-aria="search.title">
+		<div id="youtubeSearchModal" class="youtube-search-modal" style="display:none;" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="youtubeSearchModalTitle" data-i18n-aria="search.title">
 			<div class="youtube-search-modal-content">
 				<div class="youtube-search-modal-header">
-					<h3 data-i18n="search.title">搜索结果</h3>
+					<h3 id="youtubeSearchModalTitle" data-i18n="search.title">搜索结果</h3>
 					<button class="youtube-search-modal-close" type="button" data-icon="✕" data-i18n-aria="modal.close">✕</button>
 				</div>
 				<div class="youtube-search-modal-body">
@@ -263,10 +263,10 @@
 	</nav>
 
 	<!-- History modal -->
-	<div id="historyModal" class="history-modal" style="display:none;" role="dialog" aria-modal="true" data-i18n-aria="search.history">
+	<div id="historyModal" class="history-modal" style="display:none;" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="historyModalTitle" data-i18n-aria="search.history">
 		<div class="history-modal-content">
 			<div class="history-modal-header">
-				<h3 data-i18n="search.history">播放历史</h3>
+				<h3 id="historyModalTitle" data-i18n="search.history">播放历史</h3>
 				<button class="history-modal-close" type="button" data-icon="✕" data-i18n-aria="modal.close">✕</button>
 			</div>
 			<div class="history-modal-list" id="historyList"></div>
@@ -276,10 +276,11 @@
 
 
 	<!-- Search Modal -->
-	<div id="searchModal" class="search-modal" style="display:none;" role="dialog" aria-modal="true" data-i18n-aria="nav.search">
+	<div id="searchModal" class="search-modal" style="display:none;" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="searchModalTitle" data-i18n-aria="nav.search">
 		<div class="search-modal-overlay"></div>
 		<div class="search-modal-content">
 			<div class="search-modal-header">
+				<h2 id="searchModalTitle" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;" data-i18n="nav.search">搜索</h2>
 				
 				<input type="checkbox" id="karaokeModeToggle" class="toggle-checkbox" />
 				<label for="karaokeModeToggle" class="toggle-label">
@@ -315,10 +316,10 @@
 
 	
 	<!-- 歌单选择模态框 -->
-	<div id="playlistsModal" class="playlists-modal" style="display:none;" role="dialog" aria-modal="true" data-i18n-aria="playlists.select">
+	<div id="playlistsModal" class="playlists-modal" style="display:none;" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="playlistsModalTitle" data-i18n-aria="playlists.select">
 		<div class="playlists-modal-content">
 			<div class="playlists-modal-header">
-				<h2 data-i18n="playlists.select">选择歌单</h2>
+				<h2 id="playlistsModalTitle" data-i18n="playlists.select">选择歌单</h2>
 				<button class="playlists-add-btn" id="playlistsAddBtn" type="button" data-i18n-title="playlists.create" data-i18n-aria="playlists.create">
 					<svg width="24" height="24" viewBox="0 0 24 24">
 						<path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor"/>
@@ -338,10 +339,10 @@
 	</div>
 
 	<!-- 🆕 歌单选择模态框 - 用于添加歌曲到指定歌单 -->
-	<div id="selectPlaylistModal" class="select-playlist-modal" style="display:none;" role="dialog" aria-modal="true" data-i18n-aria="playlists.select">
+	<div id="selectPlaylistModal" class="select-playlist-modal" style="display:none;" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="selectPlaylistModalTitle" data-i18n-aria="playlists.select">
 		<div class="select-playlist-modal-content">
 			<div class="select-playlist-modal-header">
-				<h2 data-i18n="playlists.select">选择歌单</h2>
+				<h2 id="selectPlaylistModalTitle" data-i18n="playlists.select">选择歌单</h2>
 				<button class="select-playlist-close-btn" id="selectPlaylistCloseBtn" type="button" data-i18n-aria="modal.close">
 					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<line x1="18" y1="6" x2="6" y2="18"></line>
@@ -359,12 +360,12 @@
 	</div>
 
 	<!-- Debug Modal -->
-	<div id="debugModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0a0a0a; display: none; z-index: 9999;">
+	<div id="debugModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0a0a0a; display: none; z-index: 9999;" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="debugModalTitle">
 		<div style="background: #1e1f24; width: 100%; height: 100%; display: flex; flex-direction: column; overflow: hidden;">
 			<!-- Header -->
 			<div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #333; flex-shrink: 0; background: #151618;">
-				<h3 style="margin: 0; color: #fff; font-size: 18px;">🐛 调试面板</h3>
-				<button id="debugModalClose" style="background: none; border: none; color: #aaa; font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; transition: color 0.2s;">✕</button>
+				<h3 id="debugModalTitle" style="margin: 0; color: #fff; font-size: 18px;">🐛 调试面板</h3>
+				<button id="debugModalClose" style="background: none; border: none; color: #aaa; font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; transition: color 0.2s;" type="button" data-i18n-aria="modal.close">✕</button>
 			</div>
 			
 			<!-- Content -->
@@ -420,7 +421,7 @@
 	</template>
 
 	<!-- 设置面板 -->
-	<div id="settingsPanel" class="settings-panel" style="display: none;">
+	<div id="settingsPanel" class="settings-panel" style="display: none;" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="settingsTitle">
 		<!-- 设置面板背景遮罩 -->
 		<div id="settingsMask" class="settings-mask"></div>
 		
@@ -428,8 +429,8 @@
 		<div class="settings-container">
 			<!-- 顶部标题栏 -->
 			<div class="settings-header">
-				<h2 class="settings-title">⚙️ 设置</h2>
-				<button id="settingsCloseBtn" class="settings-close-btn" title="关闭">✕</button>
+				<h2 id="settingsTitle" class="settings-title">⚙️ 设置</h2>
+				<button id="settingsCloseBtn" class="settings-close-btn" title="关闭" type="button">✕</button>
 			</div>
 			
 			<!-- 设置内容 -->

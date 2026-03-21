@@ -10,7 +10,7 @@ import { searchManager } from './search.js';
 import { themeManager } from './themeManager.js';
 import { debug } from './debug.js';
 import { Toast, formatTime } from './ui.js';
-import { focusFirstFocusable, isMobile, isIPad, ThumbnailManager, trapFocusInContainer } from './utils.js';
+import { focusFirstFocusable, isMobile, isIPad, restoreFocus, ThumbnailManager, trapFocusInContainer } from './utils.js';
 import { localFiles } from './local.js';
 import { settingsManager } from './settingsManager.js';
 import { navManager } from './navManager.js';
@@ -1716,6 +1716,7 @@ class MusicPlayerApp {
                 if (modal) {
                     modal.classList.remove('modal-visible');
                     modal.style.display = 'none';
+                    modal.setAttribute('aria-hidden', 'true');
                 }
             });
 
@@ -1723,6 +1724,7 @@ class MusicPlayerApp {
             if (playlistsModal) {
                 playlistsModal.classList.remove('modal-visible');
                 playlistsModal.style.display = 'none';
+                playlistsModal.setAttribute('aria-hidden', 'true');
             }
 
             // 隐藏历史模态框
@@ -1730,12 +1732,14 @@ class MusicPlayerApp {
             if (historyModal) {
                 historyModal.classList.remove('modal-visible');
                 historyModal.style.display = 'none';
+                historyModal.setAttribute('aria-hidden', 'true');
             }
 
             // 关闭设置面板（直接隐藏DOM，不触发closePanel的恢复逻辑）
             const settingsPanel = document.getElementById('settingsPanel');
             if (settingsPanel && settingsPanel.style.display !== 'none') {
                 settingsPanel.style.display = 'none';
+                settingsPanel.setAttribute('aria-hidden', 'true');
                 document.body.style.overflow = '';
             }
 
@@ -1790,6 +1794,7 @@ class MusicPlayerApp {
                 const modal = modals.search;
                 if (modal) {
                     modal._previousActiveElement = document.activeElement;
+                    modal.setAttribute('aria-hidden', 'false');
                     modal.style.display = 'block';
                     currentModal = modal;
                     setTimeout(() => {
@@ -1803,6 +1808,7 @@ class MusicPlayerApp {
                 const modal = modals.debug;
                 if (modal) {
                     modal._previousActiveElement = document.activeElement;
+                    modal.setAttribute('aria-hidden', 'false');
                     modal.style.display = 'flex';
                     modal.classList.add('modal-visible');
                     currentModal = modal;
@@ -2071,18 +2077,22 @@ class MusicPlayerApp {
         const debugModal = modals.debug;
         if (debugModal) {
             const closeDebugModal = () => {
+                const previousActiveElement = debugModal._previousActiveElement;
                 if (debugModal._keydownHandler) {
                     document.removeEventListener('keydown', debugModal._keydownHandler);
                 }
 
                 debugModal.classList.remove('modal-visible');
+                debugModal.setAttribute('aria-hidden', 'true');
 
                 if (Array.isArray(this.navigationStack) && this.navigationStack[this.navigationStack.length - 1] === 'debug') {
                     navigateBack();
+                    restoreFocus(previousActiveElement);
                     return;
                 }
 
                 debugModal.style.display = 'none';
+                restoreFocus(previousActiveElement);
                 updateModalZIndex();
             };
 

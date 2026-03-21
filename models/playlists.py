@@ -17,6 +17,21 @@ from models.logger import logger
 
 DEFAULT_PLAYLIST_ID = "default"
 ROOM_PLAYLIST_PREFIX = "room_"
+DEFAULT_PLAYLIST_NAME = "未命名歌单"
+
+
+def sanitize_playlist_name(name: str, fallback: Optional[str] = DEFAULT_PLAYLIST_NAME) -> str:
+    """标准化歌单名称，去除控制字符并折叠多余空白。"""
+    if name is None:
+        normalized = ""
+    else:
+        normalized = ''.join(ch if ch.isprintable() else ' ' for ch in str(name))
+        normalized = ' '.join(normalized.split())
+
+    if normalized:
+        return normalized
+
+    return fallback if fallback is not None else ""
 
 
 class Playlist:
@@ -42,7 +57,7 @@ class Playlist:
             current_playing_index: 当前播放歌曲的索引（-1表示未开始播放）
         """
         self.id = playlist_id or str(int(time.time() * 1000))
-        self.name = name
+        self.name = sanitize_playlist_name(name)
         self.songs = songs or []
         self.created_at = created_at or time.time()
         self.updated_at = updated_at or time.time()
@@ -244,7 +259,7 @@ class Playlist:
         """
         return cls(
             playlist_id=data.get("id"),
-            name=data.get("name", "未命名歌单"),
+            name=sanitize_playlist_name(data.get("name", DEFAULT_PLAYLIST_NAME)),
             songs=data.get("songs", []),
             created_at=data.get("created_at"),
             updated_at=data.get("updated_at"),
@@ -376,7 +391,7 @@ class Playlists:
         返回:
             新创建的 Playlist 对象
         """
-        playlist = Playlist(name=name)
+        playlist = Playlist(name=sanitize_playlist_name(name))
         self._playlists[playlist.id] = playlist
         self._order.append(playlist.id)
         self.save()
@@ -424,7 +439,7 @@ class Playlists:
         """
         playlist = self._playlists.get(playlist_id)
         if playlist:
-            playlist.name = new_name
+            playlist.name = sanitize_playlist_name(new_name, playlist.name)
             playlist.updated_at = time.time()
             self.save()
             logger.debug(f"重命名歌单: {playlist_id} -> {new_name}")
