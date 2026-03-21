@@ -211,11 +211,14 @@ export class PlaylistManager {
 
     // 调整当前播放列表顺序
     async reorder(fromIndex, toIndex) {
-        const result = await api.reorderPlaylist(fromIndex, toIndex);
-        if (result.status === 'OK') {
-            // 后端已更新，重新加载以保持一致
-            await this.loadCurrent();
-        }
+        const result = this._assertStatusOk(
+            await api.reorderPlaylist(this.selectedPlaylistId, fromIndex, toIndex),
+            '调整歌单顺序失败'
+        );
+
+        // 后端已更新，重新加载以保持一致
+        await this.loadCurrent();
+
         return result;
     }
 

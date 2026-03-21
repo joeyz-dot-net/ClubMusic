@@ -557,8 +557,11 @@ export const settingsManager = {
         }
         
         // 更新外观设置章节
-        const appearanceSection = document.querySelectorAll('.section-title')[0];
+        const appearanceSection = document.getElementById('appearanceSectionTitle');
         if (appearanceSection) appearanceSection.textContent = i18n.t('settings.appearance', language);
+
+        const themeLabel = document.getElementById('themeLabel');
+        if (themeLabel) themeLabel.textContent = i18n.t('settings.theme', language);
 
         this.updateSettingsButtonTexts('themeSetting', {
             auto: {
@@ -576,7 +579,7 @@ export const settingsManager = {
         });
         
         // 更新语言标签
-        const langLabel = document.querySelectorAll('.settings-label')[1];
+        const langLabel = document.getElementById('languageLabel');
         if (langLabel) langLabel.textContent = i18n.t('settings.language', language);
 
         this.updateSettingsButtonTexts('languageSetting', {
@@ -597,6 +600,37 @@ export const settingsManager = {
                 title: i18n.t('settings.language.en', language)
             }
         });
+
+        const playbackSection = document.getElementById('playbackSectionTitle');
+        if (playbackSection) playbackSection.textContent = i18n.t('settings.playback', language);
+
+        const youtubeControlsLabel = document.getElementById('youtubeControlsLabel');
+        if (youtubeControlsLabel) youtubeControlsLabel.textContent = i18n.t('settings.youtubeControls', language);
+
+        const expandButtonLabel = document.getElementById('expandButtonLabel');
+        if (expandButtonLabel) expandButtonLabel.textContent = i18n.t('settings.expandButton', language);
+
+        const toggleOnIds = ['youtubeControlsToggleOn', 'expandButtonToggleOn'];
+        toggleOnIds.forEach((id) => {
+            const element = document.getElementById(id);
+            if (element) element.textContent = i18n.t('settings.toggleOn', language);
+        });
+
+        const toggleOffIds = ['youtubeControlsToggleOff', 'expandButtonToggleOff'];
+        toggleOffIds.forEach((id) => {
+            const element = document.getElementById(id);
+            if (element) element.textContent = i18n.t('settings.toggleOff', language);
+        });
+
+        const youtubeToggle = document.getElementById('youtubeControlsToggle');
+        if (youtubeToggle) {
+            youtubeToggle.setAttribute('aria-label', i18n.t('settings.youtubeControls', language));
+        }
+
+        const expandToggle = document.getElementById('expandButtonToggle');
+        if (expandToggle) {
+            expandToggle.setAttribute('aria-label', i18n.t('settings.expandButton', language));
+        }
     },
     
     /**

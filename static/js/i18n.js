@@ -10,9 +10,15 @@ const translations = {
 
         // 外观设置
         'settings.appearance': '🎨 外观设置',
+        'settings.theme': '主题',
         'settings.theme.dark': '深色主题',
         'settings.theme.light': '浅色主题',
         'settings.theme.auto': '自动',
+        'settings.playback': '🎛️ 播放控制',
+        'settings.youtubeControls': 'YouTube 控件',
+        'settings.expandButton': '全屏放大按钮',
+        'settings.toggleOn': '开启',
+        'settings.toggleOff': '关闭',
         'settings.language': '语言',
         'settings.language.auto': '自动选择',
         'settings.language.zh': '中文 (Chinese)',
@@ -234,9 +240,15 @@ const translations = {
 
         // Appearance settings
         'settings.appearance': '🎨 Appearance',
+        'settings.theme': 'Theme',
         'settings.theme.dark': 'Dark Theme',
         'settings.theme.light': 'Light Theme',
         'settings.theme.auto': 'Auto',
+        'settings.playback': '🎛️ Playback Controls',
+        'settings.youtubeControls': 'YouTube Controls',
+        'settings.expandButton': 'Fullscreen Expand Button',
+        'settings.toggleOn': 'On',
+        'settings.toggleOff': 'Off',
         'settings.language': 'Language',
         'settings.language.auto': 'Auto Select',
         'settings.language.zh': '中文 (Chinese)',
@@ -458,9 +470,15 @@ const translations = {
 
         // 外觀設定
         'settings.appearance': '🎨 外觀設定',
+        'settings.theme': '主題',
         'settings.theme.dark': '深色主題',
         'settings.theme.light': '淺色主題',
         'settings.theme.auto': '自動',
+        'settings.playback': '🎛️ 播放控制',
+        'settings.youtubeControls': 'YouTube 控制項',
+        'settings.expandButton': '全螢幕放大按鈕',
+        'settings.toggleOn': '開啟',
+        'settings.toggleOff': '關閉',
         'settings.language': '語言',
         'settings.language.auto': '自動選擇',
         'settings.language.zh': '中文 (简体)',

@@ -412,7 +412,7 @@
 	<!-- YouTube IFrame Player API -->
 	<script src="https://www.youtube.com/iframe_api"></script>
 
-	<script type="module" src="/static/js/main.js?v=18"></script>
+	<script type="module" src="/static/js/main.js?v=19"></script>
 
 	<!-- 调试面板模块 HTML 模板（由 debug-panel.module.js 动态创建） -->
 	<template id="debugPanelTemplate">
@@ -436,9 +436,11 @@
 			<div class="settings-content">
 				<!-- 主题设置 -->
 				<div class="settings-section">
+					<h3 class="section-title" id="appearanceSectionTitle">🎨 外观设置</h3>
 			
 					
 				<div class="settings-item settings-item-vertical">
+					<div class="settings-label" id="themeLabel">主题</div>
 				
 					<div class="settings-button-group" id="themeSetting">
 						<button class="settings-btn" data-value="auto" title="自动 (根据时间)">
@@ -457,6 +459,7 @@
 					</div>
 					
 				<div class="settings-item settings-item-vertical">
+					<div class="settings-label" id="languageLabel">语言</div>
 					<div class="settings-button-group" id="languageSetting">
 						<button class="settings-btn" data-value="auto" title="自动选择">
 							<span class="btn-icon">🌐</span>
@@ -477,6 +480,38 @@
 					</div>
 					</div>
 				</div>
+
+				<div class="settings-section">
+						<h3 class="section-title" id="playbackSectionTitle">🎛️ 播放控制</h3>
+
+						<div class="settings-item">
+							<div class="settings-label" id="youtubeControlsLabel">YouTube 控件</div>
+							<div class="settings-toggle">
+								<input id="youtubeControlsToggle" class="toggle-checkbox" type="checkbox" />
+								<label class="toggle-label" for="youtubeControlsToggle">
+									<span class="toggle-switch" aria-hidden="true"></span>
+									<span class="toggle-text">
+										<span class="toggle-on" id="youtubeControlsToggleOn">开启</span>
+										<span class="toggle-off" id="youtubeControlsToggleOff">关闭</span>
+									</span>
+								</label>
+							</div>
+						</div>
+
+						<div class="settings-item">
+							<div class="settings-label" id="expandButtonLabel">全屏放大按钮</div>
+							<div class="settings-toggle">
+								<input id="expandButtonToggle" class="toggle-checkbox" type="checkbox" />
+								<label class="toggle-label" for="expandButtonToggle">
+									<span class="toggle-switch" aria-hidden="true"></span>
+									<span class="toggle-text">
+										<span class="toggle-on" id="expandButtonToggleOn">开启</span>
+										<span class="toggle-off" id="expandButtonToggleOff">关闭</span>
+									</span>
+								</label>
+							</div>
+						</div>
+					</div>
 
     <!-- 🐛 调试面板入口按钮 -->
             <button class="playlists-debug-btn" id="playlistsDebugBtn" title="调试面板" style="margin-left:8px;">
