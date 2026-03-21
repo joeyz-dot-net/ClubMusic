@@ -45,6 +45,10 @@ class MusicPlayerApp {
 
         // 放大视图状态
         this.isArtworkExpanded = false;
+        this._orientationMediaQuery = null;
+        this._handleResponsiveNowPlayingChange = null;
+        this._handleResponsiveWindowResize = null;
+        this._responsiveNowPlayingTimer = null;
 
         // ✅ playlistManager 会在 constructor 中自动从 localStorage 恢复选择歌单
     }
@@ -312,8 +316,8 @@ class MusicPlayerApp {
         });
 
         // 手动切歌时设置标志，避免重复的 loadCurrent() 网络请求
+        player.on('next', () => { this._skipNextLoadCurrent = true; });
         player.on('prev', () => { this._skipNextLoadCurrent = true; });
-        player.on('play', () => { this._skipNextLoadCurrent = true; });
 
         // 监听暂停事件
         player.on('pause', () => {
@@ -512,6 +516,61 @@ class MusicPlayerApp {
         const duration = mpvData.duration || 0;
         if (this.elements.nppDuration) {
             this.elements.nppDuration.textContent = formatTime(duration);
+        }
+    }
+
+    _refreshResponsiveNowPlayingPanel({ collapseExpandedArtwork = false, delay = 0 } = {}) {
+        const runUpdate = () => {
+            if (collapseExpandedArtwork && this.isArtworkExpanded) {
+                this.toggleArtworkExpand();
+            }
+
+            const status = player.getStatus();
+            if (status) {
+                this._updateNowPlayingPanel(status);
+            }
+        };
+
+        if (this._responsiveNowPlayingTimer) {
+            clearTimeout(this._responsiveNowPlayingTimer);
+            this._responsiveNowPlayingTimer = null;
+        }
+
+        if (delay > 0) {
+            this._responsiveNowPlayingTimer = setTimeout(() => {
+                this._responsiveNowPlayingTimer = null;
+                runUpdate();
+            }, delay);
+            return;
+        }
+
+        runUpdate();
+    }
+
+    _bindResponsiveNowPlayingEvents() {
+        if (!isIPad()) {
+            return;
+        }
+
+        if (!this._orientationMediaQuery) {
+            this._orientationMediaQuery = window.matchMedia('(orientation: landscape)');
+        }
+
+        if (!this._handleResponsiveNowPlayingChange) {
+            this._handleResponsiveNowPlayingChange = () => {
+                this._refreshResponsiveNowPlayingPanel({
+                    collapseExpandedArtwork: true,
+                    delay: 100
+                });
+            };
+            this._orientationMediaQuery.addEventListener('change', this._handleResponsiveNowPlayingChange);
+        }
+
+        if (!this._handleResponsiveWindowResize) {
+            this._handleResponsiveWindowResize = () => {
+                this._refreshResponsiveNowPlayingPanel({ delay: 200 });
+            };
+            window.addEventListener('resize', this._handleResponsiveWindowResize);
         }
     }
 
@@ -868,35 +927,7 @@ class MusicPlayerApp {
                 e.preventDefault();
             });
 
-            // iPad 旋转时重置展开模式，防止布局错乱 + 更新 NPP 面板
-            if (isIPad()) {
-                const handleOrientationChange = () => {
-                    // 延迟等待浏览器完成 reflow
-                    setTimeout(() => {
-                        if (this.isArtworkExpanded) {
-                            this.toggleArtworkExpand();
-                        }
-                        // 同时更新 NPP 面板可见性
-                        const status = player.getStatus();
-                        if (status) {
-                            this._updateNowPlayingPanel(status);
-                        }
-                    }, 100);
-                };
-                window.matchMedia('(orientation: landscape)').addEventListener('change', handleOrientationChange);
-
-                // 备用: resize 事件防抖监听
-                let resizeTimer;
-                window.addEventListener('resize', () => {
-                    clearTimeout(resizeTimer);
-                    resizeTimer = setTimeout(() => {
-                        const status = player.getStatus();
-                        if (status) {
-                            this._updateNowPlayingPanel(status);
-                        }
-                    }, 200);
-                });
-            }
+            this._bindResponsiveNowPlayingEvents();
         }
 
         // 全屏播放器控制
@@ -1213,16 +1244,6 @@ class MusicPlayerApp {
                     setTimeout(() => {
                         this.elements.fullPlayer.classList.add('show');
                     }, 10);
-                }
-            });
-        }
-
-        // 横屏/竖屏切换时更新 Now Playing 面板
-        if (isIPad()) {
-            window.matchMedia('(orientation: landscape)').addEventListener('change', () => {
-                const status = player.getStatus();
-                if (status) {
-                    this._updateNowPlayingPanel(status);
                 }
             });
         }
@@ -1954,7 +1975,6 @@ class MusicPlayerApp {
             item.addEventListener('click', () => {
                 console.log('🖱️ 点击导航项:', tabName);
                 if (tabName === 'playlists') {
-                    this.switchSelectedPlaylist(playlistManager.getActiveDefaultId());
                     navigateTo('playlists');
                     return;
                 }

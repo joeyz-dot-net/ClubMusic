@@ -168,6 +168,7 @@ export class PlaylistsManagement {
         this.modal = null;
         this.onPlaylistSwitchCallback = null;
         this.onDismissCallback = null;
+        this._hideTimer = null;
     }
 
     init(onPlaylistSwitch = null, onDismiss = null) {
@@ -179,7 +180,8 @@ export class PlaylistsManagement {
     }
 
     getRenderablePlaylists() {
-        return (playlistManager.playlists || []).filter((playlist) => playlist.id !== playlistManager.getActiveDefaultId());
+        const activeDefaultId = playlistManager.getActiveDefaultId();
+        return (playlistManager.playlists || []).filter((playlist) => playlist.id !== activeDefaultId || playlist.is_room);
     }
 
     bindModalBodyDelegates() {
@@ -266,14 +268,12 @@ export class PlaylistsManagement {
             Toast.success(i18n.t('playlists.switchSuccess', { name: playlist.name }));
 
             console.log('[歌单管理] 步骤4: 隐藏模态框');
-            this.hide('select');
-
-            setTimeout(() => {
+            this.hide('select', () => {
                 if (this.onPlaylistSwitchCallback && typeof this.onPlaylistSwitchCallback === 'function') {
                     console.log('[歌单管理] 步骤5: 触发回调函数，更新主界面显示');
                     this.onPlaylistSwitchCallback(playlist.id, playlist.name);
                 }
-            }, 50);
+            });
         } catch (error) {
             console.error('[歌单管理] 切换失败:', error);
             Toast.error(i18n.t('playlists.switchFailed', { error: error.message }));
@@ -366,6 +366,10 @@ export class PlaylistsManagement {
     // 显示歌单管理模态框
     show() {
         if (this.modal) {
+            if (this._hideTimer) {
+                clearTimeout(this._hideTimer);
+                this._hideTimer = null;
+            }
             this.modal._previousActiveElement = document.activeElement;
             this.modal.style.display = 'flex';
 
@@ -393,19 +397,25 @@ export class PlaylistsManagement {
     }
 
     // 隐藏模态框
-    hide(reason = 'dismiss') {
+    hide(reason = 'dismiss', onHidden = null) {
         if (this.modal) {
             console.log('[歌单管理] 隐藏模态框');
             this.modal.classList.remove('modal-visible');
             if (this._handleModalKeydown) {
                 document.removeEventListener('keydown', this._handleModalKeydown);
             }
-            // 缩短延迟，确保回调执行后模态框已隐藏
-            setTimeout(() => {
+            if (this._hideTimer) {
+                clearTimeout(this._hideTimer);
+            }
+            this._hideTimer = setTimeout(() => {
+                this._hideTimer = null;
                 this.modal.style.display = 'none';
                 restoreFocus(this.modal._previousActiveElement);
                 if (reason === 'dismiss' && typeof this.onDismissCallback === 'function') {
                     this.onDismissCallback(reason);
+                }
+                if (typeof onHidden === 'function') {
+                    onHidden();
                 }
                 console.log('[歌单管理] ✓ 模态框已隐藏');
             }, 100);

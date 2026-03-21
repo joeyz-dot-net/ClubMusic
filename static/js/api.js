@@ -224,7 +224,7 @@ export class MusicAPI {
     }
 
     async getVolume() {
-        return this.post('/volume', {});
+        return this.postForm('/volume', new FormData());
     }
 
     async getVolumeDefaults() {
