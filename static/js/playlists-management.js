@@ -428,7 +428,7 @@ export class PlaylistsManagement {
         const playlists = this.getRenderablePlaylists();
         console.log('📋 渲染歌单列表，共', playlists.length, '个歌单');
 
-        this.modalBody.innerHTML = '';
+        this.modalBody.replaceChildren();
 
         if (playlists.length === 0) {
             this.modalBody.appendChild(createPlaylistsEmptyState());

@@ -590,7 +590,11 @@ function createToolbarActionButton({
     button.classList.add('playlist-toolbar-action-btn');
     button.style.setProperty('--playlist-toolbar-action-font-size', fontSize);
     applyToolbarButtonSkin(button, skin);
-    button.innerHTML = content;
+    if (content instanceof Node) {
+        button.replaceChildren(content);
+    } else {
+        button.textContent = content;
+    }
     button.title = title;
     button.addEventListener('click', onClick);
     return button;
@@ -802,10 +806,41 @@ function createEmptyActionButton({
         shadow,
         hoverShadow
     });
-    button.innerHTML = content;
+    if (content instanceof Node) {
+        button.replaceChildren(content);
+    } else {
+        button.textContent = content;
+    }
     button.title = title;
     button.addEventListener('click', onClick);
     return button;
+}
+
+function createSvgElement(tag, attributes = {}) {
+    const element = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    Object.entries(attributes).forEach(([key, value]) => {
+        element.setAttribute(key, value);
+    });
+    return element;
+}
+
+function createTrackControlIcon({ width, height, viewBox, circles }) {
+    const icon = createSvgElement('svg', {
+        width: String(width),
+        height: String(height),
+        viewBox,
+        fill: 'currentColor'
+    });
+
+    circles.forEach(({ cx, cy, r }) => {
+        icon.appendChild(createSvgElement('circle', {
+            cx: String(cx),
+            cy: String(cy),
+            r: String(r)
+        }));
+    });
+
+    return icon;
 }
 
 const PLAYLIST_OPTION_GRADIENTS = [
@@ -1355,26 +1390,33 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
             // 添加拖拽手柄（移动端触摸拖拽）
             const dragHandle = document.createElement('div');
             dragHandle.className = 'drag-handle';
-            dragHandle.innerHTML = `
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <circle cx="9" cy="5" r="2"/>
-                    <circle cx="15" cy="5" r="2"/>
-                    <circle cx="9" cy="12" r="2"/>
-                    <circle cx="15" cy="12" r="2"/>
-                    <circle cx="9" cy="19" r="2"/>
-                    <circle cx="15" cy="19" r="2"/>
-                </svg>
-            `;
+            dragHandle.appendChild(createTrackControlIcon({
+                width: 16,
+                height: 16,
+                viewBox: '0 0 24 24',
+                circles: [
+                    { cx: 9, cy: 5, r: 2 },
+                    { cx: 15, cy: 5, r: 2 },
+                    { cx: 9, cy: 12, r: 2 },
+                    { cx: 15, cy: 12, r: 2 },
+                    { cx: 9, cy: 19, r: 2 },
+                    { cx: 15, cy: 19, r: 2 }
+                ]
+            }));
             
             const deleteBtn = document.createElement('button');
             deleteBtn.className = 'track-menu-btn';
-            deleteBtn.innerHTML = `
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <circle cx="12" cy="5" r="2"/>
-                    <circle cx="12" cy="12" r="2"/>
-                    <circle cx="12" cy="19" r="2"/>
-                </svg>
-            `;
+            deleteBtn.type = 'button';
+            deleteBtn.appendChild(createTrackControlIcon({
+                width: 20,
+                height: 20,
+                viewBox: '0 0 24 24',
+                circles: [
+                    { cx: 12, cy: 5, r: 2 },
+                    { cx: 12, cy: 12, r: 2 },
+                    { cx: 12, cy: 19, r: 2 }
+                ]
+            }));
             
             // 左侧：删除按钮，右侧：拖拽手柄
             item.appendChild(deleteBtn);
