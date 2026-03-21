@@ -1219,6 +1219,14 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
                 hoverShadow: '0 8px 24px rgba(67, 233, 123, 0.45)',
                 onClick: async (e) => {
                     e.stopPropagation();
+                    if (container._randomAddInFlight) {
+                        return;
+                    }
+
+                    container._randomAddInFlight = true;
+                    randomBtn.disabled = true;
+                    randomBtn.setAttribute('aria-busy', 'true');
+
                     try {
                         loading.show('🎲 正在随机添加10首歌...');
                         await playlistManager.loadAll();
@@ -1312,6 +1320,12 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
                     } catch (err) {
                         loading.hide();
                         Toast.error('随机添加失败: ' + (err.message || err));
+                    } finally {
+                        container._randomAddInFlight = false;
+                        if (randomBtn.isConnected) {
+                            randomBtn.disabled = false;
+                            randomBtn.removeAttribute('aria-busy');
+                        }
                     }
                 }
             });
