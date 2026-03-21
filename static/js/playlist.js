@@ -2073,11 +2073,19 @@ async function addSongToChosenPlaylist({ playlistId, song, playlistItem, playlis
             checkMark.style.opacity = '1';
         }
 
-        await playlistManager.refreshAll();
+        let refreshError = null;
+        try {
+            await playlistManager.refreshAll();
+        } catch (error) {
+            refreshError = error;
+            console.warn('[歌单选择] 刷新歌单缓存失败，但添加已成功:', error);
+        }
 
         if (typeof successMessage === 'function') {
-            successMessage(playlistName);
+            successMessage(playlistName, { refreshError });
         }
+
+        return { refreshError };
     } catch (error) {
         if (playlistItem) {
             playlistItem.style.background = originalBg;
@@ -2161,10 +2169,16 @@ async function showSelectPlaylistModal(song, historyModal) {
                         song: context.song,
                         playlistItem,
                         playlistName: playlist.name,
-                        successMessage: (name) => {
+                        successMessage: (name, { refreshError } = {}) => {
                             context.closeSelectPlaylistModal();
                             console.log('[歌单选择] ✓ 歌曲已添加，返回播放历史页面');
-                            Toast.success(`✅ 已添加到「${name}」`);
+                            const baseMessage = `✅ 已添加到「${name}」`;
+                            if (refreshError) {
+                                Toast.warning(`${baseMessage} (${i18n.t('playlist.opFailed')})`);
+                                return;
+                            }
+
+                            Toast.success(baseMessage);
                         }
                     });
                 } catch (error) {
@@ -2332,8 +2346,15 @@ async function handleHistoryAddToNext(song) {
         });
 
         if (result.status === 'OK') {
-            Toast.success(`⏭️ ${i18n.t('history.addToNextSuccess')}: ${song.title}`);
-            await playlistManager.loadCurrent();
+            const baseMessage = `⏭️ ${i18n.t('history.addToNextSuccess')}: ${song.title}`;
+            try {
+                await playlistManager.loadCurrent();
+                rerenderQueueWithCurrentMeta(renderPlaylistUI);
+                Toast.success(baseMessage);
+            } catch (refreshError) {
+                console.warn('[历史-添加到下一首] 队列刷新失败，但添加已成功:', refreshError);
+                Toast.warning(`${baseMessage} (${i18n.t('playlist.opFailed')})`);
+            }
         } else if (result.duplicate) {
             Toast.warning('该歌曲已在播放队列中');
         } else {
@@ -2351,14 +2372,18 @@ async function handleHistoryDeleteRecord(song, removeFromHistoryFn, rerenderCall
         const result = await api.deleteHistoryRecord(song.url);
 
         if (result.status === 'OK') {
-            Toast.success(`🗑️ ${i18n.t('history.deleteSuccess')}`);
-            // 从内存数组中移除
-            removeFromHistoryFn(song.url);
-            // 使用当前搜索条件重新渲染
-            if (typeof rerenderCallback === 'function') {
-                const searchInput = document.querySelector('.history-search-container input');
-                const currentFilter = searchInput ? searchInput.value : '';
-                rerenderCallback(currentFilter);
+            const baseMessage = `🗑️ ${i18n.t('history.deleteSuccess')}`;
+            try {
+                removeFromHistoryFn(song.url);
+                if (typeof rerenderCallback === 'function') {
+                    const searchInput = document.querySelector('.history-search-container input');
+                    const currentFilter = searchInput ? searchInput.value : '';
+                    rerenderCallback(currentFilter);
+                }
+                Toast.success(baseMessage);
+            } catch (refreshError) {
+                console.warn('[历史-删除记录] 历史列表刷新失败，但删除已成功:', refreshError);
+                Toast.warning(`${baseMessage} (${i18n.t('playlist.opFailed')})`);
             }
         } else {
             Toast.error(`${i18n.t('history.deleteFailed')}: ${result.error || ''}`);
