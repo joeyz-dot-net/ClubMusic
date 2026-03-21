@@ -445,6 +445,14 @@ export class SearchManager {
         });
     }
 
+    getSearchResultsForBatchAction(tabName) {
+        return this.totalSearchResults[tabName] || this.currentSearchResults[tabName] || [];
+    }
+
+    getAddableSearchSongs(tabName) {
+        return this.getSearchResultsForBatchAction(tabName).filter((item) => !item.is_directory && item.type !== 'directory');
+    }
+
     setActiveSearchTab(container, tabName) {
         if (!container) return;
 
@@ -913,8 +921,7 @@ export class SearchManager {
         // 获取当前激活的标签页
         const activeTab = document.querySelector('.search-tab.active');
         const currentTab = activeTab ? activeTab.getAttribute('data-tab') : 'local';
-        const currentResults = this.currentSearchResults[currentTab] || [];
-        const resultCount = currentResults.length;
+        const resultCount = this.getAddableSearchSongs(currentTab).length;
 
         // 获取当前歌单信息用于显示
         let playlistName = i18n.t('playlist.current');
@@ -1295,15 +1302,14 @@ export class SearchManager {
     async handleAddAllToPlaylist(currentTab) {
         try {
             const playlistId = this.getCurrentPlaylistId ? this.getCurrentPlaylistId() : this.currentPlaylistId;
-            const results = this.currentSearchResults[currentTab] || [];
+            const results = this.getSearchResultsForBatchAction(currentTab);
 
             if (results.length === 0) {
                 Toast.warning(i18n.t('search.noResultsToAdd'));
                 return;
             }
 
-            // 过滤掉目录类型
-            const songs = results.filter(item => !item.is_directory && item.type !== 'directory');
+            const songs = this.getAddableSearchSongs(currentTab);
 
             if (songs.length === 0) {
                 Toast.warning(i18n.t('search.noValidSongs'));
