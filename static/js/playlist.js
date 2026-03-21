@@ -2,7 +2,7 @@
 import { api } from './api.js';
 import { Toast, loading, ConfirmModal } from './ui.js';
 import { operationLock } from './operationLock.js';
-import { thumbnailManager, escapeHTML, focusFirstFocusable, restoreFocus, trapFocusInContainer } from './utils.js';
+import { thumbnailManager, escapeHTML, focusFirstFocusable, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js';
 import { i18n } from './i18n.js';
 import { player } from './player.js';
 import { playLock } from './playLock.js';
@@ -525,292 +525,204 @@ function getThemeColors(theme) {
     }
 }
 
+function createToolbarHeaderContainer(appTheme, colors) {
+    const headerContainer = document.createElement('div');
+    headerContainer.className = 'playlist-toolbar-header';
+    const isLightTheme = appTheme === 'light';
+    const headerBg = isLightTheme
+        ? 'rgba(255, 255, 255, 0.7)'
+        : 'rgba(26, 26, 26, 0.6)';
+    const headerBorder = isLightTheme
+        ? 'rgba(224, 224, 224, 0.5)'
+        : 'rgba(51, 51, 51, 0.5)';
+
+    headerContainer.style.setProperty('--playlist-toolbar-header-bg', headerBg);
+    headerContainer.style.setProperty('--playlist-toolbar-header-border', headerBorder);
+    headerContainer.style.setProperty('--playlist-toolbar-header-shadow', colors.shadow);
+
+    return headerContainer;
+}
+
+function createToolbarInfoSection(playlistName, playlistLength, colors) {
+    const infoSection = document.createElement('div');
+    infoSection.className = 'playlist-toolbar-info';
+
+    const playlistTitle = document.createElement('div');
+    playlistTitle.className = 'playlist-toolbar-title';
+    playlistTitle.style.setProperty('--playlist-toolbar-title-color', colors.textColor);
+    playlistTitle.textContent = playlistName;
+
+    const songCount = document.createElement('div');
+    songCount.className = 'playlist-toolbar-count';
+    songCount.style.setProperty('--playlist-toolbar-count-color', colors.secondaryText);
+    songCount.textContent = i18n.t('playlist.songCount', { count: playlistLength });
+
+    infoSection.appendChild(playlistTitle);
+    infoSection.appendChild(songCount);
+    return infoSection;
+}
+
+function createToolbarLeadSection(icon, infoSection) {
+    const iconEl = document.createElement('div');
+    iconEl.className = 'playlist-toolbar-icon';
+    iconEl.textContent = icon;
+
+    const leadSection = document.createElement('div');
+    leadSection.className = 'playlist-toolbar-lead';
+    leadSection.appendChild(iconEl);
+    leadSection.appendChild(infoSection);
+    leadSection.addEventListener('click', () => {
+        document.dispatchEvent(new CustomEvent('open-playlists-modal'));
+    });
+
+    return leadSection;
+}
+
+function createToolbarActionButton({
+    content,
+    title,
+    fontSize = '18px',
+    skin,
+    onClick
+}) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.classList.add('playlist-toolbar-action-btn');
+    button.style.setProperty('--playlist-toolbar-action-font-size', fontSize);
+    applyToolbarButtonSkin(button, skin);
+    button.innerHTML = content;
+    button.title = title;
+    button.addEventListener('click', onClick);
+    return button;
+}
+
 // 播放列表顶部工具栏渲染（独立于列表容器，支持 sticky 定位）
 export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName, selectedPlaylistId, container, onPlay, currentMeta }) {
     if (!toolbarContainer) return;
     toolbarContainer.innerHTML = '';
 
-    if (selectedPlaylistId === playlistManager.getActiveDefaultId()) {
-        const appTheme = getCurrentAppTheme();
-        const colors = getThemeColors(appTheme);
+    const appTheme = getCurrentAppTheme();
+    const colors = getThemeColors(appTheme);
+    const isDefaultPlaylist = selectedPlaylistId === playlistManager.getActiveDefaultId();
+    const headerContainer = createToolbarHeaderContainer(appTheme, colors);
+    const infoSection = createToolbarInfoSection(playlistName, playlist.length, colors);
 
-        const headerContainer = document.createElement('div');
-        const isLightTheme = appTheme === 'light';
-        const headerBg = isLightTheme
-            ? 'rgba(255, 255, 255, 0.7)'
-            : 'rgba(26, 26, 26, 0.6)';
-        const headerBorder = isLightTheme
-            ? 'rgba(224, 224, 224, 0.5)'
-            : 'rgba(51, 51, 51, 0.5)';
+    headerContainer.appendChild(createToolbarLeadSection(playlistManager.getCurrentPlaylistIcon(), infoSection));
 
-        headerContainer.style.cssText = `
-            background: ${headerBg};
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border: 1px solid ${headerBorder};
-            border-radius: 12px;
-            padding: 14px 16px;
-            box-shadow: 0 4px 16px ${colors.shadow};
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-        `;
-
-        const infoSection = document.createElement('div');
-        infoSection.style.cssText = `
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            flex: 1;
-        `;
-
-        const playlistTitle = document.createElement('div');
-        playlistTitle.style.cssText = `
-            font-size: 16px;
-            font-weight: 700;
-            color: ${colors.textColor};
-            letter-spacing: 0.5px;
-            line-height: 1.2;
-        `;
-        playlistTitle.textContent = playlistName;
-
-        const songCount = document.createElement('div');
-        songCount.style.cssText = `
-            font-size: 12px;
-            color: ${colors.secondaryText};
-            font-weight: 500;
-        `;
-        songCount.textContent = i18n.t('playlist.songCount', { count: playlist.length });
-
-        infoSection.appendChild(playlistTitle);
-        infoSection.appendChild(songCount);
-
-        const defaultIcon = playlistManager.getCurrentPlaylistIcon();
-        const defaultIconEl = document.createElement('div');
-        defaultIconEl.style.cssText = `font-size: 28px; line-height: 1; flex-shrink: 0;`;
-        defaultIconEl.textContent = defaultIcon;
-
-        const defaultLeftSection = document.createElement('div');
-        defaultLeftSection.style.cssText = `display: flex; align-items: center; gap: 10px; flex: 1; cursor: pointer;`;
-        defaultLeftSection.appendChild(defaultIconEl);
-        defaultLeftSection.appendChild(infoSection);
-        defaultLeftSection.addEventListener('click', () => {
-            document.dispatchEvent(new CustomEvent('open-playlists-modal'));
-        });
-        headerContainer.appendChild(defaultLeftSection);
-
-        // 清空按钮
-        const clearBtn = document.createElement('button');
-        clearBtn.style.cssText = `
-            width: 40px;
-            height: 40px;
-            font-size: 18px;
-            flex-shrink: 0;
-        `;
-        applyToolbarButtonSkin(clearBtn, {
-            background: colors.buttonBg,
-            border: colors.buttonBorder,
-            color: colors.buttonText,
-            hoverBackground: colors.buttonHover,
-            shadow: `0 4px 12px ${colors.shadow}`,
-            hoverTransform: 'scale(1.1)'
-        });
-        clearBtn.innerHTML = '🗑️';
-        clearBtn.title = i18n.t('playlist.clearQueue');
-        clearBtn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const confirmed = await ConfirmModal.show({ title: i18n.t('playlist.clearQueueConfirm'), type: 'danger' });
-            if (confirmed) {
-                try {
-                    await api.post('/playlist_clear', {});
-                    Toast.success(i18n.t('playlist.clearSucceed'));
-                    await playlistManager.loadCurrent();
-                    renderPlaylistUI({ container, onPlay, currentMeta });
-                } catch (err) {
-                    console.error('清空队列失败:', err);
-                    Toast.error(i18n.t('playlist.clearFailed') + ': ' + (err.message || err));
+    if (isDefaultPlaylist) {
+        const clearBtn = createToolbarActionButton({
+            content: '🗑️',
+            title: i18n.t('playlist.clearQueue'),
+            skin: {
+                background: colors.buttonBg,
+                border: colors.buttonBorder,
+                color: colors.buttonText,
+                hoverBackground: colors.buttonHover,
+                shadow: `0 4px 12px ${colors.shadow}`,
+                hoverTransform: 'scale(1.1)'
+            },
+            onClick: async (e) => {
+                e.stopPropagation();
+                const confirmed = await ConfirmModal.show({ title: i18n.t('playlist.clearQueueConfirm'), type: 'danger' });
+                if (confirmed) {
+                    try {
+                        await api.post('/playlist_clear', {});
+                        Toast.success(i18n.t('playlist.clearSucceed'));
+                        await playlistManager.loadCurrent();
+                        renderPlaylistUI({ container, onPlay, currentMeta });
+                    } catch (err) {
+                        console.error('清空队列失败:', err);
+                        Toast.error(i18n.t('playlist.clearFailed') + ': ' + (err.message || err));
+                    }
                 }
             }
         });
 
         headerContainer.appendChild(clearBtn);
         toolbarContainer.appendChild(headerContainer);
+        return;
     }
 
-    if (selectedPlaylistId !== playlistManager.getActiveDefaultId()) {
-        const appTheme = getCurrentAppTheme();
-        const colors = getThemeColors(appTheme);
+    const buttonGroup = document.createElement('div');
+    buttonGroup.className = 'playlist-toolbar-actions';
 
-        const hasYoutube = playlist.some(song => {
-            const isYoutube = song.type === 'youtube' || song.type === 'stream';
-            const isUrl = song.url && (song.url.startsWith('http') || song.url.startsWith('youtu'));
-            return isYoutube || isUrl;
-        });
-
-        const headerContainer = document.createElement('div');
-        const isLightTheme = appTheme === 'light';
-        const headerBg = isLightTheme
-            ? 'rgba(255, 255, 255, 0.7)'
-            : 'rgba(26, 26, 26, 0.6)';
-        const headerBorder = isLightTheme
-            ? 'rgba(224, 224, 224, 0.5)'
-            : 'rgba(51, 51, 51, 0.5)';
-
-        headerContainer.style.cssText = `
-            background: ${headerBg};
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border: 1px solid ${headerBorder};
-            border-radius: 12px;
-            padding: 14px 16px;
-            box-shadow: 0 4px 16px ${colors.shadow};
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-        `;
-
-        const infoSection = document.createElement('div');
-        infoSection.style.cssText = `
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            flex: 1;
-        `;
-
-        const playlistTitle = document.createElement('div');
-        playlistTitle.style.cssText = `
-            font-size: 16px;
-            font-weight: 700;
-            color: ${colors.textColor};
-            letter-spacing: 0.5px;
-            line-height: 1.2;
-        `;
-        playlistTitle.textContent = playlistName;
-
-        const songCount = document.createElement('div');
-        songCount.style.cssText = `
-            font-size: 12px;
-            color: ${colors.secondaryText};
-            font-weight: 500;
-        `;
-        songCount.textContent = i18n.t('playlist.songCount', { count: playlist.length });
-
-        infoSection.appendChild(playlistTitle);
-        infoSection.appendChild(songCount);
-
-        const buttonGroup = document.createElement('div');
-        buttonGroup.style.cssText = `
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            flex-shrink: 0;
-        `;
-
-        const returnBtn = document.createElement('button');
-        returnBtn.style.cssText = `
-            width: 40px;
-            height: 40px;
-            font-size: 20px;
-            flex-shrink: 0;
-        `;
-        applyToolbarButtonSkin(returnBtn, {
+    const returnBtn = createToolbarActionButton({
+        content: '←',
+        title: i18n.t('playlist.returnToQueue'),
+        fontSize: '20px',
+        skin: {
             background: colors.buttonBg,
             border: colors.buttonBorder,
             color: colors.buttonText,
             hoverBackground: colors.buttonHover,
             shadow: `0 4px 12px ${colors.shadow}`,
             hoverTransform: 'scale(1.1) translateX(-2px)'
-        });
-        returnBtn.innerHTML = '←';
-        returnBtn.title = i18n.t('playlist.returnToQueue');
-        returnBtn.addEventListener('click', async (e) => {
+        },
+        onClick: async (e) => {
             e.stopPropagation();
             playlistManager.setSelectedPlaylist(playlistManager.getActiveDefaultId());
             await playlistManager.loadCurrent();
             renderPlaylistUI({ container, onPlay, currentMeta });
             console.log('[歌单切换] 已返回默认歌单（队列）');
             Toast.success(i18n.t('playlist.returnedToQueue'));
-        });
+        }
+    });
 
-        const addAllBtn = document.createElement('button');
-        addAllBtn.style.cssText = `
-            width: 40px;
-            height: 40px;
-            font-size: 20px;
-            flex-shrink: 0;
-        `;
-        applyToolbarButtonSkin(addAllBtn, {
+    const addAllBtn = createToolbarActionButton({
+        content: '➕',
+        title: i18n.t('playlist.addAll'),
+        fontSize: '20px',
+        skin: {
             background: colors.buttonBg,
             border: colors.buttonBorder,
             color: colors.buttonText,
             hoverBackground: colors.buttonHover,
             shadow: `0 4px 12px ${colors.shadow}`,
             hoverTransform: 'scale(1.1) rotate(90deg)'
-        });
-        addAllBtn.innerHTML = '➕';
-        addAllBtn.title = i18n.t('playlist.addAll');
-        addAllBtn.addEventListener('click', async (e) => {
+        },
+        onClick: async (e) => {
             e.stopPropagation();
             await addAllSongsToDefault(playlist, selectedPlaylistId);
-        });
+        }
+    });
 
-        const clearBtn = document.createElement('button');
-        clearBtn.style.cssText = `
-            width: 40px;
-            height: 40px;
-            font-size: 18px;
-            flex-shrink: 0;
-        `;
-        applyToolbarButtonSkin(clearBtn, {
-            background: colors.buttonBg,
-            border: colors.buttonBorder,
-            color: colors.buttonText,
-            hoverBackground: colors.buttonHover,
-            hoverTransform: 'translateY(-1px)'
-        });
-        clearBtn.innerHTML = '🗑️';
-        clearBtn.title = i18n.t('playlist.clearPlaylist');
-        clearBtn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const confirmed = await ConfirmModal.show({ title: i18n.t('playlist.clearPlaylistConfirm', { name: playlistName }), type: 'danger' });
-            if (confirmed) {
-                try {
-                    await api.delete(`/playlists/${selectedPlaylistId}`);
-                    Toast.success(i18n.t('playlists.deleteSuccess'));
-                    playlistManager.setSelectedPlaylist(playlistManager.getActiveDefaultId());
-                    await playlistManager.refreshAll();
-                    renderPlaylistUI({ container, onPlay, currentMeta });
-                } catch (err) {
-                    console.error('清空歌单失败:', err);
-                    Toast.error(i18n.t('playlist.clearFailed') + ': ' + (err.message || err));
+    buttonGroup.appendChild(returnBtn);
+    buttonGroup.appendChild(addAllBtn);
+
+    if (!selectedPlaylistId.startsWith('room_')) {
+        const clearBtn = createToolbarActionButton({
+            content: '🗑️',
+            title: i18n.t('playlist.clearPlaylist'),
+            skin: {
+                background: colors.buttonBg,
+                border: colors.buttonBorder,
+                color: colors.buttonText,
+                hoverBackground: colors.buttonHover,
+                hoverTransform: 'translateY(-1px)'
+            },
+            onClick: async (e) => {
+                e.stopPropagation();
+                const confirmed = await ConfirmModal.show({ title: i18n.t('playlist.clearPlaylistConfirm', { name: playlistName }), type: 'danger' });
+                if (confirmed) {
+                    try {
+                        await api.delete(`/playlists/${selectedPlaylistId}`);
+                        Toast.success(i18n.t('playlists.deleteSuccess'));
+                        playlistManager.setSelectedPlaylist(playlistManager.getActiveDefaultId());
+                        await playlistManager.refreshAll();
+                        renderPlaylistUI({ container, onPlay, currentMeta });
+                    } catch (err) {
+                        console.error('清空歌单失败:', err);
+                        Toast.error(i18n.t('playlist.clearFailed') + ': ' + (err.message || err));
+                    }
                 }
             }
         });
 
-        buttonGroup.appendChild(returnBtn);
-        buttonGroup.appendChild(addAllBtn);
-        if (!selectedPlaylistId.startsWith('room_')) {
-            buttonGroup.appendChild(clearBtn);
-        }
-
-        const customIcon = playlistManager.getCurrentPlaylistIcon();
-        const customIconEl = document.createElement('div');
-        customIconEl.style.cssText = `font-size: 28px; line-height: 1; flex-shrink: 0;`;
-        customIconEl.textContent = customIcon;
-
-        const customLeftSection = document.createElement('div');
-        customLeftSection.style.cssText = `display: flex; align-items: center; gap: 10px; flex: 1; cursor: pointer;`;
-        customLeftSection.appendChild(customIconEl);
-        customLeftSection.appendChild(infoSection);
-        customLeftSection.addEventListener('click', () => {
-            document.dispatchEvent(new CustomEvent('open-playlists-modal'));
-        });
-        headerContainer.appendChild(customLeftSection);
-        headerContainer.appendChild(buttonGroup);
-        toolbarContainer.appendChild(headerContainer);
+        buttonGroup.appendChild(clearBtn);
     }
+
+    headerContainer.appendChild(buttonGroup);
+    toolbarContainer.appendChild(headerContainer);
 }
 
 function getRenderedPlaylistState() {
@@ -853,6 +765,210 @@ function applyToolbarButtonSkin(button, {
     button.style.setProperty('--toolbar-btn-hover-shadow', shadow);
     button.style.setProperty('--toolbar-btn-hover-transform', hoverTransform);
     button.style.setProperty('--toolbar-btn-active-transform', activeTransform);
+}
+
+function applyEmptyActionButtonSkin(button, {
+    background,
+    color,
+    shadow,
+    hoverShadow,
+    hoverTransform = 'translateY(-2px)',
+    activeTransform = 'translateY(0) scale(0.98)'
+} = {}) {
+    button.classList.add('playlist-empty-action-btn');
+    button.style.setProperty('--empty-action-bg', background);
+    button.style.setProperty('--empty-action-color', color);
+    button.style.setProperty('--empty-action-shadow', shadow);
+    button.style.setProperty('--empty-action-hover-shadow', hoverShadow || shadow);
+    button.style.setProperty('--empty-action-hover-transform', hoverTransform);
+    button.style.setProperty('--empty-action-active-transform', activeTransform);
+}
+
+function createEmptyActionButton({
+    content,
+    title,
+    background,
+    shadow,
+    hoverShadow,
+    onClick
+}) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    applyEmptyActionButtonSkin(button, {
+        background,
+        color: 'white',
+        shadow,
+        hoverShadow
+    });
+    button.innerHTML = content;
+    button.title = title;
+    button.addEventListener('click', onClick);
+    return button;
+}
+
+const PLAYLIST_OPTION_GRADIENTS = [
+    'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+    'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+    'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+    'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+    'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',
+    'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+    'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)'
+];
+
+const PLAYLIST_OPTION_ICONS = ['🎵', '🎧', '🎸', '🎹', '🎤', '🎼', '🎺', '🥁'];
+
+function createCenteredGlyph(glyph = '🎵') {
+    const element = document.createElement('div');
+    element.className = 'playlist-centered-glyph';
+    element.textContent = glyph;
+    return element;
+}
+
+function createPrimarySecondaryInfo({ title, subtitle, colors, titleWeight = 600, titleSize = '14px', subtitleSize = '12px' }) {
+    const info = document.createElement('div');
+    info.className = 'playlist-item-info';
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'playlist-item-title';
+    titleEl.style.setProperty('--playlist-item-title-color', colors.textColor);
+    titleEl.style.setProperty('--playlist-item-title-weight', titleWeight);
+    titleEl.style.setProperty('--playlist-item-title-size', titleSize);
+    titleEl.textContent = title;
+
+    const subtitleEl = document.createElement('div');
+    subtitleEl.className = 'playlist-item-subtitle';
+    subtitleEl.style.setProperty('--playlist-item-subtitle-color', colors.secondaryText);
+    subtitleEl.style.setProperty('--playlist-item-subtitle-size', subtitleSize);
+    subtitleEl.textContent = subtitle;
+
+    info.appendChild(titleEl);
+    info.appendChild(subtitleEl);
+    return info;
+}
+
+function getThumbnailFallbacks(url) {
+    if (url && url.includes('img.youtube.com/vi/')) {
+        const baseUrl = url.substring(0, url.lastIndexOf('/'));
+        const normalizedFirst = (url.endsWith('/sddefault.jpg') || url.endsWith('/maxresdefault.jpg'))
+            ? baseUrl + '/hqdefault.jpg'
+            : url;
+        return [normalizedFirst, baseUrl + '/mqdefault.jpg', baseUrl + '/default.jpg'];
+    }
+    return [url];
+}
+
+function createHistoryCover(thumbnailUrl, colors) {
+    const coverContainer = document.createElement('div');
+    coverContainer.className = 'history-cover';
+    coverContainer.style.setProperty('--history-cover-bg', colors.buttonBg);
+
+    const hasValidThumbnail = thumbnailUrl && thumbnailUrl !== 'null' && thumbnailUrl !== 'undefined' && thumbnailUrl.trim() !== '';
+    if (!hasValidThumbnail) {
+        coverContainer.appendChild(createCenteredGlyph('🎵'));
+        return coverContainer;
+    }
+
+    const cover = document.createElement('img');
+    cover.crossOrigin = 'anonymous';
+
+    const fallbackUrls = getThumbnailFallbacks(thumbnailUrl);
+    let currentFallbackIndex = 0;
+
+    cover.onerror = function() {
+        currentFallbackIndex++;
+        if (currentFallbackIndex < fallbackUrls.length) {
+            this.src = fallbackUrls[currentFallbackIndex];
+        } else {
+            this.style.display = 'none';
+            coverContainer.appendChild(createCenteredGlyph('🎵'));
+        }
+    };
+
+    cover.src = fallbackUrls[0];
+    coverContainer.appendChild(cover);
+    return coverContainer;
+}
+
+function createHistoryListItemElement(item, { appTheme, colors }) {
+    const historyItem = document.createElement('div');
+    historyItem.className = 'history-list-item';
+    historyItem.setAttribute('data-url', item.url);
+    historyItem.setAttribute('data-ts', item.ts ?? '');
+    historyItem.setAttribute('role', 'button');
+    historyItem.setAttribute('tabindex', '0');
+    historyItem.style.setProperty('--history-item-border', appTheme === 'light' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)');
+    historyItem.style.setProperty('--item-hover-bg', colors.buttonHover);
+
+    const info = createPrimarySecondaryInfo({
+        title: item.title || i18n.t('track.unknown'),
+        subtitle: item.type === 'youtube' ? i18n.t('history.typeYoutube') : i18n.t('history.typeLocal'),
+        colors,
+        titleWeight: 500
+    });
+    const timeEl = document.createElement('div');
+    timeEl.className = 'history-list-time';
+    timeEl.style.setProperty('--history-time-color', colors.secondaryText);
+    const date = new Date((item.ts + player.clockOffset) * 1000);
+    timeEl.textContent = date.toLocaleString('zh-CN', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    });
+
+    historyItem.appendChild(createHistoryCover(item.thumbnail_url, colors));
+    historyItem.appendChild(info);
+    historyItem.appendChild(timeEl);
+    return historyItem;
+}
+
+function createSelectPlaylistItemElement(playlist, index, { appTheme, colors }) {
+    const playlistItem = document.createElement('div');
+    playlistItem.className = 'select-playlist-item';
+    playlistItem.dataset.playlistId = playlist.id;
+    playlistItem.setAttribute('role', 'button');
+    playlistItem.setAttribute('tabindex', '0');
+    playlistItem.style.setProperty('--select-playlist-item-border', appTheme === 'light' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)');
+    playlistItem.style.setProperty('--item-hover-bg', colors.buttonHover);
+
+    const gradient = PLAYLIST_OPTION_GRADIENTS[index % PLAYLIST_OPTION_GRADIENTS.length];
+    const icon = playlist.id === playlistManager.getActiveDefaultId() ? '⭐' : PLAYLIST_OPTION_ICONS[index % PLAYLIST_OPTION_ICONS.length];
+
+    const iconEl = document.createElement('div');
+    iconEl.className = 'select-playlist-item-icon';
+    iconEl.style.setProperty('--select-playlist-icon-bg', gradient);
+    iconEl.textContent = icon;
+
+    const info = createPrimarySecondaryInfo({
+        title: playlist.name,
+        subtitle: `📊 ${playlist.count || 0} 首歌曲`,
+        colors
+    });
+
+    const checkMark = document.createElement('div');
+    checkMark.className = 'select-playlist-checkmark';
+    checkMark.dataset.role = 'playlist-checkmark';
+    checkMark.textContent = '✅';
+
+    playlistItem.appendChild(iconEl);
+    playlistItem.appendChild(info);
+    playlistItem.appendChild(checkMark);
+    return playlistItem;
+}
+
+function createHistorySearchInput({ appTheme, colors }) {
+    const searchInput = document.createElement('input');
+    const defaultBorder = appTheme === 'light' ? 'rgba(0, 0, 0, 0.15)' : 'rgba(255, 255, 255, 0.15)';
+    searchInput.type = 'text';
+    searchInput.className = 'history-search-input';
+    searchInput.placeholder = i18n.t('history.search.placeholder');
+    searchInput.style.setProperty('--history-search-border', defaultBorder);
+    searchInput.style.setProperty('--history-search-bg', appTheme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)');
+    searchInput.style.setProperty('--history-search-color', colors.textColor);
+    return searchInput;
 }
 
 function bindPlaylistItemDelegates(container) {
@@ -956,162 +1072,104 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
     if (!playlist || playlist.length === 0) {
         // 播放列表为空时，显示空状态提示和历史按钮
         const emptyContainer = document.createElement('div');
-        emptyContainer.style.cssText = `
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            gap: 24px;
-            height: 60vh;
-            color: #999;
-        `;
+        emptyContainer.className = 'playlist-empty-state';
         
         // 空状态文本
         const emptyText = document.createElement('div');
-        emptyText.style.cssText = `
-            font-size: 16px;
-            text-align: center;
-            color: #999;
-        `;
+        emptyText.className = 'playlist-empty-text';
         emptyText.innerHTML = i18n.t('playlist.noSongs');
         
         // 历史按钮
-        const historyBtn = document.createElement('button');
         const appTheme = getCurrentAppTheme();
         const colors = getThemeColors(appTheme);
-        
-        historyBtn.style.cssText = `
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-            color: white;
-            padding: 16px 32px;
-            border-radius: 12px;
-            font-size: 18px;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-weight: 600;
-            white-space: nowrap;
-        `;
-        
-        historyBtn.innerHTML = '📜 播放历史';
-        historyBtn.title = '查看播放历史';
-        
-        historyBtn.addEventListener('mouseover', () => {
-            historyBtn.style.transform = 'translateY(-2px)';
-            historyBtn.style.boxShadow = '0 8px 24px rgba(102, 126, 234, 0.6)';
-        });
-        
-        historyBtn.addEventListener('mouseout', () => {
-            historyBtn.style.transform = 'translateY(0)';
-            historyBtn.style.boxShadow = '0 4px 16px rgba(102, 126, 234, 0.4)';
-        });
-        
-        historyBtn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            await showPlaybackHistory();
+
+        const historyBtn = createEmptyActionButton({
+            content: '📜 播放历史',
+            title: '查看播放历史',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            shadow: '0 4px 16px rgba(102, 126, 234, 0.4)',
+            hoverShadow: '0 8px 24px rgba(102, 126, 234, 0.6)',
+            onClick: async (e) => {
+                e.stopPropagation();
+                await showPlaybackHistory();
+            }
         });
         
         // 添加10首随即歌曲
         if (selectedPlaylistId === playlistManager.getActiveDefaultId()) {
-            const randomBtn = document.createElement('button');
-            randomBtn.style.cssText = `
-                background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-                border: none;
-                color: white;
-                padding: 16px 32px;
-                border-radius: 12px;
-                font-size: 18px;
-                cursor: pointer;
-                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                box-shadow: 0 4px 16px rgba(67, 233, 123, 0.3);
-                display: flex;
-                align-items: center;
-                gap: 12px;
-                font-weight: 600;
-                white-space: nowrap;
-            `;
-            randomBtn.innerHTML = '🎲 随机添加10首歌';
-            randomBtn.title = '从所有歌单和本地歌曲中随机添加10首到队列';
-
-            randomBtn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                try {
-                    loading.show('🎲 正在随机添加10首歌...');
-                    // 1. 获取所有歌单和本地歌曲
-                    await playlistManager.loadAll();
-                    let allSongs = [];
-                    // 从所有歌单收集（排除default）
-                    playlistManager.playlists.forEach(pl => {
-                        if (pl.id !== playlistManager.getActiveDefaultId() && Array.isArray(pl.songs)) {
-                            allSongs = allSongs.concat(pl.songs);
-                        }
-                    });
-                    // 从本地文件树收集
-                    const collectLocalSongs = (node, arr) => {
-                        if (!node) return;
-                        if (node.files) {
-                            node.files.forEach(f => arr.push({
-                                url: f.rel,
-                                title: f.name.replace(/\.[^/.]+$/, ''),
-                                type: 'local'
-                            }));
-                        }
-                        if (node.dirs) {
-                            node.dirs.forEach(dir => collectLocalSongs(dir, arr));
-                        }
-                    };
-                    // 获取本地文件树
-                    let fileTree = null;
+            const randomBtn = createEmptyActionButton({
+                content: '🎲 随机添加10首歌',
+                title: '从所有歌单和本地歌曲中随机添加10首到队列',
+                background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+                shadow: '0 4px 16px rgba(67, 233, 123, 0.3)',
+                hoverShadow: '0 8px 24px rgba(67, 233, 123, 0.45)',
+                onClick: async (e) => {
+                    e.stopPropagation();
                     try {
-                        const treeResult = await api.get('/tree');
-                        fileTree = treeResult?.tree;
-                    } catch {}
-                    if (fileTree) {
-                        collectLocalSongs(fileTree, allSongs);
-                    }
-
-                    // 去重（按url）
-                    const urlSet = new Set();
-                    allSongs = allSongs.filter(song => {
-                        if (!song.url || urlSet.has(song.url)) return false;
-                        urlSet.add(song.url);
-                        return true;
-                    });
-
-                    // 随机选10首
-                    const shuffled = allSongs.sort(() => Math.random() - 0.5);
-                    const randomSongs = shuffled.slice(0, 10);
-
-                    if (randomSongs.length === 0) {
-                        loading.hide();
-                        Toast.error('没有可用的歌曲可添加');
-                        return;
-                    }
-
-                    // 批量添加到默认歌单
-                    for (let i = 0; i < randomSongs.length; i++) {
-                        await api.addToPlaylist({
-                            playlist_id: playlistManager.getActiveDefaultId(),
-                            song: randomSongs[i],
-                            insert_index: i
+                        loading.show('🎲 正在随机添加10首歌...');
+                        await playlistManager.loadAll();
+                        let allSongs = [];
+                        playlistManager.playlists.forEach(pl => {
+                            if (pl.id !== playlistManager.getActiveDefaultId() && Array.isArray(pl.songs)) {
+                                allSongs = allSongs.concat(pl.songs);
+                            }
                         });
+                        const collectLocalSongs = (node, arr) => {
+                            if (!node) return;
+                            if (node.files) {
+                                node.files.forEach(f => arr.push({
+                                    url: f.rel,
+                                    title: f.name.replace(/\.[^/.]+$/, ''),
+                                    type: 'local'
+                                }));
+                            }
+                            if (node.dirs) {
+                                node.dirs.forEach(dir => collectLocalSongs(dir, arr));
+                            }
+                        };
+                        let fileTree = null;
+                        try {
+                            const treeResult = await api.get('/tree');
+                            fileTree = treeResult?.tree;
+                        } catch {}
+                        if (fileTree) {
+                            collectLocalSongs(fileTree, allSongs);
+                        }
+
+                        const urlSet = new Set();
+                        allSongs = allSongs.filter(song => {
+                            if (!song.url || urlSet.has(song.url)) return false;
+                            urlSet.add(song.url);
+                            return true;
+                        });
+
+                        const shuffled = allSongs.sort(() => Math.random() - 0.5);
+                        const randomSongs = shuffled.slice(0, 10);
+
+                        if (randomSongs.length === 0) {
+                            loading.hide();
+                            Toast.error('没有可用的歌曲可添加');
+                            return;
+                        }
+
+                        for (let i = 0; i < randomSongs.length; i++) {
+                            await api.addToPlaylist({
+                                playlist_id: playlistManager.getActiveDefaultId(),
+                                song: randomSongs[i],
+                                insert_index: i
+                            });
+                        }
+                        await playlistManager.loadCurrent();
+                        loading.hide();
+                        Toast.success(`已随机添加${randomSongs.length}首歌到队列`);
+                        if (randomSongs[0]) {
+                            window.app?.playSong(randomSongs[0]);
+                        }
+                        renderPlaylistUI({ container, onPlay, currentMeta });
+                    } catch (err) {
+                        loading.hide();
+                        Toast.error('随机添加失败: ' + (err.message || err));
                     }
-                    await playlistManager.loadCurrent();
-                    loading.hide();
-                    Toast.success(`已随机添加${randomSongs.length}首歌到队列`);
-                    // 自动播放第一首
-                    if (randomSongs[0]) {
-                        window.app?.playSong(randomSongs[0]);
-                    }
-                    // 刷新列表
-                    renderPlaylistUI({ container, onPlay, currentMeta });
-                } catch (err) {
-                    loading.hide();
-                    Toast.error('随机添加失败: ' + (err.message || err));
                 }
             });
 
@@ -1558,28 +1616,8 @@ export async function showPlaybackHistory() {
 
         const searchContainer = document.createElement('div');
         searchContainer.className = 'history-search-container';
-        searchContainer.style.cssText = 'padding: 8px 16px 0; flex-shrink: 0;';
 
-        const searchInput = document.createElement('input');
-        searchInput.type = 'text';
-        searchInput.placeholder = i18n.t('history.search.placeholder');
-        searchInput.style.cssText = `
-            width: 100%;
-            padding: 10px 14px;
-            border-radius: 8px;
-            border: 1px solid ${appTheme === 'light' ? 'rgba(0, 0, 0, 0.15)' : 'rgba(255, 255, 255, 0.15)'};
-            background: ${appTheme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)'};
-            color: ${colors.textColor};
-            font-size: 14px;
-            outline: none;
-            box-sizing: border-box;
-        `;
-        searchInput.addEventListener('focus', () => {
-            searchInput.style.borderColor = '#667eea';
-        });
-        searchInput.addEventListener('blur', () => {
-            searchInput.style.borderColor = appTheme === 'light' ? 'rgba(0, 0, 0, 0.15)' : 'rgba(255, 255, 255, 0.15)';
-        });
+        const searchInput = createHistorySearchInput({ appTheme, colors });
         searchContainer.appendChild(searchInput);
 
         const historyContent = historyModal.querySelector('.history-modal-content');
@@ -1595,132 +1633,7 @@ export async function showPlaybackHistory() {
 
         // 渲染单个历史项
         function renderHistoryItem(item) {
-            const historyItem = document.createElement('div');
-            historyItem.className = 'history-list-item';
-            historyItem.setAttribute('data-url', item.url);
-            historyItem.setAttribute('data-ts', item.ts ?? '');
-            historyItem.setAttribute('role', 'button');
-            historyItem.setAttribute('tabindex', '0');
-            historyItem.style.cssText = `
-                padding: 12px 16px;
-                border-bottom: 1px solid ${appTheme === 'light' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)'};
-                display: flex;
-                align-items: center;
-                gap: 12px;
-                cursor: pointer;
-                transition: background 0.2s;
-            `;
-            historyItem.style.setProperty('--item-hover-bg', colors.buttonHover);
-
-            // 封面
-            const thumbnailUrl = item.thumbnail_url;
-            const hasValidThumbnail = thumbnailUrl && thumbnailUrl !== 'null' && thumbnailUrl !== 'undefined' && thumbnailUrl.trim() !== '';
-
-            const coverContainer = document.createElement('div');
-            coverContainer.style.cssText = `
-                width: 40px;
-                height: 40px;
-                border-radius: 4px;
-                background: ${colors.buttonBg};
-                flex-shrink: 0;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                overflow: hidden;
-            `;
-
-            if (hasValidThumbnail) {
-                const cover = document.createElement('img');
-                cover.crossOrigin = 'anonymous';
-                cover.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
-
-                const getThumbnailFallbacks = (url) => {
-                    if (url && url.includes('img.youtube.com/vi/')) {
-                        const baseUrl = url.substring(0, url.lastIndexOf('/'));
-                        const normalizedFirst = (url.endsWith('/sddefault.jpg') || url.endsWith('/maxresdefault.jpg'))
-                            ? baseUrl + '/hqdefault.jpg'
-                            : url;
-                        return [normalizedFirst, baseUrl + '/mqdefault.jpg', baseUrl + '/default.jpg'];
-                    }
-                    return [url];
-                };
-
-                const fallbackUrls = getThumbnailFallbacks(thumbnailUrl);
-                let currentFallbackIndex = 0;
-
-                cover.onerror = function() {
-                    currentFallbackIndex++;
-                    if (currentFallbackIndex < fallbackUrls.length) {
-                        this.src = fallbackUrls[currentFallbackIndex];
-                    } else {
-                        this.style.display = 'none';
-                        const placeholder = document.createElement('div');
-                        placeholder.style.cssText = 'width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 20px;';
-                        placeholder.textContent = '🎵';
-                        coverContainer.appendChild(placeholder);
-                    }
-                };
-
-                cover.src = fallbackUrls[0];
-                coverContainer.appendChild(cover);
-            } else {
-                const placeholder = document.createElement('div');
-                placeholder.style.cssText = 'width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 20px;';
-                placeholder.textContent = '🎵';
-                coverContainer.appendChild(placeholder);
-            }
-
-            // 信息
-            const info = document.createElement('div');
-            info.style.cssText = 'flex: 1; overflow: hidden;';
-
-            const title = document.createElement('div');
-            title.style.cssText = `
-                color: ${colors.textColor};
-                font-weight: 500;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                font-size: 14px;
-            `;
-            title.textContent = item.title || i18n.t('track.unknown');
-
-            const typeLabel = document.createElement('div');
-            typeLabel.style.cssText = `
-                color: ${colors.secondaryText};
-                font-size: 12px;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                margin-top: 2px;
-            `;
-            typeLabel.textContent = item.type === 'youtube' ? i18n.t('history.typeYoutube') : i18n.t('history.typeLocal');
-
-            info.appendChild(title);
-            info.appendChild(typeLabel);
-
-            // 时间戳
-            const timeEl = document.createElement('div');
-            timeEl.style.cssText = `
-                color: ${colors.secondaryText};
-                font-size: 12px;
-                white-space: nowrap;
-                flex-shrink: 0;
-            `;
-            const date = new Date((item.ts + player.clockOffset) * 1000);
-            timeEl.textContent = date.toLocaleString('zh-CN', {
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false
-            });
-
-            historyItem.appendChild(coverContainer);
-            historyItem.appendChild(info);
-            historyItem.appendChild(timeEl);
-
-            return historyItem;
+            return createHistoryListItemElement(item, { appTheme, colors });
         }
 
         // 渲染过滤后的历史列表
@@ -1973,98 +1886,7 @@ async function showSelectPlaylistModal(song, historyModal) {
         } else {
             // 为每个歌单创建选项
             playlists.forEach((playlist, index) => {
-                const playlistItem = document.createElement('div');
-                playlistItem.className = 'select-playlist-item';
-                playlistItem.dataset.playlistId = playlist.id;
-                playlistItem.setAttribute('role', 'button');
-                playlistItem.setAttribute('tabindex', '0');
-                playlistItem.style.cssText = `
-                    padding: 16px;
-                    border-bottom: 1px solid ${appTheme === 'light' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)'};
-                    cursor: pointer;
-                    transition: background 0.2s;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    gap: 12px;
-                `;
-                playlistItem.style.setProperty('--item-hover-bg', colors.buttonHover);
-                
-                // 为不同歌单生成不同的渐变色（与歌单管理列表保持一致）
-                const gradients = [
-                    'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                    'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-                    'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-                    'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-                    'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-                    'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',
-                    'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
-                    'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)'
-                ];
-                const gradient = gradients[index % gradients.length];
-                
-                // 歌单图标（与歌单管理列表保持一致）
-                const icons = ['🎵', '🎧', '🎸', '🎹', '🎤', '🎼', '🎺', '🥁'];
-                const icon = playlist.id === playlistManager.getActiveDefaultId() ? '⭐' : icons[index % icons.length];
-                
-                // 创建图标容器
-                const iconEl = document.createElement('div');
-                iconEl.style.cssText = `
-                    background: ${gradient};
-                    width: 40px;
-                    height: 40px;
-                    border-radius: 8px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 20px;
-                    flex-shrink: 0;
-                `;
-                iconEl.textContent = icon;
-                playlistItem.appendChild(iconEl);
-                
-                const info = document.createElement('div');
-                info.style.cssText = `
-                    flex: 1;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 4px;
-                `;
-                
-                const name = document.createElement('div');
-                name.style.cssText = `
-                    color: ${colors.textColor};
-                    font-weight: 600;
-                    font-size: 14px;
-                `;
-                name.textContent = playlist.name;
-                
-                const count = document.createElement('div');
-                count.style.cssText = `
-                    color: ${colors.secondaryText};
-                    font-size: 12px;
-                `;
-                count.textContent = `📊 ${playlist.count || 0} 首歌曲`;
-                
-                info.appendChild(name);
-                info.appendChild(count);
-                playlistItem.appendChild(info);
-                
-                // 添加选中标记容器（初始隐藏）
-                const checkMark = document.createElement('div');
-                checkMark.style.cssText = `
-                    color: #4CAF50;
-                    font-size: 20px;
-                    margin-left: 12px;
-                    min-width: 24px;
-                    text-align: right;
-                    opacity: 0;
-                    transition: opacity 0.2s;
-                `;
-                checkMark.dataset.role = 'playlist-checkmark';
-                checkMark.textContent = '✅';
-                playlistItem.appendChild(checkMark);
-                
+                const playlistItem = createSelectPlaylistItemElement(playlist, index, { appTheme, colors });
                 selectPlaylistModalBody.appendChild(playlistItem);
             });
         }
@@ -2210,12 +2032,8 @@ async function closeHistoryModal(historyModal) {
 
 // 显示播放历史操作菜单（复用 search-action-menu 样式）
 function showHistoryActionMenu(song, historyModal, removeFromHistoryFn, rerenderCallback) {
-    // 移除已存在的菜单
-    document.querySelectorAll('.search-action-menu').forEach(m => m.remove());
-
-    const menu = document.createElement('div');
-    menu.className = 'search-action-menu';
-    menu.innerHTML = `
+    openOverlayActionMenu({
+        markup: `
         <div class="search-action-menu-content">
             <div class="search-action-menu-header">
                 <div class="search-action-menu-title">${escapeHTML(song.title || '---')}</div>
@@ -2240,47 +2058,29 @@ function showHistoryActionMenu(song, historyModal, removeFromHistoryFn, rerender
                 </button>
             </div>
         </div>
-    `;
-
-    document.body.appendChild(menu);
-    setTimeout(() => menu.classList.add('show'), 10);
-
-    const closeMenu = () => {
-        menu.classList.remove('show');
-        setTimeout(() => menu.remove(), 300);
-    };
-
-    menu.addEventListener('click', (e) => {
-        if (e.target === menu) {
-            closeMenu();
-            return;
-        }
-
-        if (e.target.closest('.search-action-menu-close')) {
-            closeMenu();
-            return;
-        }
-
-        const menuItem = e.target.closest('.search-action-menu-item');
-        if (!menuItem || !menu.contains(menuItem)) {
-            return;
-        }
-
-        e.stopPropagation();
-        const action = menuItem.getAttribute('data-action');
-        closeMenu();
-
-        setTimeout(async () => {
-            if (action === 'play-now') {
-                await handleHistoryPlayNow(song);
-            } else if (action === 'add-to-next') {
-                await handleHistoryAddToNext(song);
-            } else if (action === 'add-to-playlist') {
-                showSelectPlaylistModal(song, historyModal);
-            } else if (action === 'delete-record') {
-                await handleHistoryDeleteRecord(song, removeFromHistoryFn, rerenderCallback);
+        `,
+        onMenuClick: (e, { menu, closeMenu }) => {
+            const menuItem = e.target.closest('.search-action-menu-item');
+            if (!menuItem || !menu.contains(menuItem)) {
+                return;
             }
-        }, 300);
+
+            e.stopPropagation();
+            const action = menuItem.getAttribute('data-action');
+            closeMenu();
+
+            setTimeout(async () => {
+                if (action === 'play-now') {
+                    await handleHistoryPlayNow(song);
+                } else if (action === 'add-to-next') {
+                    await handleHistoryAddToNext(song);
+                } else if (action === 'add-to-playlist') {
+                    showSelectPlaylistModal(song, historyModal);
+                } else if (action === 'delete-record') {
+                    await handleHistoryDeleteRecord(song, removeFromHistoryFn, rerenderCallback);
+                }
+            }, 300);
+        }
     });
 }
 

@@ -220,6 +220,73 @@ export async function copyToClipboard(text) {
         }
     }
 
+    export function openOverlayActionMenu({
+        className = 'search-action-menu',
+        markup,
+        preferredSelector = '.search-action-menu-item, .search-action-menu-close',
+        onMenuClick = null
+    } = {}) {
+        document.querySelectorAll(`.${className}`).forEach((menu) => menu.remove());
+
+        const menu = document.createElement('div');
+        menu.className = className;
+        menu.innerHTML = markup;
+
+        const previousActiveElement = document.activeElement;
+
+        const cleanup = () => {
+            if (menu._keydownHandler) {
+                document.removeEventListener('keydown', menu._keydownHandler);
+                menu._keydownHandler = null;
+            }
+            restoreFocus(previousActiveElement);
+        };
+
+        const closeMenu = () => {
+            menu.classList.remove('show');
+            setTimeout(() => {
+                cleanup();
+                menu.remove();
+            }, 300);
+        };
+
+        menu._keydownHandler = (event) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                closeMenu();
+                return;
+            }
+
+            trapFocusInContainer(event, menu);
+        };
+
+        document.addEventListener('keydown', menu._keydownHandler);
+
+        menu.addEventListener('click', async (event) => {
+            if (event.target === menu) {
+                closeMenu();
+                return;
+            }
+
+            if (event.target.closest('.search-action-menu-close')) {
+                closeMenu();
+                return;
+            }
+
+            if (typeof onMenuClick === 'function') {
+                await onMenuClick(event, { menu, closeMenu });
+            }
+        });
+
+        document.body.appendChild(menu);
+        setTimeout(() => {
+            menu.classList.add('show');
+            focusFirstFocusable(menu, preferredSelector);
+        }, 10);
+
+        return { menu, closeMenu };
+    }
+
 // 延迟函数
 export function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));

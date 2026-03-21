@@ -1,11 +1,358 @@
 // 搜索功能模块
 import { api } from './api.js';
 import { Toast, formatTime, searchLoading } from './ui.js';
-import { buildTrackItemHTML } from './templates.js';
+import { buildTrackItemElement } from './templates.js';
 import { localFiles, getNodeByPath, getDirCoverUrl, countFiles } from './local.js';
 import { i18n } from './i18n.js';
-import { escapeHTML, restoreFocus, trapFocusInContainer } from './utils.js';
+import { escapeHTML, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js';
 import { playLock } from './playLock.js';
+
+const SEARCH_SUCCESS_ICON_MARKUP = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
+
+function createMarkupFragment(markup) {
+    return document.createRange().createContextualFragment(markup);
+}
+
+function snapshotElementChildren(element) {
+    return Array.from(element.childNodes).map((node) => node.cloneNode(true));
+}
+
+function restoreElementChildren(element, snapshot) {
+    element.replaceChildren(...snapshot.map((node) => node.cloneNode(true)));
+}
+
+function setElementText(element, text) {
+    element.replaceChildren(document.createTextNode(text));
+}
+
+function setElementMarkup(element, markup) {
+    element.replaceChildren(createMarkupFragment(markup));
+}
+
+function createSearchEmptyState(message) {
+    const emptyState = document.createElement('div');
+    emptyState.className = 'search-empty-state';
+
+    const icon = document.createElement('div');
+    icon.className = 'search-empty-icon';
+    icon.textContent = '🔍';
+
+    const text = document.createElement('p');
+    text.className = 'search-empty-text';
+    text.textContent = message;
+
+    emptyState.appendChild(icon);
+    emptyState.appendChild(text);
+    return emptyState;
+}
+
+function createSearchErrorState(message) {
+    const errorState = document.createElement('div');
+    errorState.className = 'search-error-state';
+    errorState.textContent = message;
+    return errorState;
+}
+
+function createSearchHistoryHeader(count) {
+    const header = document.createElement('div');
+    header.className = 'search-history-header';
+    header.appendChild(document.createTextNode(i18n.t('search.history.title') + ' '));
+
+    const countEl = document.createElement('span');
+    countEl.className = 'search-history-count';
+    countEl.textContent = `(${count})`;
+    header.appendChild(countEl);
+
+    return header;
+}
+
+function createSearchHistoryItem(query) {
+    const item = document.createElement('div');
+    item.className = 'search-history-item';
+
+    const icon = document.createElement('div');
+    icon.className = 'search-history-icon';
+    icon.textContent = '🔍';
+
+    const text = document.createElement('span');
+    text.className = 'search-history-text';
+    text.dataset.query = query;
+    text.textContent = query;
+
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'search-history-delete';
+    deleteButton.dataset.query = query;
+    deleteButton.title = i18n.t('search.history.delete');
+    deleteButton.setAttribute('aria-label', i18n.t('search.history.delete'));
+    deleteButton.textContent = '×';
+
+    item.appendChild(icon);
+    item.appendChild(text);
+    item.appendChild(deleteButton);
+    return item;
+}
+
+function createSearchActionMenuHeader(title) {
+    const header = document.createElement('div');
+    header.className = 'search-action-menu-header';
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'search-action-menu-title';
+    titleEl.textContent = title;
+
+    const closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.className = 'search-action-menu-close';
+    closeButton.textContent = '✕';
+
+    header.appendChild(titleEl);
+    header.appendChild(closeButton);
+    return header;
+}
+
+function createPlayNowConfirmView() {
+    const fragment = document.createDocumentFragment();
+    fragment.appendChild(createSearchActionMenuHeader(i18n.t('search.confirmPlayNow')));
+
+    const body = document.createElement('div');
+    body.className = 'search-action-menu-body';
+
+    const message = document.createElement('p');
+    message.className = 'play-now-confirm-msg';
+    message.textContent = i18n.t('search.confirmPlayNowMsg');
+
+    const buttonRow = document.createElement('div');
+    buttonRow.className = 'play-now-confirm-buttons';
+
+    const cancelButton = document.createElement('button');
+    cancelButton.type = 'button';
+    cancelButton.className = 'search-action-menu-item play-now-cancel';
+    cancelButton.dataset.action = 'confirm-cancel';
+    cancelButton.textContent = i18n.t('modal.cancel');
+
+    const confirmButton = document.createElement('button');
+    confirmButton.type = 'button';
+    confirmButton.className = 'search-action-menu-item play-now-confirm';
+    confirmButton.dataset.action = 'confirm-play-now';
+    confirmButton.textContent = i18n.t('search.confirmPlayNowBtn');
+
+    buttonRow.appendChild(cancelButton);
+    buttonRow.appendChild(confirmButton);
+    body.appendChild(message);
+    body.appendChild(buttonRow);
+    fragment.appendChild(body);
+
+    return fragment;
+}
+
+function createSearchBreadcrumbElement(breadcrumb) {
+    const breadcrumbContainer = document.createElement('div');
+    breadcrumbContainer.className = 'search-dir-breadcrumb';
+
+    breadcrumb.forEach((item, index) => {
+        if (index > 0) {
+            const separator = document.createElement('span');
+            separator.className = 'search-breadcrumb-sep';
+            separator.textContent = '›';
+            breadcrumbContainer.appendChild(separator);
+        }
+
+        const crumb = document.createElement('span');
+        const isLast = index === breadcrumb.length - 1;
+        crumb.className = isLast
+            ? 'search-breadcrumb-item search-breadcrumb-item--current'
+            : 'search-breadcrumb-item';
+        crumb.textContent = item.name;
+        if (!isLast) {
+            crumb.dataset.breadcrumbIndex = String(index);
+        }
+
+        breadcrumbContainer.appendChild(crumb);
+    });
+
+    return breadcrumbContainer;
+}
+
+function createSearchDirCardElement(dir) {
+    const card = document.createElement('div');
+    card.className = 'search-dir-card';
+    card.dataset.dirUrl = dir.rel;
+    card.dataset.dirName = dir.name;
+
+    const coverUrl = getDirCoverUrl(dir);
+    const cover = document.createElement('div');
+    cover.className = 'search-dir-card-cover';
+
+    const placeholder = document.createElement('div');
+    placeholder.className = 'search-dir-card-cover-placeholder';
+    placeholder.textContent = '📁';
+    placeholder.style.display = coverUrl ? 'none' : 'flex';
+
+    if (coverUrl) {
+        const image = document.createElement('img');
+        image.src = coverUrl;
+        image.alt = '';
+        image.loading = 'lazy';
+        image.addEventListener('error', () => {
+            image.style.display = 'none';
+            placeholder.style.display = 'flex';
+        });
+        cover.appendChild(image);
+    }
+    cover.appendChild(placeholder);
+
+    const info = document.createElement('div');
+    info.className = 'search-dir-card-info';
+
+    const title = document.createElement('div');
+    title.className = 'search-dir-card-title';
+    title.textContent = dir.name;
+
+    const count = document.createElement('div');
+    count.className = 'search-dir-card-count';
+    count.textContent = i18n.t('local.songCount', { count: countFiles(dir) });
+
+    info.appendChild(title);
+    info.appendChild(count);
+
+    card.appendChild(cover);
+    card.appendChild(info);
+    return card;
+}
+
+function createSearchDirContentElement(node) {
+    const content = document.createDocumentFragment();
+    const dirs = node.dirs || [];
+    const files = node.files || [];
+
+    if (!dirs.length && !files.length) {
+        const empty = document.createElement('div');
+        empty.className = 'search-dir-empty';
+        empty.textContent = i18n.t('local.dirEmpty');
+        content.appendChild(empty);
+        return content;
+    }
+
+    if (dirs.length > 0) {
+        const grid = document.createElement('div');
+        grid.className = 'search-dir-grid';
+        dirs.forEach((dir) => {
+            grid.appendChild(createSearchDirCardElement(dir));
+        });
+        content.appendChild(grid);
+    }
+
+    if (files.length > 0) {
+        const songs = document.createElement('div');
+        songs.className = 'search-dir-songs';
+        files.forEach((file) => {
+            songs.appendChild(buildTrackItemElement({
+                song: { url: file.rel, title: file.name, type: 'local' },
+                type: 'local',
+                metaText: file.rel,
+                actionButtonClass: 'track-menu-btn search-result-add',
+                actionButtonIcon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>',
+                isCover: false
+            }));
+        });
+        content.appendChild(songs);
+    }
+
+    return content;
+}
+
+function createSearchTabButton(tabName, label, isActive) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'search-tab' + (isActive ? ' active' : '');
+    button.dataset.tab = tabName;
+    button.textContent = label;
+    return button;
+}
+
+function createSearchResultsPanel(panelName, contentNode, isActive) {
+    const panel = document.createElement('div');
+    panel.className = 'search-results-panel' + (isActive ? ' active' : '');
+    panel.dataset.panel = panelName;
+    if (contentNode) {
+        panel.appendChild(contentNode);
+    }
+    return panel;
+}
+
+function createYoutubeLoadMoreControls() {
+    const fragment = document.createDocumentFragment();
+
+    const container = document.createElement('div');
+    container.className = 'search-load-more-container';
+    container.id = 'youtubeLoadMoreContainer';
+
+    const loadMoreButton = document.createElement('button');
+    loadMoreButton.type = 'button';
+    loadMoreButton.className = 'search-load-more-btn';
+    loadMoreButton.id = 'youtubeLoadMoreBtn';
+
+    const loadMoreIcon = document.createElement('span');
+    loadMoreIcon.className = 'icon';
+    loadMoreIcon.textContent = '⬇️';
+
+    const loadMoreLabel = document.createElement('span');
+    loadMoreLabel.className = 'label';
+    loadMoreLabel.textContent = i18n.t('search.loadMore', { count: 20 });
+
+    loadMoreButton.appendChild(loadMoreIcon);
+    loadMoreButton.appendChild(loadMoreLabel);
+
+    const loadAllButton = document.createElement('button');
+    loadAllButton.type = 'button';
+    loadAllButton.className = 'search-load-all-btn';
+    loadAllButton.id = 'youtubeLoadAllBtn';
+
+    const loadAllIcon = document.createElement('span');
+    loadAllIcon.className = 'icon';
+    loadAllIcon.textContent = '📥';
+
+    const loadAllLabel = document.createElement('span');
+    loadAllLabel.className = 'label';
+    loadAllLabel.textContent = i18n.t('search.loadAll');
+
+    loadAllButton.appendChild(loadAllIcon);
+    loadAllButton.appendChild(loadAllLabel);
+    container.appendChild(loadMoreButton);
+    container.appendChild(loadAllButton);
+
+    const loadStatus = document.createElement('div');
+    loadStatus.className = 'search-load-status';
+    loadStatus.id = 'youtubeLoadStatus';
+    loadStatus.style.display = 'none';
+
+    const statusText = document.createElement('span');
+    statusText.className = 'status-text';
+    statusText.textContent = i18n.t('search.loadingMore');
+    loadStatus.appendChild(statusText);
+
+    const noMore = document.createElement('div');
+    noMore.className = 'search-no-more';
+    noMore.id = 'youtubeNoMore';
+    noMore.style.display = 'none';
+
+    const noMoreIcon = document.createElement('span');
+    noMoreIcon.className = 'icon';
+    noMoreIcon.textContent = '✓';
+
+    const noMoreText = document.createElement('span');
+    noMoreText.className = 'text';
+    noMoreText.textContent = i18n.t('search.allLoaded');
+
+    noMore.appendChild(noMoreIcon);
+    noMore.appendChild(noMoreText);
+
+    fragment.appendChild(container);
+    fragment.appendChild(loadStatus);
+    fragment.appendChild(noMore);
+    return fragment;
+}
 
 export class SearchManager {
     constructor() {
@@ -114,6 +461,8 @@ export class SearchManager {
 
         if (searchModalBody && !searchModalBody._delegatedClickHandler) {
             searchModalBody._delegatedClickHandler = async (event) => {
+                const loadMoreArea = event.target.closest('.search-load-more-container, .search-load-status, .search-no-more');
+
                 const tab = event.target.closest('.search-tab');
                 if (tab && searchModalBody.contains(tab)) {
                     this.setActiveSearchTab(searchModalBody, tab.dataset.tab);
@@ -122,13 +471,23 @@ export class SearchManager {
 
                 const loadMoreBtn = event.target.closest('#youtubeLoadMoreBtn');
                 if (loadMoreBtn && searchModalBody.contains(loadMoreBtn)) {
+                    event.preventDefault();
+                    event.stopPropagation();
                     this.loadMoreYoutubeResults(false);
                     return;
                 }
 
                 const loadAllBtn = event.target.closest('#youtubeLoadAllBtn');
                 if (loadAllBtn && searchModalBody.contains(loadAllBtn)) {
+                    event.preventDefault();
+                    event.stopPropagation();
                     this.loadMoreYoutubeResults(true);
+                    return;
+                }
+
+                if (loadMoreArea && searchModalBody.contains(loadMoreArea)) {
+                    event.preventDefault();
+                    event.stopPropagation();
                     return;
                 }
 
@@ -343,26 +702,20 @@ export class SearchManager {
         
         if (history.length === 0) {
             searchModalHistory.style.display = 'none';
-            searchModalBody.innerHTML = `<div class="search-empty-state"><div class="search-empty-icon">🔍</div><p class="search-empty-text">${i18n.t('search.inputPrompt')}</p></div>`;
+            searchModalBody.replaceChildren(createSearchEmptyState(i18n.t('search.inputPrompt')));
             return;
         }
         
         searchModalHistory.style.display = 'block';
-        searchModalBody.innerHTML = '';
-        
-        // 创建历史记录标题
-        const title = `${i18n.t('search.history.title')} <span class="search-history-count">(${history.length})</span>`;
-        
-        searchModalHistoryList.innerHTML = `
-            <div class="search-history-header">${title}</div>
-            ${history.map(item => `
-                <div class="search-history-item">
-                    <div class="search-history-icon">🔍</div>
-                    <span class="search-history-text" data-query="${escapeHTML(item)}">${escapeHTML(item)}</span>
-                    <button class="search-history-delete" data-query="${escapeHTML(item)}" title="${i18n.t('search.history.delete')}">×</button>
-                </div>
-            `).join('')}
-        `;
+        searchModalBody.replaceChildren();
+
+        const fragment = document.createDocumentFragment();
+        fragment.appendChild(createSearchHistoryHeader(history.length));
+        history.forEach((item) => {
+            fragment.appendChild(createSearchHistoryItem(item));
+        });
+
+        searchModalHistoryList.replaceChildren(fragment);
     }
 
     // 执行搜索
@@ -407,7 +760,7 @@ export class SearchManager {
             
         } catch (error) {
             console.error('搜索失败:', error);
-            searchModalBody.innerHTML = `<div style="padding: 40px; text-align: center; color: #f44;">${escapeHTML(i18n.t('search.failed', { error: error.message }))}</div>`;
+            searchModalBody.replaceChildren(createSearchErrorState(i18n.t('search.failed', { error: error.message })));
         } finally {
             // 隐藏全屏加载动画
             searchLoading.hide();
@@ -429,9 +782,13 @@ export class SearchManager {
 
         const buildList = (items, type) => {
             if (!items || items.length === 0) {
-                return '<div class="search-empty">' + i18n.t('search.noResults') + '</div>';
+                const empty = document.createElement('div');
+                empty.className = 'search-empty';
+                empty.textContent = i18n.t('search.noResults');
+                return empty;
             }
-            return items.map(song => {
+            const fragment = document.createDocumentFragment();
+            items.forEach((song) => {
                 // ✅ 支持目录类型显示
                 const isDirectory = song.is_directory || song.type === 'directory';
                 const meta = isDirectory
@@ -444,63 +801,38 @@ export class SearchManager {
                     ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>'
                     : '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>';
 
-                return buildTrackItemHTML({
+                fragment.appendChild(buildTrackItemElement({
                     song,
                     type,
                     metaText: meta,
                     actionButtonClass: `track-menu-btn search-result-add ${isDirectory ? 'add-directory' : ''}`,
                     actionButtonIcon: icon,
                     isCover: song.is_directory || song.type === 'directory' // 标记是目录
-                });
-            }).join('');
+                }));
+            });
+            return fragment;
         };
 
-        // 为YouTube标签页构建带加载按钮的HTML
-        const buildYoutubePanel = () => {
-            const listHTML = buildList(youtubeResults, 'youtube');
+        const defaultTab = localResults.length > 0 ? 'local' : 'youtube';
 
-            // 只在有结果的情况下添加加载按钮
-            if (youtubeResults && youtubeResults.length > 0) {
-                return listHTML + `
-                    <div class="search-load-more-container" id="youtubeLoadMoreContainer">
-                        <button class="search-load-more-btn" id="youtubeLoadMoreBtn">
-                            <span class="icon">⬇️</span>
-                            <span class="label">${i18n.t('search.loadMore', { count: 20 })}</span>
-                        </button>
-                        <button class="search-load-all-btn" id="youtubeLoadAllBtn">
-                            <span class="icon">📥</span>
-                            <span class="label">${i18n.t('search.loadAll')}</span>
-                        </button>
-                    </div>
-                    <div class="search-load-status" id="youtubeLoadStatus" style="display:none;">
-                        <span class="status-text">${i18n.t('search.loadingMore')}</span>
-                    </div>
-                    <div class="search-no-more" id="youtubeNoMore" style="display:none;">
-                        <span class="icon">✓</span>
-                        <span class="text">${i18n.t('search.allLoaded')}</span>
-                    </div>
-                `;
-            }
-            return listHTML;
-        };
+        const tabs = document.createElement('div');
+        tabs.className = 'search-tabs';
+        tabs.appendChild(createSearchTabButton('local', i18n.t('search.localTab', { count: localResults.length }), defaultTab === 'local'));
+        tabs.appendChild(createSearchTabButton('youtube', i18n.t('search.networkTab', { count: youtubeResults.length }), defaultTab === 'youtube'));
 
-            // 选择默认标签：优先本地，其次网络
-            const defaultTab = localResults.length > 0 ? 'local' : 'youtube';
+        const panels = document.createElement('div');
+        panels.className = 'search-tab-panels';
 
-        searchModalBody.innerHTML = `
-            <div class="search-tabs">
-                <button class="search-tab ${defaultTab === 'local' ? 'active' : ''}" data-tab="local">${i18n.t('search.localTab', { count: localResults.length })}</button>
-                <button class="search-tab ${defaultTab === 'youtube' ? 'active' : ''}" data-tab="youtube">${i18n.t('search.networkTab', { count: youtubeResults.length })}</button>
-            </div>
-            <div class="search-tab-panels">
-                <div class="search-results-panel ${defaultTab === 'local' ? 'active' : ''}" data-panel="local">
-                    ${buildList(localResults, 'local')}
-                </div>
-                <div class="search-results-panel ${defaultTab === 'youtube' ? 'active' : ''}" data-panel="youtube">
-                    ${buildYoutubePanel()}
-                </div>
-            </div>
-        `;
+        const localPanel = createSearchResultsPanel('local', buildList(localResults, 'local'), defaultTab === 'local');
+        const youtubePanel = createSearchResultsPanel('youtube', buildList(youtubeResults, 'youtube'), defaultTab === 'youtube');
+
+        if (youtubeResults && youtubeResults.length > 0) {
+            youtubePanel.appendChild(createYoutubeLoadMoreControls());
+        }
+
+        panels.appendChild(localPanel);
+        panels.appendChild(youtubePanel);
+        searchModalBody.replaceChildren(tabs, panels);
 
         // 初始化YouTube加载状态
         if (youtubeResults && youtubeResults.length > 0) {
@@ -518,9 +850,6 @@ export class SearchManager {
      * 显示搜索结果操作菜单（全屏模态框）
      */
     showSearchActionMenu(button, item, isDirectory) {
-        // 移除已存在的菜单
-        document.querySelectorAll('.search-action-menu').forEach(m => m.remove());
-
         const songData = {
             url: item.getAttribute('data-url'),
             title: item.getAttribute('data-title'),
@@ -556,10 +885,8 @@ export class SearchManager {
             ? i18n.t('search.actionMenu.addToPlaylistNamed', { name: playlistName })
             : i18n.t('search.actionMenu.addToPlaylist');
 
-        // 创建全屏模态框
-        const menu = document.createElement('div');
-        menu.className = 'search-action-menu';
-        menu.innerHTML = `
+        const { menu } = openOverlayActionMenu({
+            markup: `
             <div class="search-action-menu-content">
                 <div class="search-action-menu-header">
                     <div class="search-action-menu-title">${escapeHTML(songData.title)}</div>
@@ -584,91 +911,69 @@ export class SearchManager {
                     </button>
                 </div>
             </div>
-        `;
-        
-        // 添加到body
-        document.body.appendChild(menu);
-        
-        // 延迟显示动画
-        setTimeout(() => menu.classList.add('show'), 10);
-        
-        // 关闭菜单函数
-        const closeMenu = () => {
-            menu.classList.remove('show');
-            setTimeout(() => menu.remove(), 300);
-        };
+        `,
+            onMenuClick: async (e, { menu, closeMenu }) => {
+                const menuItem = e.target.closest('.search-action-menu-item');
+                if (!menuItem || !menu.contains(menuItem)) {
+                    return;
+                }
 
-        menu.addEventListener('click', async (e) => {
-            if (e.target === menu) {
+                e.stopPropagation();
+                const action = menuItem.getAttribute('data-action');
+
+                if (action === 'play-now') {
+                    this.showPlayNowConfirm(menu, songData, isDirectory, button, closeMenu);
+                    return;
+                }
+
+                if (action === 'confirm-cancel') {
+                    closeMenu();
+                    return;
+                }
+
+                if (action === 'confirm-play-now') {
+                    closeMenu();
+                    setTimeout(() => this.handlePlayNow(songData, isDirectory, button), 300);
+                    return;
+                }
+
                 closeMenu();
-                return;
-            }
 
-            if (e.target.closest('.search-action-menu-close')) {
-                closeMenu();
-                return;
-            }
-
-            const menuItem = e.target.closest('.search-action-menu-item');
-            if (!menuItem || !menu.contains(menuItem)) {
-                return;
-            }
-
-            e.stopPropagation();
-            const action = menuItem.getAttribute('data-action');
-
-            if (action === 'play-now') {
-                this.showPlayNowConfirm(menu, songData, isDirectory, button, closeMenu);
-                return;
-            }
-
-            if (action === 'confirm-cancel') {
-                closeMenu();
-                return;
-            }
-
-            if (action === 'confirm-play-now') {
-                closeMenu();
-                setTimeout(() => this.handlePlayNow(songData, isDirectory, button), 300);
-                return;
-            }
-
-            closeMenu();
-
-            setTimeout(async () => {
-                if (action === 'add-to-queue') {
-                    await this.handleAddToQueue(songData, isDirectory, button);
-                } else if (action === 'add-to-playlist') {
-                    const playlistManager = window.app?.modules?.playlistManager;
-                    const selectedId = playlistManager?.getSelectedPlaylistId() || playlistManager?.getActiveDefaultId?.() || 'default';
-                    const activeDefault = playlistManager?.getActiveDefaultId?.() || 'default';
-                    if (selectedId !== activeDefault) {
-                        try {
-                            const result = await api.addToPlaylist({
-                                playlist_id: selectedId,
-                                song: songData
-                            });
-                            if (result.status === 'OK') {
-                                const name = playlistManager.getCurrentName() || selectedId;
-                                Toast.success(i18n.t('search.addSuccess', { name, title: songData.title }));
-                                await playlistManager.refreshAll();
-                            } else if (result.duplicate) {
-                                Toast.warning(`${songData.title} ${i18n.t('search.alreadyInList')}`);
-                            } else {
+                setTimeout(async () => {
+                    if (action === 'add-to-queue') {
+                        await this.handleAddToQueue(songData, isDirectory, button);
+                    } else if (action === 'add-to-playlist') {
+                        const playlistManager = window.app?.modules?.playlistManager;
+                        const selectedId = playlistManager?.getSelectedPlaylistId() || playlistManager?.getActiveDefaultId?.() || 'default';
+                        const activeDefault = playlistManager?.getActiveDefaultId?.() || 'default';
+                        if (selectedId !== activeDefault) {
+                            try {
+                                const result = await api.addToPlaylist({
+                                    playlist_id: selectedId,
+                                    song: songData
+                                });
+                                if (result.status === 'OK') {
+                                    const name = playlistManager.getCurrentName() || selectedId;
+                                    Toast.success(i18n.t('search.addSuccess', { name, title: songData.title }));
+                                    await playlistManager.refreshAll();
+                                } else if (result.duplicate) {
+                                    Toast.warning(`${songData.title} ${i18n.t('search.alreadyInList')}`);
+                                } else {
+                                    Toast.error(i18n.t('search.addFailed'));
+                                }
+                            } catch (err) {
+                                console.error('[搜索] 添加到歌单失败:', err);
                                 Toast.error(i18n.t('search.addFailed'));
                             }
-                        } catch (err) {
-                            console.error('[搜索] 添加到歌单失败:', err);
-                            Toast.error(i18n.t('search.addFailed'));
+                        } else {
+                            const { showSelectPlaylistModal } = await import('./playlist.js');
+                            await showSelectPlaylistModal(songData, null);
                         }
-                    } else {
-                        const { showSelectPlaylistModal } = await import('./playlist.js');
-                        await showSelectPlaylistModal(songData, null);
+                    } else if (action === 'add-all-to-playlist') {
+                        await this.handleAddAllToPlaylist(currentTab);
                     }
-                } else if (action === 'add-all-to-playlist') {
-                    await this.handleAddAllToPlaylist(currentTab);
-                }
-            }, 300);
+                }, 300);
+            }
         });
     }
 
@@ -677,26 +982,14 @@ export class SearchManager {
      */
     showPlayNowConfirm(menu, songData, isDirectory, btn, closeMenu) {
         const content = menu.querySelector('.search-action-menu-content');
-        content.innerHTML = `
-            <div class="search-action-menu-header">
-                <div class="search-action-menu-title">${i18n.t('search.confirmPlayNow')}</div>
-                <button class="search-action-menu-close">✕</button>
-            </div>
-            <div class="search-action-menu-body">
-                <p class="play-now-confirm-msg">${i18n.t('search.confirmPlayNowMsg')}</p>
-                <div class="play-now-confirm-buttons">
-                    <button class="search-action-menu-item play-now-cancel" data-action="confirm-cancel">${i18n.t('modal.cancel')}</button>
-                    <button class="search-action-menu-item play-now-confirm" data-action="confirm-play-now">${i18n.t('search.confirmPlayNowBtn')}</button>
-                </div>
-            </div>
-        `;
+        content.replaceChildren(createPlayNowConfirmView());
     }
     
     /**
      * 立即播放：将歌曲插入队列顶部并播放
      */
     async handlePlayNow(songData, isDirectory, btn) {
-        const originalHTML = btn.innerHTML;
+        const originalContent = snapshotElementChildren(btn);
         try {
             const playlistId = this.getCurrentPlaylistId ? this.getCurrentPlaylistId() : this.currentPlaylistId;
 
@@ -711,7 +1004,7 @@ export class SearchManager {
             }
 
             // 显示加载状态
-            btn.innerHTML = '⏳';
+            setElementText(btn, '⏳');
             btn.disabled = true;
 
             // 1. 将歌曲插入到队列顶部（index=0，当前播放的前面）
@@ -750,13 +1043,13 @@ export class SearchManager {
             }
 
             Toast.success(i18n.t('search.nowPlaying', { title: songData.title }));
-            btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
+            setElementMarkup(btn, SEARCH_SUCCESS_ICON_MARKUP);
 
         } catch (error) {
             playLock.release();
             console.error('[立即播放] 失败:', error);
             Toast.error(i18n.t('search.playFailed') + ': ' + error.message);
-            btn.innerHTML = originalHTML;
+            restoreElementChildren(btn, originalContent);
             btn.disabled = false;
         }
     }
@@ -773,8 +1066,8 @@ export class SearchManager {
                 console.log('[搜索] 添加整个目录:', songData.url);
                 
                 // 显示加载状态
-                const originalHTML = btn.innerHTML;
-                btn.innerHTML = i18n.t('search.loadingDir');
+                const originalContent = snapshotElementChildren(btn);
+                setElementText(btn, i18n.t('search.loadingDir'));
                 btn.disabled = true;
                 
                 try {
@@ -791,7 +1084,7 @@ export class SearchManager {
                     const songs = result.songs || [];
                     if (songs.length === 0) {
                         Toast.warning(i18n.t('search.noMusicInDir'));
-                        btn.innerHTML = originalHTML;
+                        restoreElementChildren(btn, originalContent);
                         btn.disabled = false;
                         return;
                     }
@@ -840,7 +1133,7 @@ export class SearchManager {
                     }
 
                     Toast.success(i18n.t('search.addDirSuccess', { count: addedCount, name: playlistName }));
-                    btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
+                    setElementMarkup(btn, SEARCH_SUCCESS_ICON_MARKUP);
                     
                     // ✅【关键】刷新播放列表显示 - 直接调用 renderPlaylistUI 确保立即显示
                     try {
@@ -872,7 +1165,7 @@ export class SearchManager {
                 } catch (error) {
                     console.error('添加目录歌曲失败:', error);
                     Toast.error(i18n.t('search.addDirFailed') + ': ' + error.message);
-                    btn.innerHTML = originalHTML;
+                    restoreElementChildren(btn, originalContent);
                     btn.disabled = false;
                 }
             } else {
@@ -898,7 +1191,7 @@ export class SearchManager {
                         }
                     }
                     Toast.success(i18n.t('search.addSuccess', { name: playlistName, title: songData.title }));
-                    btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
+                    setElementMarkup(btn, SEARCH_SUCCESS_ICON_MARKUP);
                     btn.disabled = true;
                     
                     // ✅【关键】刷新播放列表显示 - 直接调用 renderPlaylistUI 确保立即显示
@@ -1212,23 +1505,30 @@ export class SearchManager {
         if (!youtubePanel) return;
 
         const loadMoreContainer = youtubePanel.querySelector('.search-load-more-container');
+        const scrollContainer = document.getElementById('searchModalBody');
+        const previousTop = loadMoreContainer ? loadMoreContainer.getBoundingClientRect().top : null;
 
-        const newHTML = newResults.map(song =>
-            buildTrackItemHTML({
+        const fragment = document.createDocumentFragment();
+        newResults.forEach((song) => {
+            fragment.appendChild(buildTrackItemElement({
                 song,
                 type: 'youtube',
                 metaText: song.duration ? formatTime(song.duration) : i18n.t('track.unknownDuration'),
                 actionButtonClass: 'track-menu-btn search-result-add',
                 actionButtonIcon: '<svg class="icon icon-plus"><use xlink:href="#icon-plus"></use></svg>'
-            })
-        ).join('');
+            }));
+        });
 
         if (loadMoreContainer) {
-            loadMoreContainer.insertAdjacentHTML('beforebegin', newHTML);
+            loadMoreContainer.parentNode.insertBefore(fragment, loadMoreContainer);
+            if (scrollContainer && previousTop !== null) {
+                const nextTop = loadMoreContainer.getBoundingClientRect().top;
+                scrollContainer.scrollTop += nextTop - previousTop;
+            }
+            return;
         }
 
-        // 重新绑定事件
-        this.bindSearchResultEvents(youtubePanel);
+        youtubePanel.appendChild(fragment);
     }
 
     /**
@@ -1315,79 +1615,12 @@ export class SearchManager {
         const searchModalBody = document.getElementById('searchModalBody');
         if (!searchModalBody) return;
 
-        const breadcrumbHTML = this.buildSearchBreadcrumbHTML(this.dirNavState.breadcrumb);
-        const contentHTML = this.buildDirContentHTML(node);
+        const dirView = document.createElement('div');
+        dirView.className = 'search-dir-view';
+        dirView.appendChild(createSearchBreadcrumbElement(this.dirNavState.breadcrumb));
+        dirView.appendChild(createSearchDirContentElement(node));
 
-        searchModalBody.innerHTML = `
-            <div class="search-dir-view">
-                <div class="search-dir-breadcrumb">${breadcrumbHTML}</div>
-                ${contentHTML}
-            </div>
-        `;
-    }
-
-    // 生成面包屑 HTML
-    buildSearchBreadcrumbHTML(breadcrumb) {
-        return breadcrumb.map((item, index) => {
-            const isLast = index === breadcrumb.length - 1;
-            const sep = index > 0 ? '<span class="search-breadcrumb-sep">›</span>' : '';
-            if (isLast) {
-                return `${sep}<span class="search-breadcrumb-item search-breadcrumb-item--current">${escapeHTML(item.name)}</span>`;
-            }
-            return `${sep}<span class="search-breadcrumb-item" data-breadcrumb-index="${index}">${escapeHTML(item.name)}</span>`;
-        }).join('');
-    }
-
-    // 生成目录内容 HTML（子目录卡片 + 歌曲列表）
-    buildDirContentHTML(node) {
-        const dirs = node.dirs || [];
-        const files = node.files || [];
-
-        if (!dirs.length && !files.length) {
-            return '<div class="search-dir-empty">' + i18n.t('local.dirEmpty') + '</div>';
-        }
-
-        let html = '';
-
-        // 子目录卡片网格
-        if (dirs.length > 0) {
-            html += '<div class="search-dir-grid">';
-            dirs.forEach(dir => {
-                const coverUrl = getDirCoverUrl(dir);
-                const fileCount = countFiles(dir);
-                html += `
-                    <div class="search-dir-card" data-dir-url="${escapeHTML(dir.rel)}" data-dir-name="${escapeHTML(dir.name)}">
-                        <div class="search-dir-card-cover">
-                            ${coverUrl ? `<img src="${escapeHTML(coverUrl)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" loading="lazy" />` : ''}
-                            <div class="search-dir-card-cover-placeholder" ${coverUrl ? '' : 'style="display:flex"'}>📁</div>
-                        </div>
-                        <div class="search-dir-card-info">
-                            <div class="search-dir-card-title">${escapeHTML(dir.name)}</div>
-                            <div class="search-dir-card-count">${i18n.t('local.songCount', { count: fileCount })}</div>
-                        </div>
-                    </div>
-                `;
-            });
-            html += '</div>';
-        }
-
-        // 歌曲列表
-        if (files.length > 0) {
-            html += '<div class="search-dir-songs">';
-            files.forEach(file => {
-                html += buildTrackItemHTML({
-                    song: { url: file.rel, title: file.name, type: 'local' },
-                    type: 'local',
-                    metaText: file.rel,
-                    actionButtonClass: 'track-menu-btn search-result-add',
-                    actionButtonIcon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>',
-                    isCover: false
-                });
-            });
-            html += '</div>';
-        }
-
-        return html;
+        searchModalBody.replaceChildren(dirView);
     }
 
     // 点击面包屑回退
