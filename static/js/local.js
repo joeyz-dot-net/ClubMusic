@@ -1,7 +1,6 @@
 import { api } from './api.js';
 import { Toast } from './ui.js';
 import { i18n } from './i18n.js';
-import { escapeHTML } from './utils.js';
 
 // 当前导航路径
 let currentNavPath = [];
@@ -45,100 +44,209 @@ export const getNodeByPath = (root, path) => {
     return node;
 };
 
-// 构建面包屑导航HTML
-const buildBreadcrumbHTML = (path) => {
-    let html = '<div class="local-breadcrumb">';
-    html += `<span class="breadcrumb-home" data-nav-to="root">🏠 ${i18n.t('local.home')}</span>`;
-    
-    path.forEach((name, index) => {
-        const navPath = path.slice(0, index + 1).join('/');
-        html += `<span class="breadcrumb-sep">›</span>`;
-        html += `<span class="breadcrumb-item" data-nav-to="${escapeHTML(navPath)}">${escapeHTML(name)}</span>`;
+const createInteractiveElement = ({ tag = 'div', className, dataset = {}, label }) => {
+    const element = document.createElement(tag);
+    element.className = className;
+    element.tabIndex = 0;
+    element.setAttribute('role', 'button');
+    if (label) {
+        element.setAttribute('aria-label', label);
+    }
+
+    Object.entries(dataset).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+            element.dataset[key] = value;
+        }
     });
-    
-    // 添加返回按钮
-    html += `<button class="local-return-btn" id="localCloseBtn" title="${i18n.t('local.backToPlaylist')}">✕</button>`;
-    
-    html += '</div>';
-    return html;
+
+    return element;
 };
 
-// 构建当前目录内容HTML
-const buildCurrentDirHTML = (node, path) => {
-    let html = '';
-    
-    // 始终显示面包屑导航（包括根目录和空目录时）
-    html += buildBreadcrumbHTML(path);
+const createCoverImage = ({ src, placeholderText, placeholderClass }) => {
+    const fragment = document.createDocumentFragment();
+    const placeholder = document.createElement('div');
+    placeholder.className = placeholderClass;
+    placeholder.textContent = placeholderText;
+    placeholder.style.display = src ? 'none' : 'flex';
+
+    if (src) {
+        const image = document.createElement('img');
+        image.src = src;
+        image.alt = '';
+        image.loading = 'lazy';
+        image.addEventListener('error', () => {
+            image.style.display = 'none';
+            placeholder.style.display = 'flex';
+        });
+        fragment.appendChild(image);
+    }
+
+    fragment.appendChild(placeholder);
+    return fragment;
+};
+
+const createBreadcrumbElement = (path) => {
+    const breadcrumb = document.createElement('div');
+    breadcrumb.className = 'local-breadcrumb';
+
+    const home = createInteractiveElement({
+        tag: 'span',
+        className: 'breadcrumb-home',
+        dataset: { navTo: 'root' },
+        label: i18n.t('local.home')
+    });
+    home.textContent = `🏠 ${i18n.t('local.home')}`;
+    breadcrumb.appendChild(home);
+
+    path.forEach((name, index) => {
+        const separator = document.createElement('span');
+        separator.className = 'breadcrumb-sep';
+        separator.textContent = '›';
+        breadcrumb.appendChild(separator);
+
+        const item = createInteractiveElement({
+            tag: 'span',
+            className: 'breadcrumb-item',
+            dataset: { navTo: path.slice(0, index + 1).join('/') },
+            label: name
+        });
+        item.textContent = name;
+        breadcrumb.appendChild(item);
+    });
+
+    const closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.className = 'local-return-btn';
+    closeButton.id = 'localCloseBtn';
+    closeButton.title = i18n.t('local.backToPlaylist');
+    closeButton.setAttribute('aria-label', i18n.t('local.backToPlaylist'));
+    closeButton.textContent = '✕';
+    breadcrumb.appendChild(closeButton);
+
+    return breadcrumb;
+};
+
+const createEmptyStateElement = (message) => {
+    const empty = document.createElement('div');
+    empty.className = 'local-empty';
+    empty.textContent = message;
+    return empty;
+};
+
+const createDirectoryCardElement = (dir, path) => {
+    const card = createInteractiveElement({
+        className: 'local-album-card',
+        dataset: { dirPath: [...path, dir.name].join('/') },
+        label: dir.name
+    });
+
+    const cover = document.createElement('div');
+    cover.className = 'local-album-cover';
+    cover.appendChild(createCoverImage({
+        src: getDirCoverUrl(dir),
+        placeholderText: '📁',
+        placeholderClass: 'local-album-cover-placeholder'
+    }));
+
+    const info = document.createElement('div');
+    info.className = 'local-album-info';
+
+    const title = document.createElement('div');
+    title.className = 'local-album-title';
+    title.textContent = dir.name;
+
+    const count = document.createElement('div');
+    count.className = 'local-album-count';
+    count.textContent = i18n.t('local.songCount', { count: countFiles(dir) });
+
+    info.appendChild(title);
+    info.appendChild(count);
+    card.appendChild(cover);
+    card.appendChild(info);
+
+    return card;
+};
+
+const createSongItemElement = (file, seq) => {
+    const songItem = createInteractiveElement({
+        className: 'playlist-track-item local-song-item',
+        dataset: { filePath: file.rel, fileName: file.name },
+        label: file.name
+    });
+
+    const trackLeft = document.createElement('div');
+    trackLeft.className = 'track-left';
+
+    const trackCover = document.createElement('div');
+    trackCover.className = 'track-cover';
+    trackCover.appendChild(createCoverImage({
+        src: `/cover/${file.rel.split('/').map(encodeURIComponent).join('/')}`,
+        placeholderText: '🎵',
+        placeholderClass: 'track-cover-placeholder'
+    }));
+
+    const trackType = document.createElement('div');
+    trackType.className = 'track-type';
+    trackType.textContent = i18n.t('local.musicType');
+
+    trackLeft.appendChild(trackCover);
+    trackLeft.appendChild(trackType);
+
+    const trackInfo = document.createElement('div');
+    trackInfo.className = 'track-info';
+
+    const trackTitle = document.createElement('div');
+    trackTitle.className = 'track-title';
+    trackTitle.textContent = file.name;
+    trackInfo.appendChild(trackTitle);
+
+    const trackSeq = document.createElement('div');
+    trackSeq.className = 'track-seq';
+    trackSeq.textContent = String(seq);
+
+    songItem.appendChild(trackLeft);
+    songItem.appendChild(trackInfo);
+    songItem.appendChild(trackSeq);
+
+    return songItem;
+};
+
+const createCurrentDirContent = (node, path) => {
+    const fragment = document.createDocumentFragment();
+    fragment.appendChild(createBreadcrumbElement(path));
 
     if (!node) {
-        return html + `<div class="local-empty">${i18n.t('local.empty')}</div>`;
+        fragment.appendChild(createEmptyStateElement(i18n.t('local.empty')));
+        return fragment;
     }
 
     const dirs = node.dirs || [];
     const files = node.files || [];
 
     if (!dirs.length && !files.length) {
-        return html + `<div class="local-empty">${i18n.t('local.dirEmpty')}</div>`;
+        fragment.appendChild(createEmptyStateElement(i18n.t('local.dirEmpty')));
+        return fragment;
     }
 
-    // 子目录 - 使用专辑卡片方式展示
     if (dirs.length > 0) {
-        html += '<div class="local-album-grid">';
-        dirs.forEach(dir => {
-            const coverUrl = getDirCoverUrl(dir);
-            const fileCount = countFiles(dir);
-            
-            html += `
-                <div class="local-album-card" data-dir-name="${escapeHTML(dir.name)}">
-                    <div class="local-album-cover">
-                        ${coverUrl ? `<img src="${escapeHTML(coverUrl)}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" loading="lazy" />` : ''}
-                        <div class="local-album-cover-placeholder" ${coverUrl ? '' : 'style="display:flex"'}>📁</div>
-                    </div>
-                    <div class="local-album-info">
-                        <div class="local-album-title">${escapeHTML(dir.name)}</div>
-                        <div class="local-album-count">${i18n.t('local.songCount', { count: fileCount })}</div>
-                    </div>
-                </div>
-            `;
+        const grid = document.createElement('div');
+        grid.className = 'local-album-grid';
+        dirs.forEach((dir) => {
+            grid.appendChild(createDirectoryCardElement(dir, path));
         });
-        html += '</div>';
+        fragment.appendChild(grid);
     }
 
-    // 文件项 - 使用播放列表样式展示
     if (files.length > 0) {
-        html += '<div class="local-songs-list">';
+        const songs = document.createElement('div');
+        songs.className = 'local-songs-list';
         files.forEach((file, index) => {
-            const coverUrl = `/cover/${file.rel.split('/').map(encodeURIComponent).join('/')}`;
-            html += buildSongItemHTML(file, coverUrl, index + 1);
+            songs.appendChild(createSongItemElement(file, index + 1));
         });
-        html += '</div>';
+        fragment.appendChild(songs);
     }
 
-    return html;
-};
-
-// 构建歌曲项HTML（播放列表样式）
-const buildSongItemHTML = (file, coverUrl, seq) => {
-    return `
-        <div class="playlist-track-item local-song-item" data-file-path="${escapeHTML(file.rel)}" data-file-name="${escapeHTML(file.name)}">
-            <div class="track-left">
-                <div class="track-cover">
-                    <img src="${escapeHTML(coverUrl)}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" loading="lazy" />
-                    <div class="track-cover-placeholder">🎵</div>
-                </div>
-                <div class="track-type">${i18n.t('local.musicType')}</div>
-            </div>
-            <div class="track-info">
-                <div class="track-title">${escapeHTML(file.name)}</div>
-            </div>
-            <div class="track-seq">${seq}</div>
-        </div>
-    `;
-};
-
-// 保持原来的函数名用于兼容性
-const buildFileCardsHTML = (node, path = []) => {
-    return buildCurrentDirHTML(node, path);
+    return fragment;
 };
 
 export const localFiles = {
@@ -149,6 +257,7 @@ export const localFiles = {
     fullTree: null,
     searchQuery: '',
     onSongAdded: null,
+    hasBoundContentEvents: false,
 
     async init({ treeEl, getCurrentPlaylistId, onSongAdded }) {
         this.treeEl = treeEl;
@@ -163,10 +272,12 @@ export const localFiles = {
         // 绑定搜索输入事件
         if (this.searchInput) {
             this.searchInput.addEventListener('input', (e) => {
-                this.searchQuery = e.target.value.toLowerCase();
+                this.searchQuery = e.target.value.trim();
                 this.renderCurrentLevel();
             });
         }
+
+        this.bindContentEvents();
         
         await this.loadTree();
     },
@@ -184,7 +295,7 @@ export const localFiles = {
                 currentNavPath = [];
                 this.renderCurrentLevel();
             } else {
-                this.contentEl.innerHTML = `<div class="local-empty">${i18n.t('local.empty')}</div>`;
+                this.contentEl.replaceChildren(createEmptyStateElement(i18n.t('local.empty')));
             }
         } catch (error) {
             console.error('加载本地文件树失败:', error);
@@ -199,21 +310,22 @@ export const localFiles = {
         if (!node || !query) {
             return node;
         }
-        
-        const filteredDirs = (node.dirs || []).filter(dir => {
-            if (dir.name.toLowerCase().includes(query)) {
-                return true;
-            }
-            const filteredFiles = (dir.files || []).filter(file =>
-                file.name.toLowerCase().includes(query)
-            );
-            return filteredFiles.length > 0;
-        });
-        
-        const filteredFiles = (node.files || []).filter(file =>
-            file.name.toLowerCase().includes(query)
+
+        const normalizedQuery = query.toLowerCase();
+        const nodeName = typeof node.name === 'string' ? node.name.toLowerCase() : '';
+
+        if (nodeName.includes(normalizedQuery)) {
+            return node;
+        }
+
+        const filteredDirs = (node.dirs || [])
+            .map((dir) => this.filterNode(dir, normalizedQuery))
+            .filter((dir) => dir && ((dir.dirs || []).length > 0 || (dir.files || []).length > 0));
+
+        const filteredFiles = (node.files || []).filter((file) =>
+            file.name.toLowerCase().includes(normalizedQuery)
         );
-        
+
         return {
             ...node,
             dirs: filteredDirs,
@@ -226,9 +338,8 @@ export const localFiles = {
         const currentNode = this.getCurrentNode();
         
         const displayNode = this.searchQuery ? this.filterNode(currentNode, this.searchQuery) : currentNode;
-        
-        this.contentEl.innerHTML = buildFileCardsHTML(displayNode, currentNavPath);
-        this.bindClicks();
+
+        this.contentEl.replaceChildren(createCurrentDirContent(displayNode, currentNavPath));
     },
 
     // 导航到指定目录
@@ -247,63 +358,81 @@ export const localFiles = {
         this.renderCurrentLevel();
     },
 
-    bindClicks() {
-        if (!this.contentEl) return;
-        
-        // 绑定返回按钮（关闭本地歌曲页面，返回歌单）
-        const localCloseBtn = this.contentEl.querySelector('#localCloseBtn');
-        if (localCloseBtn) {
-            localCloseBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                // 触发导航到歌单页面
-                const playlistNavBtn = document.querySelector('.nav-item[data-tab="playlists"]');
-                if (playlistNavBtn) {
-                    playlistNavBtn.click();
-                }
-            });
+    bindContentEvents() {
+        if (!this.contentEl || this.hasBoundContentEvents) {
+            return;
         }
-        
-        // 绑定面包屑导航点击
-        this.contentEl.querySelectorAll('.breadcrumb-home, .breadcrumb-item').forEach(el => {
-            el.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const navTo = el.getAttribute('data-nav-to');
-                if (navTo === 'root') {
-                    this.navigateTo([]);
-                } else {
-                    this.navigateTo(navTo.split('/'));
-                }
-            });
+
+        this.contentEl.addEventListener('click', (event) => {
+            void this.handleContentInteraction(event);
         });
 
-        // 绑定专辑卡片（目录）点击 - 进入目录
-        this.contentEl.querySelectorAll('.local-album-card').forEach(el => {
-            el.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const dirName = el.getAttribute('data-dir-name');
-                if (dirName) {
-                    // 进入子目录
-                    this.navigateTo([...currentNavPath, dirName]);
-                }
-            });
+        this.contentEl.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') {
+                return;
+            }
+
+            const interactive = event.target.closest(
+                '.breadcrumb-home, .breadcrumb-item, .local-album-card, .local-song-item'
+            );
+
+            if (!interactive || !this.contentEl.contains(interactive)) {
+                return;
+            }
+
+            event.preventDefault();
+            interactive.click();
         });
 
-        // 绑定歌曲项点击
-        this.contentEl.querySelectorAll('.local-song-item').forEach(el => {
-            el.addEventListener('click', async (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const filePath = el.getAttribute('data-file-path');
-                const fileName = el.getAttribute('data-file-name');
-                if (filePath) {
-                    await this.addFileToPlaylist(filePath, fileName);
-                }
-            });
-        });
+        this.hasBoundContentEvents = true;
+    },
+
+    async handleContentInteraction(event) {
+        if (!this.contentEl) {
+            return;
+        }
+
+        const closeButton = event.target.closest('#localCloseBtn');
+        if (closeButton && this.contentEl.contains(closeButton)) {
+            event.preventDefault();
+            this.closeLocalView();
+            return;
+        }
+
+        const breadcrumb = event.target.closest('.breadcrumb-home, .breadcrumb-item');
+        if (breadcrumb && this.contentEl.contains(breadcrumb)) {
+            event.preventDefault();
+            const navTo = breadcrumb.dataset.navTo;
+            this.navigateTo(navTo === 'root' ? [] : navTo.split('/').filter(Boolean));
+            return;
+        }
+
+        const directoryCard = event.target.closest('.local-album-card');
+        if (directoryCard && this.contentEl.contains(directoryCard)) {
+            event.preventDefault();
+            const dirPath = directoryCard.dataset.dirPath;
+            if (dirPath !== undefined) {
+                this.navigateTo(dirPath ? dirPath.split('/').filter(Boolean) : []);
+            }
+            return;
+        }
+
+        const songItem = event.target.closest('.local-song-item');
+        if (songItem && this.contentEl.contains(songItem)) {
+            event.preventDefault();
+            const filePath = songItem.dataset.filePath;
+            const fileName = songItem.dataset.fileName;
+            if (filePath) {
+                await this.addFileToPlaylist(filePath, fileName);
+            }
+        }
+    },
+
+    closeLocalView() {
+        const playlistNavBtn = document.querySelector('.nav-item[data-tab="playlists"]');
+        if (playlistNavBtn) {
+            playlistNavBtn.click();
+        }
     },
 
     async addFileToPlaylist(filePath, fileName) {
