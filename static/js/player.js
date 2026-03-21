@@ -51,7 +51,18 @@ export class Player {
 
     emit(event, data) {
         const callbacks = this.listeners.get(event) || [];
-        callbacks.forEach(cb => cb(data));
+        callbacks.forEach((callback) => {
+            try {
+                const result = callback(data);
+                if (result && typeof result.then === 'function') {
+                    result.catch((error) => {
+                        console.error(`[Player] ${event} 监听器异常:`, error);
+                    });
+                }
+            } catch (error) {
+                console.error(`[Player] ${event} 监听器异常:`, error);
+            }
+        });
     }
 
     _createApiError(result, fallbackMessage) {

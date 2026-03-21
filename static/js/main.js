@@ -2,20 +2,20 @@
 // 这是一个使用新模块系统的示例文件
 
 import { api } from './api.js?v=2';
-import { player } from './player.js';
-import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=5';
-import { playlistsManagement } from './playlists-management.js?v=4';
+import { player } from './player.js?v=2';
+import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=6';
+import { playlistsManagement } from './playlists-management.js?v=5';
 import { volumeControl } from './volume.js';
-import { searchManager } from './search.js?v=8';
+import { searchManager } from './search.js?v=9';
 import { themeManager } from './themeManager.js';
 import { debug } from './debug.js';
 import { Toast, formatTime } from './ui.js';
 import { focusFirstFocusable, isMobile, isIPad, restoreFocus, ThumbnailManager, trapFocusInContainer } from './utils.js';
-import { localFiles } from './local.js?v=4';
+import { localFiles } from './local.js?v=5';
 import { settingsManager } from './settingsManager.js?v=3';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
-import { ktvSync } from './ktv.js?v=6';
+import { ktvSync } from './ktv.js?v=7';
 import { playLock } from './playLock.js';
 import { unavailableSongs } from './unavailable.js';
 
@@ -292,17 +292,23 @@ class MusicPlayerApp {
             // 这样才能显示后端删除当前歌曲后的最新列表
             const currentUrl = status?.current_meta?.url || status?.current_meta?.rel || null;
             if (currentUrl !== this._lastRenderedSongUrl) {
-                this._lastRenderedSongUrl = currentUrl;
                 if (this._skipNextLoadCurrent) {
                     // 由 next/prev 直接触发：跳过 loadCurrent() 请求，直接重渲染
                     this._skipNextLoadCurrent = false;
+                    this._lastRenderedSongUrl = currentUrl;
                     this.renderPlaylist();
                     console.log('[歌曲变化] ✓ 手动切歌，直接重渲染（跳过 loadCurrent）');
                 } else {
-                    // 由轮询发现的变化（自动续播等）：需要重新加载列表数据
-                    await playlistManager.loadCurrent();
-                    this.renderPlaylist();
-                    console.log('[歌曲变化] ✓ 已刷新播放列表数据');
+                    try {
+                        // 由轮询发现的变化（自动续播等）：需要重新加载列表数据
+                        await playlistManager.loadCurrent();
+                        this._lastRenderedSongUrl = currentUrl;
+                        this.renderPlaylist();
+                        console.log('[歌曲变化] ✓ 已刷新播放列表数据');
+                    } catch (error) {
+                        console.warn('[歌曲变化] 刷新播放列表数据失败，保留待重试状态:', error);
+                        this.renderPlaylist();
+                    }
                 }
             }
         });
