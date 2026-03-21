@@ -13,6 +13,10 @@ from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 
+from startup_cleanup import cleanup_stale_mpv_processes
+
+cleanup_stale_mpv_processes(logger=logger)
+
 # 确保 stdout 使用 UTF-8 编码（Windows 兼容性）
 if sys.stdout.encoding != "utf-8":
     import io

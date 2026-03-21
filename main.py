@@ -20,6 +20,7 @@ import configparser
 
 # 导入日志模块
 from models.logger import setup_logging, logger
+from startup_cleanup import cleanup_stale_mpv_processes
 
 
 def disable_uvicorn_access_logs():
@@ -372,6 +373,8 @@ def main():
 
     # 设置日志
     setup_logging()
+
+    cleanup_stale_mpv_processes(logger=logger)
 
     # 禁用 uvicorn 访问日志
     disable_uvicorn_access_logs()
