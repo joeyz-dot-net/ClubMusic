@@ -168,6 +168,7 @@ export class PlaylistsManagement {
         this.modal = null;
         this.onPlaylistSwitchCallback = null;
         this.onDismissCallback = null;
+        this.modalActionInFlight = false;
     }
 
     init(onPlaylistSwitch = null, onDismiss = null) {
@@ -180,6 +181,47 @@ export class PlaylistsManagement {
 
     getRenderablePlaylists() {
         return (playlistManager.playlists || []).filter((playlist) => playlist.id !== playlistManager.getActiveDefaultId());
+    }
+
+    setModalActionState(disabled) {
+        if (this.modal) {
+            this.modal.setAttribute('aria-busy', String(disabled));
+        }
+
+        const playlistsAddBtn = document.getElementById('playlistsAddBtn');
+        if (playlistsAddBtn) {
+            playlistsAddBtn.disabled = disabled;
+        }
+
+        if (!this.modalBody) {
+            return;
+        }
+
+        this.modalBody.querySelectorAll('.playlist-item').forEach((item) => {
+            item.style.pointerEvents = disabled ? 'none' : '';
+            item.setAttribute('aria-disabled', String(disabled));
+        });
+
+        this.modalBody.querySelectorAll('.playlist-action-btn').forEach((button) => {
+            button.disabled = disabled;
+        });
+    }
+
+    async runExclusiveModalAction(actionName, action) {
+        if (this.modalActionInFlight) {
+            console.log(`[歌单管理] ${actionName} 已在执行中，忽略重复触发`);
+            return false;
+        }
+
+        this.modalActionInFlight = true;
+        this.setModalActionState(true);
+
+        try {
+            return await action();
+        } finally {
+            this.modalActionInFlight = false;
+            this.setModalActionState(false);
+        }
     }
 
     bindModalBodyDelegates() {
@@ -250,34 +292,51 @@ export class PlaylistsManagement {
     }
 
     async handleSwitchPlaylist(playlist) {
-        try {
-            console.log('[歌单管理] 开始切换歌单:', playlist.id, playlist.name);
-            console.log('[歌单管理] 步骤1: 更新前端本地状态');
-            playlistManager.setSelectedPlaylist(playlist.id);
+        return this.runExclusiveModalAction('切换歌单', async () => {
+            const previousPlaylistId = playlistManager.getSelectedPlaylistId();
 
-            console.log('[歌单管理] 步骤2: 调用后端验证歌单');
-            const switchResult = await playlistManager.switch(playlist.id);
-            console.log('[歌单管理] 后端验证结果:', switchResult);
+            operationLock.acquire('switch-playlist');
 
-            console.log('[歌单管理] 步骤3: 重新加载所有歌单数据');
-            await playlistManager.loadAll();
+            try {
+                console.log('[歌单管理] 开始切换歌单:', playlist.id, playlist.name);
+                console.log('[歌单管理] 步骤1: 更新前端本地状态');
+                playlistManager.setSelectedPlaylist(playlist.id);
 
-            console.log('[歌单管理] ✅ 歌单切换完成:', playlist.name);
-            Toast.success(i18n.t('playlists.switchSuccess', { name: playlist.name }));
+                console.log('[歌单管理] 步骤2: 调用后端验证歌单');
+                const switchResult = await playlistManager.switch(playlist.id);
+                console.log('[歌单管理] 后端验证结果:', switchResult);
 
-            console.log('[歌单管理] 步骤4: 隐藏模态框');
-            this.hide('select');
-
-            setTimeout(() => {
-                if (this.onPlaylistSwitchCallback && typeof this.onPlaylistSwitchCallback === 'function') {
-                    console.log('[歌单管理] 步骤5: 触发回调函数，更新主界面显示');
-                    this.onPlaylistSwitchCallback(playlist.id, playlist.name);
+                if (!switchResult || switchResult._error || switchResult.status !== 'OK') {
+                    throw new Error(switchResult?.error || switchResult?.message || '切换歌单失败');
                 }
-            }, 50);
-        } catch (error) {
-            console.error('[歌单管理] 切换失败:', error);
-            Toast.error(i18n.t('playlists.switchFailed', { error: error.message }));
-        }
+
+                console.log('[歌单管理] 步骤3: 重新加载所有歌单数据');
+                await playlistManager.loadAll();
+
+                console.log('[歌单管理] ✅ 歌单切换完成:', playlist.name);
+                Toast.success(i18n.t('playlists.switchSuccess', { name: playlist.name }));
+
+                console.log('[歌单管理] 步骤4: 隐藏模态框');
+                this.hide('select');
+
+                setTimeout(() => {
+                    if (this.onPlaylistSwitchCallback && typeof this.onPlaylistSwitchCallback === 'function') {
+                        console.log('[歌单管理] 步骤5: 触发回调函数，更新主界面显示');
+                        this.onPlaylistSwitchCallback(playlist.id, playlist.name);
+                    }
+                }, 50);
+
+                return true;
+            } catch (error) {
+                playlistManager.setSelectedPlaylist(previousPlaylistId);
+                this.render();
+                console.error('[歌单管理] 切换失败:', error);
+                Toast.error(i18n.t('playlists.switchFailed', { error: error.message }));
+                return false;
+            } finally {
+                operationLock.release('switch-playlist');
+            }
+        });
     }
 
     async handleEditPlaylist(playlist) {
@@ -332,16 +391,30 @@ export class PlaylistsManagement {
         const playlistsAddBtn = document.getElementById('playlistsAddBtn');
         if (playlistsAddBtn) {
             playlistsAddBtn.addEventListener('click', async () => {
-                const name = await InputModal.show({ title: i18n.t('playlists.createPrompt') });
-                if (name && name.trim()) {
+                await this.runExclusiveModalAction('创建歌单', async () => {
+                    operationLock.acquire('create-playlist');
+
                     try {
-                        await playlistManager.create(name.trim());
+                        const name = await InputModal.show({ title: i18n.t('playlists.createPrompt') });
+                        if (!name || !name.trim()) {
+                            return false;
+                        }
+
+                        const createResult = await playlistManager.create(name.trim());
+                        if (!createResult || createResult._error || !createResult.id) {
+                            throw new Error(createResult?.error || createResult?.message || '创建歌单失败');
+                        }
+
                         Toast.success(i18n.t('playlists.createSuccess'));
                         this.render();
+                        return true;
                     } catch (error) {
                         Toast.error(i18n.t('playlists.createFailed', { error: error.message }));
+                        return false;
+                    } finally {
+                        operationLock.release('create-playlist');
                     }
-                }
+                });
             });
         }
 
@@ -349,6 +422,9 @@ export class PlaylistsManagement {
         const playlistsCloseBtn = document.getElementById('playlistsCloseBtn');
         if (playlistsCloseBtn) {
             playlistsCloseBtn.addEventListener('click', () => {
+                if (this.modalActionInFlight) {
+                    return;
+                }
                 this.hide('dismiss');
             });
         }
@@ -356,6 +432,9 @@ export class PlaylistsManagement {
         // 点击背景关闭模态框
         if (this.modal) {
             this.modal.addEventListener('click', (e) => {
+                if (this.modalActionInFlight) {
+                    return;
+                }
                 if (e.target === this.modal) {
                     this.hide('dismiss');
                 }
@@ -374,6 +453,10 @@ export class PlaylistsManagement {
                     if (!this.modal || !this.modal.classList.contains('modal-visible')) return;
 
                     if (event.key === 'Escape') {
+                        if (this.modalActionInFlight) {
+                            event.preventDefault();
+                            return;
+                        }
                         event.preventDefault();
                         this.hide('dismiss');
                         return;

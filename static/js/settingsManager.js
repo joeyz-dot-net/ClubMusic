@@ -24,6 +24,7 @@ export const settingsManager = {
     // 用于存储 player 实例引用
     player: null,
     schema: {},
+    uiConfigSaveInFlight: false,
 
     setButtonGroupValue(groupId, value) {
         const group = document.getElementById(groupId);
@@ -93,6 +94,9 @@ export const settingsManager = {
 
             // 加载 UI 配置（从服务器）
             await this.loadUIConfig();
+
+            // 服务器 UI 配置返回后，重新同步一次表单状态
+            this.updateUI();
 
             // 加载版本号
             await this.loadVersion();
@@ -248,6 +252,61 @@ export const settingsManager = {
         }
     },
 
+    setUIConfigTogglesDisabled(disabled) {
+        ['youtubeControlsToggle', 'expandButtonToggle'].forEach((id) => {
+            const toggle = document.getElementById(id);
+            if (toggle) {
+                toggle.disabled = disabled;
+            }
+        });
+    },
+
+    async handleUIConfigToggleChange(toggle, configKey, enabled, successMessage) {
+        const previousConfig = { ...this.uiConfig };
+        const previousValue = previousConfig[configKey];
+
+        if (previousValue === enabled) {
+            toggle.checked = enabled;
+            return true;
+        }
+
+        if (this.uiConfigSaveInFlight) {
+            toggle.checked = previousValue;
+            return false;
+        }
+
+        this.uiConfigSaveInFlight = true;
+        this.setUIConfigTogglesDisabled(true);
+
+        try {
+            const success = await this.saveUIConfig({
+                ...previousConfig,
+                [configKey]: enabled
+            });
+
+            if (!success) {
+                this.uiConfig = previousConfig;
+                toggle.checked = previousValue;
+                Toast.error(i18n.t('settings.saveFailed'));
+                return false;
+            }
+
+            toggle.checked = this.uiConfig[configKey];
+            await this.applyFullscreenControls();
+            console.log(successMessage);
+            return true;
+        } catch (error) {
+            this.uiConfig = previousConfig;
+            toggle.checked = previousValue;
+            console.error('[设置] UI配置切换失败:', error);
+            Toast.error(i18n.t('settings.saveFailed'));
+            return false;
+        } finally {
+            this.uiConfigSaveInFlight = false;
+            this.setUIConfigTogglesDisabled(false);
+        }
+    },
+
     /**
      * 更新UI - 将设置值同步到表单
      */
@@ -322,12 +381,12 @@ export const settingsManager = {
         if (youtubeControlsToggle) {
             youtubeControlsToggle.addEventListener('change', async (e) => {
                 const enabled = e.target.checked;
-                const config = { ...this.uiConfig, youtube_controls: enabled };
-                const success = await this.saveUIConfig(config);
-                if (success) {
-                    await this.applyFullscreenControls();
-                    console.log(`[设置] YouTube控件：${enabled ? '启用' : '禁用'}`);
-                }
+                await this.handleUIConfigToggleChange(
+                    e.target,
+                    'youtube_controls',
+                    enabled,
+                    `[设置] YouTube控件：${enabled ? '启用' : '禁用'}`
+                );
             });
         }
 
@@ -336,12 +395,12 @@ export const settingsManager = {
         if (expandButtonToggle) {
             expandButtonToggle.addEventListener('change', async (e) => {
                 const enabled = e.target.checked;
-                const config = { ...this.uiConfig, expand_button: enabled };
-                const success = await this.saveUIConfig(config);
-                if (success) {
-                    await this.applyFullscreenControls();
-                    console.log(`[设置] 放大按钮：${enabled ? '显示' : '隐藏'}`);
-                }
+                await this.handleUIConfigToggleChange(
+                    e.target,
+                    'expand_button',
+                    enabled,
+                    `[设置] 放大按钮：${enabled ? '显示' : '隐藏'}`
+                );
             });
         }
 
