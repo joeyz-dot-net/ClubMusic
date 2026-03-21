@@ -599,7 +599,7 @@ function createToolbarActionButton({
 // 播放列表顶部工具栏渲染（独立于列表容器，支持 sticky 定位）
 export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName, selectedPlaylistId, container, onPlay, currentMeta }) {
     if (!toolbarContainer) return;
-    toolbarContainer.innerHTML = '';
+    toolbarContainer.replaceChildren();
 
     const appTheme = getCurrentAppTheme();
     const colors = getThemeColors(appTheme);
@@ -1077,7 +1077,7 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
     container._playlistRenderContext = { container, onPlay, currentMeta };
     bindPlaylistItemDelegates(container);
 
-    container.innerHTML = '';
+    container.replaceChildren();
     renderPlaylistToolbar({ toolbarContainer: document.getElementById('playlistToolbar'), playlist, playlistName, selectedPlaylistId, container, onPlay, currentMeta });
 
     if (!playlist || playlist.length === 0) {
@@ -1088,7 +1088,7 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
         // 空状态文本
         const emptyText = document.createElement('div');
         emptyText.className = 'playlist-empty-text';
-        emptyText.innerHTML = i18n.t('playlist.noSongs');
+        emptyText.textContent = i18n.t('playlist.noSongs');
         
         // 历史按钮
         const appTheme = getCurrentAppTheme();

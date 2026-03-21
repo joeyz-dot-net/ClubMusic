@@ -1308,7 +1308,11 @@ class MusicPlayerApp {
                     if (currentPlayingCard && !currentPlayingCard.querySelector('.track-progress-bar')) {
                         const progressBar = document.createElement('div');
                         progressBar.className = 'track-progress-bar';
-                        progressBar.innerHTML = '<div class="track-progress-fill" id="currentTrackProgress" style="width:' + percent + '%"></div>';
+                        const progressFill = document.createElement('div');
+                        progressFill.className = 'track-progress-fill';
+                        progressFill.id = 'currentTrackProgress';
+                        progressFill.style.width = percent + '%';
+                        progressBar.appendChild(progressFill);
                         currentPlayingCard.appendChild(progressBar);
                     }
                 }
