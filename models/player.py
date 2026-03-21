@@ -130,6 +130,21 @@ class MusicPlayer:
         return os.path.join(MusicPlayer._get_app_dir(), "settings.ini")
 
     @staticmethod
+    def _extract_audio_device_arg(mpv_cmd: str) -> str:
+        """从 mpv 命令中提取 --audio-device 参数值。"""
+        if not mpv_cmd:
+            return ""
+        match = re.search(r'--audio-device=([^\s]+)', mpv_cmd)
+        return match.group(1).strip() if match else ""
+
+    @staticmethod
+    def _strip_audio_device_arg(mpv_cmd: str) -> str:
+        """移除 mpv 命令中的 --audio-device 参数。"""
+        if not mpv_cmd:
+            return mpv_cmd
+        return re.sub(r'\s*--audio-device=[^\s]+', '', mpv_cmd).strip()
+
+    @staticmethod
     def _get_yt_dlp_path() -> str:
         """获取 yt-dlp 可执行文件路径（优先使用 bin 目录，其次系统 PATH）"""
         app_dir = MusicPlayer._get_app_dir()
@@ -314,29 +329,6 @@ class MusicPlayer:
         """
         with self._lock:
             return dict(self.current_meta) if self.current_meta else {}
-
-    def _infer_stream_type(self, url: str) -> str:
-        normalized_url = (url or "").lower()
-        if "youtube.com" in normalized_url or "youtu.be" in normalized_url:
-            return "youtube"
-        return "stream"
-
-    def _build_current_meta(self, song: Song, **extra_fields) -> dict:
-        current_meta = song.to_dict()
-        url = current_meta.get("url", "")
-        song_type = current_meta.get("type", "local")
-
-        if url:
-            current_meta.setdefault("rel", url)
-            if song_type != "local":
-                current_meta.setdefault("raw_url", url)
-
-        current_meta.setdefault("title", current_meta.get("name") or "")
-        current_meta.setdefault("name", current_meta.get("title") or "")
-        current_meta.setdefault("artist", current_meta.get("title") or "")
-
-        current_meta.update(extra_fields)
-        return current_meta
 
     def set_external_deps(self, playlists_manager, default_playlist_id,
                           playback_history, broadcast_from_thread):
@@ -680,6 +672,131 @@ class MusicPlayer:
             pass
         
         return known_devices
+
+    def _list_available_audio_devices(self) -> dict:
+        """获取当前 MPV 可见的音频设备列表。"""
+        devices = {}
+        try:
+            mpv_path = ""
+            if self.mpv_cmd:
+                import shlex
+
+                parts = shlex.split(self.mpv_cmd, posix=False)
+                if parts:
+                    mpv_path = parts[0].strip('"\'')
+
+            if not mpv_path or not os.path.exists(mpv_path):
+                fallback = os.path.join(MusicPlayer._get_app_dir(), "bin", "mpv.exe")
+                if os.path.exists(fallback):
+                    mpv_path = fallback
+                else:
+                    import shutil
+
+                    mpv_path = shutil.which("mpv") or ""
+
+            if not mpv_path:
+                return devices
+
+            result = subprocess.run(
+                [mpv_path, "--audio-device=help"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0,
+            )
+            output = (result.stdout or "") + (result.stderr or "")
+            pattern = r"'([^']+)'\s+\(([^)]+)\)"
+            for device_id, device_name in re.findall(pattern, output):
+                devices[device_id.strip()] = device_name.strip()
+        except Exception as e:
+            logger.debug(f"获取 MPV 音频设备列表失败: {e}")
+
+        return devices
+
+    def _refresh_default_mpv_cmd_from_ini(self):
+        """为默认播放器重新读取 settings.ini 中的 mpv_cmd。"""
+        if self.mpv_cmd is None or hasattr(self, '_room_id'):
+            return
+
+        try:
+            ini_path = MusicPlayer._get_default_ini_path()
+            cfg = MusicPlayer._read_ini_file(ini_path)
+            mpv_cmd = cfg.get("MPV_CMD") or MusicPlayer._get_default_mpv_cmd()
+            mpv_cmd = MusicPlayer._normalize_mpv_cmd(mpv_cmd, MusicPlayer._get_app_dir())
+        except Exception as e:
+            logger.warning(f"[MPV 配置] 重新读取 settings.ini 失败，继续使用当前配置: {e}")
+            return
+
+        if mpv_cmd != self.mpv_cmd:
+            logger.warning("[MPV 配置] 检测到 settings.ini 中的 mpv_cmd 已变化，重新加载默认播放器配置")
+            self.mpv_cmd = mpv_cmd
+            if hasattr(self, 'config') and isinstance(self.config, dict):
+                self.config["MPV_CMD"] = mpv_cmd
+            self._extract_pipe_name_from_cmd()
+
+    def _sanitize_default_audio_device(self):
+        """默认播放器启动前校验配置中的音频设备是否仍然可用。"""
+        if self.mpv_cmd is None or hasattr(self, '_room_id'):
+            return
+
+        device_id = MusicPlayer._extract_audio_device_arg(self.mpv_cmd)
+        if not device_id or device_id == "auto":
+            return
+
+        devices = self._list_available_audio_devices()
+        if devices and device_id not in devices:
+            logger.warning(
+                f"[MPV 配置] 当前配置的音频设备已不可用，回退为系统默认设备: {device_id}"
+            )
+            self.mpv_cmd = MusicPlayer._strip_audio_device_arg(self.mpv_cmd)
+            if hasattr(self, 'config') and isinstance(self.config, dict):
+                self.config["MPV_CMD"] = self.mpv_cmd
+            self._extract_pipe_name_from_cmd()
+
+    def is_room_output_ready(self) -> bool:
+        """RoomPlayer 的 PCM 接收端是否已就绪。"""
+        if not hasattr(self, '_room_id'):
+            return True
+
+        pcm_pipe = getattr(self, '_pcm_pipe_name', '')
+        if not pcm_pipe:
+            return False
+
+        return self._pipe_exists(pcm_pipe)
+
+    def _get_desired_audio_device(self) -> str:
+        """获取当前实例期望使用的音频设备。"""
+        runtime_audio_device = os.environ.get("MPV_AUDIO_DEVICE", "").strip()
+        if runtime_audio_device:
+            return runtime_audio_device
+
+        return MusicPlayer._extract_audio_device_arg(self.mpv_cmd) or "auto"
+
+    def _get_running_audio_device(self) -> str:
+        """通过 IPC 获取当前运行中的 MPV 音频设备。"""
+        try:
+            return (self.mpv_get("audio-device") or "").strip()
+        except Exception as e:
+            logger.debug(f"读取 MPV 当前音频设备失败: {e}")
+            return ""
+
+    def _quit_mpv_via_pipe(self, timeout: float = 3.0) -> bool:
+        """通过 IPC 请求现有 MPV 退出。"""
+        if not self.mpv_pipe_exists():
+            return True
+
+        try:
+            with open(self.pipe_name, "wb") as pipe:
+                pipe.write((json.dumps({"command": ["quit"]}) + "\n").encode("utf-8"))
+            end = time.time() + timeout
+            while time.time() < end:
+                if not self.mpv_pipe_exists():
+                    return True
+                time.sleep(0.1)
+        except Exception as e:
+            logger.warning(f"[MPV 进程] 通过 IPC 请求退出失败: {e}")
+
+        return not self.mpv_pipe_exists()
 
     def get_audio_device_name(self) -> str:
         """获取当前音频设备名称
@@ -1130,7 +1247,7 @@ class MusicPlayer:
                     )
 
                     if success:
-                        self.current_meta = self._build_current_meta(song)
+                        self.current_meta = song.to_dict()
                         self._last_play_time = time.time()
                         auto_play_success = True
                         logger.info(f"[自动播放] ✅ 单曲循环成功: {title}")
@@ -1226,7 +1343,7 @@ class MusicPlayer:
                         )
 
                         if success:
-                            self.current_meta = self._build_current_meta(song)
+                            self.current_meta = song.to_dict()
                             self.current_index = 0
                             self._last_play_time = time.time()
                             auto_play_success = True
@@ -1340,6 +1457,8 @@ class MusicPlayer:
             return self.start_room_mpv()
 
         # 每次调用重新解析，允许运行期间修改 MPV_CMD 并热加载
+        self._refresh_default_mpv_cmd_from_ini()
+        self._sanitize_default_audio_device()
         self._extract_pipe_name_from_cmd()
 
         if not self.mpv_cmd:
@@ -1347,7 +1466,26 @@ class MusicPlayer:
             return False
 
         if self.mpv_pipe_exists():
-            return True
+            desired_audio_device = self._get_desired_audio_device()
+            running_audio_device = self._get_running_audio_device()
+            should_restart = False
+
+            if self.mpv_process is None:
+                should_restart = True
+                logger.warning("[MPV 进程] 检测到未受当前实例管理的默认 MPV 进程，准备重启以接管控制")
+            elif running_audio_device and desired_audio_device != "auto" and running_audio_device != desired_audio_device:
+                should_restart = True
+                logger.warning(
+                    f"[MPV 进程] 当前默认 MPV 音频设备与配置不一致，准备重启: running={running_audio_device}, desired={desired_audio_device}"
+                )
+
+            if not should_restart:
+                return True
+
+            if not self._quit_mpv_via_pipe(timeout=3.0):
+                logger.warning("[MPV 进程] 旧默认 MPV 未能在超时内退出，将继续尝试启动新进程")
+
+            self.mpv_process = None
 
         # MPV 进程仍然存活时，等待管道恢复，不要直接 taskkill
         if self.mpv_process and self.mpv_process.poll() is None:
@@ -1389,8 +1527,15 @@ class MusicPlayer:
             # 【新增】检查环境变量中是否有运行时选择的音频设备
             runtime_audio_device = os.environ.get("MPV_AUDIO_DEVICE", "")
             if runtime_audio_device:
+                devices = self._list_available_audio_devices()
+                if devices and runtime_audio_device not in devices:
+                    logger.warning(
+                        f"[MPV 配置] 运行时音频设备已不可用，忽略环境变量覆盖: {runtime_audio_device}"
+                    )
+                    os.environ.pop("MPV_AUDIO_DEVICE", None)
+                    runtime_audio_device = ""
+            if runtime_audio_device:
                 # 移除现有的 --audio-device 参数
-                import re
                 mpv_launch_cmd = re.sub(r'\s*--audio-device=[^\s]+', '', mpv_launch_cmd)
                 mpv_launch_cmd = mpv_launch_cmd.strip() + f" --audio-device={runtime_audio_device}"
                 logger.info(f"使用运行时选择的音频设备: {runtime_audio_device}")
@@ -1464,7 +1609,8 @@ class MusicPlayer:
                 # 方法 1: 使用 shlex 解析命令字符串为列表，然后用 Popen
                 # 重要：在 Windows 上使用 posix=False 避免反斜杠被当作转义字符
                 cmd_list = shlex.split(mpv_launch_cmd, posix=False)
-                mpv_exe_path = cmd_list[0]
+                mpv_exe_path = cmd_list[0].strip('"\'')
+                cmd_list[0] = mpv_exe_path
                 
                 # 验证 MPV 可执行文件是否存在
                 if not os.path.exists(mpv_exe_path):
@@ -2098,12 +2244,13 @@ class MusicPlayer:
             raise
 
         self.current_index = idx
-        self.current_meta = self._build_current_meta(
-            LocalSong(rel, os.path.basename(rel)),
-            abs_path=abs_file,
-            rel=rel,
-            index=idx,
-        )
+        self.current_meta = {
+            "abs_path": abs_file,
+            "rel": rel,
+            "index": idx,
+            "ts": int(time.time()),
+            "name": os.path.basename(rel),
+        }
         self._last_play_time = time.time()  # 记录播放开始时间
 
         # 添加到播放历史（存储相对路径，以便 /play 接口使用）
@@ -2190,13 +2337,15 @@ class MusicPlayer:
 
             # 初始化 CURRENT_META：保留 raw_url，并使用占位名（避免将原始 URL 直接显示给用户）
             # 同时准备 media_title 字段供客户端优先显示
-            self.current_meta = self._build_current_meta(
-                StreamSong(url, "加载中…", stream_type=self._infer_stream_type(url)),
-                abs_path=url,
-                rel=url,
-                index=-1,
-                media_title=None,
-            )
+            self.current_meta = {
+                "abs_path": url,
+                "rel": url,
+                "index": -1,
+                "ts": int(time.time()),
+                "name": "加载中…",
+                "raw_url": url,
+                "media_title": None,
+            }
 
             # 检测是否为播放列表 URL
             is_playlist = False
@@ -2451,7 +2600,7 @@ class MusicPlayer:
             logger.info(f"[MusicPlayer.play] ✅ song.play() 返回成功")
 
             # 更新当前播放的元数据
-            self.current_meta = self._build_current_meta(song)
+            self.current_meta = song.to_dict()
             self._last_play_time = time.time()
             logger.info(f"[MusicPlayer.play] 已更新 current_meta: duration={self.current_meta.get('duration', 'N/A')}")
             logger.debug(f"已更新 current_meta: {self.current_meta}")

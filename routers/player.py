@@ -66,6 +66,27 @@ def _create_song_object(url, title, song_type, duration):
         return LocalSong(file_path=url, title=title)
 
 
+def _room_output_not_ready_response(player: MusicPlayer, endpoint: str):
+    """RoomPlayer 的外部 PCM 接收端未就绪时返回明确错误。"""
+    if not hasattr(player, '_room_id'):
+        return None
+
+    if player.is_room_output_ready():
+        return None
+
+    pcm_pipe = getattr(player, '_pcm_pipe_name', '')
+    logger.warning(f"[{endpoint}] 房间音频输出未就绪，拒绝播放请求: room_id={player._room_id}, pcm_pipe={pcm_pipe}")
+    return JSONResponse(
+        {
+            "status": "ERROR",
+            "error": "房间音频输出未就绪，请先连接 ClubVoice",
+            "room_id": player._room_id,
+            "pcm_pipe": pcm_pipe,
+        },
+        status_code=409,
+    )
+
+
 # ==================== 路由 ====================
 
 @router.post("/play")
@@ -114,8 +135,12 @@ async def play(
         else:
             song = LocalSong(file_path=url, title=title)
 
+        room_output_error = _room_output_not_ready_response(player, "/play")
+        if room_output_error:
+            return room_output_error
+
         with player_lock:
-            player.play(
+            success = player.play(
                 song,
                 mpv_command_func=player.mpv_command,
                 mpv_pipe_exists_func=player.mpv_pipe_exists,
@@ -124,6 +149,13 @@ async def play(
                 save_to_history=True,
                 mpv_cmd=player.mpv_cmd
             )
+            if not success:
+                logger.error(f"[/play] ❌ 播放失败: {title or url}")
+                return JSONResponse(
+                    {"status": "ERROR", "error": "播放失败", "current": player.current_meta},
+                    status_code=500,
+                )
+
             player.reset_pitch_shift()
 
             logger.info(f"▶️ [播放状态改变] 正在播放: {title} (类型: {song_type})")
@@ -188,6 +220,10 @@ async def next_track(
 ):
     """播放下一首（根据 loop_mode / shuffle_mode 决定行为）"""
     try:
+        room_output_error = _room_output_not_ready_response(player, "/next")
+        if room_output_error:
+            return room_output_error
+
         with player_lock:
             current_pid = get_current_playlist_id(player)
             playlist = playlists.get_playlist(current_pid)
@@ -321,6 +357,10 @@ async def prev_track(
 ):
     """播放上一首"""
     try:
+        room_output_error = _room_output_not_ready_response(player, "/prev")
+        if room_output_error:
+            return room_output_error
+
         with player_lock:
             current_pid = get_current_playlist_id(player)
             playlist = playlists.get_playlist(current_pid)

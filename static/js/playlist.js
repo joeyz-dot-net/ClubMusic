@@ -144,9 +144,16 @@ export class PlaylistManager {
         const songTitle = this.currentPlaylist[index]?.title || '未知歌曲';
         console.log(`[删除歌曲] 歌单: ${this.selectedPlaylistId}, 索引: ${index}, 歌曲: ${songTitle}`);
         
+        // 根据当前选择的歌单使用不同的API
         let result;
         try {
-            result = await api.removeFromSpecificPlaylist(this.selectedPlaylistId, index);
+            if (this.selectedPlaylistId === this.getActiveDefaultId()) {
+                // 默认歌单使用旧的API (针对当前播放的歌单)
+                result = await api.removeFromPlaylist(index);
+            } else {
+                // 非默认歌单使用新的API (针对特定歌单)
+                result = await api.removeFromSpecificPlaylist(this.selectedPlaylistId, index);
+            }
             
             if (result.status === 'OK') {
                 console.log(`[删除成功] ${songTitle} 已从歌单删除`);
@@ -164,7 +171,7 @@ export class PlaylistManager {
 
     // 调整当前播放列表顺序
     async reorder(fromIndex, toIndex) {
-        const result = await api.reorderPlaylist(this.selectedPlaylistId, fromIndex, toIndex);
+        const result = await api.reorderPlaylist(fromIndex, toIndex);
         if (result.status === 'OK') {
             // 后端已更新，重新加载以保持一致
             await this.loadCurrent();
@@ -623,12 +630,9 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
                 const confirmed = await ConfirmModal.show({ title: i18n.t('playlist.clearQueueConfirm'), type: 'danger' });
                 if (confirmed) {
                     try {
-                        const response = await api.post('/playlist_clear', {});
-                        if (response?._error || response?.status !== 'OK') {
-                            throw new Error(response?.error || response?.message || i18n.t('playlist.clearFailed'));
-                        }
+                        await api.post('/playlist_clear', {});
                         Toast.success(i18n.t('playlist.clearSucceed'));
-                        await playlistManager.refreshAll();
+                        await playlistManager.loadCurrent();
                         renderPlaylistUI({ container, onPlay, currentMeta });
                     } catch (err) {
                         console.error('清空队列失败:', err);

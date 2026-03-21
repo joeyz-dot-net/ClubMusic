@@ -242,12 +242,7 @@ async def add_to_playlist(
 
 
 @router.post("/playlists/{playlist_id}/add_next")
-async def add_song_to_playlist_next(
-    playlist_id: str,
-    request: Request,
-    player: MusicPlayer = Depends(get_player_for_request),
-    playlists: Playlists = Depends(get_playlists),
-):
+async def add_song_to_playlist_next(playlist_id: str, request: Request, playlists: Playlists = Depends(get_playlists)):
     """添加歌曲到下一曲位置"""
     try:
         form_data = await request.form()
@@ -292,12 +287,7 @@ async def add_song_to_playlist_next(
             thumbnail_url=thumbnail_url if thumbnail_url else None
         )
 
-        active_playlist_id = get_current_playlist_id(player)
-        current_index = -1
-        if playlist_id == active_playlist_id:
-            current_index = player.current_index if hasattr(player, 'current_index') else -1
-        elif hasattr(playlist, 'current_playing_index'):
-            current_index = playlist.current_playing_index
+        current_index = playlist.current_playing_index if hasattr(playlist, 'current_playing_index') else -1
 
         if current_index >= 0 and current_index < len(playlist.songs):
             insert_index = current_index + 1
