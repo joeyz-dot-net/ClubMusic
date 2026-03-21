@@ -104,26 +104,74 @@ export class PlaylistManager {
     // 创建新歌单
     async create(name) {
         const result = this._assertPlaylistCreated(await api.createPlaylist(name), '创建歌单失败');
-        await this.loadAll(); // 重新加载
+        const newPlaylist = {
+            id: result.id,
+            name: result.name,
+            songs: Array.isArray(result.songs) ? result.songs : []
+        };
+
+        if (!this.playlists.some((playlist) => playlist.id === newPlaylist.id)) {
+            this.playlists.push(newPlaylist);
+        }
+
+        try {
+            await this.loadAll(); // 重新加载
+        } catch (error) {
+            result.refreshError = error;
+            console.warn('[歌单管理] 创建后刷新歌单列表失败:', error);
+        }
+
         return result;
     }
 
     // 删除歌单
     async delete(id) {
         const result = this._assertStatusOk(await api.deletePlaylist(id), '删除歌单失败');
-        await this.loadAll(); // 重新加载
+        this.playlists = this.playlists.filter((playlist) => playlist.id !== id);
         // ✅ 如果删除的是当前选择的歌单，重置为播放队列
         if (this.selectedPlaylistId === id) {
             console.log('[歌单管理] 被删除的歌单是当前选择，重置为播放队列');
             this.setSelectedPlaylist(this.getActiveDefaultId());
         }
+
+        try {
+            await this.loadAll(); // 重新加载
+        } catch (error) {
+            result.refreshError = error;
+            console.warn('[歌单管理] 删除后刷新歌单列表失败:', error);
+        }
+
         return result;
     }
 
     // 更新歌单
     async update(id, data) {
         const result = this._assertStatusOk(await api.updatePlaylist(id, data), '更新歌单失败');
-        await this.loadAll(); // 重新加载
+        const nextName = data?.name;
+        if (nextName) {
+            this.playlists = this.playlists.map((playlist) => {
+                if (playlist.id !== id) {
+                    return playlist;
+                }
+
+                return {
+                    ...playlist,
+                    name: nextName
+                };
+            });
+
+            if (this.selectedPlaylistId === id) {
+                this.currentPlaylistName = nextName;
+            }
+        }
+
+        try {
+            await this.loadAll(); // 重新加载
+        } catch (error) {
+            result.refreshError = error;
+            console.warn('[歌单管理] 更新后刷新歌单列表失败:', error);
+        }
+
         return result;
     }
 

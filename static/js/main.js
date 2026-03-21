@@ -3,15 +3,15 @@
 
 import { api } from './api.js?v=2';
 import { player } from './player.js';
-import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=4';
-import { playlistsManagement } from './playlists-management.js?v=3';
+import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=5';
+import { playlistsManagement } from './playlists-management.js?v=4';
 import { volumeControl } from './volume.js';
-import { searchManager } from './search.js?v=7';
+import { searchManager } from './search.js?v=8';
 import { themeManager } from './themeManager.js';
 import { debug } from './debug.js';
 import { Toast, formatTime } from './ui.js';
 import { focusFirstFocusable, isMobile, isIPad, restoreFocus, ThumbnailManager, trapFocusInContainer } from './utils.js';
-import { localFiles } from './local.js?v=3';
+import { localFiles } from './local.js?v=4';
 import { settingsManager } from './settingsManager.js?v=3';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';

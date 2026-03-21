@@ -1,5 +1,5 @@
 // 歌单管理模块
-import { playlistManager } from './playlist.js?v=4';
+import { playlistManager } from './playlist.js?v=5';
 import { Toast, ConfirmModal, InputModal } from './ui.js';
 import { operationLock } from './operationLock.js';
 import { i18n } from './i18n.js';
@@ -171,6 +171,15 @@ export class PlaylistsManagement {
         this.modalActionInFlight = false;
     }
 
+    notifyMutationResult(successMessage, refreshError) {
+        if (refreshError) {
+            Toast.warning(`${successMessage} (${i18n.t('playlist.opFailed')})`);
+            return;
+        }
+
+        Toast.success(successMessage);
+    }
+
     init(onPlaylistSwitch = null, onDismiss = null) {
         this.modalBody = document.getElementById('playlistsModalBody');
         this.modal = document.getElementById('playlistsModal');
@@ -302,10 +311,16 @@ export class PlaylistsManagement {
                 console.log('[歌单管理] 后端验证结果:', switchResult);
 
                 console.log('[歌单管理] 步骤2: 重新加载所有歌单数据');
-                await playlistManager.loadAll();
+                let refreshError = null;
+                try {
+                    await playlistManager.loadAll();
+                } catch (error) {
+                    refreshError = error;
+                    console.warn('[歌单管理] 切换后刷新歌单列表失败:', error);
+                }
 
                 console.log('[歌单管理] ✅ 歌单切换完成:', playlist.name);
-                Toast.success(i18n.t('playlists.switchSuccess', { name: playlist.name }));
+                this.notifyMutationResult(i18n.t('playlists.switchSuccess', { name: playlist.name }), refreshError);
 
                 console.log('[歌单管理] 步骤3: 隐藏模态框');
                 this.hide('select');
@@ -313,7 +328,10 @@ export class PlaylistsManagement {
                 setTimeout(() => {
                     if (this.onPlaylistSwitchCallback && typeof this.onPlaylistSwitchCallback === 'function') {
                         console.log('[歌单管理] 步骤4: 触发回调函数，更新主界面显示');
-                        this.onPlaylistSwitchCallback(playlist.id, playlist.name);
+                        Promise.resolve(this.onPlaylistSwitchCallback(playlist.id, playlist.name)).catch((error) => {
+                            console.error('[歌单管理] 主界面切换回调失败:', error);
+                            Toast.warning(`${i18n.t('playlists.switchSuccess', { name: playlist.name })} (${i18n.t('playlist.opFailed')})`);
+                        });
                     }
                 }, 50);
 
@@ -335,8 +353,8 @@ export class PlaylistsManagement {
         try {
             const newName = await InputModal.show({ title: i18n.t('playlists.renamePrompt'), defaultValue: playlist.name });
             if (newName !== null && newName.trim() && newName.trim() !== playlist.name) {
-                await playlistManager.update(playlist.id, { name: newName.trim() });
-                Toast.success(i18n.t('playlists.renameSuccess'));
+                const result = await playlistManager.update(playlist.id, { name: newName.trim() });
+                this.notifyMutationResult(i18n.t('playlists.renameSuccess'), result.refreshError);
                 this.render();
             }
         } catch (error) {
@@ -362,8 +380,8 @@ export class PlaylistsManagement {
                 item.style.transform = 'translateX(-100%)';
 
                 await new Promise((resolve) => setTimeout(resolve, 300));
-                await playlistManager.delete(playlist.id);
-                Toast.success(i18n.t('playlists.deleteSuccess'));
+                const result = await playlistManager.delete(playlist.id);
+                this.notifyMutationResult(i18n.t('playlists.deleteSuccess'), result.refreshError);
                 this.render();
             }
         } catch (error) {
@@ -390,9 +408,9 @@ export class PlaylistsManagement {
                             return false;
                         }
 
-                        await playlistManager.create(name.trim());
+                        const result = await playlistManager.create(name.trim());
 
-                        Toast.success(i18n.t('playlists.createSuccess'));
+                        this.notifyMutationResult(i18n.t('playlists.createSuccess'), result.refreshError);
                         this.render();
                         return true;
                     } catch (error) {
