@@ -2,6 +2,25 @@
 import { themeManager } from './themeManager.js';
 import { i18n } from './i18n.js';
 
+function stringifyDebugValue(value) {
+    if (typeof value !== 'object' || value === null) {
+        return String(value);
+    }
+
+    try {
+        return JSON.stringify(value);
+    } catch {
+        return '[Unserializable Object]';
+    }
+}
+
+function createDebugTextLine(text, color) {
+    const line = document.createElement('div');
+    line.style.color = color;
+    line.textContent = text;
+    return line;
+}
+
 export class Debug {
     constructor() {
         this.debugLogHistory = [];
@@ -167,11 +186,10 @@ export class Debug {
         const playerStatus = this.player.getStatus();
         if (this.elements.debugPlayer) {
             const timestamp = new Date().toLocaleTimeString();
-            const logsHtml = Object.entries(playerStatus || {}).map(([key, value]) => {
-                const valueStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
-                return `<div style="color: #51cf66;">[${timestamp}] ${key}: ${valueStr}</div>`;
-            }).join('');
-            this.elements.debugPlayer.innerHTML = logsHtml || `<div style="color: #888;">${i18n.t('debug.noData')}</div>`;
+            this.renderDebugEntries(this.elements.debugPlayer, Object.entries(playerStatus || {}).map(([key, value]) => ({
+                text: `[${timestamp}] ${key}: ${stringifyDebugValue(value)}`,
+                color: '#51cf66'
+            })), i18n.t('debug.noData'));
         }
     }
 
@@ -188,11 +206,10 @@ export class Debug {
         };
         if (this.elements.debugPlaylist) {
             const timestamp = new Date().toLocaleTimeString();
-            const logsHtml = Object.entries(playlistInfo || {}).map(([key, value]) => {
-                const valueStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
-                return `<div style="color: #51cf66;">[${timestamp}] ${key}: ${valueStr}</div>`;
-            }).join('');
-            this.elements.debugPlaylist.innerHTML = logsHtml || `<div style="color: #888;">${i18n.t('debug.noData')}</div>`;
+            this.renderDebugEntries(this.elements.debugPlaylist, Object.entries(playlistInfo || {}).map(([key, value]) => ({
+                text: `[${timestamp}] ${key}: ${stringifyDebugValue(value)}`,
+                color: '#51cf66'
+            })), i18n.t('debug.noData'));
         }
     }
 
@@ -210,24 +227,40 @@ export class Debug {
         };
         if (this.elements.debugStorage) {
             const timestamp = new Date().toLocaleTimeString();
-            const logsHtml = Object.entries(storageInfo || {}).map(([key, value]) => {
-                const valueStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
-                return `<div style="color: #51cf66;">[${timestamp}] ${key}: ${valueStr}</div>`;
-            }).join('');
-            this.elements.debugStorage.innerHTML = logsHtml || `<div style="color: #888;">${i18n.t('debug.noData')}</div>`;
+            this.renderDebugEntries(this.elements.debugStorage, Object.entries(storageInfo || {}).map(([key, value]) => ({
+                text: `[${timestamp}] ${key}: ${stringifyDebugValue(value)}`,
+                color: '#51cf66'
+            })), i18n.t('debug.noData'));
         }
     }
 
     // 更新日志显示
     updateLogs() {
         if (this.elements.debugLogs) {
-            const logsHtml = this.debugLogHistory.map(log =>
-                `<div style="color: ${this.getLogColor(log.type)};">[${log.timestamp}] ${log.type}: ${log.message}</div>`
-            ).join('');
-            this.elements.debugLogs.innerHTML = logsHtml || `<div style="color: #888;">${i18n.t('debug.noLogs')}</div>`;
+            this.renderDebugEntries(this.elements.debugLogs, this.debugLogHistory.map((log) => ({
+                text: `[${log.timestamp}] ${log.type}: ${log.message}`,
+                color: this.getLogColor(log.type)
+            })), i18n.t('debug.noLogs'));
             // 自动滚到底部
             this.elements.debugLogs.scrollTop = this.elements.debugLogs.scrollHeight;
         }
+    }
+
+    renderDebugEntries(container, entries, emptyMessage) {
+        if (!container) {
+            return;
+        }
+
+        const fragment = document.createDocumentFragment();
+        if (!entries || entries.length === 0) {
+            fragment.appendChild(createDebugTextLine(emptyMessage, '#888'));
+        } else {
+            entries.forEach((entry) => {
+                fragment.appendChild(createDebugTextLine(entry.text, entry.color));
+            });
+        }
+
+        container.replaceChildren(fragment);
     }
 
     // 获取日志颜色

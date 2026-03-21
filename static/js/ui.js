@@ -374,20 +374,33 @@ export class SearchLoadingOverlay {
         if (this.overlay) return;
 
         this.overlay = createElement('div', 'search-loading-overlay');
-        this.overlay.innerHTML = `
-            <div class="search-loading-content">
-                <div class="search-loading-spinner">
-                    <div class="spinner-ring"></div>
-                    <div class="spinner-ring"></div>
-                    <div class="spinner-ring"></div>
-                    <svg class="search-icon" viewBox="0 0 24 24" width="48" height="48">
-                        <path fill="currentColor" d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
-                    </svg>
-                </div>
-                <div class="search-loading-message">${msg}</div>
-                <div class="search-loading-submessage">${i18n.t('search.loadingRes')}</div>
-            </div>
-        `;
+
+        const content = createElement('div', 'search-loading-content');
+        const spinner = createElement('div', 'search-loading-spinner');
+
+        spinner.appendChild(createElement('div', 'spinner-ring'));
+        spinner.appendChild(createElement('div', 'spinner-ring'));
+        spinner.appendChild(createElement('div', 'spinner-ring'));
+
+        const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        icon.setAttribute('class', 'search-icon');
+        icon.setAttribute('viewBox', '0 0 24 24');
+        icon.setAttribute('width', '48');
+        icon.setAttribute('height', '48');
+
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('fill', 'currentColor');
+        path.setAttribute('d', 'M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z');
+        icon.appendChild(path);
+        spinner.appendChild(icon);
+
+        const messageElement = createElement('div', 'search-loading-message', String(msg));
+        const submessageElement = createElement('div', 'search-loading-submessage', i18n.t('search.loadingRes'));
+
+        content.appendChild(spinner);
+        content.appendChild(messageElement);
+        content.appendChild(submessageElement);
+        this.overlay.appendChild(content);
 
         document.body.appendChild(this.overlay);
         // 触发动画
