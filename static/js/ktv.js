@@ -290,9 +290,11 @@ export class KTVSync {
     async getYouTubeControlsSetting() {
         try {
             const result = await api.getUIConfig();
-            if (result.status === 'OK') {
-                return result.data.youtube_controls !== false;
+            if (result?._error || result?.status !== 'OK') {
+                throw new Error(result?.error || result?.message || '读取配置失败');
             }
+
+            return result.data.youtube_controls !== false;
         } catch (error) {
             console.error('[KTV] 读取配置失败:', error);
         }

@@ -171,17 +171,34 @@ export const settingsManager = {
         return true;
     },
 
+    getApiErrorMessage(result, fallbackMessage) {
+        if (!result) {
+            return fallbackMessage;
+        }
+
+        return result.error || result.message || result.detail || fallbackMessage;
+    },
+
+    assertApiSuccess(result, fallbackMessage) {
+        if (!result || result._error || result.status !== 'OK') {
+            throw new Error(this.getApiErrorMessage(result, fallbackMessage));
+        }
+
+        return result;
+    },
+
     /**
      * 加载设置 schema
      */
     async loadSchema() {
         try {
-            const result = await api.getSettingsSchema();
+            const result = this.assertApiSuccess(
+                await api.getSettingsSchema(),
+                'Schema加载失败'
+            );
 
-            if (result.status === 'OK') {
-                this.schema = result.schema;
-                console.log('[设置] Schema已加载');
-            }
+            this.schema = result.schema;
+            console.log('[设置] Schema已加载');
         } catch (error) {
             console.error('[设置] Schema加载失败:', error);
         }
@@ -192,8 +209,11 @@ export const settingsManager = {
      */
     async loadVersion() {
         try {
-            const result = await api.getVersion();
-            if (result.status === 'OK' && result.version) {
+            const result = this.assertApiSuccess(
+                await api.getVersion(),
+                '版本号加载失败'
+            );
+            if (result.version) {
                 const el = document.getElementById('appVersionText');
                 if (el) el.textContent = `ClubMusic v${result.version}`;
             }
@@ -207,13 +227,14 @@ export const settingsManager = {
      */
     async loadUIConfig() {
         try {
-            const result = await api.getUIConfig();
+            const result = this.assertApiSuccess(
+                await api.getUIConfig(),
+                'UI配置加载失败'
+            );
 
-            if (result.status === 'OK') {
-                this.uiConfig = result.data;
-                console.log('[设置] UI配置已加载:', this.uiConfig);
-                return this.uiConfig;
-            }
+            this.uiConfig = result.data;
+            console.log('[设置] UI配置已加载:', this.uiConfig);
+            return this.uiConfig;
         } catch (error) {
             console.error('[设置] UI配置加载失败:', error);
             // 使用默认值
@@ -226,16 +247,14 @@ export const settingsManager = {
      */
     async saveUIConfig(config) {
         try {
-            const result = await api.saveUIConfig(config);
+            const result = this.assertApiSuccess(
+                await api.saveUIConfig(config),
+                'UI配置保存失败'
+            );
 
-            if (result.status === 'OK') {
-                this.uiConfig = result.data;
-                console.log('[设置] UI配置已保存:', this.uiConfig);
-                return true;
-            } else {
-                console.error('[设置] UI配置保存失败:', result.error);
-                return false;
-            }
+            this.uiConfig = result.data;
+            console.log('[设置] UI配置已保存:', this.uiConfig);
+            return true;
         } catch (error) {
             console.error('[设置] UI配置保存失败:', error);
             return false;
@@ -638,28 +657,26 @@ export const settingsManager = {
             };
             
             // 发送到服务器
-            const result = await api.saveSettings(updates);
+            const result = this.assertApiSuccess(
+                await api.saveSettings(updates),
+                '保存设置失败'
+            );
+
+            this.settings = result.data;
+            this.applyTheme(updates.theme);
             
-            if (result.status === 'OK') {
-                this.settings = result.data;
-                this.applyTheme(updates.theme);
-                
-                // 应用语言设置
-                this.applyLanguage(updates.language);
-                
-                // 显示保存成功提示
-                this.showNotification(i18n.t('settings.saveSuccess'), 'success');
-                console.log('[设置] 已保存');
-                
-                // 延迟 1.5 秒后关闭设置面板 - 使用 settingsManager 对象引用确保调用最新的方法
-                console.log('[设置] 将在 1.5 秒后关闭设置面板...');
-                setTimeout(() => {
-                    settingsManager.closePanel();
-                }, 1500);
-            } else {
-                this.showNotification(i18n.t('settings.saveFailed') + ': ' + result.error, 'error');
-                console.error('[设置] 保存失败:', result.error);
-            }
+            // 应用语言设置
+            this.applyLanguage(updates.language);
+            
+            // 显示保存成功提示
+            this.showNotification(i18n.t('settings.saveSuccess'), 'success');
+            console.log('[设置] 已保存');
+            
+            // 延迟 1.5 秒后关闭设置面板 - 使用 settingsManager 对象引用确保调用最新的方法
+            console.log('[设置] 将在 1.5 秒后关闭设置面板...');
+            setTimeout(() => {
+                settingsManager.closePanel();
+            }, 1500);
         } catch (error) {
             console.error('[设置] 保存失败:', error);
             this.showNotification(i18n.t('settings.saveFailed') + ': ' + error.message, 'error');
@@ -704,23 +721,21 @@ export const settingsManager = {
             };
             
             console.log('[DEBUG] 发送保存请求...');
-            const result = await api.saveSettings(updates);
+            const result = this.assertApiSuccess(
+                await api.saveSettings(updates),
+                '重置设置失败'
+            );
             console.log('[DEBUG] 保存结果:', result);
+
+            this.settings = result.data;
+            this.applyTheme(defaults.theme);
+            this.applyLanguage(defaults.language);
             
-            if (result.status === 'OK') {
-                this.settings = result.data;
-                this.applyTheme(defaults.theme);
-                this.applyLanguage(defaults.language);
-                
-                // 显示重置成功提示
-                this.showNotification(i18n.t('settings.resetSuccess'), 'success');
-                console.log('[设置] 已重置');
-                
-                // 不关闭面板，不刷新页面，用户可继续调整设置
-            } else {
-                this.showNotification(i18n.t('settings.resetFailed') + ': ' + result.error, 'error');
-                console.error('[设置] 重置失败:', result.error);
-            }
+            // 显示重置成功提示
+            this.showNotification(i18n.t('settings.resetSuccess'), 'success');
+            console.log('[设置] 已重置');
+            
+            // 不关闭面板，不刷新页面，用户可继续调整设置
         } catch (error) {
             console.error('[设置] 重置失败:', error);
             this.showNotification(i18n.t('settings.resetFailed') + ': ' + error.message, 'error');
@@ -791,14 +806,14 @@ export const settingsManager = {
      */
     async set(key, value) {
         try {
-            const result = await api.updateSetting(key, value);
-            
-            if (result.status === 'OK') {
-                this.settings[key] = value;
-                console.log(`[设置] ${key} = ${value}`);
-                return true;
-            }
-            return false;
+            this.assertApiSuccess(
+                await api.updateSetting(key, value),
+                `设置 ${key} 失败`
+            );
+
+            this.settings[key] = value;
+            console.log(`[设置] ${key} = ${value}`);
+            return true;
         } catch (error) {
             console.error(`[设置] 设置 ${key} 失败:`, error);
             return false;

@@ -1,5 +1,5 @@
 // 播放列表管理模块
-import { api } from './api.js';
+import { api } from './api.js?v=2';
 import { Toast, loading, ConfirmModal } from './ui.js';
 import { operationLock } from './operationLock.js';
 import { thumbnailManager, escapeHTML, focusFirstFocusable, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js';

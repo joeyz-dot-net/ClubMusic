@@ -1,21 +1,21 @@
 // 模块化主入口示例
 // 这是一个使用新模块系统的示例文件
 
-import { api } from './api.js';
+import { api } from './api.js?v=2';
 import { player } from './player.js';
 import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js';
 import { playlistsManagement } from './playlists-management.js';
 import { volumeControl } from './volume.js';
-import { searchManager } from './search.js';
+import { searchManager } from './search.js?v=2';
 import { themeManager } from './themeManager.js';
 import { debug } from './debug.js';
 import { Toast, formatTime } from './ui.js';
 import { focusFirstFocusable, isMobile, isIPad, restoreFocus, ThumbnailManager, trapFocusInContainer } from './utils.js';
 import { localFiles } from './local.js';
-import { settingsManager } from './settingsManager.js?v=2';
+import { settingsManager } from './settingsManager.js?v=3';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
-import { ktvSync } from './ktv.js?v=5';
+import { ktvSync } from './ktv.js?v=6';
 import { playLock } from './playLock.js';
 import { unavailableSongs } from './unavailable.js';
 
