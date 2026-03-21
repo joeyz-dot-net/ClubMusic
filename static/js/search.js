@@ -1216,6 +1216,10 @@ export class SearchManager {
                             console.warn(`[搜索] 添加歌曲异常: ${err.message}`);
                         }
                     }
+
+                    if (addedCount === 0) {
+                        throw new Error(i18n.t('search.addDirFailed'));
+                    }
                     
                     // 获取歌单名称
                     let playlistName = i18n.t('nav.queue');
@@ -1408,6 +1412,10 @@ export class SearchManager {
                     }
                 }
 
+                if (addedCount === 0) {
+                    throw new Error(i18n.t('search.batchAddFailed'));
+                }
+
                 Toast.success(i18n.t('search.batchAddSuccess', { done: addedCount, total: songs.length, name: playlistName }));
 
                 // 刷新播放列表显示
@@ -1456,6 +1464,11 @@ export class SearchManager {
 
         try {
             const result = await api.searchSong(query.trim(), this.youtubeLoadState.maxResultsLimit);
+
+            if (result?._error || result?.status !== 'OK') {
+                throw new Error(result?.error || result?.message || i18n.t('search.failed', { error: 'request failed' }));
+            }
+
             this.addToHistory(query.trim());
             return result;
         } catch (error) {
