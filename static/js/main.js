@@ -243,22 +243,26 @@ class MusicPlayerApp {
                     'color: #2196F3; font-weight: bold');
                 this.lastLoopMode = status.loop_mode;
             }
+
+            const mpvData = status?.mpv_state || status?.mpv || {};
+            const paused = mpvData.paused ?? true;
+            const volume = mpvData.volume;
             
             // ✅ 只在播放状态改变时输出日志
-            if (status && status.paused !== this.lastPlaybackStatus) {
-                const statusText = status.paused ? '⏸️ 已暂停' : '▶️ 正在播放';
+            if (status && paused !== this.lastPlaybackStatus) {
+                const statusText = paused ? '⏸️ 已暂停' : '▶️ 正在播放';
                 console.log(`%c[播放器] ${statusText}`, 
-                    `color: ${status.paused ? '#FF9800' : '#4CAF50'}; font-weight: bold`);
-                this.lastPlaybackStatus = status.paused;
+                    `color: ${paused ? '#FF9800' : '#4CAF50'}; font-weight: bold`);
+                this.lastPlaybackStatus = paused;
             }
             
             // ✅ 只在音量改变时输出日志（避免频繁输出）
-            if (status && status.volume !== null && status.volume !== undefined && !isNaN(status.volume)) {
-                const roundedVolume = Math.round(status.volume);
+            if (status && volume !== null && volume !== undefined && !isNaN(volume)) {
+                const roundedVolume = Math.round(volume);
                 if (roundedVolume !== Math.round(this.lastVolume || 0)) {
                     console.log(`%c[播放器] 🔊 音量: ${roundedVolume}%`, 
                         'color: #FF9800; font-weight: bold');
-                    this.lastVolume = status.volume;
+                    this.lastVolume = volume;
                 }
             }
             
@@ -496,7 +500,7 @@ class MusicPlayerApp {
         }
 
         // 播放/暂停按钮 SVG
-        const isPlaying = (status.mpv?.paused || status.mpv_state?.paused) === false;
+        const isPlaying = (status?.mpv_state?.paused ?? status?.mpv?.paused ?? true) === false;
         if (this.elements.nppPlayPause) {
             const path = this.elements.nppPlayPause.querySelector('svg path');
             if (path) {
@@ -508,7 +512,7 @@ class MusicPlayerApp {
         }
 
         // 时长
-        const mpvData = status.mpv || status.mpv_state || {};
+        const mpvData = status?.mpv_state || status?.mpv || {};
         const duration = mpvData.duration || 0;
         if (this.elements.nppDuration) {
             this.elements.nppDuration.textContent = formatTime(duration);
@@ -1046,8 +1050,9 @@ class MusicPlayerApp {
 
                 // 更新时间显示
                 const status = player.getStatus();
-                if (status?.mpv?.duration && this.elements.fullPlayerCurrentTime) {
-                    const currentTime = (percent / 100) * status.mpv.duration;
+                const mpvData = status?.mpv_state || status?.mpv || {};
+                if (mpvData.duration && this.elements.fullPlayerCurrentTime) {
+                    const currentTime = (percent / 100) * mpvData.duration;
                     this.elements.fullPlayerCurrentTime.textContent = formatTime(currentTime);
                 }
 
@@ -1204,7 +1209,7 @@ class MusicPlayerApp {
         }
 
         // 更新进度信息（支持两种字段名）
-        const mpvData = status.mpv || status.mpv_state || {};
+        const mpvData = status?.mpv_state || status?.mpv || {};
         if (mpvData) {
             const duration = mpvData.duration || 0;
 
@@ -1256,7 +1261,7 @@ class MusicPlayerApp {
         }
 
         // 更新播放/暂停按钮状态
-        const isPlaying = (status.mpv?.paused || status.mpv_state?.paused) === false;
+        const isPlaying = (status?.mpv_state?.paused ?? status?.mpv?.paused ?? true) === false;
         
         // 更新按钮文本/图标
         if (this.elements.playPauseBtn) {

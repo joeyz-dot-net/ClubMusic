@@ -636,7 +636,10 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
                 const confirmed = await ConfirmModal.show({ title: i18n.t('playlist.clearQueueConfirm'), type: 'danger' });
                 if (confirmed) {
                     try {
-                        await api.post('/playlist_clear', {});
+                        const response = await api.clearQueue();
+                        if (response?._error || response?.status !== 'OK') {
+                            throw new Error(response?.error || response?.message || i18n.t('playlist.clearFailed'));
+                        }
                         Toast.success(i18n.t('playlist.clearSucceed'));
                         await playlistManager.loadCurrent();
                         renderPlaylistUI({ container, onPlay, currentMeta });
