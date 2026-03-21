@@ -103,6 +103,7 @@ const translations = {
         'player.shuffle.title': '随机播放',
         'player.notPlaying': '未播放',
         'player.skippedSongs': '已跳过 {count} 首不可用歌曲',
+        'player.youtubeVideoSkipped': 'YouTube 视频无法嵌入或播放，已跳过: {title}',
 
         // 搜索
         'search.title': '搜索结果',
@@ -333,6 +334,7 @@ const translations = {
         'player.shuffle.title': 'Shuffle',
         'player.notPlaying': 'Not playing',
         'player.skippedSongs': 'Skipped {count} unavailable song(s)',
+        'player.youtubeVideoSkipped': 'Skipped YouTube video that could not be embedded or played: {title}',
 
         // Search
         'search.title': 'Search Results',
@@ -563,6 +565,7 @@ const translations = {
         'player.shuffle.title': '隨機播放',
         'player.notPlaying': '未播放',
         'player.skippedSongs': '已跳過 {count} 首不可用歌曲',
+        'player.youtubeVideoSkipped': 'YouTube 視訊無法嵌入或播放，已跳過: {title}',
 
         // 搜尋
         'search.title': '搜尋結果',

@@ -247,6 +247,30 @@ export class MusicAPI {
         return this.get('/volume/defaults');
     }
 
+    async getVersion() {
+        return this.get('/version');
+    }
+
+    async getSettingsSchema() {
+        return this.get('/settings/schema');
+    }
+
+    async saveSettings(data) {
+        return this.post('/settings', data);
+    }
+
+    async updateSetting(key, value) {
+        return this.post(`/settings/${key}`, { value });
+    }
+
+    async getUIConfig() {
+        return this.get('/ui-config');
+    }
+
+    async saveUIConfig(data) {
+        return this.post('/ui-config', data);
+    }
+
     // 播放列表 API
     async getPlaylist(playlistId = null) {
         const url = playlistId ? `/playlist?playlist_id=${encodeURIComponent(playlistId)}` : '/playlist';

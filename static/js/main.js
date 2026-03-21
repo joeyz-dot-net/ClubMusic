@@ -12,10 +12,10 @@ import { debug } from './debug.js';
 import { Toast, formatTime } from './ui.js';
 import { focusFirstFocusable, isMobile, isIPad, restoreFocus, ThumbnailManager, trapFocusInContainer } from './utils.js';
 import { localFiles } from './local.js';
-import { settingsManager } from './settingsManager.js';
+import { settingsManager } from './settingsManager.js?v=2';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
-import { ktvSync } from './ktv.js?v=2';
+import { ktvSync } from './ktv.js?v=5';
 import { playLock } from './playLock.js';
 import { unavailableSongs } from './unavailable.js';
 

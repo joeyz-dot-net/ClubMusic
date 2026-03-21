@@ -6,7 +6,7 @@
 import { Toast } from './ui.js';
 import { themeManager } from './themeManager.js';
 import { i18n } from './i18n.js';
-import { api } from './api.js';
+import { api } from './api.js?v=2';
 import { focusFirstFocusable, restoreFocus, trapFocusInContainer } from './utils.js';
 
 export const settingsManager = {
@@ -176,8 +176,7 @@ export const settingsManager = {
      */
     async loadSchema() {
         try {
-            const response = await fetch('/settings/schema');
-            const result = await response.json();
+            const result = await api.getSettingsSchema();
 
             if (result.status === 'OK') {
                 this.schema = result.schema;
@@ -193,8 +192,7 @@ export const settingsManager = {
      */
     async loadVersion() {
         try {
-            const response = await fetch('/version');
-            const result = await response.json();
+            const result = await api.getVersion();
             if (result.status === 'OK' && result.version) {
                 const el = document.getElementById('appVersionText');
                 if (el) el.textContent = `ClubMusic v${result.version}`;
@@ -209,8 +207,7 @@ export const settingsManager = {
      */
     async loadUIConfig() {
         try {
-            const response = await fetch('/ui-config');
-            const result = await response.json();
+            const result = await api.getUIConfig();
 
             if (result.status === 'OK') {
                 this.uiConfig = result.data;
@@ -229,15 +226,7 @@ export const settingsManager = {
      */
     async saveUIConfig(config) {
         try {
-            const response = await fetch('/ui-config', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(config)
-            });
-
-            const result = await response.json();
+            const result = await api.saveUIConfig(config);
 
             if (result.status === 'OK') {
                 this.uiConfig = result.data;
@@ -649,15 +638,7 @@ export const settingsManager = {
             };
             
             // 发送到服务器
-            const response = await fetch('/settings', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(updates)
-            });
-            
-            const result = await response.json();
+            const result = await api.saveSettings(updates);
             
             if (result.status === 'OK') {
                 this.settings = result.data;
@@ -723,15 +704,7 @@ export const settingsManager = {
             };
             
             console.log('[DEBUG] 发送保存请求...');
-            const response = await fetch('/settings', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(updates)
-            });
-            
-            const result = await response.json();
+            const result = await api.saveSettings(updates);
             console.log('[DEBUG] 保存结果:', result);
             
             if (result.status === 'OK') {
@@ -818,15 +791,7 @@ export const settingsManager = {
      */
     async set(key, value) {
         try {
-            const response = await fetch(`/settings/${key}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ value })
-            });
-            
-            const result = await response.json();
+            const result = await api.updateSetting(key, value);
             
             if (result.status === 'OK') {
                 this.settings[key] = value;

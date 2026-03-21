@@ -3,9 +3,24 @@
  * 负责在全屏播放器中显示YouTube视频，并与服务器音频同步
  */
 
-import { api } from './api.js';
+import { api } from './api.js?v=2';
 import { player } from './player.js';
+import { Toast } from './ui.js';
+import { i18n } from './i18n.js';
 import { unavailableSongs } from './unavailable.js';
+
+function dismissSuccessToastsForTitle(title) {
+    if (!title) {
+        return;
+    }
+
+    document.querySelectorAll('.toast.toast-success').forEach((toast) => {
+        const message = toast.querySelector('.toast-message')?.textContent || '';
+        if (message.includes(title)) {
+            toast.remove();
+        }
+    });
+}
 
 export class KTVSync {
     constructor() {
@@ -121,11 +136,19 @@ export class KTVSync {
      * 播放器错误回调
      */
     onPlayerError(event) {
-        console.error('[KTV] YouTube 播放器错误:', event.data);
         // 错误码: 2=无效ID, 5=HTML5播放器错误, 100=视频不存在, 101/150=不允许嵌入
         if (event.data === 2 || event.data === 100 || event.data === 101 || event.data === 150) {
-            console.error('[KTV] 视频无法播放，自动跳过下一首');
-            this._failedVideoId = this.currentVideoId;  // 记住失败的ID，防止重试
+            const failedVideoId = this.currentVideoId;
+            if (failedVideoId && failedVideoId === this._failedVideoId) {
+                return;
+            }
+
+            const currentTitle = player.getStatus()?.current_meta?.title || '';
+            console.warn('[KTV] YouTube 播放器错误（将自动跳过）:', event.data);
+            console.warn('[KTV] 视频无法播放，自动跳过下一首');
+            this._failedVideoId = failedVideoId;  // 记住失败的ID，防止重试
+            dismissSuccessToastsForTitle(currentTitle);
+            Toast.warning(i18n.t('player.youtubeVideoSkipped', { title: currentTitle || i18n.t('track.unknown') }));
             this.disableVideoMode();  // 立即清理视频模式状态
             void player.next().then((result) => {
                 this._markSkippedSongs(result);
@@ -137,7 +160,10 @@ export class KTVSync {
                 }
                 console.error('[KTV] 自动跳过失败:', error?.message || error);
             });
+            return;
         }
+
+        console.error('[KTV] YouTube 播放器错误:', event.data);
     }
 
     _markSkippedSongs(result) {
@@ -263,8 +289,7 @@ export class KTVSync {
      */
     async getYouTubeControlsSetting() {
         try {
-            const response = await fetch('/ui-config');
-            const result = await response.json();
+            const result = await api.getUIConfig();
             if (result.status === 'OK') {
                 return result.data.youtube_controls !== false;
             }
@@ -325,6 +350,9 @@ export class KTVSync {
                 this.artworkContainer.classList.remove('video-mode');
             }
             this.isVideoMode = false;
+            this.lastSyncTime = 0;
+            this.isSyncing = false;
+            this.resetMetrics();
             console.log('[KTV] 已切换到音乐模式');
         }
     }
@@ -343,6 +371,9 @@ export class KTVSync {
             return;
         }
 
+        this.lastSyncTime = 0;
+        this.isSyncing = false;
+        this.resetMetrics();
         this.currentVideoId = videoId;
         console.log('[KTV] 加载视频:', videoId);
 
