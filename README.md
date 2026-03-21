@@ -19,7 +19,6 @@
   - 歌单标签切换时无需刷新页面
 - **搜索与批量添加**：支持本地文件搜索与 YouTube 搜索，支持批量添加到歌单
 - **卡拉OK搜索模式**：YouTube 搜索支持切换卡拉OK/伴奏搜索模式
-- **播放排行榜**：自动记录历史播放次数，展示热播榜单（支持全部/日/周/月/季/年筛选）
 - **中英繁三语界面**：支持简体中文、英文、繁體中文，自动检测浏览器语言，支持手动切换
 - **主题切换**：支持深色 / 浅色主题，支持按时间自动切换（6:00-18:00 浅色）
 - **Windows 优化**：使用 WASAPI 音频输出，支持 PyInstaller 单文件打包
@@ -216,7 +215,6 @@ http://localhost:9000
 | `static/js/playlist.js` | `playlistManager`, `renderPlaylistUI` | 歌单管理与渲染 |
 | `static/js/playlists-management.js` | `playlistsManagement` | 多歌单管理弹窗 UI |
 | `static/js/search.js` | `searchManager` | 搜索管理（本地 + YouTube，卡拉OK模式） |
-| `static/js/ranking.js` | `RankingManager` | 播放排行榜（支持多时间段筛选） |
 | `static/js/volume.js` | `volumeControl` | 音量控制，服务端同步，节流 API 调用 |
 | `static/js/local.js` | `localFiles` | 本地文件浏览器，专辑卡片网格 |
 | `static/js/ktv.js` | `ktv` | KTV 视频同步模块 |

@@ -216,7 +216,6 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) { /* ... */
 | [operationLock.js](../static/js/operationLock.js) | `operationLock` | Operation lock (pauses polling during drag/edit) |
 | [templates.js](../static/js/templates.js) | `buildTrackItemHTML` | Track list item HTML template builder |
 | [utils.js](../static/js/utils.js) | `escapeHTML`, `thumbnailManager` | Utility functions (XSS protection, thumbnails) |
-| [ranking.js](../static/js/ranking.js) | `RankingManager` | Playback ranking management |
 | [navManager.js](../static/js/navManager.js) | `navManager` | Navigation bar i18n management |
 
 **Import Pattern**:
