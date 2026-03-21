@@ -3,10 +3,10 @@ import { api } from './api.js';
 import { Toast, formatTime, searchLoading } from './ui.js';
 import { buildTrackItemElement } from './templates.js';
 import { localFiles, getNodeByPath, getDirCoverUrl, countFiles } from './local.js';
-import { playlistManager } from './playlist.js';
+import { playlistManager, renderPlaylistUI } from './playlist.js';
 import { i18n } from './i18n.js';
 import { escapeHTML, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js';
-import { playLock } from './playLock.js';
+import { executePlayNow, rerenderQueueWithCurrentMeta } from './playNow.js';
 
 const SEARCH_SUCCESS_ICON_MARKUP = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
 
@@ -1121,15 +1121,9 @@ export class SearchManager {
         const originalContent = snapshotElementChildren(btn);
         try {
             const playlistId = this.getCurrentPlaylistId ? this.getCurrentPlaylistId() : this.currentPlaylistId;
-            let wasAlreadyQueued = false;
 
             if (isDirectory) {
                 Toast.warning(i18n.t('search.dirNotSupported'));
-                return;
-            }
-
-            // 播放准备锁：防止等待期间覆盖操作
-            if (!playLock.acquire(songData.title)) {
                 return;
             }
 
@@ -1137,52 +1131,18 @@ export class SearchManager {
             setElementText(btn, '⏳');
             btn.disabled = true;
 
-            // 1. 将歌曲插入到队列顶部（index=0，当前播放的前面）
-            const addResponse = await this.addSongToPlaylist(playlistId, songData, 0);
-
-            if (addResponse?.duplicate) {
-                wasAlreadyQueued = true;
-            }
-
-            if (!wasAlreadyQueued && addResponse?.status !== 'OK') {
-                throw new Error(addResponse?.error || addResponse?.message || i18n.t('search.addSongFailed'));
-            }
-
-            // 2. 刷新播放列表数据
             const playlistManager = window.app?.modules?.playlistManager;
-            if (playlistManager && !wasAlreadyQueued) {
-                await playlistManager.refreshAll();
-            }
+            await executePlayNow({
+                song: songData,
+                addToQueueTop: () => this.addSongToPlaylist(playlistId, songData, 0),
+                refreshPlaylist: playlistManager ? () => playlistManager.refreshAll() : null,
+                addFailedMessage: i18n.t('search.addSongFailed')
+            });
 
-            // 3. 立即播放这首歌
-            await window.app.modules.player.play(
-                songData.url,
-                songData.title,
-                songData.type,
-                0  // duration
-            );
-
-            playLock.release();
-
-            // 4. 刷新UI显示
-            const container = document.getElementById('playListContainer');
-            const currentMeta = window.app?.modules?.player?.status?.current_meta
-                || window.app?.lastPlayStatus?.current_meta
-                || null;
-            if (container) {
-                const { renderPlaylistUI } = await import('./playlist.js');
-                renderPlaylistUI({
-                    container,
-                    onPlay: (s) => window.app?.playSong(s),
-                    currentMeta
-                });
-            }
-
-            Toast.success(i18n.t('search.nowPlaying', { title: songData.title }));
+            rerenderQueueWithCurrentMeta(renderPlaylistUI);
             setElementMarkup(btn, SEARCH_SUCCESS_ICON_MARKUP);
 
         } catch (error) {
-            playLock.release();
             console.error('[立即播放] 失败:', error);
             Toast.error(i18n.t('search.playFailed') + ': ' + error.message);
             restoreElementChildren(btn, originalContent);

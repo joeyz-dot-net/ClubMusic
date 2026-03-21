@@ -5,8 +5,8 @@ import { operationLock } from './operationLock.js';
 import { thumbnailManager, escapeHTML, focusFirstFocusable, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js';
 import { i18n } from './i18n.js';
 import { player } from './player.js';
-import { playLock } from './playLock.js';
 import { unavailableSongs } from './unavailable.js';
+import { executePlayNow, rerenderQueueWithCurrentMeta } from './playNow.js';
 
 export class PlaylistManager {
     constructor() {
@@ -2292,51 +2292,27 @@ function showHistoryActionMenu(song, historyModal, removeFromHistoryFn, rerender
 // 立即播放：将歌曲插入队列顶部并播放
 async function handleHistoryPlayNow(song) {
     try {
-        let wasAlreadyQueued = false;
-
-        // 播放准备锁：防止等待期间覆盖操作
-        if (!playLock.acquire(song.title)) {
-            return;
-        }
-
         const currentPlaylistId = playlistManager.getSelectedPlaylistId() || playlistManager.getActiveDefaultId();
 
-        // 1. 将歌曲插入到队列顶部（index=0）
-        const addResult = await playlistManager.addSong(currentPlaylistId, {
-            url: song.url,
-            title: song.title,
-            type: song.type || 'local',
-            thumbnail_url: song.thumbnail_url || ''
-        }, 0);
+        await executePlayNow({
+            song: {
+                url: song.url,
+                title: song.title,
+                type: song.type || 'local',
+                thumbnail_url: song.thumbnail_url || ''
+            },
+            addToQueueTop: () => playlistManager.addSong(currentPlaylistId, {
+                url: song.url,
+                title: song.title,
+                type: song.type || 'local',
+                thumbnail_url: song.thumbnail_url || ''
+            }, 0),
+            refreshPlaylist: () => playlistManager.refreshAll(),
+            addFailedMessage: i18n.t('search.addSongFailed')
+        });
 
-        if (addResult?.duplicate) {
-            wasAlreadyQueued = true;
-        }
-
-        // 2. 刷新播放列表数据
-        if (!wasAlreadyQueued) {
-            await playlistManager.refreshAll();
-        }
-
-        // 3. 播放歌曲
-        await player.play(song.url, song.title, song.type || 'local', 0);
-
-        playLock.release();
-
-        // 4. 刷新播放列表 UI
-        const container = document.getElementById('playListContainer');
-        const currentMeta = player.status?.current_meta || window.app?.lastPlayStatus?.current_meta || null;
-        if (container) {
-            renderPlaylistUI({
-                container,
-                onPlay: (s) => window.app?.playSong(s),
-                currentMeta
-            });
-        }
-
-        Toast.success(`▶️ ${i18n.t('history.playNowSuccess')}: ${song.title}`);
+        rerenderQueueWithCurrentMeta(renderPlaylistUI);
     } catch (error) {
-        playLock.release();
         console.error('[历史-立即播放] 失败:', error);
         Toast.error('播放失败: ' + error.message);
     }

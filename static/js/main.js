@@ -1471,7 +1471,6 @@ class MusicPlayerApp {
             
             if (playSuccess) {
                 playLock.release();
-                Toast.success(i18n.t('player.nowPlaying', { title: song.title }));
             }
 
         } catch (error) {
