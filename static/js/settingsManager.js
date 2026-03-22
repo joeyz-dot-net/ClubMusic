@@ -25,7 +25,6 @@ export const settingsManager = {
     // 用于存储 player 实例引用
     player: null,
     schema: {},
-    uiConfigSaveInFlight: false,
 
     setButtonGroupValue(groupId, value) {
         const group = document.getElementById(groupId);
@@ -261,61 +260,6 @@ export const settingsManager = {
         }
     },
 
-    setUIConfigTogglesDisabled(disabled) {
-        ['expandButtonToggle'].forEach((id) => {
-            const toggle = document.getElementById(id);
-            if (toggle) {
-                toggle.disabled = disabled;
-            }
-        });
-    },
-
-    async handleUIConfigToggleChange(toggle, configKey, enabled, successMessage) {
-        const previousConfig = { ...this.uiConfig };
-        const previousValue = previousConfig[configKey];
-
-        if (previousValue === enabled) {
-            toggle.checked = enabled;
-            return true;
-        }
-
-        if (this.uiConfigSaveInFlight) {
-            toggle.checked = previousValue;
-            return false;
-        }
-
-        this.uiConfigSaveInFlight = true;
-        this.setUIConfigTogglesDisabled(true);
-
-        try {
-            const success = await this.saveUIConfig({
-                ...previousConfig,
-                [configKey]: enabled
-            });
-
-            if (!success) {
-                this.uiConfig = previousConfig;
-                toggle.checked = previousValue;
-                Toast.error(i18n.t('settings.saveFailed'));
-                return false;
-            }
-
-            toggle.checked = this.uiConfig[configKey];
-            await this.applyFullscreenControls();
-            console.log(successMessage);
-            return true;
-        } catch (error) {
-            this.uiConfig = previousConfig;
-            toggle.checked = previousValue;
-            console.error('[设置] UI配置切换失败:', error);
-            Toast.error(i18n.t('settings.saveFailed'));
-            return false;
-        } finally {
-            this.uiConfigSaveInFlight = false;
-            this.setUIConfigTogglesDisabled(false);
-        }
-    },
-
     /**
      * 更新UI - 将设置值同步到表单
      */
@@ -334,12 +278,6 @@ export const settingsManager = {
         if (langGroup) {
             const currentLang = settings.language || 'auto';
             this.setButtonGroupValue('languageSetting', currentLang);
-        }
-
-        // UI 配置 - 放大按钮开关
-        const expandButtonToggle = document.getElementById('expandButtonToggle');
-        if (expandButtonToggle) {
-            expandButtonToggle.checked = this.uiConfig.expand_button;
         }
     },
     
@@ -376,20 +314,6 @@ export const settingsManager = {
                     this.setSetting('language', value);
                     this.applyLanguage(value);
                 });
-            });
-        }
-
-        // 放大按钮开关
-        const expandButtonToggle = document.getElementById('expandButtonToggle');
-        if (expandButtonToggle) {
-            expandButtonToggle.addEventListener('change', async (e) => {
-                const enabled = e.target.checked;
-                await this.handleUIConfigToggleChange(
-                    e.target,
-                    'expand_button',
-                    enabled,
-                    `[设置] 放大按钮：${enabled ? '显示' : '隐藏'}`
-                );
             });
         }
 
@@ -590,28 +514,6 @@ export const settingsManager = {
             }
         });
 
-        const playbackSection = document.getElementById('playbackSectionTitle');
-        if (playbackSection) playbackSection.textContent = i18n.t('settings.playback', language);
-
-        const expandButtonLabel = document.getElementById('expandButtonLabel');
-        if (expandButtonLabel) expandButtonLabel.textContent = i18n.t('settings.expandButton', language);
-
-        const toggleOnIds = ['expandButtonToggleOn'];
-        toggleOnIds.forEach((id) => {
-            const element = document.getElementById(id);
-            if (element) element.textContent = i18n.t('settings.toggleOn', language);
-        });
-
-        const toggleOffIds = ['expandButtonToggleOff'];
-        toggleOffIds.forEach((id) => {
-            const element = document.getElementById(id);
-            if (element) element.textContent = i18n.t('settings.toggleOff', language);
-        });
-
-        const expandToggle = document.getElementById('expandButtonToggle');
-        if (expandToggle) {
-            expandToggle.setAttribute('aria-label', i18n.t('settings.expandButton', language));
-        }
     },
     
     /**

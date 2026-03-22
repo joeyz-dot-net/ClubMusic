@@ -413,7 +413,7 @@
 	<!-- YouTube IFrame Player API -->
 	<script src="https://www.youtube.com/iframe_api"></script>
 
-	<script type="module" src="/static/js/main.js?v=78"></script>
+	<script type="module" src="/static/js/main.js?v=80"></script>
 
 	<!-- 调试面板模块 HTML 模板（由 debug-panel.module.js 动态创建） -->
 	<template id="debugPanelTemplate">
@@ -482,30 +482,10 @@
 					</div>
 				</div>
 
-				<div class="settings-section">
-						<h3 class="section-title" id="playbackSectionTitle">🎛️ 播放控制</h3>
-
-						<div class="settings-item">
-							<div class="settings-label" id="expandButtonLabel">全屏放大按钮</div>
-							<div class="settings-toggle">
-								<input id="expandButtonToggle" class="toggle-checkbox" type="checkbox" />
-								<label class="toggle-label" for="expandButtonToggle">
-									<span class="toggle-switch" aria-hidden="true"></span>
-									<span class="toggle-text">
-										<span class="toggle-on" id="expandButtonToggleOn">开启</span>
-										<span class="toggle-off" id="expandButtonToggleOff">关闭</span>
-									</span>
-								</label>
-							</div>
-						</div>
-					</div>
-
-    <!-- 🐛 调试面板入口按钮 -->
-            <button class="playlists-debug-btn" id="playlistsDebugBtn" title="调试面板" style="margin-left:8px;">
-                <span style="font-size:20px;">🐛</span>
-            </button>		
-
-</div>
+				<button class="playlists-debug-btn" id="playlistsDebugBtn" title="调试面板" style="margin-left:8px;">
+					<span style="font-size:20px;">🐛</span>
+				</button>
+			</div>
 			<!-- 底部操作栏 -->
 			<div class="settings-footer">
 				<span id="appVersionText" class="settings-version"></span>

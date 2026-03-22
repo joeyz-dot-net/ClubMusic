@@ -714,7 +714,8 @@ export class Player {
 
     // 判断是否正在播放
     isPlaying() {
-        return this.status?.mpv?.paused === false;
+        const mpvData = this.status?.mpv_state || this.status?.mpv || {};
+        return mpvData.paused === false;
     }
 }
 

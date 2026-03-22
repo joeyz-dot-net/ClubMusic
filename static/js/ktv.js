@@ -4,7 +4,7 @@
  */
 
 import { api } from './api.js?v=2';
-import { player } from './player.js?v=16';
+import { player } from './player.js?v=17';
 import { Toast } from './ui.js';
 import { i18n } from './i18n.js';
 import { unavailableSongs } from './unavailable.js';
@@ -65,6 +65,10 @@ export class KTVSync {
         }
 
         let mount = this.playerHost.querySelector('#fullPlayerYouTube');
+        if (mount && mount.tagName !== 'DIV') {
+            mount = null;
+        }
+
         if (!mount) {
             mount = document.createElement('div');
             mount.id = 'fullPlayerYouTube';
@@ -330,21 +334,9 @@ export class KTVSync {
                 }
             }
 
-            // 销毁旧播放器
-            if (this.player && typeof this.player.destroy === 'function') {
-                try {
-                    this.player.destroy();
-                    console.log('[KTV] 旧播放器已销毁');
-                } catch (e) {
-                    console.warn('[KTV] 销毁播放器失败:', e);
-                }
-            }
-
-            // 重置状态
-            this.player = null;
-            this.playerReady = false;
+            this.resetPlayerInstance();
             this.currentVideoId = null;
-            this.ensurePlayerMount();
+            console.log('[KTV] 旧播放器已销毁');
 
             // 重新创建播放器（会自动读取新配置）
             await this.createPlayer();
@@ -361,15 +353,16 @@ export class KTVSync {
                         // 恢复视频
                         try {
                             this.currentVideoId = currentVideoId;
-                            this.player.cueVideoById({
-                                videoId: currentVideoId,
-                                startSeconds: currentTime
-                            });
-
-                            if (!wasPaused) {
-                                setTimeout(() => {
-                                    this.player.playVideo();
-                                }, 500);
+                            if (wasPaused) {
+                                this.player.cueVideoById({
+                                    videoId: currentVideoId,
+                                    startSeconds: currentTime
+                                });
+                            } else {
+                                this.player.loadVideoById({
+                                    videoId: currentVideoId,
+                                    startSeconds: currentTime
+                                });
                             }
 
                             console.log('[KTV] 视频已恢复');
@@ -562,12 +555,13 @@ export class KTVSync {
             const playerState = this.player.getPlayerState();
             const isPlayerPlaying = playerState === YT.PlayerState.PLAYING;
             const isPlayerPaused = playerState === YT.PlayerState.PAUSED || playerState === YT.PlayerState.CUED;
+            const isPlayerPending = playerState === YT.PlayerState.UNSTARTED || playerState === YT.PlayerState.BUFFERING;
 
             // 同步暂停/播放状态
             if (isPaused && isPlayerPlaying) {
                 console.log('[KTV] 服务器已暂停，暂停视频');
                 this.player.pauseVideo();
-            } else if (!isPaused && isPlayerPaused) {
+            } else if (!isPaused && (isPlayerPaused || isPlayerPending)) {
                 console.log('[KTV] 服务器正在播放，播放视频');
                 this.player.playVideo();
             }
