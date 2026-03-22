@@ -340,7 +340,7 @@ def get_player_for_pipe(pipe_name: str) -> MusicPlayer:
     """获取或创建指定管道的 Player 实例。
 
     无 pipe 或匹配默认管道 → 返回全局 PLAYER；
-    房间管道模式（\\.\pipe\mpv-ipc-*）→ 按 room_id 查 ROOM_PLAYERS，不自动创建；
+    房间管道模式（\\\\.\\pipe\\mpv-ipc-*）→ 按 room_id 查 ROOM_PLAYERS，不自动创建；
     其他管道 → 查/创建 PipePlayer。
     """
     if not pipe_name or pipe_name == PLAYER.pipe_name:

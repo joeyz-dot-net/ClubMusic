@@ -120,7 +120,7 @@ class MusicPlayer:
         mpv_path = os.path.join(app_dir, "bin", "mpv.exe")
         return (
             f'"{mpv_path}" '
-            "--input-ipc-server=\\\\.\\\pipe\\\\mpv-pipe "
+            r"--input-ipc-server=\\.\pipe\mpv-pipe "
             "--idle=yes --force-window=no --no-video"
         )
 
@@ -1257,6 +1257,9 @@ class MusicPlayer:
                         should_broadcast_state = True
                         logger.info(f"[自动播放] ✅ 单曲循环成功: {title}")
                     else:
+                        self.current_meta = {}
+                        self.current_index = -1
+                        should_broadcast_state = True
                         logger.error(f"[自动播放] ❌ 单曲循环播放失败: {title}")
 
                 else:
@@ -1371,6 +1374,8 @@ class MusicPlayer:
                         self.current_meta = {}
                         self.current_index = -1
                     elif not auto_play_success:
+                        self.current_meta = {}
+                        self.current_index = -1
                         logger.error(f"[自动播放] ❌ 连续 {MAX_SKIP} 首播放失败")
 
             # 锁外广播
