@@ -1178,6 +1178,7 @@ export class SearchManager {
                                     const name = playlistManager.getCurrentName() || selectedId;
                                     Toast.success(i18n.t('search.addSuccess', { name, title: songData.title }));
                                     await playlistManager.refreshAll();
+                                    this.playlistViewFreshWhileModalOpen = true;
                                 } else if (result.duplicate) {
                                     Toast.warning(`${songData.title} ${i18n.t('search.alreadyInList')}`);
                                 }
