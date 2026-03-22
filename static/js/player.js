@@ -103,6 +103,53 @@ export class Player {
         );
     }
 
+    _buildLocalStatusWithMpvPatch(mpvPatch) {
+        if (!this.status) {
+            return null;
+        }
+
+        const currentStatus = this.status;
+        const currentMpvState = currentStatus.mpv_state || currentStatus.mpv || {};
+        const nextMpvState = {
+            ...currentMpvState,
+            ...mpvPatch,
+        };
+
+        const nextStatus = {
+            ...currentStatus,
+            mpv_state: nextMpvState,
+        };
+
+        if (currentStatus.mpv) {
+            nextStatus.mpv = {
+                ...currentStatus.mpv,
+                ...mpvPatch,
+            };
+        }
+
+        return nextStatus;
+    }
+
+    _applyLocalMpvStatePatch(mpvPatch) {
+        const nextStatus = this._buildLocalStatusWithMpvPatch(mpvPatch);
+        if (!nextStatus) {
+            return null;
+        }
+
+        this._markLocalStatusBarrier();
+        this.updateStatus(nextStatus, { source: 'local' });
+        return nextStatus;
+    }
+
+    _createPlayEventPayload(status = this.status) {
+        const meta = status?.current_meta || {};
+        return {
+            url: meta.url || meta.rel,
+            title: meta.title || meta.name,
+            type: meta.type,
+        };
+    }
+
     _shouldAcceptServerStatus(status, source) {
         if (!status?.server_time || source === 'local') {
             return true;
@@ -164,7 +211,8 @@ export class Player {
     
     async pause() {
         const result = this._ensureSuccess(await api.pause(), '暂停失败');
-        this.emit('pause');
+        this._applyLocalMpvStatePatch({ paused: !!result?.paused });
+        this.emit(result?.paused ? 'pause' : 'play', result?.paused ? undefined : this._createPlayEventPayload());
         return result;
     }
 
@@ -199,40 +247,17 @@ export class Player {
     async togglePlayPause() {
         // 后端 /pause 已是切换语义
         const result = this._ensureSuccess(await api.pause(), '播放状态切换失败');
-        // 尽力刷新状态，避免UI卡住
-        try {
-            const status = await this.refreshStatus();
-            // 恢复播放时，发送当前歌曲元数据
-            if (!result?.paused) {
-                const meta = status?.current_meta || {};
-                this.emit('play', { 
-                    url: meta.url || meta.rel, 
-                    title: meta.title || meta.name,
-                    type: meta.type 
-                });
-                return result;
-            }
-        } catch (err) {
-            console.warn('刷新状态失败:', err);
-        }
-
-        if (!result?.paused) {
-            const meta = this.status?.current_meta || {};
-            this.emit('play', {
-                url: meta.url || meta.rel,
-                title: meta.title || meta.name,
-                type: meta.type
-            });
-            return result;
-        }
-
-        this.emit(result?.paused ? 'pause' : 'play');
+        this._applyLocalMpvStatePatch({ paused: !!result?.paused });
+        this.emit(result?.paused ? 'pause' : 'play', result?.paused ? undefined : this._createPlayEventPayload());
         return result;
     }
 
     // 音量控制
     async setVolume(value) {
         const result = this._ensureSuccess(await api.setVolume(value), '设置音量失败');
+        if (result?.volume !== undefined) {
+            this._applyLocalMpvStatePatch({ volume: result.volume });
+        }
         this.emit('volumeChange', value);
         return result;
     }
@@ -240,6 +265,18 @@ export class Player {
     // 进度控制
     async seek(percent) {
         const result = this._ensureSuccess(await api.seek(percent), '跳转失败');
+        const currentMpvState = this.status?.mpv_state || this.status?.mpv || {};
+        const duration = currentMpvState.duration ?? 0;
+        const nextTimePos = result?.position !== undefined
+            ? result.position
+            : (duration > 0 ? (percent / 100) * duration : currentMpvState.time_pos ?? currentMpvState.time);
+
+        if (nextTimePos !== undefined && nextTimePos !== null) {
+            this._applyLocalMpvStatePatch({
+                time_pos: nextTimePos,
+                time: nextTimePos,
+            });
+        }
         this.emit('seek', percent);
         return result;
     }
@@ -511,7 +548,7 @@ export class Player {
         const oldStatus = this.status;
         this.status = status;
 
-        if (status?.server_time) {
+        if (status?.server_time && source !== 'local') {
             this._lastServerTime = Math.max(this._lastServerTime, status.server_time);
             if (status.server_time >= this._minAcceptedServerTime - STATUS_TIME_EPSILON) {
                 this._minAcceptedServerTime = 0;

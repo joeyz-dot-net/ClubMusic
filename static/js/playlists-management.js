@@ -1,5 +1,5 @@
 // 歌单管理模块
-import { playlistManager } from './playlist.js?v=7';
+import { playlistManager } from './playlist.js?v=9';
 import { Toast, ConfirmModal, InputModal } from './ui.js';
 import { operationLock } from './operationLock.js';
 import { i18n } from './i18n.js';

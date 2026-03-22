@@ -1,5 +1,6 @@
 // 音量控制模块
 import { api } from './api.js?v=2';
+import { player } from './player.js?v=5';
 
 // 调试模式检查
 const isDebugMode = () => localStorage.getItem('DEBUG_MODE') === '1';
@@ -179,7 +180,7 @@ export class VolumeControl {
 
         this.throttleTimer = setTimeout(async () => {
             try {
-                const result = this._ensureSuccess(await api.setVolume(value), '设置音量失败');
+                const result = this._ensureSuccess(await player.setVolume(value), '设置音量失败');
                 if (result.status === 'OK') {
                     if (!this.silent && isDebugMode()) {
                         console.log('[音量] 已设置:', value);
