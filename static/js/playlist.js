@@ -2,7 +2,7 @@
 import { api } from './api.js?v=2';
 import { Toast, loading, ConfirmModal } from './ui.js';
 import { operationLock } from './operationLock.js';
-import { thumbnailManager, escapeHTML, focusFirstFocusable, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js';
+import { thumbnailManager, escapeHTML, focusFirstFocusable, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js?v=2';
 import { i18n } from './i18n.js';
 import { player } from './player.js?v=16';
 import { unavailableSongs } from './unavailable.js';
@@ -2186,7 +2186,11 @@ function installModalKeyHandler(modal, onClose) {
 
 function showManagedModal(modal, { display = 'block', preferredSelector = null } = {}) {
     modal._previousActiveElement = document.activeElement;
+    modal.setAttribute('aria-modal', 'true');
     modal.setAttribute('aria-hidden', 'false');
+    if (!modal.hasAttribute('tabindex')) {
+        modal.setAttribute('tabindex', '-1');
+    }
     modal.style.display = display;
     setTimeout(() => {
         modal.classList.add('modal-visible');

@@ -231,6 +231,21 @@ export async function copyToClipboard(text) {
         const menu = document.createElement('div');
         menu.className = className;
         menu.replaceChildren(content || document.createDocumentFragment());
+        menu.setAttribute('role', 'dialog');
+        menu.setAttribute('aria-modal', 'true');
+        menu.setAttribute('aria-hidden', 'true');
+
+        if (!menu.hasAttribute('tabindex')) {
+            menu.setAttribute('tabindex', '-1');
+        }
+
+        const menuTitle = menu.querySelector('.search-action-menu-title');
+        if (menuTitle) {
+            if (!menuTitle.id) {
+                menuTitle.id = `${className}-${generateId()}-title`;
+            }
+            menu.setAttribute('aria-labelledby', menuTitle.id);
+        }
 
         const previousActiveElement = document.activeElement;
 
@@ -244,6 +259,7 @@ export async function copyToClipboard(text) {
 
         const closeMenu = () => {
             menu.classList.remove('show');
+            menu.setAttribute('aria-hidden', 'true');
             setTimeout(() => {
                 cleanup();
                 menu.remove();
@@ -280,6 +296,7 @@ export async function copyToClipboard(text) {
 
         document.body.appendChild(menu);
         setTimeout(() => {
+            menu.setAttribute('aria-hidden', 'false');
             menu.classList.add('show');
             focusFirstFocusable(menu, preferredSelector);
         }, 10);

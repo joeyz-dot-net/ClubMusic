@@ -3,9 +3,9 @@ import { api } from './api.js?v=2';
 import { Toast, formatTime, searchLoading } from './ui.js';
 import { buildTrackItemElement } from './templates.js';
 import { localFiles, getNodeByPath, getDirCoverUrl, countFiles } from './local.js?v=20';
-import { playlistManager, renderPlaylistUI } from './playlist.js?v=32';
+import { playlistManager, renderPlaylistUI } from './playlist.js?v=33';
 import { i18n } from './i18n.js';
-import { escapeHTML, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js';
+import { escapeHTML, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js?v=2';
 import { executePlayNow } from './playNow.js?v=18';
 import { getCurrentPlaybackMeta } from './playbackState.js?v=16';
 
@@ -1238,7 +1238,7 @@ export class SearchManager {
                                 Toast.error(i18n.t('search.addFailed') + ': ' + err.message);
                             }
                         } else {
-                            const { showSelectPlaylistModal } = await import('./playlist.js?v=32');
+                            const { showSelectPlaylistModal } = await import('./playlist.js?v=33');
                             await showSelectPlaylistModal(songData, null);
                         }
                     } else if (action === 'add-all-to-playlist') {

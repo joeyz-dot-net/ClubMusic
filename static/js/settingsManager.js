@@ -7,7 +7,7 @@ import { Toast } from './ui.js';
 import { themeManager } from './themeManager.js';
 import { i18n } from './i18n.js';
 import { api } from './api.js?v=2';
-import { focusFirstFocusable, restoreFocus, trapFocusInContainer } from './utils.js';
+import { focusFirstFocusable, restoreFocus, trapFocusInContainer } from './utils.js?v=2';
 
 export const settingsManager = {
     // 默认设置
@@ -749,7 +749,11 @@ export const settingsManager = {
         const panel = document.getElementById('settingsPanel');
         if (panel) {
             panel._previousActiveElement = document.activeElement;
+            panel.setAttribute('aria-modal', 'true');
             panel.setAttribute('aria-hidden', 'false');
+            if (!panel.hasAttribute('tabindex')) {
+                panel.setAttribute('tabindex', '-1');
+            }
             panel.style.display = 'block';
             document.body.style.overflow = 'hidden';
 

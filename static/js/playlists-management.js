@@ -1,9 +1,9 @@
 // 歌单管理模块
-import { playlistManager } from './playlist.js?v=32';
+import { playlistManager } from './playlist.js?v=33';
 import { Toast, ConfirmModal, InputModal } from './ui.js';
 import { operationLock } from './operationLock.js';
 import { i18n } from './i18n.js';
-import { focusFirstFocusable, restoreFocus, trapFocusInContainer } from './utils.js';
+import { focusFirstFocusable, restoreFocus, trapFocusInContainer } from './utils.js?v=2';
 
 const PLAYLIST_GRADIENTS = [
     'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',

@@ -3,16 +3,16 @@
 
 import { api } from './api.js?v=2';
 import { player } from './player.js?v=16';
-import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=32';
-import { playlistsManagement } from './playlists-management.js?v=21';
+import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=33';
+import { playlistsManagement } from './playlists-management.js?v=22';
 import { volumeControl } from './volume.js?v=14';
-import { searchManager } from './search.js?v=35';
+import { searchManager } from './search.js?v=36';
 import { themeManager } from './themeManager.js';
 import { debug } from './debug.js';
 import { Toast, formatTime } from './ui.js';
-import { focusFirstFocusable, isMobile, isIPad, restoreFocus, ThumbnailManager, trapFocusInContainer } from './utils.js';
+import { focusFirstFocusable, isMobile, isIPad, restoreFocus, ThumbnailManager, trapFocusInContainer } from './utils.js?v=2';
 import { localFiles } from './local.js?v=20';
-import { settingsManager } from './settingsManager.js?v=3';
+import { settingsManager } from './settingsManager.js?v=4';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
 import { ktvSync } from './ktv.js?v=21';
@@ -2124,11 +2124,13 @@ class MusicPlayerApp {
                 if (modal) {
                     modal.classList.remove('modal-visible');
                     modal.style.display = 'none';
+                    modal.setAttribute('aria-hidden', 'true');
                 }
             });
             if (playlistsModal) {
                 playlistsModal.classList.remove('modal-visible');
                 playlistsModal.style.display = 'none';
+                playlistsModal.setAttribute('aria-hidden', 'true');
             }
             
             // 【用户隔离】不再强制切换到 default，保持 initPlaylist() 中从 localStorage 恢复的歌单选择
