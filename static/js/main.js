@@ -1,8 +1,8 @@
 // 模块化主入口示例
 // 这是一个使用新模块系统的示例文件
 
-import { api } from './api.js?v=2';
-import { player } from './player.js?v=19';
+import { api } from './api.js?v=4';
+import { player } from './player.js?v=20';
 import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=34';
 import { playlistsManagement } from './playlists-management.js?v=23';
 import { volumeControl } from './volume.js?v=14';
@@ -15,9 +15,10 @@ import { localFiles } from './local.js?v=20';
 import { settingsManager } from './settingsManager.js?v=6';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
-import { ktvSync } from './ktv.js?v=27';
+import { ktvSync } from './ktv.js?v=29';
 import { playLock } from './playLock.js';
 import { unavailableSongs } from './unavailable.js';
+import { recordTrace } from './requestTrace.js?v=1';
 
 // ==========================================
 // 应用初始化
@@ -1035,17 +1036,20 @@ class MusicPlayerApp {
 
         // 下一首
         if (this.elements.nextBtn) {
-            this.elements.nextBtn.addEventListener('click', async () => {
+            this.elements.nextBtn.addEventListener('click', async (event) => {
+                this._recordControlClick('nextBtn', event);
                 await this.playNext();
             });
         }
         if (this.elements.fullPlayerNext) {
-            this.elements.fullPlayerNext.addEventListener('click', async () => {
+            this.elements.fullPlayerNext.addEventListener('click', async (event) => {
+                this._recordControlClick('fullPlayerNext', event);
                 await this.playNext();
             });
         }
         if (this.elements.miniNextBtn) {
             this.elements.miniNextBtn.addEventListener('click', async (e) => {
+                this._recordControlClick('miniNextBtn', e);
                 e.stopPropagation(); // 阻止事件冒泡，避免触发打开全屏播放器
                 await this.playNext();
             });
@@ -1245,7 +1249,8 @@ class MusicPlayerApp {
             });
         }
         if (this.elements.nppNext) {
-            this.elements.nppNext.addEventListener('click', async () => {
+            this.elements.nppNext.addEventListener('click', async (event) => {
+                this._recordControlClick('nppNext', event);
                 await this.playNext();
             });
         }
@@ -1537,6 +1542,15 @@ class MusicPlayerApp {
     // 播放歌曲
     async playSong(song) {
         try {
+            recordTrace('app.playSong', {
+                song: {
+                    url: song?.url || null,
+                    title: song?.title || song?.name || null,
+                    type: song?.type || null,
+                    duration: song?.duration || 0,
+                    videoId: song?.video_id || null,
+                }
+            });
             // 获取当前播放的歌曲信息
             const status = player.getStatus();
             const currentMeta = status?.current_meta;
@@ -1624,6 +1638,21 @@ class MusicPlayerApp {
             Toast.error(errorMessage);
             return null;
         }
+    }
+
+    _recordControlClick(controlId, event) {
+        recordTrace('ui.control.click', {
+            controlId,
+            isTrusted: event?.isTrusted ?? null,
+            detail: event?.detail ?? null,
+            pointerType: event?.pointerType || null,
+            clientX: event?.clientX ?? null,
+            clientY: event?.clientY ?? null,
+            targetId: event?.target?.id || null,
+            currentTargetId: event?.currentTarget?.id || null,
+            activeElementId: document.activeElement?.id || null,
+            activeElementTag: document.activeElement?.tagName || null,
+        }, { includeStack: false });
     }
 
     // 播放/暂停
@@ -1806,12 +1835,11 @@ class MusicPlayerApp {
         };
         const playlistsModal = document.getElementById('playlistsModal');
 
-        // 导航历史栈
         // 保持导航栈为 app 实例属性，确保在外部回调也可访问
         this.navigationStack = this.navigationStack || ['playlists'];
         const navigationStack = this.navigationStack; // 局部引用（用于闭包）
-         let currentModal = null; // 追踪当前打开的模态框
-        
+        let currentModal = null; // 追踪当前打开的模态框
+
         // 获取当前栏目
         const getCurrentTab = () => navigationStack[navigationStack.length - 1];
         
@@ -1823,7 +1851,7 @@ class MusicPlayerApp {
                 }
             });
             if (currentModal) {
-                currentModal.style.zIndex = '1000';
+                currentModal.style.zIndex = '110';
             }
         };
         

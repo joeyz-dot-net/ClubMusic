@@ -1,4 +1,4 @@
-import { api } from './api.js?v=2';
+import { api } from './api.js?v=4';
 import { playlistManager } from './playlist.js?v=34';
 import { Toast } from './ui.js';
 import { i18n } from './i18n.js';

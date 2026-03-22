@@ -3,8 +3,8 @@
  * 负责在全屏播放器中显示YouTube视频，并与服务器音频同步
  */
 
-import { api } from './api.js?v=2';
-import { player } from './player.js?v=19';
+import { api } from './api.js?v=4';
+import { player } from './player.js?v=20';
 import { Toast } from './ui.js';
 import { i18n } from './i18n.js';
 import { unavailableSongs } from './unavailable.js';
@@ -66,7 +66,7 @@ export class KTVSync {
 
     isVideoSurfaceVisible() {
         const fullPlayer = document.getElementById('fullPlayer');
-        if (!fullPlayer || !this.videoContainer || !this.playerHost) {
+        if (!fullPlayer || !this.artworkContainer) {
             return false;
         }
 
@@ -74,9 +74,8 @@ export class KTVSync {
             return false;
         }
 
-        const videoRect = this.videoContainer.getBoundingClientRect();
-        const hostRect = this.playerHost.getBoundingClientRect();
-        return videoRect.width > 0 && videoRect.height > 0 && hostRect.width > 0 && hostRect.height > 0;
+        const artworkRect = this.artworkContainer.getBoundingClientRect();
+        return artworkRect.width > 0 && artworkRect.height > 0;
     }
 
     ensurePlayerMount() {

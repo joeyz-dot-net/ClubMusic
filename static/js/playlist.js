@@ -1,10 +1,10 @@
 // 播放列表管理模块
-import { api } from './api.js?v=2';
+import { api } from './api.js?v=4';
 import { Toast, loading, ConfirmModal } from './ui.js';
 import { operationLock } from './operationLock.js';
 import { thumbnailManager, escapeHTML, focusFirstFocusable, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js?v=2';
 import { i18n } from './i18n.js';
-import { player } from './player.js?v=19';
+import { player } from './player.js?v=20';
 import { unavailableSongs } from './unavailable.js';
 import { executePlayNow, rerenderQueueWithCurrentMeta } from './playNow.js?v=18';
 import { getCurrentPlaybackStatus } from './playbackState.js?v=16';

@@ -87,6 +87,21 @@ def _room_output_not_ready_response(player: MusicPlayer, endpoint: str):
     )
 
 
+def _describe_request_source(request: Request) -> str:
+    """格式化客户端来源，便于追踪是谁发起了控制请求。"""
+    client_host = request.client.host if request.client else "unknown"
+    user_id = request.headers.get("x-clubmusic-user", "")
+    tab_id = request.headers.get("x-clubmusic-tab", "")
+    page = request.headers.get("x-clubmusic-page", "")
+    room = request.headers.get("x-clubmusic-room", "")
+    request_id = request.headers.get("x-clubmusic-request", "")
+    user_agent = request.headers.get("user-agent", "")
+    return (
+        f"host={client_host}, user={user_id or '-'}, tab={tab_id or '-'}, "
+        f"room={room or '-'}, request={request_id or '-'}, page={page or '-'}, ua={user_agent[:120] or '-'}"
+    )
+
+
 # ==================== 路由 ====================
 
 @router.post("/play")
@@ -119,6 +134,7 @@ async def play(
         _player_type = 'PipePlayer' if player.mpv_cmd is None else ('RoomPlayer' if hasattr(player, '_room_id') else 'Default')
         logger.info(f"   📌 Player: {_player_type}")
         logger.info(f"   📌 管道路径: {player.pipe_name}")
+        logger.info(f"   📌 请求来源: {_describe_request_source(request)}")
         logger.info("=" * 60)
 
         if not url:
@@ -221,6 +237,7 @@ async def next_track(
 ):
     """播放下一首（根据 loop_mode / shuffle_mode 决定行为）"""
     try:
+        logger.info(f"[/next] 请求来源: {_describe_request_source(request)}")
         response_payload = None
         response_status_code = 200
         should_broadcast_playlist_update = False

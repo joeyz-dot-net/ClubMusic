@@ -1,7 +1,8 @@
 // 播放器控制模块
-import { api } from './api.js?v=2';
+import { api } from './api.js?v=4';
 import { settingsManager } from './settingsManager.js?v=6';
 import { operationLock } from './operationLock.js';
+import { recordTrace } from './requestTrace.js?v=1';
 
 const STATUS_TIME_EPSILON = 0.001;
 
@@ -237,6 +238,13 @@ export class Player {
     // 播放控制
     async play(url, title, type = 'local', duration = 0) {
         try {
+            recordTrace('player.play', {
+                url,
+                title,
+                type,
+                duration,
+                currentUrl: this.status?.current_meta?.url || null,
+            });
             const result = this._ensureSuccess(
                 await api.play(url, title, type, duration),
                 '播放失败'
@@ -307,6 +315,11 @@ export class Player {
         };
 
         try {
+            recordTrace('player.next', {
+                currentUrl: this.status?.current_meta?.url || null,
+                currentTitle: this.status?.current_meta?.title || this.status?.current_meta?.name || null,
+                currentIndex: this.status?.current_index ?? null,
+            });
             const result = this._ensureSuccess(await api.next(), '下一首播放失败', { allowStatuses: ['EMPTY'] });
             this.emit('next', result);
             // 利用响应中的 current_meta 立即更新 UI，无需等待下次 1000ms 轮询

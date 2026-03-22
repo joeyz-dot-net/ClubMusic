@@ -1,5 +1,8 @@
 // API 调用封装模块
 
+import { userSession } from './userSession.js';
+import { recordTrace } from './requestTrace.js?v=1';
+
 /**
  * Leading debounce（先到先得）：
  * 第一次调用立即执行，窗口期内的后续调用被忽略并返回第一次的 Promise。
@@ -39,10 +42,20 @@ function isPageUnloading() {
     return window.__clubMusicPageUnloading === true;
 }
 
+function generateTabId() {
+    if (window.crypto?.randomUUID) {
+        return `tab_${window.crypto.randomUUID().slice(0, 8)}`;
+    }
+    return `tab_${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export class MusicAPI {
     constructor(baseURL = '') {
         this.baseURL = baseURL;
         this.defaultTimeout = 15000;
+        this.clientUserId = userSession.getUserId();
+        this.clientTabId = sessionStorage.getItem('clubMusicClientTabId') || generateTabId();
+        sessionStorage.setItem('clubMusicClientTabId', this.clientTabId);
 
         // 读取 URL 中的 room_id 或 pipe 参数（用于多房间 Player 路由）
         const urlParams = new URLSearchParams(window.location.search);
@@ -56,6 +69,24 @@ export class MusicAPI {
         this._debouncedPrev  = makeLeadingDebounce(this._rawPrev.bind(this),  1000);
         this._debouncedPlay  = makeLeadingDebounce(this._rawPlay.bind(this),  1000);
         this._debouncedPause = makeLeadingDebounce(this._rawPause.bind(this), 500);
+    }
+
+    _buildTraceHeaders(endpoint) {
+        const requestId = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+        return {
+            'X-ClubMusic-User': this.clientUserId || '',
+            'X-ClubMusic-Tab': this.clientTabId,
+            'X-ClubMusic-Page': `${window.location.pathname}${window.location.search}${window.location.hash}`.slice(0, 240),
+            'X-ClubMusic-Room': this.roomId || this.pipeParam || 'default',
+            'X-ClubMusic-Request': `${endpoint}:${requestId}`,
+        };
+    }
+
+    _buildHeaders(endpoint, headers = {}, traceHeaders = null) {
+        return {
+            ...(traceHeaders || this._buildTraceHeaders(endpoint)),
+            ...headers,
+        };
     }
 
     // 将 room_id 或 pipe 参数附加到 URL（多房间支持）
@@ -80,10 +111,12 @@ export class MusicAPI {
             .finally(() => clearTimeout(timer));
     }
 
-    async get(endpoint, { timeout } = {}) {
+    async get(endpoint, { timeout, traceHeaders = null } = {}) {
         try {
             const url = this._appendPipe(`${this.baseURL}${endpoint}`);
-            const response = await this._fetchWithTimeout(url, {}, timeout);
+            const response = await this._fetchWithTimeout(url, {
+                headers: this._buildHeaders(endpoint, {}, traceHeaders)
+            }, timeout);
             const data = await response.json();
             if (!response.ok) {
                 console.warn(`[API] GET ${endpoint} HTTP ${response.status}:`, data);
@@ -98,12 +131,12 @@ export class MusicAPI {
         }
     }
 
-    async post(endpoint, data, { timeout, quietHttpStatuses = [] } = {}) {
+    async post(endpoint, data, { timeout, quietHttpStatuses = [], traceHeaders = null } = {}) {
         try {
             const url = this._appendPipe(`${this.baseURL}${endpoint}`);
             const response = await this._fetchWithTimeout(url, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: this._buildHeaders(endpoint, { 'Content-Type': 'application/json' }, traceHeaders),
                 body: JSON.stringify(data)
             }, timeout);
             const result = await response.json();
@@ -122,11 +155,12 @@ export class MusicAPI {
         }
     }
 
-    async postForm(endpoint, formData, { timeout } = {}) {
+    async postForm(endpoint, formData, { timeout, traceHeaders = null } = {}) {
         try {
             const url = this._appendPipe(`${this.baseURL}${endpoint}`);
             const response = await this._fetchWithTimeout(url, {
                 method: 'POST',
+                headers: this._buildHeaders(endpoint, {}, traceHeaders),
                 body: formData
             }, timeout);
             const result = await response.json();
@@ -143,11 +177,12 @@ export class MusicAPI {
         }
     }
 
-    async delete(endpoint, { timeout } = {}) {
+    async delete(endpoint, { timeout, traceHeaders = null } = {}) {
         try {
             const url = this._appendPipe(`${this.baseURL}${endpoint}`);
             const response = await this._fetchWithTimeout(url, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: this._buildHeaders(endpoint, {}, traceHeaders)
             }, timeout);
             const result = await response.json();
             if (!response.ok) {
@@ -163,12 +198,12 @@ export class MusicAPI {
         }
     }
 
-    async put(endpoint, data, { timeout } = {}) {
+    async put(endpoint, data, { timeout, traceHeaders = null } = {}) {
         try {
             const url = this._appendPipe(`${this.baseURL}${endpoint}`);
             const response = await this._fetchWithTimeout(url, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: this._buildHeaders(endpoint, { 'Content-Type': 'application/json' }, traceHeaders),
                 body: JSON.stringify(data)
             }, timeout);
             const result = await response.json();
@@ -192,12 +227,17 @@ export class MusicAPI {
 
     // 原始（未防抖）播放方法
     async _rawPlay(url, title, type = 'local', duration = 0) {
+        const traceHeaders = this._buildTraceHeaders('/play');
+        recordTrace('api.play.request', {
+            traceHeaders,
+            payload: { url, title, type, duration }
+        });
         const formData = new FormData();
         formData.append('url', url);
         formData.append('title', title);
         formData.append('type', type);
         formData.append('duration', duration);
-        return this.postForm('/play', formData);
+        return this.postForm('/play', formData, { traceHeaders });
     }
 
     async _rawPause() {
@@ -205,7 +245,12 @@ export class MusicAPI {
     }
 
     async _rawNext() {
-        return this.post('/next', {});
+        const traceHeaders = this._buildTraceHeaders('/next');
+        recordTrace('api.next.request', {
+            traceHeaders,
+            payload: {}
+        });
+        return this.post('/next', {}, { traceHeaders });
     }
 
     async _rawPrev() {
@@ -214,6 +259,7 @@ export class MusicAPI {
 
     // 公开 API 使用防抖版本（先到先得）
     async play(url, title, type = 'local', duration = 0) {
+        recordTrace('api.play.invoke', { url, title, type, duration });
         return this._debouncedPlay(url, title, type, duration);
     }
 
@@ -222,6 +268,7 @@ export class MusicAPI {
     }
 
     async next() {
+        recordTrace('api.next.invoke', {});
         return this._debouncedNext();
     }
 

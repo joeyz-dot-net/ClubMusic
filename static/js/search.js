@@ -1,5 +1,5 @@
 // 搜索功能模块
-import { api } from './api.js?v=2';
+import { api } from './api.js?v=4';
 import { Toast, formatTime, searchLoading } from './ui.js';
 import { buildTrackItemElement } from './templates.js';
 import { localFiles, getNodeByPath, getDirCoverUrl, countFiles } from './local.js?v=20';
