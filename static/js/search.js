@@ -490,6 +490,7 @@ export class SearchManager {
             // url: null 表示 sentinel（搜索结果入口）
         };
         this.bulkPlaylistActionInFlight = false;
+        this.playlistViewFreshWhileModalOpen = false;
         this.loadHistory();
 
         // 异步加载搜索配置，供首次搜索前等待
@@ -594,6 +595,7 @@ export class SearchManager {
             if (!this.renderPlaylistFromCache()) {
                 throw new Error('playlist container unavailable');
             }
+            this.playlistViewFreshWhileModalOpen = true;
             if (successLogMessage) {
                 console.log(successLogMessage);
             }
@@ -605,11 +607,13 @@ export class SearchManager {
         try {
             if (this.refreshPlaylist) {
                 await this.refreshPlaylist();
+                this.playlistViewFreshWhileModalOpen = true;
                 console.log(`${logPrefix} 已通过应用回退刷新播放列表`);
                 return true;
             }
 
             if (this.renderPlaylistFromCache()) {
+                this.playlistViewFreshWhileModalOpen = true;
                 console.log(`${logPrefix} 已通过缓存回退重绘播放列表`);
                 return true;
             }
@@ -797,11 +801,15 @@ export class SearchManager {
                 // 延迟后返回到当前选择的歌单（只刷新显示，不改变选择）
                 setTimeout(() => {
                     // ✅ 仅刷新播放列表显示，保持当前选择的歌单
-                    if (this.refreshPlaylist) {
+                    if (this.playlistViewFreshWhileModalOpen) {
+                        console.log('[搜索] 当前队列已在弹窗内刷新，关闭时跳过重复刷新');
+                    } else if (this.refreshPlaylist) {
                         void this.refreshPlaylist();
                     } else {
                         this.renderPlaylistFromCache();
                     }
+
+                    this.playlistViewFreshWhileModalOpen = false;
 
                     if (typeof this.closeModalCallback === 'function') {
                         this.closeModalCallback();
@@ -1221,6 +1229,7 @@ export class SearchManager {
                 refreshPlaylist: playlistManager ? () => playlistManager.refreshAll() : null,
                 addFailedMessage: i18n.t('search.addSongFailed')
             });
+            this.playlistViewFreshWhileModalOpen = true;
             setElementMarkup(btn, SEARCH_SUCCESS_ICON_MARKUP);
 
         } catch (error) {
