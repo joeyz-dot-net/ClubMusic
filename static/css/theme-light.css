@@ -665,6 +665,26 @@ body.theme-light {
     color: #666;
 }
 
+.full-player-audio-only-notice {
+    background: linear-gradient(180deg, rgba(255, 251, 241, 0.95), rgba(255, 247, 230, 0.96));
+    border-color: rgba(217, 119, 6, 0.24);
+    box-shadow: 0 10px 24px rgba(148, 91, 0, 0.12);
+}
+
+.full-player-audio-only-icon {
+    background: rgba(245, 158, 11, 0.12);
+    border-color: rgba(217, 119, 6, 0.28);
+    color: #b45309;
+}
+
+.full-player-audio-only-title {
+    color: #7c2d12;
+}
+
+.full-player-audio-only-body {
+    color: #9a3412;
+}
+
 /* 标签页背景 - 亮色主题 */
 .tab-content, #tree {
     background: #ffffff;

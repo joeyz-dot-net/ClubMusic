@@ -254,7 +254,12 @@ export class MusicAPI {
     }
 
     async _rawPrev() {
-        return this.post('/prev', {});
+        const traceHeaders = this._buildTraceHeaders('/prev');
+        recordTrace('api.prev.request', {
+            traceHeaders,
+            payload: {}
+        });
+        return this.post('/prev', {}, { traceHeaders });
     }
 
     // 公开 API 使用防抖版本（先到先得）
@@ -273,6 +278,7 @@ export class MusicAPI {
     }
 
     async prev() {
+        recordTrace('api.prev.invoke', {});
         return this._debouncedPrev();
     }
 

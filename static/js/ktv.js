@@ -8,6 +8,7 @@ import { player } from './player.js?v=20';
 import { Toast } from './ui.js';
 import { i18n } from './i18n.js';
 import { unavailableSongs } from './unavailable.js';
+import { recordTrace } from './requestTrace.js?v=1';
 
 function dismissSuccessToastsForTitle(title) {
     if (!title) {
@@ -28,18 +29,22 @@ export class KTVSync {
         this.playerHost = document.getElementById('fullPlayerYouTubeHost');
         this.coverElement = document.getElementById('fullPlayerCover');
         this.placeholderElement = document.getElementById('fullPlayerPlaceholder');
+        this.audioOnlyNoticeElement = document.getElementById('fullPlayerAudioOnlyNotice');
         this.artworkContainer = document.querySelector('.full-player-artwork-container');
 
         this.player = null;
         this.playerCreationPromise = null;
         this.playerCreateStartedAt = 0;
         this.currentVideoId = null;
+        this.pendingVideoId = null;
+        this.pendingMpvState = null;
         this.lastSyncTime = 0;
         this.syncThreshold = 0.3;  // 300ms同步阈值
         this.isVideoMode = false;
         this.playerReady = false;
         this.isSyncing = false;  // 防止同步循环
         this._failedVideoId = null;  // 记录播放失败的视频ID，避免无限重试
+        this._fallbackNoticePrefix = 'clubmusic.ktvFallbackNotice:';
         this.videoOffset = 0;  // 视频时间偏移量（秒），正值=视频提前，负值=视频延迟
         this.loadOffset();
         this.videoLoadSettlingUntil = 0;
@@ -117,7 +122,75 @@ export class KTVSync {
         this.playerReady = false;
         this.playerCreationPromise = null;
         this.playerCreateStartedAt = 0;
+        this.pendingMpvState = null;
         this.videoLoadSettlingUntil = 0;
+    }
+
+    rememberPendingVideo(videoId, mpvState = {}) {
+        if (!videoId) {
+            return;
+        }
+        this.pendingVideoId = videoId;
+        this.pendingMpvState = mpvState;
+    }
+
+    clearPendingVideo() {
+        this.pendingVideoId = null;
+        this.pendingMpvState = null;
+    }
+
+    hasShownFallbackNotice(videoId) {
+        if (!videoId) {
+            return false;
+        }
+        try {
+            return sessionStorage.getItem(`${this._fallbackNoticePrefix}${videoId}`) === '1';
+        } catch (error) {
+            return false;
+        }
+    }
+
+    markFallbackNoticeShown(videoId) {
+        if (!videoId) {
+            return;
+        }
+        try {
+            sessionStorage.setItem(`${this._fallbackNoticePrefix}${videoId}`, '1');
+        } catch (error) {
+            // Ignore storage failures; warning dedupe is best-effort only.
+        }
+    }
+
+    showAudioOnlyNotice() {
+        if (!this.audioOnlyNoticeElement) {
+            return;
+        }
+
+        const titleElement = this.audioOnlyNoticeElement.querySelector('.full-player-audio-only-title');
+        const bodyElement = this.audioOnlyNoticeElement.querySelector('.full-player-audio-only-body');
+        if (titleElement) {
+            titleElement.textContent = i18n.t('player.youtubeAudioOnlyTitle');
+        }
+        if (bodyElement) {
+            bodyElement.textContent = i18n.t('player.youtubeAudioOnlyBody');
+        }
+        this.audioOnlyNoticeElement.classList.add('visible');
+    }
+
+    hideAudioOnlyNotice() {
+        if (!this.audioOnlyNoticeElement) {
+            return;
+        }
+
+        const titleElement = this.audioOnlyNoticeElement.querySelector('.full-player-audio-only-title');
+        const bodyElement = this.audioOnlyNoticeElement.querySelector('.full-player-audio-only-body');
+        if (titleElement) {
+            titleElement.textContent = '';
+        }
+        if (bodyElement) {
+            bodyElement.textContent = '';
+        }
+        this.audioOnlyNoticeElement.classList.remove('visible');
     }
 
     /**
@@ -223,6 +296,12 @@ export class KTVSync {
         if (currentStatus?.current_meta?.type === 'youtube') {
             console.log('[KTV] 播放器就绪后恢复当前 YouTube 状态');
             this.updateStatus(currentStatus);
+            return;
+        }
+
+        if (this.pendingVideoId && this.isVideoSurfaceVisible()) {
+            console.log('[KTV] 播放器就绪后恢复待处理视频状态');
+            this.enableVideoMode(this.pendingVideoId, this.pendingMpvState || {});
         }
     }
 
@@ -247,28 +326,28 @@ export class KTVSync {
     onPlayerError(event) {
         // 错误码: 2=无效ID, 5=HTML5播放器错误, 100=视频不存在, 101/150=不允许嵌入
         if (event.data === 2 || event.data === 100 || event.data === 101 || event.data === 150) {
-            const failedVideoId = this.currentVideoId;
+            const currentMeta = player.getStatus()?.current_meta || {};
+            const failedVideoId = this.currentVideoId || currentMeta.video_id || null;
             if (failedVideoId && failedVideoId === this._failedVideoId) {
                 return;
             }
 
-            const currentTitle = player.getStatus()?.current_meta?.title || '';
-            console.warn('[KTV] YouTube 播放器错误（将自动跳过）:', event.data);
-            console.warn('[KTV] 视频无法播放，自动跳过下一首');
+            const currentTitle = currentMeta.title || currentMeta.name || '';
+            console.warn('[KTV] YouTube 播放器错误（切换为纯音频模式）:', event.data);
             this._failedVideoId = failedVideoId;  // 记住失败的ID，防止重试
+            recordTrace('ktv.video_error_audio_fallback', {
+                errorCode: event.data,
+                failedVideoId: failedVideoId || null,
+                currentTrackUrl: currentMeta.url || null,
+                currentTrackTitle: currentTitle || null,
+            }, { includeStack: false });
             dismissSuccessToastsForTitle(currentTitle);
-            Toast.warning(i18n.t('player.youtubeVideoSkipped', { title: currentTitle || i18n.t('track.unknown') }));
+            if (!this.hasShownFallbackNotice(failedVideoId)) {
+                Toast.warning(i18n.t('player.youtubeVideoSkipped', { title: currentTitle || i18n.t('track.unknown') }));
+                this.markFallbackNoticeShown(failedVideoId);
+            }
+            this.showAudioOnlyNotice();
             this.disableVideoMode();  // 立即清理视频模式状态
-            void player.next().then((result) => {
-                this._markSkippedSongs(result);
-            }).catch((error) => {
-                this._markSkippedSongs(error?.result || error);
-                if (error?.result?.status === 'EMPTY') {
-                    console.warn('[KTV] 自动跳过结束：队列为空');
-                    return;
-                }
-                console.error('[KTV] 自动跳过失败:', error?.message || error);
-            });
             return;
         }
 
@@ -297,11 +376,21 @@ export class KTVSync {
         const videoId = currentMeta.video_id;
         const isYouTube = currentMeta.type === 'youtube' && videoId;
 
+        if (!isYouTube) {
+            this.hideAudioOnlyNotice();
+        } else if (videoId === this._failedVideoId) {
+            this.showAudioOnlyNotice();
+        } else {
+            this.hideAudioOnlyNotice();
+        }
+
         // 判断是否需要切换视频模式
         if (isYouTube) {
             if (!this.isVideoSurfaceVisible()) {
                 return;
             }
+
+            this.rememberPendingVideo(videoId, mpvState);
 
             const playerCreationTimedOut = this.player && !this.playerReady
                 && this.playerCreateStartedAt > 0
@@ -429,16 +518,20 @@ export class KTVSync {
      */
     enableVideoMode(videoId, mpvState) {
         if (!this.playerReady) {
+            this.rememberPendingVideo(videoId, mpvState);
             console.log('[KTV] 播放器未就绪，等待...');
             return;
         }
 
         // 该视频之前加载失败，跳过避免无限重试；新歌曲加载时自动解除
         if (videoId === this._failedVideoId) {
+            this.clearPendingVideo();
             return;
         }
         // 不同视频加载时清除失败记录
         this._failedVideoId = null;
+        this.clearPendingVideo();
+        this.hideAudioOnlyNotice();
 
         // 如果视频ID改变，加载新视频
         if (videoId !== this.currentVideoId) {
@@ -462,23 +555,28 @@ export class KTVSync {
      * 禁用视频模式
      */
     disableVideoMode() {
-        if (this.isVideoMode) {
-            if (this.player && this.playerReady) {
-                try {
-                    this.player.stopVideo();
-                } catch (e) {
-                    console.warn('[KTV] 停止播放失败:', e);
-                }
+        const wasVideoMode = this.isVideoMode;
+
+        if (wasVideoMode && this.player && this.playerReady) {
+            try {
+                this.player.stopVideo();
+            } catch (e) {
+                console.warn('[KTV] 停止播放失败:', e);
             }
-            this.currentVideoId = null;
-            if (this.artworkContainer) {
-                this.artworkContainer.classList.remove('video-mode');
-            }
-            this.isVideoMode = false;
-            this.lastSyncTime = 0;
-            this.isSyncing = false;
-            this.videoLoadSettlingUntil = 0;
-            this.resetMetrics();
+        }
+
+        this.currentVideoId = null;
+        this.clearPendingVideo();
+        if (this.artworkContainer) {
+            this.artworkContainer.classList.remove('video-mode');
+        }
+        this.isVideoMode = false;
+        this.lastSyncTime = 0;
+        this.isSyncing = false;
+        this.videoLoadSettlingUntil = 0;
+        this.resetMetrics();
+
+        if (wasVideoMode) {
             console.log('[KTV] 已切换到音乐模式');
         }
     }

@@ -32,9 +32,9 @@ import logging
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse, HTMLResponse
 
-from models import MusicPlayer, Playlists
+from models import MusicPlayer, Playlists, PlayHistory
 from models.playlists import sanitize_playlist_name
-from routers.dependencies import get_player_for_request, get_playlists, get_player_lock
+from routers.dependencies import get_player_for_request, get_playlists, get_playback_history, get_player_lock
 from routers.state import (
     DEFAULT_PLAYLIST_ID, CURRENT_PLAYLIST_ID,
     get_current_playlist_id,
@@ -589,6 +589,8 @@ async def playlist_play(
     request: Request,
     player: MusicPlayer = Depends(get_player_for_request),
     playlists: Playlists = Depends(get_playlists),
+    playback_history: PlayHistory = Depends(get_playback_history),
+    player_lock=Depends(get_player_lock),
 ):
     """播放队列中指定索引的歌曲"""
     try:
@@ -615,8 +617,31 @@ async def playlist_play(
             else:
                 song = LocalSong(file_path=url, title=title)
 
-            player.play(song, index=index)
-            return JSONResponse({"status": "OK", "message": "播放成功"})
+            with player_lock:
+                success = player.play(
+                    song,
+                    mpv_command_func=player.mpv_command,
+                    mpv_pipe_exists_func=player.mpv_pipe_exists,
+                    ensure_mpv_func=player.ensure_mpv,
+                    add_to_history_func=playback_history.add_to_history,
+                    save_to_history=True,
+                    mpv_cmd=player.mpv_cmd,
+                )
+                if not success:
+                    return JSONResponse(
+                        {"status": "ERROR", "error": "播放失败"},
+                        status_code=500,
+                    )
+
+                player.current_index = index
+
+            await _broadcast_state(player)
+            return JSONResponse({
+                "status": "OK",
+                "message": "播放成功",
+                "current": player.current_meta,
+                "current_index": player.current_index,
+            })
         else:
             return JSONResponse(
                 {"status": "ERROR", "error": "索引超出范围"},

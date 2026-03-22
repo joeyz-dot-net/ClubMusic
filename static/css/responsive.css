@@ -1130,4 +1130,27 @@
     .now-playing-panel {
         display: none !important;
     }
+
+    .full-player-audio-only-notice {
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 14px;
+    }
+
+    .full-player-audio-only-icon {
+        width: 24px;
+        height: 24px;
+        font-size: 14px;
+    }
+
+    .full-player-audio-only-title {
+        font-size: 12px;
+    }
+
+    .full-player-audio-only-body {
+        font-size: 11px;
+    }
 }

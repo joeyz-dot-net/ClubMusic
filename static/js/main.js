@@ -15,10 +15,11 @@ import { localFiles } from './local.js?v=20';
 import { settingsManager } from './settingsManager.js?v=6';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
-import { ktvSync } from './ktv.js?v=29';
+import { ktvSync } from './ktv.js?v=35';
 import { playLock } from './playLock.js';
 import { unavailableSongs } from './unavailable.js';
 import { recordTrace } from './requestTrace.js?v=1';
+import { createRegressionHarness } from './regressionHarness.js?v=13';
 
 // ==========================================
 // 应用初始化
@@ -47,6 +48,7 @@ class MusicPlayerApp {
         this._hasInitialPlaylistRender = false;
         this._pendingManualQueueMutationRefresh = false;
         this._manualQueueRefreshInFlight = null;
+        this._nextControlIntent = null;
 
         // 初始化缩略图管理器 - 用于处理YouTube缩略图降级
         this.thumbnailManager = new ThumbnailManager();
@@ -1035,25 +1037,9 @@ class MusicPlayerApp {
         }
 
         // 下一首
-        if (this.elements.nextBtn) {
-            this.elements.nextBtn.addEventListener('click', async (event) => {
-                this._recordControlClick('nextBtn', event);
-                await this.playNext();
-            });
-        }
-        if (this.elements.fullPlayerNext) {
-            this.elements.fullPlayerNext.addEventListener('click', async (event) => {
-                this._recordControlClick('fullPlayerNext', event);
-                await this.playNext();
-            });
-        }
-        if (this.elements.miniNextBtn) {
-            this.elements.miniNextBtn.addEventListener('click', async (e) => {
-                this._recordControlClick('miniNextBtn', e);
-                e.stopPropagation(); // 阻止事件冒泡，避免触发打开全屏播放器
-                await this.playNext();
-            });
-        }
+        this._bindNextControl(this.elements.nextBtn, 'nextBtn');
+        this._bindNextControl(this.elements.fullPlayerNext, 'fullPlayerNext');
+        this._bindNextControl(this.elements.miniNextBtn, 'miniNextBtn', { stopPropagation: true });
 
         // 上一首
         if (this.elements.prevBtn) {
@@ -1248,12 +1234,7 @@ class MusicPlayerApp {
                 void this.togglePlayPause();
             });
         }
-        if (this.elements.nppNext) {
-            this.elements.nppNext.addEventListener('click', async (event) => {
-                this._recordControlClick('nppNext', event);
-                await this.playNext();
-            });
-        }
+        this._bindNextControl(this.elements.nppNext, 'nppNext');
         if (this.elements.nppPrev) {
             this.elements.nppPrev.addEventListener('click', async () => {
                 await this.playPrev();
@@ -1653,6 +1634,104 @@ class MusicPlayerApp {
             activeElementId: document.activeElement?.id || null,
             activeElementTag: document.activeElement?.tagName || null,
         }, { includeStack: false });
+    }
+
+    _isControlInteractable(element) {
+        if (!element || !element.isConnected) {
+            return false;
+        }
+
+        const style = getComputedStyle(element);
+        if (style.display === 'none' || style.visibility === 'hidden' || style.pointerEvents === 'none') {
+            return false;
+        }
+
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+    }
+
+    _recordNextControlIntent(controlId, event) {
+        this._nextControlIntent = {
+            controlId,
+            time: Date.now(),
+            pointerType: event?.pointerType || null,
+        };
+
+        recordTrace('ui.control.pointerdown', {
+            controlId,
+            pointerType: event?.pointerType || null,
+            clientX: event?.clientX ?? null,
+            clientY: event?.clientY ?? null,
+            targetId: event?.target?.id || null,
+            currentTargetId: event?.currentTarget?.id || null,
+        }, { includeStack: false });
+    }
+
+    _shouldAllowNextControlClick(controlId, event) {
+        const currentTarget = event?.currentTarget || null;
+        const isInteractable = this._isControlInteractable(currentTarget);
+        const clickDetail = Number(event?.detail || 0);
+        const isKeyboardActivation = clickDetail === 0;
+        const activeMatches = currentTarget ? document.activeElement === currentTarget : false;
+        const intent = this._nextControlIntent;
+        const hasRecentIntent = Boolean(
+            intent
+            && intent.controlId === controlId
+            && (Date.now() - intent.time) <= 1500
+        );
+
+        const allowed = Boolean(
+            event?.isTrusted
+            && isInteractable
+            && (
+                (isKeyboardActivation && activeMatches)
+                || (!isKeyboardActivation && hasRecentIntent)
+            )
+        );
+
+        if (!allowed) {
+            recordTrace('ui.control.click_blocked', {
+                controlId,
+                isTrusted: event?.isTrusted ?? null,
+                detail: clickDetail,
+                isInteractable,
+                activeMatches,
+                hasRecentIntent,
+                intentControlId: intent?.controlId || null,
+                intentAgeMs: intent ? (Date.now() - intent.time) : null,
+                currentTargetId: currentTarget?.id || null,
+            }, { includeStack: false });
+        }
+
+        this._nextControlIntent = null;
+        return allowed;
+    }
+
+    _bindNextControl(element, controlId, { stopPropagation = false } = {}) {
+        if (!element) {
+            return;
+        }
+
+        element.addEventListener('pointerdown', (event) => {
+            this._recordNextControlIntent(controlId, event);
+        });
+
+        element.addEventListener('click', async (event) => {
+            this._recordControlClick(controlId, event);
+            if (!this._shouldAllowNextControlClick(controlId, event)) {
+                if (stopPropagation) {
+                    event.stopPropagation();
+                }
+                event.preventDefault();
+                return;
+            }
+
+            if (stopPropagation) {
+                event.stopPropagation();
+            }
+
+            await this.playNext();
+        });
     }
 
     // 播放/暂停
@@ -2382,6 +2461,61 @@ app.renderPlaylist = app.renderPlaylist.bind(app);
 app.player = player;
 app.settingsManager = settingsManager;
 app.ktvSync = ktvSync;
+app.regression = createRegressionHarness({ app, api, player, ktvSync, playlistManager });
+app.diagnose = {
+    printHelp() {
+        console.log('Diagnose commands:');
+        console.log('  app.diagnose.printCurrentState()');
+        console.log('  app.diagnose.reportCurrentState()');
+        console.log('  await app.diagnose.runQuickSuite()');
+        console.log('  await app.diagnose.runQuickSuiteAndPrint()');
+        console.log('  await app.diagnose.runRestrictedAudioOnlyFlow()');
+        console.log('  await app.diagnose.runEmbeddableVideoFlow()');
+        console.log('  await app.diagnose.prepareTrustedNextClickFlow()');
+        console.log('  await app.diagnose.evaluateTrustedNextClickFlow()');
+        console.log('  await app.diagnose.prepareTrustedPrevClickFlow()');
+        console.log('  await app.diagnose.evaluateTrustedPrevClickFlow()');
+        console.log('  app.diagnose.buildControlSuiteResult({ trustedNext, trustedPrev })');
+        console.log('  app.diagnose.printControlSuiteSummary(result)');
+        console.log('  app.regression.printHelp()');
+    },
+    reportCurrentState(label) {
+        return app.regression.reportCurrentState(label);
+    },
+    printCurrentState(label) {
+        return app.regression.printCurrentState(label);
+    },
+    runQuickSuite() {
+        return app.regression.runQuickSuite();
+    },
+    runQuickSuiteAndPrint() {
+        return app.regression.runQuickSuiteAndPrint();
+    },
+    runRestrictedAudioOnlyFlow(options) {
+        return app.regression.runRestrictedAudioOnlyFlow(options);
+    },
+    runEmbeddableVideoFlow() {
+        return app.regression.runEmbeddableVideoFlow();
+    },
+    prepareTrustedNextClickFlow(options) {
+        return app.regression.prepareTrustedNextClickFlow(options);
+    },
+    evaluateTrustedNextClickFlow(options) {
+        return app.regression.evaluateTrustedNextClickFlow(options);
+    },
+    prepareTrustedPrevClickFlow(options) {
+        return app.regression.prepareTrustedPrevClickFlow(options);
+    },
+    evaluateTrustedPrevClickFlow(options) {
+        return app.regression.evaluateTrustedPrevClickFlow(options);
+    },
+    buildControlSuiteResult(result) {
+        return app.regression.buildControlSuiteResult(result);
+    },
+    printControlSuiteSummary(result) {
+        return app.regression.printControlSuiteSummary(result);
+    }
+};
 app.modules = {
     api,
     player,
@@ -2392,12 +2526,16 @@ app.modules = {
     themeManager,
     settingsManager,
     navManager,
-    ktvSync
+    ktvSync,
+    regression: app.regression,
+    diagnose: app.diagnose,
 };
 window.app = app;
 window.ktvSync = ktvSync;
+window.clubMusicRegression = app.regression;
 
 console.log('💡 模块化音乐播放器已加载');
 console.log('💡 输入 app.diagnose.printHelp() 查看诊断命令');
+console.log('💡 输入 app.regression.printHelp() 查看回归命令');
 
 console.log('💡 可通过 window.app.player、window.app.settingsManager 访问核心模块');

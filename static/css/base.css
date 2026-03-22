@@ -2140,6 +2140,12 @@ textarea:focus-visible,
     height: 100dvh;
 }
 
+.full-player.artwork-expanded .full-player-audio-only-notice {
+    left: max(16px, env(safe-area-inset-left));
+    right: max(16px, env(safe-area-inset-right));
+    bottom: max(16px, env(safe-area-inset-bottom));
+}
+
 /* 隐藏放大按钮（通过配置控制） */
 .full-player-expand.hidden {
     display: none !important;
@@ -2165,6 +2171,75 @@ textarea:focus-visible,
     justify-content: center;
     font-size: 96px;
     opacity: 0.3;
+}
+
+.full-player-audio-only-notice {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    z-index: 3;
+    display: none;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    background: linear-gradient(180deg, rgba(18, 23, 33, 0.88), rgba(11, 15, 24, 0.92));
+    border: 1px solid rgba(255, 210, 126, 0.22);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32);
+    backdrop-filter: blur(12px);
+}
+
+.full-player-audio-only-notice::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 14px;
+    bottom: 14px;
+    width: 3px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255, 214, 122, 0.95), rgba(255, 162, 74, 0.82));
+}
+
+.full-player-audio-only-notice.visible {
+    display: flex;
+}
+
+.full-player-audio-only-icon {
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 196, 79, 0.16);
+    border: 1px solid rgba(255, 210, 126, 0.35);
+    color: rgba(255, 225, 156, 0.98);
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.full-player-audio-only-copy {
+    min-width: 0;
+    padding-left: 4px;
+}
+
+.full-player-audio-only-title {
+    color: rgba(255, 244, 214, 0.98);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.35;
+    letter-spacing: 0.01em;
+}
+
+.full-player-audio-only-body {
+    margin-top: 3px;
+    color: rgba(241, 229, 201, 0.86);
+    font-size: 12px;
+    line-height: 1.45;
+    letter-spacing: 0.01em;
 }
 
 /* KTV YouTube iframe 播放器样式 */

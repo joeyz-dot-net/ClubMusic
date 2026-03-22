@@ -336,6 +336,11 @@ export class Player {
     }
 
     async prev() {
+        recordTrace('player.prev', {
+            currentUrl: this.status?.current_meta?.url || null,
+            currentTitle: this.status?.current_meta?.title || this.status?.current_meta?.name || null,
+            currentIndex: this.status?.current_index ?? null,
+        });
         const result = this._ensureSuccess(await api.prev(), '上一首播放失败');
         // 利用响应中的 current_meta 立即更新 UI，无需等待下次 1000ms 轮询
         if (result?.status === 'OK' && result?.current && this.status) {

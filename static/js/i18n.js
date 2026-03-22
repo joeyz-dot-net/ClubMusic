@@ -98,7 +98,10 @@ const translations = {
         'player.shuffle.title': '随机播放',
         'player.notPlaying': '未播放',
         'player.skippedSongs': '已跳过 {count} 首不可用歌曲',
-        'player.youtubeVideoSkipped': 'YouTube 视频无法嵌入或播放，已跳过: {title}',
+        'player.youtubeAudioOnlyTitle': '视频当前不可用',
+        'player.youtubeAudioOnly': '当前视频无法嵌入，正在继续纯音频播放',
+        'player.youtubeAudioOnlyBody': '这是 YouTube 对嵌入播放的限制，音频会继续正常播放。',
+        'player.youtubeVideoSkipped': 'YouTube 视频无法嵌入，已切换为纯音频播放: {title}',
 
         // 搜索
         'search.title': '搜索结果',
@@ -324,7 +327,10 @@ const translations = {
         'player.shuffle.title': 'Shuffle',
         'player.notPlaying': 'Not playing',
         'player.skippedSongs': 'Skipped {count} unavailable song(s)',
-        'player.youtubeVideoSkipped': 'Skipped YouTube video that could not be embedded or played: {title}',
+        'player.youtubeAudioOnlyTitle': 'Video Unavailable',
+        'player.youtubeAudioOnly': 'This video cannot be embedded, continuing with audio only',
+        'player.youtubeAudioOnlyBody': 'YouTube blocks embedded playback for this video, but audio continues normally.',
+        'player.youtubeVideoSkipped': 'YouTube video could not be embedded, continuing with audio only: {title}',
 
         // Search
         'search.title': 'Search Results',
@@ -550,7 +556,10 @@ const translations = {
         'player.shuffle.title': '隨機播放',
         'player.notPlaying': '未播放',
         'player.skippedSongs': '已跳過 {count} 首不可用歌曲',
-        'player.youtubeVideoSkipped': 'YouTube 視訊無法嵌入或播放，已跳過: {title}',
+        'player.youtubeAudioOnlyTitle': '影片目前無法顯示',
+        'player.youtubeAudioOnly': '目前影片無法嵌入，正在繼續純音訊播放',
+        'player.youtubeAudioOnlyBody': '這是 YouTube 的嵌入限制，音訊會繼續正常播放。',
+        'player.youtubeVideoSkipped': 'YouTube 視訊無法嵌入，已切換為純音訊播放: {title}',
 
         // 搜尋
         'search.title': '搜尋結果',
