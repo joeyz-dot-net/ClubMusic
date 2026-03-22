@@ -17,6 +17,9 @@ export class Player {
         this.clockOffset = 0; // 客户端与服务器的时钟偏移（秒）: client_time - server_time
         this._lastServerTime = 0;
         this._minAcceptedServerTime = 0;
+        this._isShuttingDown = false;
+
+        window.__clubMusicPageUnloading = false;
 
         // WebSocket 相关
         this.ws = null;
@@ -33,6 +36,12 @@ export class Player {
                 this._resumeFromHidden();
             }
         });
+
+        const handlePageUnload = () => {
+            this.shutdown();
+        };
+        window.addEventListener('pagehide', handlePageUnload);
+        window.addEventListener('beforeunload', handlePageUnload);
 
         // 注册操作锁回调
         operationLock.onPause(() => {
@@ -365,6 +374,7 @@ export class Player {
 
     // 状态轮询
     startPolling(interval = 5000) {
+        if (this._isShuttingDown) return;
         if (this.pollInterval) return;
         this._lastPollIntervalMs = interval;
 
@@ -378,7 +388,9 @@ export class Player {
             try {
                 await this.refreshStatus();
             } catch (error) {
-                console.error('状态轮询失败:', error);
+                if (!this._isShuttingDown) {
+                    console.error('状态轮询失败:', error);
+                }
             }
         }, interval);
 
@@ -456,6 +468,7 @@ export class Player {
 
     // 标签页恢复可见时重启轮询并立即刷新状态
     async _resumeFromHidden() {
+        if (this._isShuttingDown) return;
         if (!this._hiddenByVisibility) return;
         this._hiddenByVisibility = false;
         console.log('[Player] 标签页恢复可见，重启轮询');
@@ -469,12 +482,20 @@ export class Player {
         this.startPolling(this._lastPollIntervalMs);
     }
 
+    shutdown() {
+        if (this._isShuttingDown) return;
+        this._isShuttingDown = true;
+        window.__clubMusicPageUnloading = true;
+        this.stopPolling();
+    }
+
     // ==================== WebSocket 实时同步 ====================
 
     /**
      * 建立 WebSocket 连接，实现跨客户端实时状态推送
      */
     connectWebSocket() {
+        if (this._isShuttingDown) return;
         if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
 
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -489,6 +510,10 @@ export class Player {
             this.ws = new WebSocket(wsUrl);
 
             this.ws.onopen = () => {
+                if (this._isShuttingDown) {
+                    this.ws?.close();
+                    return;
+                }
                 console.log('[WS] 连接成功');
                 this.wsConnected = true;
                 this.wsReconnectDelay = 1000;  // 重置退避时间
@@ -513,6 +538,9 @@ export class Player {
 
             this.ws.onclose = (event) => {
                 this.wsConnected = false;
+                if (this._isShuttingDown) {
+                    return;
+                }
                 console.log(`[WS] 连接断开 (code=${event.code})，${this.wsReconnectDelay}ms 后重连`);
                 // 断开后恢复正常轮询频率
                 this._restorePollingForWS();

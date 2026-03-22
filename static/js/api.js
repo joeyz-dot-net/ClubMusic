@@ -35,6 +35,10 @@ function makeLeadingDebounce(fn, waitMs) {
     };
 }
 
+function isPageUnloading() {
+    return window.__clubMusicPageUnloading === true;
+}
+
 export class MusicAPI {
     constructor(baseURL = '') {
         this.baseURL = baseURL;
@@ -87,7 +91,9 @@ export class MusicAPI {
             }
             return data;
         } catch (err) {
-            console.warn(`[API] GET ${endpoint} failed:`, err);
+            if (!isPageUnloading()) {
+                console.warn(`[API] GET ${endpoint} failed:`, err);
+            }
             return { _error: true, message: err.message };
         }
     }
@@ -109,7 +115,9 @@ export class MusicAPI {
             }
             return result;
         } catch (err) {
-            console.warn(`[API] POST ${endpoint} failed:`, err);
+            if (!isPageUnloading()) {
+                console.warn(`[API] POST ${endpoint} failed:`, err);
+            }
             return { _error: true, message: err.message };
         }
     }
@@ -128,7 +136,9 @@ export class MusicAPI {
             }
             return result;
         } catch (err) {
-            console.warn(`[API] POST-FORM ${endpoint} failed:`, err);
+            if (!isPageUnloading()) {
+                console.warn(`[API] POST-FORM ${endpoint} failed:`, err);
+            }
             return { _error: true, message: err.message };
         }
     }
@@ -146,7 +156,9 @@ export class MusicAPI {
             }
             return result;
         } catch (err) {
-            console.warn(`[API] DELETE ${endpoint} failed:`, err);
+            if (!isPageUnloading()) {
+                console.warn(`[API] DELETE ${endpoint} failed:`, err);
+            }
             return { _error: true, message: err.message };
         }
     }
@@ -166,7 +178,9 @@ export class MusicAPI {
             }
             return result;
         } catch (err) {
-            console.warn(`[API] PUT ${endpoint} failed:`, err);
+            if (!isPageUnloading()) {
+                console.warn(`[API] PUT ${endpoint} failed:`, err);
+            }
             return { _error: true, message: err.message };
         }
     }

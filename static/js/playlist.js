@@ -4,10 +4,10 @@ import { Toast, loading, ConfirmModal } from './ui.js';
 import { operationLock } from './operationLock.js';
 import { thumbnailManager, escapeHTML, focusFirstFocusable, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js';
 import { i18n } from './i18n.js';
-import { player } from './player.js?v=9';
+import { player } from './player.js?v=10';
 import { unavailableSongs } from './unavailable.js';
-import { executePlayNow, rerenderQueueWithCurrentMeta } from './playNow.js?v=10';
-import { getCurrentPlaybackStatus } from './playbackState.js?v=9';
+import { executePlayNow, rerenderQueueWithCurrentMeta } from './playNow.js?v=11';
+import { getCurrentPlaybackStatus } from './playbackState.js?v=10';
 
 export class PlaylistManager {
     constructor() {

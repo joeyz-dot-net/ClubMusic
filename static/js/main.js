@@ -2,20 +2,20 @@
 // 这是一个使用新模块系统的示例文件
 
 import { api } from './api.js?v=2';
-import { player } from './player.js?v=9';
-import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=13';
-import { playlistsManagement } from './playlists-management.js?v=12';
-import { volumeControl } from './volume.js?v=7';
-import { searchManager } from './search.js?v=18';
+import { player } from './player.js?v=10';
+import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=14';
+import { playlistsManagement } from './playlists-management.js?v=13';
+import { volumeControl } from './volume.js?v=8';
+import { searchManager } from './search.js?v=19';
 import { themeManager } from './themeManager.js';
 import { debug } from './debug.js';
 import { Toast, formatTime } from './ui.js';
 import { focusFirstFocusable, isMobile, isIPad, restoreFocus, ThumbnailManager, trapFocusInContainer } from './utils.js';
-import { localFiles } from './local.js?v=11';
+import { localFiles } from './local.js?v=12';
 import { settingsManager } from './settingsManager.js?v=3';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
-import { ktvSync } from './ktv.js?v=14';
+import { ktvSync } from './ktv.js?v=15';
 import { playLock } from './playLock.js';
 import { unavailableSongs } from './unavailable.js';
 
@@ -42,6 +42,7 @@ class MusicPlayerApp {
         this._lastSeenPlaylistUpdatedAt = 0;
         this._pendingPlaylistUpdatedAt = null;
         this._skipNextLoadCurrent = false;  // 手动切歌时跳过 loadCurrent() 网络请求
+        this._pendingStartupStatusSync = false;
 
         // 初始化缩略图管理器 - 用于处理YouTube缩略图降级
         this.thumbnailManager = new ThumbnailManager();
@@ -72,6 +73,7 @@ class MusicPlayerApp {
             
             // 4. 初始化播放列表
             await this.initPlaylist();
+            this._pendingStartupStatusSync = true;
             
             // 5. 初始化歌单管理模块
             playlistsManagement.init(
@@ -297,6 +299,8 @@ class MusicPlayerApp {
             const rawPlaylistUpdatedAt = Number(status?.playlist_updated_at ?? 0);
             const hasPlaylistUpdatedAt = Number.isFinite(rawPlaylistUpdatedAt) && rawPlaylistUpdatedAt > 0;
             const playlistVersionChanged = hasPlaylistUpdatedAt && rawPlaylistUpdatedAt !== this._lastSeenPlaylistUpdatedAt;
+            const isStartupStatusSync = this._pendingStartupStatusSync;
+            this._pendingStartupStatusSync = false;
             if (currentUrl !== this._lastRenderedSongUrl) {
                 const hasPlaylistUpdatedFlag = Object.prototype.hasOwnProperty.call(status || {}, 'playlist_updated');
                 const playlistUpdated = status?.playlist_updated === true;
@@ -308,6 +312,16 @@ class MusicPlayerApp {
                     console.log('[歌曲变化] ✓ 手动切歌，直接重渲染（跳过 loadCurrent）');
                 } else {
                     try {
+                        if (isStartupStatusSync && !hasPlaylistUpdatedFlag) {
+                            if (hasPlaylistUpdatedAt) {
+                                this._lastSeenPlaylistUpdatedAt = rawPlaylistUpdatedAt;
+                            }
+                            this._lastRenderedSongUrl = currentUrl;
+                            this.renderPlaylist();
+                            console.log('[启动恢复] ✓ 复用初始化歌单数据，跳过重复 loadCurrent');
+                            return;
+                        }
+
                         if (!hasPlaylistUpdatedFlag || playlistUpdated) {
                             // 轮询或真正的歌单变更：需要重新加载列表数据
                             if (playlistUpdated) {
