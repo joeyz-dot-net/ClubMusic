@@ -2,20 +2,20 @@
 // 这是一个使用新模块系统的示例文件
 
 import { api } from './api.js?v=2';
-import { player } from './player.js?v=7';
-import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=11';
-import { playlistsManagement } from './playlists-management.js?v=10';
-import { volumeControl } from './volume.js?v=5';
-import { searchManager } from './search.js?v=14';
+import { player } from './player.js?v=9';
+import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=13';
+import { playlistsManagement } from './playlists-management.js?v=12';
+import { volumeControl } from './volume.js?v=7';
+import { searchManager } from './search.js?v=18';
 import { themeManager } from './themeManager.js';
 import { debug } from './debug.js';
 import { Toast, formatTime } from './ui.js';
 import { focusFirstFocusable, isMobile, isIPad, restoreFocus, ThumbnailManager, trapFocusInContainer } from './utils.js';
-import { localFiles } from './local.js?v=10';
+import { localFiles } from './local.js?v=11';
 import { settingsManager } from './settingsManager.js?v=3';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
-import { ktvSync } from './ktv.js?v=12';
+import { ktvSync } from './ktv.js?v=14';
 import { playLock } from './playLock.js';
 import { unavailableSongs } from './unavailable.js';
 
@@ -38,6 +38,9 @@ class MusicPlayerApp {
         this.lastThumbnailUrl = null;  // 缩略图URL追踪
         this.lastPitchShift = null;   // 音调追踪，防止重复 UI 更新
         this._autoNextTriggered = false;  // 自动播放下一首的标记
+        this._skipNextPlaylistChangedRefresh = false;
+        this._lastSeenPlaylistUpdatedAt = 0;
+        this._pendingPlaylistUpdatedAt = null;
         this._skipNextLoadCurrent = false;  // 手动切歌时跳过 loadCurrent() 网络请求
 
         // 初始化缩略图管理器 - 用于处理YouTube缩略图降级
@@ -291,7 +294,12 @@ class MusicPlayerApp {
             // ✅【关键修复】歌曲变化时：先刷新播放列表数据，再重新渲染
             // 这样才能显示后端删除当前歌曲后的最新列表
             const currentUrl = status?.current_meta?.url || status?.current_meta?.rel || null;
+            const rawPlaylistUpdatedAt = Number(status?.playlist_updated_at ?? 0);
+            const hasPlaylistUpdatedAt = Number.isFinite(rawPlaylistUpdatedAt) && rawPlaylistUpdatedAt > 0;
+            const playlistVersionChanged = hasPlaylistUpdatedAt && rawPlaylistUpdatedAt !== this._lastSeenPlaylistUpdatedAt;
             if (currentUrl !== this._lastRenderedSongUrl) {
+                const hasPlaylistUpdatedFlag = Object.prototype.hasOwnProperty.call(status || {}, 'playlist_updated');
+                const playlistUpdated = status?.playlist_updated === true;
                 if (this._skipNextLoadCurrent) {
                     // 由 next/prev 直接触发：跳过 loadCurrent() 请求，直接重渲染
                     this._skipNextLoadCurrent = false;
@@ -300,16 +308,43 @@ class MusicPlayerApp {
                     console.log('[歌曲变化] ✓ 手动切歌，直接重渲染（跳过 loadCurrent）');
                 } else {
                     try {
-                        // 由轮询发现的变化（自动续播等）：需要重新加载列表数据
-                        await playlistManager.loadCurrent();
+                        if (!hasPlaylistUpdatedFlag || playlistUpdated) {
+                            // 轮询或真正的歌单变更：需要重新加载列表数据
+                            if (playlistUpdated) {
+                                this._skipNextPlaylistChangedRefresh = true;
+                                this._pendingPlaylistUpdatedAt = hasPlaylistUpdatedAt ? rawPlaylistUpdatedAt : null;
+                            }
+                            await playlistManager.loadCurrent();
+                            if (hasPlaylistUpdatedAt) {
+                                this._lastSeenPlaylistUpdatedAt = rawPlaylistUpdatedAt;
+                            }
+                            if (playlistUpdated) {
+                                this._pendingPlaylistUpdatedAt = null;
+                            }
+                        } else if (hasPlaylistUpdatedAt) {
+                            this._lastSeenPlaylistUpdatedAt = rawPlaylistUpdatedAt;
+                        }
                         this._lastRenderedSongUrl = currentUrl;
                         this.renderPlaylist();
-                        console.log('[歌曲变化] ✓ 已刷新播放列表数据');
+                        console.log(hasPlaylistUpdatedFlag && !playlistUpdated
+                            ? '[歌曲变化] ✓ 仅重渲染当前队列视图'
+                            : '[歌曲变化] ✓ 已刷新播放列表数据');
                     } catch (error) {
                         console.warn('[歌曲变化] 刷新播放列表数据失败，保留待重试状态:', error);
                         this.renderPlaylist();
                     }
                 }
+            } else if (playlistVersionChanged && !Object.prototype.hasOwnProperty.call(status || {}, 'playlist_updated')) {
+                try {
+                    await playlistManager.loadCurrent();
+                    this._lastSeenPlaylistUpdatedAt = rawPlaylistUpdatedAt;
+                    this.renderPlaylist();
+                    console.log('[歌单版本] ✓ 轮询检测到歌单变更，已刷新播放列表数据');
+                } catch (error) {
+                    console.warn('[歌单版本] 刷新播放列表数据失败，保留待重试状态:', error);
+                }
+            } else if (hasPlaylistUpdatedAt && this._lastSeenPlaylistUpdatedAt === 0) {
+                this._lastSeenPlaylistUpdatedAt = rawPlaylistUpdatedAt;
             }
         });
 
@@ -351,9 +386,18 @@ class MusicPlayerApp {
         // 监听 WebSocket 推送的歌单变更事件
         // 当其他用户操作（next/prev/删除歌曲）时，所有客户端都会收到此事件
         player.on('playlistChanged', async () => {
+            if (this._skipNextPlaylistChangedRefresh) {
+                this._skipNextPlaylistChangedRefresh = false;
+                console.log('[WS] 歌单变更刷新已由 statusUpdate 合并处理，跳过重复刷新');
+                return;
+            }
             console.log('[WS] 歌单已变更，刷新歌单列表');
             try {
                 await playlistManager.loadCurrent();
+                if (this._pendingPlaylistUpdatedAt) {
+                    this._lastSeenPlaylistUpdatedAt = this._pendingPlaylistUpdatedAt;
+                    this._pendingPlaylistUpdatedAt = null;
+                }
                 this.renderPlaylist();
             } catch (e) {
                 console.warn('[WS] 刷新歌单失败:', e);

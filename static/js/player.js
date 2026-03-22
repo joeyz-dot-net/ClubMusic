@@ -187,6 +187,7 @@ export class Player {
             pitchShift: status.pitch_shift ?? null,
             playlistId: status.current_playlist_id || '',
             playlistIndex: status.current_index ?? null,
+            playlistUpdatedAt: status.playlist_updated_at ?? 0,
         });
     }
 
@@ -549,10 +550,12 @@ export class Player {
             current_meta: msg.current_meta,
             current_playlist_id: msg.current_playlist_id,
             current_index: msg.current_index,
+            playlist_updated_at: msg.playlist_updated_at,
             loop_mode: msg.loop_mode,
             shuffle_mode: msg.shuffle_mode,
             pitch_shift: msg.pitch_shift,
             mpv_state: msg.mpv_state,
+            playlist_updated: msg.playlist_updated === true,
             server_time: msg.server_time,
         };
         this.updateStatus(newStatus, { source: 'ws' });

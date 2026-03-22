@@ -336,7 +336,7 @@ async def next_track(
                     status_code=500
                 )
 
-        await _broadcast_state(player)
+        await _broadcast_state(player, playlist_updated=True)
         return {
             "status": "OK",
             "current": player.current_meta,
@@ -474,6 +474,7 @@ async def get_status(
             "current_playlist_id": current_pid,
             "current_playlist_name": playlist.name if playlist else "--",
             "current_index": getattr(player, "current_index", -1),
+            "playlist_updated_at": getattr(playlist, "updated_at", 0) if playlist else 0,
             "loop_mode": player.loop_mode,
             "shuffle_mode": getattr(player, "shuffle_mode", False),
             "pitch_shift": player.pitch_shift,
@@ -490,6 +491,7 @@ async def get_status(
                 "current_playlist_id": get_current_playlist_id(player) if player else DEFAULT_PLAYLIST_ID,
                 "current_playlist_name": "--",
                 "current_index": getattr(player, "current_index", -1) if player else -1,
+                "playlist_updated_at": 0,
                 "loop_mode": 0,
                 "shuffle_mode": getattr(player, "shuffle_mode", False) if player else False,
                 "pitch_shift": 0,

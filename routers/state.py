@@ -167,6 +167,7 @@ def _build_state_message(player: MusicPlayer = None, playlist_updated: bool = Fa
         player: 目标播放器实例。None 则使用全局默认 PLAYER。
     """
     p = player or PLAYER
+    current_playlist = PLAYLISTS_MANAGER.get_playlist(get_current_playlist_id(p))
     try:
         mpv_state = {
             "paused": p.mpv_get("pause"),
@@ -185,6 +186,7 @@ def _build_state_message(player: MusicPlayer = None, playlist_updated: bool = Fa
         "pitch_shift": p.pitch_shift,
         "current_playlist_id": get_current_playlist_id(p),
         "current_index": getattr(p, 'current_index', -1),
+        "playlist_updated_at": getattr(current_playlist, 'updated_at', 0) if current_playlist else 0,
         "playlist_updated": playlist_updated,
         "ts": time.time(),
         "server_time": time.time(),
