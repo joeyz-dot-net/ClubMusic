@@ -282,7 +282,12 @@ async def next_track(
                 logger.info("[/next] 队列已空，停止播放")
                 player.current_meta = {}
                 player.current_index = -1
-                response_payload = {"status": "EMPTY", "message": "队列已空"}
+                response_payload = {
+                    "status": "EMPTY",
+                    "message": "队列已空",
+                    "current": player.current_meta,
+                    "current_index": player.current_index,
+                }
             else:
                 # 随机模式：从队列随机选一首放到队首
                 if player.shuffle_mode and len(songs) > 1:
@@ -338,7 +343,13 @@ async def next_track(
                     player.current_meta = {}
                     player.current_index = -1
                     logger.error(f"[/next] 连续 {len(skipped_songs)} 首播放失败")
-                    response_payload = {"status": "ERROR", "error": "连续播放失败", "skipped_songs": skipped_songs}
+                    response_payload = {
+                        "status": "ERROR",
+                        "error": "连续播放失败",
+                        "skipped_songs": skipped_songs,
+                        "current": player.current_meta,
+                        "current_index": player.current_index,
+                    }
                     response_status_code = 500
                 else:
                     response_payload = {

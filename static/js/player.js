@@ -267,17 +267,54 @@ export class Player {
     }
 
     async next() {
-        const result = this._ensureSuccess(await api.next(), '下一首播放失败');
-        this.emit('next', result);
-        // 利用响应中的 current_meta 立即更新 UI，无需等待下次 1000ms 轮询
-        if (result?.status === 'OK' && result?.current && this.status) {
+        const applyNextResultLocally = (result) => {
+            if (!result?.current || !this.status) {
+                return;
+            }
+
             this._markLocalStatusBarrier();
-            this.updateStatus({
+            const currentMpvState = this.status?.mpv_state || this.status?.mpv || {};
+            const nextStatus = {
                 ...this.status,
                 current_meta: result.current,
-            }, { source: 'local' });
+                current_index: result.current_index ?? this.status?.current_index ?? -1,
+            };
+
+            if (result.status === 'EMPTY' || result.status === 'ERROR') {
+                nextStatus.mpv_state = {
+                    ...currentMpvState,
+                    paused: true,
+                    time_pos: 0,
+                    duration: 0,
+                };
+
+                if (this.status?.mpv) {
+                    nextStatus.mpv = {
+                        ...this.status.mpv,
+                        paused: true,
+                        time_pos: 0,
+                        duration: 0,
+                    };
+                }
+            }
+
+            this.updateStatus(nextStatus, { source: 'local' });
+        };
+
+        try {
+            const result = this._ensureSuccess(await api.next(), '下一首播放失败', { allowStatuses: ['EMPTY'] });
+            this.emit('next', result);
+            // 利用响应中的 current_meta 立即更新 UI，无需等待下次 1000ms 轮询
+            if ((result?.status === 'OK' || result?.status === 'EMPTY')) {
+                applyNextResultLocally(result);
+            }
+            return result;
+        } catch (error) {
+            if (error?.result?.status === 'ERROR') {
+                applyNextResultLocally(error.result);
+            }
+            throw error;
         }
-        return result;
     }
 
     async prev() {
