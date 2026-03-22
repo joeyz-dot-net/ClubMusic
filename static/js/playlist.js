@@ -101,6 +101,33 @@ export class PlaylistManager {
         await Promise.all([this.loadCurrent(), this.loadAll()]);
     }
 
+    replacePlaylistSongsInCache(playlistId, songs = []) {
+        const nextSongs = Array.isArray(songs) ? songs : [];
+        let nextPlaylistName = null;
+
+        this.playlists = this.playlists.map((playlist) => {
+            if (playlist.id !== playlistId) {
+                return playlist;
+            }
+
+            nextPlaylistName = playlist.name || null;
+            return {
+                ...playlist,
+                songs: [...nextSongs],
+            };
+        });
+
+        this.roomPlaylist = this.playlists.find((playlist) => playlist.is_room) || null;
+
+        if (this.selectedPlaylistId === playlistId) {
+            this.currentPlaylist = [...nextSongs];
+            if (nextPlaylistName) {
+                this.currentPlaylistName = nextPlaylistName;
+            }
+            this.updateUrlSet();
+        }
+    }
+
     // 创建新歌单
     async create(name) {
         const result = this._assertPlaylistCreated(await api.createPlaylist(name), '创建歌单失败');
@@ -866,7 +893,7 @@ export function renderPlaylistToolbar({ toolbarContainer, playlist, playlistName
                             throw new Error(response?.error || response?.message || i18n.t('playlist.clearFailed'));
                         }
                         try {
-                            await playlistManager.refreshAll();
+                            playlistManager.replacePlaylistSongsInCache(selectedPlaylistId, []);
                             renderPlaylistUI({ container, onPlay, currentMeta });
                             Toast.success(i18n.t('playlist.clearPlaylistSucceed', { name: playlistName }));
                         } catch (refreshError) {
