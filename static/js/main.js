@@ -2,9 +2,9 @@
 // 这是一个使用新模块系统的示例文件
 
 import { api } from './api.js?v=2';
-import { player } from './player.js?v=17';
+import { player } from './player.js?v=18';
 import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=33';
-import { playlistsManagement } from './playlists-management.js?v=22';
+import { playlistsManagement } from './playlists-management.js?v=23';
 import { volumeControl } from './volume.js?v=14';
 import { searchManager } from './search.js?v=36';
 import { themeManager } from './themeManager.js';
@@ -1257,7 +1257,7 @@ class MusicPlayerApp {
                 const rect = this.elements.nppProgressBar.getBoundingClientRect();
                 const percent = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
                 const status = player.getStatus();
-                const duration = status?.mpv?.duration || status?.mpv_state?.duration || 0;
+                const duration = status?.mpv_state?.duration || status?.mpv?.duration || 0;
                 if (duration > 0) {
                     player.seek(percent).catch(err => console.warn('[NPP Seek] Error:', err));
                 }
@@ -2345,6 +2345,7 @@ app.modules = {
     api,
     player,
     playlistManager,
+    playlistsManagement,
     volumeControl,
     searchManager,
     themeManager,

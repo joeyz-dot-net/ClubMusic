@@ -448,10 +448,11 @@ export class PlaylistsManagement {
     }
 
     // 显示歌单管理模态框
-    show() {
+    async show() {
         if (this.modal) {
             this.modal._previousActiveElement = document.activeElement;
             this.modal.setAttribute('aria-hidden', 'false');
+            this.modal.setAttribute('aria-busy', 'true');
             this.modal.style.display = 'flex';
 
             if (!this._handleModalKeydown) {
@@ -477,6 +478,16 @@ export class PlaylistsManagement {
                 this.modal.classList.add('modal-visible');
                 focusFirstFocusable(this.modal, '#playlistsAddBtn');
             }, 10);
+
+            try {
+                await playlistManager.loadAll();
+            } catch (error) {
+                console.error('[歌单管理] 加载歌单列表失败:', error);
+                Toast.error(i18n.t('playlists.loadFailed', { error: error.message }));
+            } finally {
+                this.modal.removeAttribute('aria-busy');
+            }
+
             this.render();
         }
     }

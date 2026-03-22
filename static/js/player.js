@@ -1,6 +1,6 @@
 // 播放器控制模块
 import { api } from './api.js?v=2';
-import { settingsManager } from './settingsManager.js?v=3';
+import { settingsManager } from './settingsManager.js?v=6';
 import { operationLock } from './operationLock.js';
 
 const STATUS_TIME_EPSILON = 0.001;
