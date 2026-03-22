@@ -377,8 +377,8 @@ async function moveToTopAndPlay(song, currentIndex, onPlay, rerenderArgs) {
             console.log('[播放列表] ✓ 已移动到队列顶部');
         }
         
-        // 刷新数据
-        await playlistManager.refreshAll();
+        // 仅当前歌单顺序变化，无需刷新全部歌单元数据
+        await playlistManager.loadCurrent();
         
         // 播放歌曲（现在已经在索引0）
         if (onPlay) {
@@ -1811,17 +1811,17 @@ function initTouchDragSort(container, rerenderFn, rerenderArgs) {
                     if (result.status === 'OK') {
                         Toast.success(i18n.t('playlist.reordered'));
                         // 先刷新数据，再重新渲染列表
-                        await playlistManager.refreshAll();
+                        await playlistManager.loadCurrent();
                         rerenderFn(rerenderArgs);
                     } else {
                         Toast.error(i18n.t('playlist.reorderFailed') + ': ' + (result.error || result.message));
-                        await playlistManager.refreshAll();
+                        await playlistManager.loadCurrent();
                         rerenderFn(rerenderArgs);
                     }
                 } catch (err) {
                     console.error('调整顺序失败:', err);
                     Toast.error(i18n.t('playlist.reorderFailed'));
-                    await playlistManager.refreshAll();
+                    await playlistManager.loadCurrent();
                     rerenderFn(rerenderArgs);
                 }
             }
