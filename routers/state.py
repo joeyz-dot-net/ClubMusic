@@ -191,7 +191,7 @@ def _build_state_message(player: MusicPlayer = None, playlist_updated: bool = Fa
     }
 
 
-    async def _broadcast_state(player: MusicPlayer = None, playlist_updated: bool = False):
+async def _broadcast_state(player: MusicPlayer = None, playlist_updated: bool = False):
     """广播当前状态给对应 room 的 WebSocket 客户端（必须在锁外调用）
 
     Args:
