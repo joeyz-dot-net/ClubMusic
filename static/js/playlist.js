@@ -489,9 +489,9 @@ async function addAllSongsToDefault(playlist, selectedPlaylistId) {
             await new Promise(resolve => setTimeout(resolve, 50));
         }
         
-        // 完成后刷新播放列表数据
+        // 当前查看的是非默认歌单，这里只需刷新歌单元数据（数量/列表）
         loading.hide();
-        await playlistManager.refreshAll();
+        await playlistManager.loadAll();
         
         // 显示完成结果
         console.log('[批量添加] 完成:', {
@@ -2139,7 +2139,12 @@ async function addSongToChosenPlaylist({ playlistId, song, playlistItem, playlis
 
         let refreshError = null;
         try {
-            await playlistManager.refreshAll();
+            const selectedPlaylistId = playlistManager.getSelectedPlaylistId();
+            if (playlistId === selectedPlaylistId) {
+                await playlistManager.refreshAll();
+            } else {
+                await playlistManager.loadAll();
+            }
         } catch (error) {
             refreshError = error;
             console.warn('[歌单选择] 刷新歌单缓存失败，但添加已成功:', error);
