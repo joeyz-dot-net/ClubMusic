@@ -220,6 +220,10 @@ async def next_track(
 ):
     """播放下一首（根据 loop_mode / shuffle_mode 决定行为）"""
     try:
+        response_payload = None
+        response_status_code = 200
+        should_broadcast_playlist_update = False
+
         room_output_error = _room_output_not_ready_response(player, "/next")
         if room_output_error:
             return room_output_error
@@ -272,77 +276,85 @@ async def next_track(
 
             playlist.updated_at = time.time()
             playlists.save()
+            should_broadcast_playlist_update = True
 
             if not songs:
                 logger.info("[/next] 队列已空，停止播放")
                 player.current_meta = {}
                 player.current_index = -1
-                return {"status": "EMPTY", "message": "队列已空"}
+                response_payload = {"status": "EMPTY", "message": "队列已空"}
+            else:
+                # 随机模式：从队列随机选一首放到队首
+                if player.shuffle_mode and len(songs) > 1:
+                    import random
+                    pick = random.randint(0, len(songs) - 1)
+                    songs.insert(0, songs.pop(pick))
+                    logger.info(f"[/next] 🔀 随机模式: 随机选中第{pick}首")
 
-            # 随机模式：从队列随机选一首放到队首
-            if player.shuffle_mode and len(songs) > 1:
-                import random
-                pick = random.randint(0, len(songs) - 1)
-                songs.insert(0, songs.pop(pick))
-                logger.info(f"[/next] 🔀 随机模式: 随机选中第{pick}首")
+                # 播放队首，跳过失败歌曲（最多5首）
+                MAX_SKIP = 5
+                skipped_songs = []
+                success = False
 
-            # 播放队首，跳过失败歌曲（最多5首）
-            MAX_SKIP = 5
-            skipped_songs = []
-            success = False
+                for attempt in range(MAX_SKIP):
+                    if not songs:
+                        break
 
-            for attempt in range(MAX_SKIP):
-                if not songs:
-                    break
+                    url, title, song_type, duration = _extract_song_info(songs[0])
 
-                url, title, song_type, duration = _extract_song_info(songs[0])
+                    if not url:
+                        skipped = songs.pop(0)
+                        songs.append(skipped)
+                        skipped_songs.append({"url": url, "title": title})
+                        logger.warning(f"[/next] 跳过数据不完整的歌曲 ({attempt+1}/{MAX_SKIP}): {title}")
+                        continue
 
-                if not url:
-                    skipped = songs.pop(0)
-                    songs.append(skipped)
-                    skipped_songs.append({"url": url, "title": title})
-                    logger.warning(f"[/next] 跳过数据不完整的歌曲 ({attempt+1}/{MAX_SKIP}): {title}")
-                    continue
+                    song = _create_song_object(url, title, song_type, duration)
+                    logger.info(f"[/next] 尝试播放: {title}")
 
-                song = _create_song_object(url, title, song_type, duration)
-                logger.info(f"[/next] 尝试播放: {title}")
+                    success = player.play(
+                        song,
+                        mpv_command_func=player.mpv_command,
+                        mpv_pipe_exists_func=player.mpv_pipe_exists,
+                        ensure_mpv_func=player.ensure_mpv,
+                        add_to_history_func=playback_history.add_to_history,
+                        save_to_history=True
+                    )
 
-                success = player.play(
-                    song,
-                    mpv_command_func=player.mpv_command,
-                    mpv_pipe_exists_func=player.mpv_pipe_exists,
-                    ensure_mpv_func=player.ensure_mpv,
-                    add_to_history_func=playback_history.add_to_history,
-                    save_to_history=True
-                )
+                    if success:
+                        player.current_index = 0
+                        logger.info(f"[/next] ✓ 已切换到下一首: {title}")
+                        break
+                    else:
+                        skipped = songs.pop(0)
+                        songs.append(skipped)
+                        skipped_songs.append({"url": url, "title": title})
+                        logger.warning(f"[/next] 跳过失败歌曲 ({attempt+1}/{MAX_SKIP}): {title}")
 
-                if success:
-                    player.current_index = 0
-                    logger.info(f"[/next] ✓ 已切换到下一首: {title}")
-                    break
+                playlist.updated_at = time.time()
+                playlists.save()
+
+                if not success:
+                    player.current_meta = {}
+                    player.current_index = -1
+                    logger.error(f"[/next] 连续 {len(skipped_songs)} 首播放失败")
+                    response_payload = {"status": "ERROR", "error": "连续播放失败", "skipped_songs": skipped_songs}
+                    response_status_code = 500
                 else:
-                    skipped = songs.pop(0)
-                    songs.append(skipped)
-                    skipped_songs.append({"url": url, "title": title})
-                    logger.warning(f"[/next] 跳过失败歌曲 ({attempt+1}/{MAX_SKIP}): {title}")
+                    response_payload = {
+                        "status": "OK",
+                        "current": player.current_meta,
+                        "current_index": player.current_index,
+                        "skipped_songs": skipped_songs,
+                    }
 
-            playlist.updated_at = time.time()
-            playlists.save()
+        if should_broadcast_playlist_update:
+            await _broadcast_state(player, playlist_updated=True)
 
-            if not success:
-                logger.error(f"[/next] 连续 {len(skipped_songs)} 首播放失败")
-                return JSONResponse(
-                    {"status": "ERROR", "error": "连续播放失败", "skipped_songs": skipped_songs},
-                    status_code=500
-                )
+        if response_status_code != 200:
+            return JSONResponse(response_payload, status_code=response_status_code)
 
-        await _broadcast_state(player, playlist_updated=True)
-        return {
-            "status": "OK",
-            "current": player.current_meta,
-            "current_index": player.current_index,
-            "skipped_songs": skipped_songs,
-        }
+        return response_payload
     except Exception as e:
         return error_response("[/next] 切换下一首异常", exc=e, _logger=logger)
 
