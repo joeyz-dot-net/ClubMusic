@@ -589,6 +589,29 @@ export class SearchManager {
         return true;
     }
 
+    getPlaylistRefreshContext(playlistId) {
+        const activeDefaultId = playlistManager.getActiveDefaultId?.() || 'default';
+        const selectedPlaylistId = playlistManager.getSelectedPlaylistId?.() || activeDefaultId;
+        return {
+            activeDefaultId,
+            selectedPlaylistId,
+            useLocalSelectedPlaylistSync: playlistId === selectedPlaylistId && playlistId !== activeDefaultId,
+        };
+    }
+
+    async finalizePlaylistMutationView({ playlistId, logPrefix = '[搜索]', successLogMessage = '' } = {}) {
+        const { useLocalSelectedPlaylistSync } = this.getPlaylistRefreshContext(playlistId);
+        if (useLocalSelectedPlaylistSync && this.renderPlaylistFromCache()) {
+            this.playlistViewFreshWhileModalOpen = true;
+            if (successLogMessage) {
+                console.log(successLogMessage);
+            }
+            return true;
+        }
+
+        return this.refreshPlaylistView({ logPrefix, successLogMessage });
+    }
+
     async refreshPlaylistView({ logPrefix = '[搜索]', successLogMessage = '' } = {}) {
         try {
             await playlistManager.refreshAll();
@@ -1249,6 +1272,7 @@ export class SearchManager {
     async handleAddToQueue(songData, isDirectory, btn) {
         try {
             const playlistId = this.getCurrentPlaylistId ? this.getCurrentPlaylistId() : this.currentPlaylistId;
+            const { useLocalSelectedPlaylistSync } = this.getPlaylistRefreshContext(playlistId);
             
             if (isDirectory) {
                 return this.runExclusiveBulkPlaylistAction('目录添加', async () => {
@@ -1305,6 +1329,9 @@ export class SearchManager {
                                 
                                 if (!addResponse?._error && addResponse?.status === 'OK') {
                                     addedCount++;
+                                    if (useLocalSelectedPlaylistSync) {
+                                        playlistManager.insertSongIntoPlaylistCache(playlistId, song, currentInsertIndex);
+                                    }
                                     console.log(`[搜索] ✓ 添加歌曲 (${i+1}/${songs.length}): ${song.title} 在位置 ${currentInsertIndex}`);
                                 } else if (addResponse?.duplicate) {
                                     skippedCount++;
@@ -1334,11 +1361,14 @@ export class SearchManager {
                             restoreElementChildren(btn, originalContent);
                             btn.disabled = false;
                         }
-                        
-                        await this.refreshPlaylistView({
-                            logPrefix: '[搜索]',
-                            successLogMessage: '[搜索] ✓ 播放列表已刷新 - ' + addedCount + ' 首歌曲'
-                        });
+
+                        if (addedCount > 0) {
+                            await this.finalizePlaylistMutationView({
+                                playlistId,
+                                logPrefix: '[搜索]',
+                                successLogMessage: '[搜索] ✓ 播放列表已刷新 - ' + addedCount + ' 首歌曲'
+                            });
+                        }
                     } catch (error) {
                         console.error('添加目录歌曲失败:', error);
                         Toast.error(i18n.t('search.addDirFailed') + ': ' + error.message);
@@ -1357,6 +1387,9 @@ export class SearchManager {
                 const response = await this.addSongToPlaylist(playlistId, songData, insertIndex);
                 
                 if (!response?._error && response?.status === 'OK') {
+                    if (useLocalSelectedPlaylistSync) {
+                        playlistManager.insertSongIntoPlaylistCache(playlistId, songData, insertIndex);
+                    }
                     // 获取歌单名称以显示在toast中
                     let playlistName = i18n.t('nav.queue');
                     const _activeDefault2 = window.app?.modules?.playlistManager?.getActiveDefaultId?.() || 'default';
@@ -1371,8 +1404,9 @@ export class SearchManager {
                     Toast.success(i18n.t('search.addSuccess', { name: playlistName, title: songData.title }));
                     setElementMarkup(btn, SEARCH_SUCCESS_ICON_MARKUP);
                     btn.disabled = true;
-                    
-                    await this.refreshPlaylistView({
+
+                    await this.finalizePlaylistMutationView({
+                        playlistId,
                         logPrefix: '[搜索]',
                         successLogMessage: '[搜索] ✓ 播放列表已刷新 - 已添加单曲'
                     });
@@ -1397,6 +1431,7 @@ export class SearchManager {
     async handleAddAllToPlaylist(currentTab) {
         try {
             const playlistId = this.getCurrentPlaylistId ? this.getCurrentPlaylistId() : this.currentPlaylistId;
+            const { useLocalSelectedPlaylistSync } = this.getPlaylistRefreshContext(playlistId);
             const results = this.getSearchResultsForBatchAction(currentTab);
 
             if (results.length === 0) {
@@ -1446,6 +1481,9 @@ export class SearchManager {
 
                             if (!response?._error && response?.status === 'OK') {
                                 addedCount++;
+                                if (useLocalSelectedPlaylistSync) {
+                                    playlistManager.insertSongIntoPlaylistCache(playlistId, songData, currentInsertIndex);
+                                }
                                 const processedCount = addedCount + skippedCount + failedCount;
                                 const progress = Math.round((processedCount / songs.length) * 100);
                                 searchLoading.show(i18n.t('search.batchAddProgress', { done: addedCount, total: songs.length, pct: progress }));
@@ -1487,10 +1525,13 @@ export class SearchManager {
                         failedCount
                     });
 
-                    await this.refreshPlaylistView({
-                        logPrefix: '[批量添加]',
-                        successLogMessage: '[批量添加] ✓ 播放列表已刷新'
-                    });
+                    if (addedCount > 0) {
+                        await this.finalizePlaylistMutationView({
+                            playlistId,
+                            logPrefix: '[批量添加]',
+                            successLogMessage: '[批量添加] ✓ 播放列表已刷新'
+                        });
+                    }
                 } catch (error) {
                     searchLoading.hide();
                     console.error('[批量添加] 添加失败:', error);
