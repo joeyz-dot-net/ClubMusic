@@ -382,10 +382,10 @@ async function moveToTopAndPlay(song, currentIndex, onPlay, rerenderArgs) {
         
         // 播放歌曲（现在已经在索引0）
         if (onPlay) {
-            onPlay(song);
+            await onPlay(song);
+            return;
         }
-        
-        // 重新渲染列表（使用 song 作为 currentMeta 以立即高亮已点击的歌曲）
+
         if (rerenderArgs) {
             renderPlaylistUI({ ...rerenderArgs, currentMeta: song });
         }
@@ -1448,8 +1448,10 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
                         }
 
                         if (addedSongs[0]) {
-                            window.app?.playSong(addedSongs[0]);
+                            await window.app?.playSong(addedSongs[0]);
+                            return;
                         }
+
                         renderPlaylistUI({ container, onPlay, currentMeta });
                     } catch (err) {
                         loading.hide();
