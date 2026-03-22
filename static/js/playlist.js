@@ -6,7 +6,7 @@ import { thumbnailManager, escapeHTML, focusFirstFocusable, openOverlayActionMen
 import { i18n } from './i18n.js';
 import { player } from './player.js?v=16';
 import { unavailableSongs } from './unavailable.js';
-import { executePlayNow, rerenderQueueWithCurrentMeta } from './playNow.js?v=17';
+import { executePlayNow, rerenderQueueWithCurrentMeta } from './playNow.js?v=18';
 import { getCurrentPlaybackStatus } from './playbackState.js?v=16';
 
 export class PlaylistManager {
@@ -157,6 +157,56 @@ export class PlaylistManager {
 
         baseSongs.splice(nextIndex, 0, nextSong);
         this.replacePlaylistSongsInCache(playlistId, baseSongs);
+    }
+
+    findSongIndexInCache(playlistId, url) {
+        if (!url) {
+            return -1;
+        }
+
+        const playlist = this.playlists.find((item) => item.id === playlistId);
+        const songs = Array.isArray(playlist?.songs)
+            ? playlist.songs
+            : (this.selectedPlaylistId === playlistId ? this.currentPlaylist : []);
+
+        return songs.findIndex((song) => song?.url === url);
+    }
+
+    async ensureSongAtTop(playlistId, url) {
+        let songIndex = this.findSongIndexInCache(playlistId, url);
+
+        if (songIndex < 0) {
+            await this.loadAll();
+            songIndex = this.findSongIndexInCache(playlistId, url);
+        }
+
+        if (songIndex < 0) {
+            throw new Error('未能在队列中找到已存在的歌曲');
+        }
+
+        if (songIndex === 0) {
+            return { moved: false, index: 0 };
+        }
+
+        this._assertStatusOk(
+            await api.reorderPlaylist(playlistId, songIndex, 0),
+            '移动歌曲到队列顶部失败'
+        );
+
+        const playlist = this.playlists.find((item) => item.id === playlistId);
+        const songs = Array.isArray(playlist?.songs)
+            ? [...playlist.songs]
+            : (this.selectedPlaylistId === playlistId ? [...this.currentPlaylist] : []);
+        const [song] = songs.splice(songIndex, 1);
+
+        if (!song) {
+            throw new Error('移动歌曲到队列顶部失败');
+        }
+
+        songs.unshift(song);
+        this.replacePlaylistSongsInCache(playlistId, songs);
+
+        return { moved: true, index: 0 };
     }
 
     // 创建新歌单
@@ -2441,7 +2491,15 @@ async function handleHistoryPlayNow(song) {
 
         await executePlayNow({
             song: songData,
-            addToQueueTop: () => playlistManager.addSong(activeDefaultId, songData, 0),
+            addToQueueTop: () => {
+                const existingIndex = playlistManager.findSongIndexInCache(activeDefaultId, songData.url);
+                if (existingIndex >= 0) {
+                    return { status: 'OK', duplicate: true };
+                }
+
+                return playlistManager.addSong(activeDefaultId, songData, 0);
+            },
+            ensureQueuedSongAtTop: () => playlistManager.ensureSongAtTop(activeDefaultId, songData.url),
             refreshPlaylist: () => playlistManager.insertSongIntoPlaylistCache(activeDefaultId, songData, 0),
             addFailedMessage: i18n.t('search.addSongFailed')
         });

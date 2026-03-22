@@ -3,10 +3,10 @@ import { api } from './api.js?v=2';
 import { Toast, formatTime, searchLoading } from './ui.js';
 import { buildTrackItemElement } from './templates.js';
 import { localFiles, getNodeByPath, getDirCoverUrl, countFiles } from './local.js?v=20';
-import { playlistManager, renderPlaylistUI } from './playlist.js?v=31';
+import { playlistManager, renderPlaylistUI } from './playlist.js?v=32';
 import { i18n } from './i18n.js';
 import { escapeHTML, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js';
-import { executePlayNow } from './playNow.js?v=17';
+import { executePlayNow } from './playNow.js?v=18';
 import { getCurrentPlaybackMeta } from './playbackState.js?v=16';
 
 const SEARCH_SUCCESS_ICON_MARKUP = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
@@ -631,7 +631,16 @@ export class SearchManager {
 
     async refreshPlaylistView({ logPrefix = '[搜索]', successLogMessage = '' } = {}) {
         try {
-            await playlistManager.refreshAll();
+            const activeDefaultId = playlistManager.getActiveDefaultId?.() || 'default';
+            const selectedPlaylistId = playlistManager.getSelectedPlaylistId?.() || activeDefaultId;
+
+            if (selectedPlaylistId === activeDefaultId) {
+                await playlistManager.loadCurrent();
+            } else {
+                await playlistManager.loadAll();
+                playlistManager.syncSelectedPlaylistFromCache();
+            }
+
             if (!this.renderPlaylistFromCache()) {
                 throw new Error('playlist container unavailable');
             }
@@ -1229,7 +1238,7 @@ export class SearchManager {
                                 Toast.error(i18n.t('search.addFailed') + ': ' + err.message);
                             }
                         } else {
-                            const { showSelectPlaylistModal } = await import('./playlist.js?v=31');
+                            const { showSelectPlaylistModal } = await import('./playlist.js?v=32');
                             await showSelectPlaylistModal(songData, null);
                         }
                     } else if (action === 'add-all-to-playlist') {
@@ -1268,7 +1277,15 @@ export class SearchManager {
             const appPlaylistManager = window.app?.modules?.playlistManager;
             await executePlayNow({
                 song: songData,
-                addToQueueTop: () => this.addSongToPlaylist(activeDefaultId, songData, 0),
+                addToQueueTop: () => {
+                    const existingIndex = playlistManager.findSongIndexInCache(activeDefaultId, songData.url);
+                    if (existingIndex >= 0) {
+                        return { status: 'OK', duplicate: true };
+                    }
+
+                    return this.addSongToPlaylist(activeDefaultId, songData, 0);
+                },
+                ensureQueuedSongAtTop: () => playlistManager.ensureSongAtTop(activeDefaultId, songData.url),
                 refreshPlaylist: appPlaylistManager ? () => appPlaylistManager.insertSongIntoPlaylistCache(activeDefaultId, songData, 0) : null,
                 addFailedMessage: i18n.t('search.addSongFailed')
             });

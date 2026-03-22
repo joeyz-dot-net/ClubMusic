@@ -30,7 +30,13 @@ export function rerenderQueueWithCurrentMeta(renderPlaylistUI) {
     return true;
 }
 
-export async function executePlayNow({ song, addToQueueTop, refreshPlaylist, addFailedMessage = '添加歌曲失败' }) {
+export async function executePlayNow({
+    song,
+    addToQueueTop,
+    ensureQueuedSongAtTop,
+    refreshPlaylist,
+    addFailedMessage = '添加歌曲失败'
+}) {
     if (!playLock.acquire(song.title)) {
         return { skipped: true, reason: 'locked' };
     }
@@ -42,6 +48,10 @@ export async function executePlayNow({ song, addToQueueTop, refreshPlaylist, add
 
         if (!wasAlreadyQueued && (addResult?._error || addResult?.status !== 'OK')) {
             throw createPlayNowError(addResult, addFailedMessage);
+        }
+
+        if (wasAlreadyQueued && typeof ensureQueuedSongAtTop === 'function') {
+            await ensureQueuedSongAtTop();
         }
 
         if (!wasAlreadyQueued && typeof refreshPlaylist === 'function') {
