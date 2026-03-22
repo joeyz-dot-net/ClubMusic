@@ -262,7 +262,7 @@ export const settingsManager = {
     },
 
     setUIConfigTogglesDisabled(disabled) {
-        ['youtubeControlsToggle', 'expandButtonToggle'].forEach((id) => {
+        ['expandButtonToggle'].forEach((id) => {
             const toggle = document.getElementById(id);
             if (toggle) {
                 toggle.disabled = disabled;
@@ -336,12 +336,6 @@ export const settingsManager = {
             this.setButtonGroupValue('languageSetting', currentLang);
         }
 
-        // UI 配置 - YouTube控件开关
-        const youtubeControlsToggle = document.getElementById('youtubeControlsToggle');
-        if (youtubeControlsToggle) {
-            youtubeControlsToggle.checked = this.uiConfig.youtube_controls;
-        }
-
         // UI 配置 - 放大按钮开关
         const expandButtonToggle = document.getElementById('expandButtonToggle');
         if (expandButtonToggle) {
@@ -382,20 +376,6 @@ export const settingsManager = {
                     this.setSetting('language', value);
                     this.applyLanguage(value);
                 });
-            });
-        }
-
-        // YouTube控件开关
-        const youtubeControlsToggle = document.getElementById('youtubeControlsToggle');
-        if (youtubeControlsToggle) {
-            youtubeControlsToggle.addEventListener('change', async (e) => {
-                const enabled = e.target.checked;
-                await this.handleUIConfigToggleChange(
-                    e.target,
-                    'youtube_controls',
-                    enabled,
-                    `[设置] YouTube控件：${enabled ? '启用' : '禁用'}`
-                );
             });
         }
 
@@ -613,28 +593,20 @@ export const settingsManager = {
         const playbackSection = document.getElementById('playbackSectionTitle');
         if (playbackSection) playbackSection.textContent = i18n.t('settings.playback', language);
 
-        const youtubeControlsLabel = document.getElementById('youtubeControlsLabel');
-        if (youtubeControlsLabel) youtubeControlsLabel.textContent = i18n.t('settings.youtubeControls', language);
-
         const expandButtonLabel = document.getElementById('expandButtonLabel');
         if (expandButtonLabel) expandButtonLabel.textContent = i18n.t('settings.expandButton', language);
 
-        const toggleOnIds = ['youtubeControlsToggleOn', 'expandButtonToggleOn'];
+        const toggleOnIds = ['expandButtonToggleOn'];
         toggleOnIds.forEach((id) => {
             const element = document.getElementById(id);
             if (element) element.textContent = i18n.t('settings.toggleOn', language);
         });
 
-        const toggleOffIds = ['youtubeControlsToggleOff', 'expandButtonToggleOff'];
+        const toggleOffIds = ['expandButtonToggleOff'];
         toggleOffIds.forEach((id) => {
             const element = document.getElementById(id);
             if (element) element.textContent = i18n.t('settings.toggleOff', language);
         });
-
-        const youtubeToggle = document.getElementById('youtubeControlsToggle');
-        if (youtubeToggle) {
-            youtubeToggle.setAttribute('aria-label', i18n.t('settings.youtubeControls', language));
-        }
 
         const expandToggle = document.getElementById('expandButtonToggle');
         if (expandToggle) {
