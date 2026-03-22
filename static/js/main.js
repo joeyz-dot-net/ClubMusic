@@ -2,20 +2,20 @@
 // 这是一个使用新模块系统的示例文件
 
 import { api } from './api.js?v=2';
-import { player } from './player.js?v=10';
-import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=14';
-import { playlistsManagement } from './playlists-management.js?v=13';
-import { volumeControl } from './volume.js?v=8';
-import { searchManager } from './search.js?v=19';
+import { player } from './player.js?v=11';
+import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=15';
+import { playlistsManagement } from './playlists-management.js?v=14';
+import { volumeControl } from './volume.js?v=9';
+import { searchManager } from './search.js?v=20';
 import { themeManager } from './themeManager.js';
 import { debug } from './debug.js';
 import { Toast, formatTime } from './ui.js';
 import { focusFirstFocusable, isMobile, isIPad, restoreFocus, ThumbnailManager, trapFocusInContainer } from './utils.js';
-import { localFiles } from './local.js?v=12';
+import { localFiles } from './local.js?v=13';
 import { settingsManager } from './settingsManager.js?v=3';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
-import { ktvSync } from './ktv.js?v=15';
+import { ktvSync } from './ktv.js?v=16';
 import { playLock } from './playLock.js';
 import { unavailableSongs } from './unavailable.js';
 

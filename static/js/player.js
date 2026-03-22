@@ -262,7 +262,7 @@ export class Player {
     async pause() {
         const result = this._ensureSuccess(await api.pause(), '暂停失败');
         this._applyLocalMpvStatePatch({ paused: !!result?.paused });
-        this.emit(result?.paused ? 'pause' : 'play', result?.paused ? undefined : this._createPlayEventPayload());
+        this.emit(result?.paused ? 'pause' : 'resume', result?.paused ? undefined : this._createPlayEventPayload());
         return result;
     }
 
@@ -298,7 +298,7 @@ export class Player {
         // 后端 /pause 已是切换语义
         const result = this._ensureSuccess(await api.pause(), '播放状态切换失败');
         this._applyLocalMpvStatePatch({ paused: !!result?.paused });
-        this.emit(result?.paused ? 'pause' : 'play', result?.paused ? undefined : this._createPlayEventPayload());
+        this.emit(result?.paused ? 'pause' : 'resume', result?.paused ? undefined : this._createPlayEventPayload());
         return result;
     }
 
