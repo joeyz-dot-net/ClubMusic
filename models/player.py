@@ -338,7 +338,8 @@ class MusicPlayer:
             playlists_manager: Playlists 管理器实例
             default_playlist_id: 默认歌单 ID (字符串)
             playback_history: PlayHistory 播放历史实例
-            broadcast_from_thread: 从后台线程触发 WebSocket 广播的回调函数
+            broadcast_from_thread: 从后台线程触发 WebSocket 广播的回调函数，
+                                   签名为 callback(playlist_updated: bool = True)
         """
         self._ext_playlists_manager = playlists_manager
         self._ext_default_playlist_id = default_playlist_id
@@ -359,7 +360,8 @@ class MusicPlayer:
             id_key: 用于生成 room_playlist_id 的标识符
             playlists_manager: 共享的 Playlists 管理器
             playback_history: 共享的 PlayHistory 实例
-            broadcast_from_thread: WebSocket 广播回调
+            broadcast_from_thread: WebSocket 广播回调，
+                                   签名为 callback(playlist_updated: bool = True)
             music_dir: 音乐目录（可选）
             config_overrides: 额外的 config 字典项
         """
@@ -1195,6 +1197,8 @@ class MusicPlayer:
             logger.info("[自动播放] ✓ 检测到歌曲播放结束，开始后端自动播放逻辑")
 
             auto_play_success = False
+            playlist_updated = False
+            should_broadcast_state = False
 
             with self._lock:
                 default_playlist = playlists_mgr.get_playlist(default_pid)
@@ -1250,6 +1254,7 @@ class MusicPlayer:
                         self.current_meta = song.to_dict()
                         self._last_play_time = time.time()
                         auto_play_success = True
+                        should_broadcast_state = True
                         logger.info(f"[自动播放] ✅ 单曲循环成功: {title}")
                     else:
                         logger.error(f"[自动播放] ❌ 单曲循环播放失败: {title}")
@@ -1266,6 +1271,7 @@ class MusicPlayer:
 
                     if self.loop_mode == 2:
                         # 全部循环：将当前歌曲移到队尾
+                        playlist_updated = True
                         if removed_index >= 0:
                             moved_song = default_playlist.songs.pop(removed_index)
                             default_playlist.songs.append(moved_song)
@@ -1278,6 +1284,7 @@ class MusicPlayer:
                             logger.info(f"[自动播放] 🔁 全部循环: 已将 {song_title} 移到队尾")
                     else:
                         # 不循环 (loop_mode == 0)：删除当前歌曲
+                        playlist_updated = True
                         if removed_index >= 0:
                             removed_song = default_playlist.songs.pop(removed_index)
                             song_title = removed_song.get('title') if isinstance(removed_song, dict) else str(removed_song)
@@ -1289,6 +1296,7 @@ class MusicPlayer:
 
                     default_playlist.updated_at = time.time()
                     playlists_mgr.save()
+                    should_broadcast_state = True
 
                     # 随机播放：打乱剩余队列顺序
                     if self.shuffle_mode and len(default_playlist.songs) > 1:
@@ -1366,8 +1374,8 @@ class MusicPlayer:
                         logger.error(f"[自动播放] ❌ 连续 {MAX_SKIP} 首播放失败")
 
             # 锁外广播
-            if auto_play_success and self._ext_broadcast_from_thread:
-                self._ext_broadcast_from_thread()
+            if should_broadcast_state and self._ext_broadcast_from_thread:
+                self._ext_broadcast_from_thread(playlist_updated=playlist_updated)
 
         except Exception as e:
             logger.error(f"[自动播放] ❌ 后端自动播放异常: {e}")

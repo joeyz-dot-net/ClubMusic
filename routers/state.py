@@ -208,12 +208,12 @@ async def _broadcast_state(player: MusicPlayer = None, playlist_updated: bool = 
     await ws_manager.broadcast_to_room(room_id, msg)
 
 
-def _broadcast_from_thread():
+def _broadcast_from_thread(playlist_updated: bool = True):
     """从后台线程安全地触发默认 PLAYER 的 WebSocket 广播（线程安全入口）"""
     if _main_loop is None or not ws_manager.active_connections:
         return
     try:
-        asyncio.run_coroutine_threadsafe(_broadcast_state(playlist_updated=True), _main_loop)
+        asyncio.run_coroutine_threadsafe(_broadcast_state(playlist_updated=playlist_updated), _main_loop)
     except Exception as e:
         logger.debug(f"[WS] 跨线程广播失败: {e}")
 
@@ -224,7 +224,7 @@ def _make_room_broadcast(room_id: str):
     返回的函数签名与 _broadcast_from_thread 相同，可直接传给
     MusicPlayer.set_external_deps(broadcast_from_thread=...)。
     """
-    def _room_broadcast():
+    def _room_broadcast(playlist_updated: bool = True):
         if _main_loop is None:
             return
         with _room_players_lock:
@@ -235,7 +235,7 @@ def _make_room_broadcast(room_id: str):
             return
         try:
             asyncio.run_coroutine_threadsafe(
-                _broadcast_state(player, playlist_updated=True), _main_loop
+                _broadcast_state(player, playlist_updated=playlist_updated), _main_loop
             )
         except Exception as e:
             logger.debug(f"[WS] 房间 {room_id} 跨线程广播失败: {e}")
