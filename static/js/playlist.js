@@ -128,6 +128,20 @@ export class PlaylistManager {
         }
     }
 
+    insertSongIntoPlaylistCache(playlistId, song, insertIndex = null) {
+        const targetPlaylist = this.playlists.find((playlist) => playlist.id === playlistId);
+        const baseSongs = Array.isArray(targetPlaylist?.songs)
+            ? [...targetPlaylist.songs]
+            : (this.selectedPlaylistId === playlistId ? [...this.currentPlaylist] : []);
+        const nextSong = song ? { ...song } : song;
+        const nextIndex = Number.isFinite(insertIndex)
+            ? Math.max(0, Math.min(insertIndex, baseSongs.length))
+            : baseSongs.length;
+
+        baseSongs.splice(nextIndex, 0, nextSong);
+        this.replacePlaylistSongsInCache(playlistId, baseSongs);
+    }
+
     // 创建新歌单
     async create(name) {
         const result = this._assertPlaylistCreated(await api.createPlaylist(name), '创建歌单失败');
@@ -292,7 +306,8 @@ export class PlaylistManager {
                 if (isDefaultPlaylist) {
                     await this.loadCurrent();
                 } else {
-                    await this.refreshAll();
+                    const nextSongs = this.currentPlaylist.filter((_, currentIndex) => currentIndex !== index);
+                    this.replacePlaylistSongsInCache(this.selectedPlaylistId, nextSongs);
                 }
             } else {
                 throw new Error(result.error || result.message || '删除操作失败');
@@ -2173,7 +2188,7 @@ async function addSongToChosenPlaylist({ playlistId, song, playlistItem, playlis
         try {
             const selectedPlaylistId = playlistManager.getSelectedPlaylistId();
             if (playlistId === selectedPlaylistId) {
-                await playlistManager.refreshAll();
+                playlistManager.insertSongIntoPlaylistCache(playlistId, song, insertIndex);
             } else {
                 await playlistManager.loadAll();
             }

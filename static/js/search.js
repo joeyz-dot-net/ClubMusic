@@ -3,7 +3,7 @@ import { api } from './api.js?v=2';
 import { Toast, formatTime, searchLoading } from './ui.js';
 import { buildTrackItemElement } from './templates.js';
 import { localFiles, getNodeByPath, getDirCoverUrl, countFiles } from './local.js?v=20';
-import { playlistManager, renderPlaylistUI } from './playlist.js?v=27';
+import { playlistManager, renderPlaylistUI } from './playlist.js?v=29';
 import { i18n } from './i18n.js';
 import { escapeHTML, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js';
 import { executePlayNow } from './playNow.js?v=17';
@@ -1173,11 +1173,13 @@ export class SearchManager {
                         const activeDefault = playlistManager?.getActiveDefaultId?.() || 'default';
                         if (selectedId !== activeDefault) {
                             try {
-                                const result = await this.addSongToPlaylist(selectedId, songData, null);
+                                const insertIndex = await this.getQueueInsertIndex({ logPrefix: '[搜索]' });
+                                const result = await this.addSongToPlaylist(selectedId, songData, insertIndex);
                                 if (result?.status === 'OK') {
                                     const name = playlistManager.getCurrentName() || selectedId;
                                     Toast.success(i18n.t('search.addSuccess', { name, title: songData.title }));
-                                    await playlistManager.refreshAll();
+                                    playlistManager.insertSongIntoPlaylistCache(selectedId, songData, insertIndex);
+                                    this.renderPlaylistFromCache();
                                     this.playlistViewFreshWhileModalOpen = true;
                                 } else if (result.duplicate) {
                                     Toast.warning(`${songData.title} ${i18n.t('search.alreadyInList')}`);
@@ -1187,7 +1189,7 @@ export class SearchManager {
                                 Toast.error(i18n.t('search.addFailed') + ': ' + err.message);
                             }
                         } else {
-                            const { showSelectPlaylistModal } = await import('./playlist.js?v=27');
+                            const { showSelectPlaylistModal } = await import('./playlist.js?v=29');
                             await showSelectPlaylistModal(songData, null);
                         }
                     } else if (action === 'add-all-to-playlist') {
