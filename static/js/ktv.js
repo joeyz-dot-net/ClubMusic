@@ -25,11 +25,14 @@ function dismissSuccessToastsForTitle(title) {
 export class KTVSync {
     constructor() {
         this.videoContainer = document.getElementById('fullPlayerVideoContainer');
+        this.playerHost = document.getElementById('fullPlayerYouTubeHost');
         this.coverElement = document.getElementById('fullPlayerCover');
         this.placeholderElement = document.getElementById('fullPlayerPlaceholder');
         this.artworkContainer = document.querySelector('.full-player-artwork-container');
 
         this.player = null;
+        this.playerCreationPromise = null;
+        this.playerCreateStartedAt = 0;
         this.currentVideoId = null;
         this.lastSyncTime = 0;
         this.syncThreshold = 0.3;  // 300ms同步阈值
@@ -52,6 +55,47 @@ export class KTVSync {
         this.initYouTubeAPI();
     }
 
+    hasEmbeddedPlayer() {
+        return Boolean(this.player && this.playerHost?.querySelector('iframe'));
+    }
+
+    ensurePlayerMount() {
+        if (!this.playerHost) {
+            return null;
+        }
+
+        let mount = this.playerHost.querySelector('#fullPlayerYouTube');
+        if (!mount) {
+            mount = document.createElement('div');
+            mount.id = 'fullPlayerYouTube';
+            this.playerHost.replaceChildren(mount);
+        }
+
+        return mount;
+    }
+
+    resetPlayerInstance() {
+        if (this.player && typeof this.player.destroy === 'function') {
+            try {
+                this.player.destroy();
+            } catch (error) {
+                console.warn('[KTV] 销毁旧播放器失败:', error);
+            }
+        }
+
+        if (this.playerHost) {
+            this.playerHost.replaceChildren();
+            const mount = document.createElement('div');
+            mount.id = 'fullPlayerYouTube';
+            this.playerHost.appendChild(mount);
+        }
+
+        this.player = null;
+        this.playerReady = false;
+        this.playerCreationPromise = null;
+        this.playerCreateStartedAt = 0;
+    }
+
     /**
      * 初始化 YouTube IFrame API
      */
@@ -63,9 +107,16 @@ export class KTVSync {
         };
 
         // 如果 API 已经加载（热重载情况）
-        if (window.YT && window.YT.Player) {
-            console.log('[KTV] YouTube API 已存在，直接创建播放器');
-            this.createPlayer();  // 不需要 await，因为在构造函数中
+        if (window.YT) {
+            if (typeof window.YT.ready === 'function') {
+                console.log('[KTV] YouTube API 已存在，等待 ready 后创建播放器');
+                window.YT.ready(() => {
+                    void this.createPlayer();
+                });
+            } else if (window.YT.Player) {
+                console.log('[KTV] YouTube API 已存在，直接创建播放器');
+                void this.createPlayer();
+            }
         }
     }
 
@@ -73,40 +124,68 @@ export class KTVSync {
      * 创建 YouTube 播放器实例
      */
     async createPlayer() {
-        if (this.player) {
+        if (this.hasEmbeddedPlayer()) {
             console.log('[KTV] 播放器已存在，跳过创建');
             return;
         }
 
-        try {
-            // 从服务器读取控件配置
-            const controlsEnabled = await this.getYouTubeControlsSetting();
-            console.log(`[KTV] 创建播放器，控件配置: ${controlsEnabled ? '启用' : '禁用'}`);
-
-            this.player = new YT.Player('fullPlayerYouTube', {
-                height: '100%',
-                width: '100%',
-                playerVars: {
-                    autoplay: 0,
-                    controls: controlsEnabled ? 1 : 0,  // 根据配置显示/隐藏 YouTube 控件
-                    disablekb: controlsEnabled ? 0 : 1,  // 根据配置启用/禁用键盘控制
-                    fs: 1,  // 启用全屏按钮
-                    modestbranding: 1,  // 隐藏 YouTube logo
-                    rel: 0,  // 不显示相关视频
-                    showinfo: 0,  // 不显示视频信息
-                    iv_load_policy: 3,  // 隐藏视频注释
-                    mute: 1  // 静音（音频走服务器）
-                },
-                events: {
-                    'onReady': (event) => this.onPlayerReady(event),
-                    'onStateChange': (event) => this.onPlayerStateChange(event),
-                    'onError': (event) => this.onPlayerError(event)
-                }
-            });
-            console.log('[KTV] YouTube 播放器已创建');
-        } catch (e) {
-            console.error('[KTV] 创建播放器失败:', e);
+        const mount = this.ensurePlayerMount();
+        if (!mount) {
+            console.error('[KTV] 未找到 YouTube 播放器挂载点');
+            return;
         }
+
+        if (this.player && !this.hasEmbeddedPlayer()) {
+            console.warn('[KTV] 检测到播放器实例存在但 iframe 缺失，重建播放器');
+            this.resetPlayerInstance();
+        }
+
+        if (this.playerCreationPromise) {
+            return this.playerCreationPromise;
+        }
+
+        this.playerCreationPromise = (async () => {
+            try {
+                this.playerCreateStartedAt = Date.now();
+                // 从服务器读取控件配置
+                const controlsEnabled = await this.getYouTubeControlsSetting();
+                console.log(`[KTV] 创建播放器，控件配置: ${controlsEnabled ? '启用' : '禁用'}`);
+
+                const nextMount = this.ensurePlayerMount();
+                if (!nextMount) {
+                    throw new Error('YouTube 播放器挂载点不存在');
+                }
+
+                this.player = new YT.Player(nextMount, {
+                    height: '100%',
+                    width: '100%',
+                    playerVars: {
+                        autoplay: 0,
+                        controls: controlsEnabled ? 1 : 0,
+                        disablekb: controlsEnabled ? 0 : 1,
+                        fs: 1,
+                        modestbranding: 1,
+                        rel: 0,
+                        showinfo: 0,
+                        iv_load_policy: 3,
+                        mute: 1
+                    },
+                    events: {
+                        'onReady': (event) => this.onPlayerReady(event),
+                        'onStateChange': (event) => this.onPlayerStateChange(event),
+                        'onError': (event) => this.onPlayerError(event)
+                    }
+                });
+                console.log('[KTV] YouTube 播放器已创建');
+            } catch (e) {
+                console.error('[KTV] 创建播放器失败:', e);
+                this.player = null;
+            } finally {
+                this.playerCreationPromise = null;
+            }
+        })();
+
+        return this.playerCreationPromise;
     }
 
     /**
@@ -115,6 +194,12 @@ export class KTVSync {
     onPlayerReady(event) {
         console.log('[KTV] YouTube 播放器就绪');
         this.playerReady = true;
+
+        const currentStatus = player.getStatus();
+        if (currentStatus?.current_meta?.type === 'youtube') {
+            console.log('[KTV] 播放器就绪后恢复当前 YouTube 状态');
+            this.updateStatus(currentStatus);
+        }
     }
 
     /**
@@ -190,6 +275,26 @@ export class KTVSync {
 
         // 判断是否需要切换视频模式
         if (isYouTube) {
+            const playerCreationTimedOut = this.player && !this.playerReady
+                && this.playerCreateStartedAt > 0
+                && (Date.now() - this.playerCreateStartedAt) > 2500;
+
+            if (playerCreationTimedOut) {
+                console.warn('[KTV] 播放器创建超时，重建 YouTube 播放器');
+                this.resetPlayerInstance();
+            }
+
+            if ((!this.player || !this.hasEmbeddedPlayer()) && window.YT) {
+                console.log('[KTV] 检测到 YouTube 播放状态但播放器未创建，开始补建播放器');
+                if (typeof window.YT.ready === 'function') {
+                    window.YT.ready(() => {
+                        void this.createPlayer();
+                    });
+                } else if (window.YT.Player) {
+                    void this.createPlayer();
+                }
+                return;
+            }
             this.enableVideoMode(videoId, mpvState);
         } else {
             this.disableVideoMode();
@@ -239,6 +344,7 @@ export class KTVSync {
             this.player = null;
             this.playerReady = false;
             this.currentVideoId = null;
+            this.ensurePlayerMount();
 
             // 重新创建播放器（会自动读取新配置）
             await this.createPlayer();
@@ -319,7 +425,7 @@ export class KTVSync {
 
         // 如果视频ID改变，加载新视频
         if (videoId !== this.currentVideoId) {
-            this.loadVideo(videoId);
+            this.loadVideo(videoId, mpvState);
         }
 
         // 同步播放状态
@@ -362,7 +468,7 @@ export class KTVSync {
     /**
      * 加载视频
      */
-    loadVideo(videoId) {
+    loadVideo(videoId, mpvState = {}) {
         if (!this.player || !this.playerReady) {
             console.error('[KTV] 播放器未就绪');
             return;
@@ -380,11 +486,24 @@ export class KTVSync {
         console.log('[KTV] 加载视频:', videoId);
 
         try {
-            // 使用 cueVideoById 预加载，不自动播放
-            this.player.cueVideoById({
-                videoId: videoId,
-                startSeconds: 0
-            });
+            const rawServerTime = mpvState.time_pos ?? mpvState.time ?? 0;
+            const serverTime = Number(rawServerTime);
+            const startSeconds = Number.isFinite(serverTime)
+                ? Math.max(0, serverTime + this.videoOffset)
+                : 0;
+            const shouldPlay = mpvState.paused === false;
+
+            if (shouldPlay) {
+                this.player.loadVideoById({
+                    videoId,
+                    startSeconds
+                });
+            } else {
+                this.player.cueVideoById({
+                    videoId,
+                    startSeconds
+                });
+            }
         } catch (e) {
             console.error('[KTV] 加载视频失败:', e);
         }

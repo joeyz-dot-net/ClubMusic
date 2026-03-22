@@ -15,7 +15,7 @@ import { localFiles } from './local.js?v=20';
 import { settingsManager } from './settingsManager.js?v=4';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
-import { ktvSync } from './ktv.js?v=21';
+import { ktvSync } from './ktv.js?v=24';
 import { playLock } from './playLock.js';
 import { unavailableSongs } from './unavailable.js';
 
@@ -2340,6 +2340,7 @@ app.playSong = app.playSong.bind(app);
 app.renderPlaylist = app.renderPlaylist.bind(app);
 app.player = player;
 app.settingsManager = settingsManager;
+app.ktvSync = ktvSync;
 app.modules = {
     api,
     player,
@@ -2348,9 +2349,11 @@ app.modules = {
     searchManager,
     themeManager,
     settingsManager,
-    navManager
+    navManager,
+    ktvSync
 };
 window.app = app;
+window.ktvSync = ktvSync;
 
 console.log('💡 模块化音乐播放器已加载');
 console.log('💡 输入 app.diagnose.printHelp() 查看诊断命令');

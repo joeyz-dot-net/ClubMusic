@@ -2146,11 +2146,13 @@ textarea:focus-visible,
 }
 
 /* 隐藏 YouTube 控件（通过配置控制） */
+#fullPlayerYouTubeHost.youtube-controls-hidden,
 #fullPlayerYouTube.youtube-controls-hidden {
     pointer-events: none;
 }
 
 /* YouTube iframe 禁用交互时的样式 */
+#fullPlayerYouTubeHost.youtube-controls-hidden iframe,
 #fullPlayerYouTube.youtube-controls-hidden iframe {
     pointer-events: none;
 }
@@ -2176,9 +2178,25 @@ textarea:focus-visible,
     left: 0;
 }
 
+#fullPlayerYouTubeHost,
 #fullPlayerYouTube {
     width: 100%;
     height: 100%;
+    display: block;
+}
+
+#fullPlayerYouTubeHost {
+    position: absolute;
+    inset: 0;
+}
+
+#fullPlayerYouTubeHost iframe,
+#fullPlayerYouTube {
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
 }
 
 /* 视频模式下隐藏封面和占位符 */

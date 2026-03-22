@@ -32,7 +32,7 @@
 	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
 	<meta name="renderer" content="webkit" />
 	<!-- CSS Stylesheets -->
-	<link rel="stylesheet" href="/static/css/base.css?v=1" />
+	<link rel="stylesheet" href="/static/css/base.css?v=2" />
 	<!-- 调试面板模块 CSS -->
 	<!-- 主题 CSS 将由 themeManager 动态加载 -->
 	<link rel="stylesheet" href="/static/css/responsive.css?v=1" />
@@ -84,7 +84,7 @@
 				<div class="full-player-artwork-container">
 					<!-- KTV YouTube iframe 播放器 -->
 					<div id="fullPlayerVideoContainer" style="display:none; width:100%; height:100%; background:#000;">
-						<div id="fullPlayerYouTube"></div>
+						<div id="fullPlayerYouTubeHost"><div id="fullPlayerYouTube"></div></div>
 					</div>
 
 					<!-- 封面图片（音乐模式） -->
@@ -413,7 +413,7 @@
 	<!-- YouTube IFrame Player API -->
 	<script src="https://www.youtube.com/iframe_api"></script>
 
-	<script type="module" src="/static/js/main.js?v=75"></script>
+	<script type="module" src="/static/js/main.js?v=78"></script>
 
 	<!-- 调试面板模块 HTML 模板（由 debug-panel.module.js 动态创建） -->
 	<template id="debugPanelTemplate">
