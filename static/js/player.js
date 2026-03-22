@@ -268,6 +268,7 @@ export class Player {
 
     async next() {
         const result = this._ensureSuccess(await api.next(), '下一首播放失败');
+        this.emit('next', result);
         // 利用响应中的 current_meta 立即更新 UI，无需等待下次 1000ms 轮询
         if (result?.status === 'OK' && result?.current && this.status) {
             this._markLocalStatusBarrier();
@@ -276,7 +277,6 @@ export class Player {
                 current_meta: result.current,
             }, { source: 'local' });
         }
-        this.emit('next', result);
         return result;
     }
 

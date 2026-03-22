@@ -2,20 +2,20 @@
 // 这是一个使用新模块系统的示例文件
 
 import { api } from './api.js?v=2';
-import { player } from './player.js?v=11';
-import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=15';
-import { playlistsManagement } from './playlists-management.js?v=14';
-import { volumeControl } from './volume.js?v=9';
-import { searchManager } from './search.js?v=20';
+import { player } from './player.js?v=12';
+import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=16';
+import { playlistsManagement } from './playlists-management.js?v=15';
+import { volumeControl } from './volume.js?v=10';
+import { searchManager } from './search.js?v=21';
 import { themeManager } from './themeManager.js';
 import { debug } from './debug.js';
 import { Toast, formatTime } from './ui.js';
 import { focusFirstFocusable, isMobile, isIPad, restoreFocus, ThumbnailManager, trapFocusInContainer } from './utils.js';
-import { localFiles } from './local.js?v=13';
+import { localFiles } from './local.js?v=14';
 import { settingsManager } from './settingsManager.js?v=3';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
-import { ktvSync } from './ktv.js?v=16';
+import { ktvSync } from './ktv.js?v=17';
 import { playLock } from './playLock.js';
 import { unavailableSongs } from './unavailable.js';
 
@@ -43,6 +43,9 @@ class MusicPlayerApp {
         this._pendingPlaylistUpdatedAt = null;
         this._skipNextLoadCurrent = false;  // 手动切歌时跳过 loadCurrent() 网络请求
         this._pendingStartupStatusSync = false;
+        this._hasInitialPlaylistRender = false;
+        this._pendingManualQueueMutationRefresh = false;
+        this._manualQueueRefreshInFlight = null;
 
         // 初始化缩略图管理器 - 用于处理YouTube缩略图降级
         this.thumbnailManager = new ThumbnailManager();
@@ -304,6 +307,17 @@ class MusicPlayerApp {
             if (currentUrl !== this._lastRenderedSongUrl) {
                 const hasPlaylistUpdatedFlag = Object.prototype.hasOwnProperty.call(status || {}, 'playlist_updated');
                 const playlistUpdated = status?.playlist_updated === true;
+                const hasMatchingManualQueueRefresh = playlistUpdated
+                    && this._manualQueueRefreshInFlight?.url === currentUrl
+                    && this._manualQueueRefreshInFlight.expiresAt > Date.now();
+                if (hasMatchingManualQueueRefresh) {
+                    if (hasPlaylistUpdatedAt) {
+                        this._commitPlaylistUpdatedAt(rawPlaylistUpdatedAt);
+                    }
+                    this._skipNextPlaylistChangedRefresh = true;
+                    this._pendingPlaylistUpdatedAt = null;
+                    return;
+                }
                 if (this._skipNextLoadCurrent) {
                     // 由 next/prev 直接触发：跳过 loadCurrent() 请求，直接重渲染
                     this._skipNextLoadCurrent = false;
@@ -312,9 +326,16 @@ class MusicPlayerApp {
                     console.log('[歌曲变化] ✓ 手动切歌，直接重渲染（跳过 loadCurrent）');
                 } else {
                     try {
+                        if (!hasPlaylistUpdatedFlag && this._pendingManualQueueMutationRefresh) {
+                            this._manualQueueRefreshInFlight = {
+                                url: currentUrl,
+                                expiresAt: Date.now() + 2000,
+                            };
+                        }
+
                         if (isStartupStatusSync && !hasPlaylistUpdatedFlag) {
                             if (hasPlaylistUpdatedAt) {
-                                this._lastSeenPlaylistUpdatedAt = rawPlaylistUpdatedAt;
+                                this._commitPlaylistUpdatedAt(rawPlaylistUpdatedAt);
                             }
                             this._lastRenderedSongUrl = currentUrl;
                             this.renderPlaylist();
@@ -330,35 +351,45 @@ class MusicPlayerApp {
                             }
                             await playlistManager.loadCurrent();
                             if (hasPlaylistUpdatedAt) {
-                                this._lastSeenPlaylistUpdatedAt = rawPlaylistUpdatedAt;
+                                this._commitPlaylistUpdatedAt(rawPlaylistUpdatedAt);
                             }
                             if (playlistUpdated) {
                                 this._pendingPlaylistUpdatedAt = null;
                             }
                         } else if (hasPlaylistUpdatedAt) {
-                            this._lastSeenPlaylistUpdatedAt = rawPlaylistUpdatedAt;
+                            this._commitPlaylistUpdatedAt(rawPlaylistUpdatedAt);
                         }
                         this._lastRenderedSongUrl = currentUrl;
                         this.renderPlaylist();
+                        this._pendingManualQueueMutationRefresh = false;
                         console.log(hasPlaylistUpdatedFlag && !playlistUpdated
                             ? '[歌曲变化] ✓ 仅重渲染当前队列视图'
                             : '[歌曲变化] ✓ 已刷新播放列表数据');
                     } catch (error) {
+                        this._pendingManualQueueMutationRefresh = false;
                         console.warn('[歌曲变化] 刷新播放列表数据失败，保留待重试状态:', error);
                         this.renderPlaylist();
                     }
                 }
+            } else if (hasPlaylistUpdatedAt && status?.playlist_updated === true && (
+                this._skipNextPlaylistChangedRefresh
+                || (this._manualQueueRefreshInFlight?.url === currentUrl
+                    && this._manualQueueRefreshInFlight.expiresAt > Date.now())
+            )) {
+                this._commitPlaylistUpdatedAt(rawPlaylistUpdatedAt);
+                this._skipNextPlaylistChangedRefresh = true;
+                this._pendingPlaylistUpdatedAt = null;
             } else if (playlistVersionChanged && !Object.prototype.hasOwnProperty.call(status || {}, 'playlist_updated')) {
                 try {
                     await playlistManager.loadCurrent();
-                    this._lastSeenPlaylistUpdatedAt = rawPlaylistUpdatedAt;
+                    this._commitPlaylistUpdatedAt(rawPlaylistUpdatedAt);
                     this.renderPlaylist();
                     console.log('[歌单版本] ✓ 轮询检测到歌单变更，已刷新播放列表数据');
                 } catch (error) {
                     console.warn('[歌单版本] 刷新播放列表数据失败，保留待重试状态:', error);
                 }
             } else if (hasPlaylistUpdatedAt && this._lastSeenPlaylistUpdatedAt === 0) {
-                this._lastSeenPlaylistUpdatedAt = rawPlaylistUpdatedAt;
+                this._commitPlaylistUpdatedAt(rawPlaylistUpdatedAt);
             }
         });
 
@@ -371,6 +402,7 @@ class MusicPlayerApp {
         });
 
         // 手动切歌时设置标志，避免重复的 loadCurrent() 网络请求
+        player.on('next', () => { this._pendingManualQueueMutationRefresh = true; });
         player.on('prev', () => { this._skipNextLoadCurrent = true; });
         player.on('play', () => { this._skipNextLoadCurrent = true; });
 
@@ -402,6 +434,7 @@ class MusicPlayerApp {
         player.on('playlistChanged', async () => {
             if (this._skipNextPlaylistChangedRefresh) {
                 this._skipNextPlaylistChangedRefresh = false;
+                this._manualQueueRefreshInFlight = null;
                 console.log('[WS] 歌单变更刷新已由 statusUpdate 合并处理，跳过重复刷新');
                 return;
             }
@@ -409,7 +442,7 @@ class MusicPlayerApp {
             try {
                 await playlistManager.loadCurrent();
                 if (this._pendingPlaylistUpdatedAt) {
-                    this._lastSeenPlaylistUpdatedAt = this._pendingPlaylistUpdatedAt;
+                    this._commitPlaylistUpdatedAt(this._pendingPlaylistUpdatedAt);
                     this._pendingPlaylistUpdatedAt = null;
                 }
                 this.renderPlaylist();
@@ -417,6 +450,15 @@ class MusicPlayerApp {
                 console.warn('[WS] 刷新歌单失败:', e);
             }
         });
+    }
+
+    _commitPlaylistUpdatedAt(value) {
+        const nextValue = Number(value ?? 0);
+        if (!Number.isFinite(nextValue) || nextValue <= 0) {
+            return;
+        }
+
+        this._lastSeenPlaylistUpdatedAt = Math.max(this._lastSeenPlaylistUpdatedAt, nextValue);
     }
 
     // 更新循环按钮的视觉状态
@@ -698,6 +740,7 @@ class MusicPlayerApp {
             }
             
             this.renderPlaylist();
+            this._hasInitialPlaylistRender = true;
 
             // 激活队列导航按钮
             const navItems = document.querySelectorAll('.nav-item');
@@ -2078,8 +2121,11 @@ class MusicPlayerApp {
             }
             
             // 【用户隔离】不再强制切换到 default，保持 initPlaylist() 中从 localStorage 恢复的歌单选择
-            // 只渲染列表，不改变当前歌单ID
-            this.renderPlaylist();
+            // initPlaylist() 已完成首次渲染时，跳过这里的重复 renderPlaylist()
+            if (!this._hasInitialPlaylistRender) {
+                this.renderPlaylist();
+                this._hasInitialPlaylistRender = true;
+            }
         }
         
         // 绑定本地歌曲关闭按钮
