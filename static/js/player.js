@@ -53,6 +53,10 @@ export class Player {
             console.log('[Player] 轮询已被操作锁恢复');
         });
     }
+
+    _getMpvData(status = this.status) {
+        return status?.mpv_state || status?.mpv || {};
+    }
     
     // 事件监听
     on(event, callback) {
@@ -118,7 +122,7 @@ export class Player {
         }
 
         const currentStatus = this.status;
-        const currentMpvState = currentStatus.mpv_state || currentStatus.mpv || {};
+        const currentMpvState = this._getMpvData(currentStatus);
         const nextMpvState = {
             ...currentMpvState,
             ...mpvPatch,
@@ -180,7 +184,7 @@ export class Player {
         }
 
         const meta = status.current_meta || {};
-        const mpvState = status.mpv_state || status.mpv || {};
+        const mpvState = this._getMpvData(status);
         return JSON.stringify({
             url: meta.url || meta.rel || meta.raw_url || '',
             title: meta.title || meta.name || '',
@@ -354,7 +358,7 @@ export class Player {
     // 进度控制
     async seek(percent) {
         const result = this._ensureSuccess(await api.seek(percent), '跳转失败');
-        const currentMpvState = this.status?.mpv_state || this.status?.mpv || {};
+        const currentMpvState = this._getMpvData();
         const duration = currentMpvState.duration ?? 0;
         const nextTimePos = result?.position !== undefined
             ? result.position
@@ -677,7 +681,7 @@ export class Player {
         }
 
         // 记录插值参考点，供前端 RAF 循环推算当前进度
-        const mpvData = status?.mpv_state || status?.mpv || {};
+        const mpvData = this._getMpvData(status);
         const timePos = mpvData.time_pos ?? mpvData.time ?? null;
         const paused  = mpvData.paused ?? true;
         if (timePos !== null) {
@@ -706,7 +710,7 @@ export class Player {
             return this._interpTime ?? 0;
         }
         const elapsed  = (Date.now() - this._interpStamp) / 1000;
-        const mpvData  = this.status?.mpv_state || this.status?.mpv || {};
+        const mpvData  = this._getMpvData();
         const duration = mpvData.duration ?? 0;
         const result   = this._interpTime + elapsed;
         return duration > 0 ? Math.min(result, duration) : result;
@@ -714,7 +718,7 @@ export class Player {
 
     // 判断是否正在播放
     isPlaying() {
-        const mpvData = this.status?.mpv_state || this.status?.mpv || {};
+        const mpvData = this._getMpvData();
         return mpvData.paused === false;
     }
 }

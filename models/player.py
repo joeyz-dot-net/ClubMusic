@@ -166,6 +166,19 @@ class MusicPlayer:
                 return True
             if "youtu" in s.lower():
                 return True
+            lowered = s.lower()
+            # 直链查询串或媒体参数片段不应显示为标题
+            if (
+                "mime=" in lowered
+                or "clen=" in lowered
+                or "dur=" in lowered
+                or "expire=" in lowered
+                or "source=youtube" in lowered
+                or "videoplayback" in lowered
+            ):
+                return True
+            if s.count("&") >= 3 and s.count("=") >= 3:
+                return True
             # YouTube video ID（11字符，仅字母数字和 -_）不作为有效标题
             if len(s) == 11 and all(c.isalnum() or c in ("-", "_") for c in s):
                 return True

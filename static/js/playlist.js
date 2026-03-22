@@ -4,7 +4,7 @@ import { Toast, loading, ConfirmModal } from './ui.js';
 import { operationLock } from './operationLock.js';
 import { thumbnailManager, escapeHTML, focusFirstFocusable, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js?v=2';
 import { i18n } from './i18n.js';
-import { player } from './player.js?v=18';
+import { player } from './player.js?v=19';
 import { unavailableSongs } from './unavailable.js';
 import { executePlayNow, rerenderQueueWithCurrentMeta } from './playNow.js?v=18';
 import { getCurrentPlaybackStatus } from './playbackState.js?v=16';
@@ -1412,6 +1412,10 @@ function bindPlaylistItemDelegates(container) {
                 fullPlayer.style.display = 'flex';
                 setTimeout(() => {
                     fullPlayer.classList.add('show');
+                    const status = window.app?.player?.getStatus?.();
+                    if (status) {
+                        window.app?.ktvSync?.updateStatus?.(status);
+                    }
                 }, 10);
             }
             return;

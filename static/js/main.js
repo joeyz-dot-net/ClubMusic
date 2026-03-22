@@ -2,8 +2,8 @@
 // 这是一个使用新模块系统的示例文件
 
 import { api } from './api.js?v=2';
-import { player } from './player.js?v=18';
-import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=33';
+import { player } from './player.js?v=19';
+import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=34';
 import { playlistsManagement } from './playlists-management.js?v=23';
 import { volumeControl } from './volume.js?v=14';
 import { searchManager } from './search.js?v=36';
@@ -15,7 +15,7 @@ import { localFiles } from './local.js?v=20';
 import { settingsManager } from './settingsManager.js?v=6';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
-import { ktvSync } from './ktv.js?v=25';
+import { ktvSync } from './ktv.js?v=27';
 import { playLock } from './playLock.js';
 import { unavailableSongs } from './unavailable.js';
 
@@ -54,6 +54,10 @@ class MusicPlayerApp {
         this.isArtworkExpanded = false;
 
         // ✅ playlistManager 会在 constructor 中自动从 localStorage 恢复选择歌单
+    }
+
+    getMpvData(status) {
+        return status?.mpv_state || status?.mpv || {};
     }
 
     async init() {
@@ -252,7 +256,7 @@ class MusicPlayerApp {
                 this.lastLoopMode = status.loop_mode;
             }
 
-            const mpvData = status?.mpv_state || status?.mpv || {};
+            const mpvData = this.getMpvData(status);
             const paused = mpvData.paused ?? true;
             const volume = mpvData.volume;
             
@@ -606,7 +610,8 @@ class MusicPlayerApp {
         }
 
         // 播放/暂停按钮 SVG
-        const isPlaying = (status?.mpv_state?.paused ?? status?.mpv?.paused ?? true) === false;
+        const mpvData = this.getMpvData(status);
+        const isPlaying = mpvData.paused === false;
         if (this.elements.nppPlayPause) {
             const path = this.elements.nppPlayPause.querySelector('svg path');
             if (path) {
@@ -618,7 +623,6 @@ class MusicPlayerApp {
         }
 
         // 时长
-        const mpvData = status?.mpv_state || status?.mpv || {};
         const duration = mpvData.duration || 0;
         if (this.elements.nppDuration) {
             this.elements.nppDuration.textContent = formatTime(duration);
@@ -644,7 +648,7 @@ class MusicPlayerApp {
 
     _updateProgressBar() {
         const status = player.getStatus();
-        const mpvData = status?.mpv_state || status?.mpv || {};
+        const mpvData = this.getMpvData(status);
         const duration = mpvData.duration || 0;
         if (duration <= 0) return;
 
@@ -693,7 +697,8 @@ class MusicPlayerApp {
             // 恢复播放状态
             try {
                 const status = await player.refreshStatus();
-                const paused = status?.mpv_state?.paused ?? status?.mpv?.paused ?? true;
+                const mpvData = this.getMpvData(status);
+                const paused = mpvData.paused ?? true;
                 if (!paused) {
                     console.log('[恢复状态] 音乐正在播放，保持播放状态');
                 } else {
@@ -1168,7 +1173,7 @@ class MusicPlayerApp {
 
                 // 更新时间显示
                 const status = player.getStatus();
-                const mpvData = status?.mpv_state || status?.mpv || {};
+                const mpvData = this.getMpvData(status);
                 if (mpvData.duration && this.elements.fullPlayerCurrentTime) {
                     const currentTime = (percent / 100) * mpvData.duration;
                     this.elements.fullPlayerCurrentTime.textContent = formatTime(currentTime);
@@ -1257,7 +1262,7 @@ class MusicPlayerApp {
                 const rect = this.elements.nppProgressBar.getBoundingClientRect();
                 const percent = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
                 const status = player.getStatus();
-                const duration = status?.mpv_state?.duration || status?.mpv?.duration || 0;
+                const duration = this.getMpvData(status).duration || 0;
                 if (duration > 0) {
                     player.seek(percent).catch(err => console.warn('[NPP Seek] Error:', err));
                 }
@@ -1271,6 +1276,10 @@ class MusicPlayerApp {
                     this.elements.fullPlayer.style.display = 'flex';
                     setTimeout(() => {
                         this.elements.fullPlayer.classList.add('show');
+                        const status = player.getStatus();
+                        if (status) {
+                            ktvSync.updateStatus(status);
+                        }
                     }, 10);
                 }
             });
@@ -1327,7 +1336,7 @@ class MusicPlayerApp {
         }
 
         // 更新进度信息（支持两种字段名）
-        const mpvData = status?.mpv_state || status?.mpv || {};
+        const mpvData = this.getMpvData(status);
         if (mpvData) {
             const duration = mpvData.duration || 0;
 
@@ -1379,7 +1388,7 @@ class MusicPlayerApp {
         }
 
         // 更新播放/暂停按钮状态
-        const isPlaying = (status?.mpv_state?.paused ?? status?.mpv?.paused ?? true) === false;
+        const isPlaying = mpvData.paused === false;
         
         // 更新按钮文本/图标
         if (this.elements.playPauseBtn) {
@@ -1541,6 +1550,10 @@ class MusicPlayerApp {
                     // 触发动画：先设置 display，然后添加 show 类
                     setTimeout(() => {
                         this.elements.fullPlayer.classList.add('show');
+                        const nextStatus = player.getStatus();
+                        if (nextStatus) {
+                            ktvSync.updateStatus(nextStatus);
+                        }
                     }, 10);
                 }
                 return;

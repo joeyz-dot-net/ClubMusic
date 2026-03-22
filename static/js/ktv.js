@@ -4,7 +4,7 @@
  */
 
 import { api } from './api.js?v=2';
-import { player } from './player.js?v=18';
+import { player } from './player.js?v=19';
 import { Toast } from './ui.js';
 import { i18n } from './i18n.js';
 import { unavailableSongs } from './unavailable.js';
@@ -42,6 +42,7 @@ export class KTVSync {
         this._failedVideoId = null;  // 记录播放失败的视频ID，避免无限重试
         this.videoOffset = 0;  // 视频时间偏移量（秒），正值=视频提前，负值=视频延迟
         this.loadOffset();
+        this.videoLoadSettlingUntil = 0;
 
         // 性能监控指标
         this.metrics = {
@@ -55,8 +56,27 @@ export class KTVSync {
         this.initYouTubeAPI();
     }
 
+    getMpvState(status) {
+        return status?.mpv_state || status?.mpv || {};
+    }
+
     hasEmbeddedPlayer() {
         return Boolean(this.player && this.playerHost?.querySelector('iframe'));
+    }
+
+    isVideoSurfaceVisible() {
+        const fullPlayer = document.getElementById('fullPlayer');
+        if (!fullPlayer || !this.videoContainer || !this.playerHost) {
+            return false;
+        }
+
+        if (getComputedStyle(fullPlayer).display === 'none') {
+            return false;
+        }
+
+        const videoRect = this.videoContainer.getBoundingClientRect();
+        const hostRect = this.playerHost.getBoundingClientRect();
+        return videoRect.width > 0 && videoRect.height > 0 && hostRect.width > 0 && hostRect.height > 0;
     }
 
     ensurePlayerMount() {
@@ -98,6 +118,7 @@ export class KTVSync {
         this.playerReady = false;
         this.playerCreationPromise = null;
         this.playerCreateStartedAt = 0;
+        this.videoLoadSettlingUntil = 0;
     }
 
     /**
@@ -272,13 +293,17 @@ export class KTVSync {
      */
     updateStatus(status) {
         const currentMeta = status?.current_meta || {};
-        const mpvState = status?.mpv_state || status?.mpv || {};
+        const mpvState = this.getMpvState(status);
 
         const videoId = currentMeta.video_id;
         const isYouTube = currentMeta.type === 'youtube' && videoId;
 
         // 判断是否需要切换视频模式
         if (isYouTube) {
+            if (!this.isVideoSurfaceVisible()) {
+                return;
+            }
+
             const playerCreationTimedOut = this.player && !this.playerReady
                 && this.playerCreateStartedAt > 0
                 && (Date.now() - this.playerCreateStartedAt) > 2500;
@@ -453,6 +478,7 @@ export class KTVSync {
             this.isVideoMode = false;
             this.lastSyncTime = 0;
             this.isSyncing = false;
+            this.videoLoadSettlingUntil = 0;
             this.resetMetrics();
             console.log('[KTV] 已切换到音乐模式');
         }
@@ -476,6 +502,7 @@ export class KTVSync {
         this.isSyncing = false;
         this.resetMetrics();
         this.currentVideoId = videoId;
+        this.videoLoadSettlingUntil = Date.now() + 1500;
         console.log('[KTV] 加载视频:', videoId);
 
         try {
@@ -556,18 +583,28 @@ export class KTVSync {
             const isPlayerPlaying = playerState === YT.PlayerState.PLAYING;
             const isPlayerPaused = playerState === YT.PlayerState.PAUSED || playerState === YT.PlayerState.CUED;
             const isPlayerPending = playerState === YT.PlayerState.UNSTARTED || playerState === YT.PlayerState.BUFFERING;
+            const now = Date.now();
 
             // 同步暂停/播放状态
             if (isPaused && isPlayerPlaying) {
                 console.log('[KTV] 服务器已暂停，暂停视频');
                 this.player.pauseVideo();
-            } else if (!isPaused && (isPlayerPaused || isPlayerPending)) {
+            } else if (!isPaused && isPlayerPaused) {
                 console.log('[KTV] 服务器正在播放，播放视频');
                 this.player.playVideo();
             }
 
+            if (isPlayerPending) {
+                this.lastSyncTime = now;
+                return;
+            }
+
+            if (now < this.videoLoadSettlingUntil) {
+                this.lastSyncTime = now;
+                return;
+            }
+
             // 同步时间位置（每1秒最多同步一次）
-            const now = Date.now();
             if (now - this.lastSyncTime > 1000) {
                 const videoTime = Number(this.player.getCurrentTime());
                 if (!Number.isFinite(videoTime)) {
