@@ -101,6 +101,23 @@ export class PlaylistManager {
         await Promise.all([this.loadCurrent(), this.loadAll()]);
     }
 
+    syncSelectedPlaylistFromCache() {
+        const activeDefaultId = this.getActiveDefaultId();
+        let targetPlaylist = this.playlists.find((playlist) => playlist.id === this.selectedPlaylistId);
+
+        if (!targetPlaylist && this.selectedPlaylistId !== activeDefaultId) {
+            this.setSelectedPlaylist(activeDefaultId);
+            targetPlaylist = this.playlists.find((playlist) => playlist.id === activeDefaultId) || null;
+        }
+
+        const nextSongs = Array.isArray(targetPlaylist?.songs) ? [...targetPlaylist.songs] : [];
+        this.currentPlaylist = nextSongs;
+        this.currentPlaylistName = targetPlaylist?.name || i18n.t('playlist.current');
+        this.updateUrlSet();
+
+        return targetPlaylist;
+    }
+
     replacePlaylistSongsInCache(playlistId, songs = []) {
         const nextSongs = Array.isArray(songs) ? songs : [];
         let nextPlaylistName = null;
@@ -2414,22 +2431,18 @@ function showHistoryActionMenu(song, historyModal, removeFromHistoryFn, rerender
 // 立即播放：将歌曲插入队列顶部并播放
 async function handleHistoryPlayNow(song) {
     try {
-        const currentPlaylistId = playlistManager.getSelectedPlaylistId() || playlistManager.getActiveDefaultId();
+        const activeDefaultId = playlistManager.getActiveDefaultId();
+        const songData = {
+            url: song.url,
+            title: song.title,
+            type: song.type || 'local',
+            thumbnail_url: song.thumbnail_url || ''
+        };
 
         await executePlayNow({
-            song: {
-                url: song.url,
-                title: song.title,
-                type: song.type || 'local',
-                thumbnail_url: song.thumbnail_url || ''
-            },
-            addToQueueTop: () => playlistManager.addSong(currentPlaylistId, {
-                url: song.url,
-                title: song.title,
-                type: song.type || 'local',
-                thumbnail_url: song.thumbnail_url || ''
-            }, 0),
-            refreshPlaylist: () => playlistManager.refreshAll(),
+            song: songData,
+            addToQueueTop: () => playlistManager.addSong(activeDefaultId, songData, 0),
+            refreshPlaylist: () => playlistManager.insertSongIntoPlaylistCache(activeDefaultId, songData, 0),
             addFailedMessage: i18n.t('search.addSongFailed')
         });
     } catch (error) {
