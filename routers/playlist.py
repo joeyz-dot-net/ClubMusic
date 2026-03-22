@@ -468,7 +468,7 @@ async def clear_playlist(
                 player.current_index = -1
                 player.current_meta = None
 
-        await _broadcast_state(player)
+        await _broadcast_state(player, playlist_updated=True)
         return {"status": "OK", "message": "清空成功"}
     except Exception as e:
         return error_response("[POST /playlists/{id}/clear] 清空歌单异常", exc=e, _logger=logger)
@@ -519,7 +519,7 @@ async def remove_song_from_playlist(
                 elif index < player.current_index:
                     player.current_index -= 1
 
-        await _broadcast_state(player)
+        await _broadcast_state(player, playlist_updated=True)
         return JSONResponse({"status": "OK", "message": "删除成功"})
 
     except Exception as e:
@@ -700,7 +700,7 @@ async def playlist_remove(
             elif index < player.current_index:
                 player.current_index -= 1
 
-        await _broadcast_state(player)
+        await _broadcast_state(player, playlist_updated=True)
         return JSONResponse({"status": "OK", "message": "删除成功"})
 
     except Exception as e:
@@ -735,7 +735,7 @@ async def playlist_clear(
                 playlist.updated_at = time.time()
                 playlists.save()
 
-        await _broadcast_state(player)
+        await _broadcast_state(player, playlist_updated=True)
         return JSONResponse({"status": "OK", "message": "清空成功"})
     except Exception as e:
         return error_response("[/playlist_clear] 清空队列异常", exc=e, _logger=logger)

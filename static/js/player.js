@@ -130,8 +130,19 @@ export class Player {
         return nextStatus;
     }
 
-    _applyLocalMpvStatePatch(mpvPatch) {
-        const nextStatus = this._buildLocalStatusWithMpvPatch(mpvPatch);
+    _buildLocalStatusPatch(statusPatch) {
+        if (!this.status) {
+            return null;
+        }
+
+        return {
+            ...this.status,
+            ...statusPatch,
+        };
+    }
+
+    _applyLocalStatusPatch(statusPatch) {
+        const nextStatus = this._buildLocalStatusPatch(statusPatch);
         if (!nextStatus) {
             return null;
         }
@@ -141,6 +152,10 @@ export class Player {
         return nextStatus;
     }
 
+    _applyLocalMpvStatePatch(mpvPatch) {
+        return this._applyLocalStatusPatch(this._buildLocalStatusWithMpvPatch(mpvPatch));
+    }
+
     _createPlayEventPayload(status = this.status) {
         const meta = status?.current_meta || {};
         return {
@@ -148,6 +163,31 @@ export class Player {
             title: meta.title || meta.name,
             type: meta.type,
         };
+    }
+
+    _buildStatusUiSignature(status) {
+        if (!status) {
+            return '';
+        }
+
+        const meta = status.current_meta || {};
+        const mpvState = status.mpv_state || status.mpv || {};
+        return JSON.stringify({
+            url: meta.url || meta.rel || meta.raw_url || '',
+            title: meta.title || meta.name || '',
+            artist: meta.artist || status.artist || '',
+            type: meta.type || '',
+            thumbnailUrl: status.thumbnail_url || meta.thumbnail_url || '',
+            videoId: meta.video_id || '',
+            paused: mpvState.paused ?? true,
+            volume: Number.isFinite(mpvState.volume) ? Math.round(mpvState.volume) : null,
+            duration: Number.isFinite(mpvState.duration) ? Math.round(mpvState.duration) : 0,
+            loopMode: status.loop_mode ?? null,
+            shuffleMode: status.shuffle_mode ?? null,
+            pitchShift: status.pitch_shift ?? null,
+            playlistId: status.current_playlist_id || '',
+            playlistIndex: status.current_index ?? null,
+        });
     }
 
     _shouldAcceptServerStatus(status, source) {
@@ -285,6 +325,9 @@ export class Player {
     async cycleLoop() {
         const result = this._ensureSuccess(await api.loop(), '循环模式切换失败');
         const loopMode = result.loop_mode !== undefined ? result.loop_mode : result;
+        if (loopMode !== undefined && loopMode !== null) {
+            this._applyLocalStatusPatch({ loop_mode: loopMode });
+        }
         this.emit('loopChange', loopMode);
         return result;
     }
@@ -293,6 +336,7 @@ export class Player {
     async toggleShuffle() {
         const result = this._ensureSuccess(await api.shuffle(), '随机播放切换失败');
         const shuffleMode = result.shuffle_mode !== undefined ? result.shuffle_mode : false;
+        this._applyLocalStatusPatch({ shuffle_mode: shuffleMode });
         this.emit('shuffleChange', shuffleMode);
         return result;
     }
@@ -301,6 +345,7 @@ export class Player {
     async setPitch(semitones) {
         const result = this._ensureSuccess(await api.setPitch(semitones), '音调调整失败');
         const pitchShift = result.pitch_shift !== undefined ? result.pitch_shift : semitones;
+        this._applyLocalStatusPatch({ pitch_shift: pitchShift });
         this.emit('pitchChange', pitchShift);
         return result;
     }
@@ -546,6 +591,7 @@ export class Player {
         }
 
         const oldStatus = this.status;
+        const oldUiSignature = this._buildStatusUiSignature(oldStatus);
         this.status = status;
 
         if (status?.server_time && source !== 'local') {
@@ -570,7 +616,13 @@ export class Player {
             this._interpPlaying = !paused;
         }
 
+        const newUiSignature = this._buildStatusUiSignature(status);
+        if (oldStatus && oldUiSignature === newUiSignature) {
+            return status;
+        }
+
         this.emit('statusUpdate', { status, oldStatus });
+        return status;
     }
 
     // 获取当前状态

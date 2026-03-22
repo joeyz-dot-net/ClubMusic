@@ -29,7 +29,7 @@ async def websocket_endpoint(websocket: WebSocket, manager=Depends(get_ws_manage
             player = get_player_for_room_id(room_id) or PLAYER
         else:
             player = PLAYER
-        await websocket.send_json(_build_state_message(player))
+        await websocket.send_json(_build_state_message(player, playlist_updated=False))
         while True:
             # 接收心跳消息（客户端每 20 秒发送 "ping"，忽略内容）
             await websocket.receive_text()

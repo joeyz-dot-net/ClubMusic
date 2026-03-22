@@ -160,7 +160,7 @@ def mpv_get(property_name):
 
 # ==================== 状态消息和广播函数 ====================
 
-def _build_state_message(player: MusicPlayer = None) -> dict:
+def _build_state_message(player: MusicPlayer = None, playlist_updated: bool = False) -> dict:
     """构建要广播的状态消息（同步函数，可在任意线程调用）
 
     Args:
@@ -185,13 +185,13 @@ def _build_state_message(player: MusicPlayer = None) -> dict:
         "pitch_shift": p.pitch_shift,
         "current_playlist_id": get_current_playlist_id(p),
         "current_index": getattr(p, 'current_index', -1),
-        "playlist_updated": True,
+        "playlist_updated": playlist_updated,
         "ts": time.time(),
         "server_time": time.time(),
     }
 
 
-async def _broadcast_state(player: MusicPlayer = None):
+    async def _broadcast_state(player: MusicPlayer = None, playlist_updated: bool = False):
     """广播当前状态给对应 room 的 WebSocket 客户端（必须在锁外调用）
 
     Args:
@@ -202,7 +202,7 @@ async def _broadcast_state(player: MusicPlayer = None):
         return
     p = player or PLAYER
     room_id = getattr(p, '_room_id', None)
-    msg = _build_state_message(p)
+    msg = _build_state_message(p, playlist_updated=playlist_updated)
     await ws_manager.broadcast_to_room(room_id, msg)
 
 
@@ -211,7 +211,7 @@ def _broadcast_from_thread():
     if _main_loop is None or not ws_manager.active_connections:
         return
     try:
-        asyncio.run_coroutine_threadsafe(_broadcast_state(), _main_loop)
+        asyncio.run_coroutine_threadsafe(_broadcast_state(playlist_updated=True), _main_loop)
     except Exception as e:
         logger.debug(f"[WS] 跨线程广播失败: {e}")
 
@@ -233,7 +233,7 @@ def _make_room_broadcast(room_id: str):
             return
         try:
             asyncio.run_coroutine_threadsafe(
-                _broadcast_state(player), _main_loop
+                _broadcast_state(player, playlist_updated=True), _main_loop
             )
         except Exception as e:
             logger.debug(f"[WS] 房间 {room_id} 跨线程广播失败: {e}")
