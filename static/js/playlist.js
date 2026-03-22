@@ -250,7 +250,9 @@ export class PlaylistManager {
         // 根据当前选择的歌单使用不同的API
         let result;
         try {
-            if (this.selectedPlaylistId === this.getActiveDefaultId()) {
+            const isDefaultPlaylist = this.selectedPlaylistId === this.getActiveDefaultId();
+
+            if (isDefaultPlaylist) {
                 // 默认歌单使用旧的API (针对当前播放的歌单)
                 result = await api.removeFromPlaylist(index);
             } else {
@@ -260,7 +262,11 @@ export class PlaylistManager {
             
             if (result.status === 'OK') {
                 console.log(`[删除成功] ${songTitle} 已从歌单删除`);
-                await this.loadCurrent();
+                if (isDefaultPlaylist) {
+                    await this.loadCurrent();
+                } else {
+                    await this.refreshAll();
+                }
             } else {
                 throw new Error(result.error || result.message || '删除操作失败');
             }
@@ -1279,7 +1285,6 @@ function bindPlaylistItemDelegates(container) {
                 deleteBtn.style.opacity = '0.5';
 
                 await playlistManager.removeAt(index);
-                await playlistManager.loadAll();
 
                 Toast.success(i18n.t('playlist.deleted'));
                 renderPlaylistUI(renderContext);

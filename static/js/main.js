@@ -3,7 +3,7 @@
 
 import { api } from './api.js?v=2';
 import { player } from './player.js?v=16';
-import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=25';
+import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=26';
 import { playlistsManagement } from './playlists-management.js?v=21';
 import { volumeControl } from './volume.js?v=14';
 import { searchManager } from './search.js?v=29';
@@ -710,14 +710,19 @@ class MusicPlayerApp {
     // 初始化播放列表
     async initPlaylist() {
         try {
-            await playlistManager.refreshAll();
+            if (api.roomId) {
+                await playlistManager.loadAll();
 
-            // 如果在自定义房间中且有房间播放列表，自动选择房间播放列表
-            if (api.roomId && playlistManager.roomPlaylist) {
-                const roomPlaylistId = playlistManager.roomPlaylist.id;
-                console.log('[初始化] 检测到自定义房间，自动选择房间播放列表:', roomPlaylistId);
-                playlistManager.setSelectedPlaylist(roomPlaylistId);
+                // 如果在自定义房间中且有房间播放列表，自动选择房间播放列表
+                if (playlistManager.roomPlaylist) {
+                    const roomPlaylistId = playlistManager.roomPlaylist.id;
+                    console.log('[初始化] 检测到自定义房间，自动选择房间播放列表:', roomPlaylistId);
+                    playlistManager.setSelectedPlaylist(roomPlaylistId);
+                }
+
                 await playlistManager.loadCurrent();
+            } else {
+                await playlistManager.refreshAll();
             }
 
             // ✅ 从 playlistManager 恢复当前选择歌单的 ID（从 localStorage 中已恢复）
