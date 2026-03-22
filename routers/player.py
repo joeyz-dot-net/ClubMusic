@@ -177,7 +177,8 @@ async def play(
         return {
             "status": "OK",
             "message": "播放成功",
-            "current": player.current_meta
+            "current": player.current_meta,
+            "current_index": player.current_index,
         }
     except Exception as e:
         return error_response("[/play] 播放异常", exc=e, _logger=logger)

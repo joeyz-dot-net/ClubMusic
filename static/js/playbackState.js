@@ -1,4 +1,4 @@
-import { player } from './player.js?v=14';
+import { player } from './player.js?v=16';
 
 export function getCurrentPlaybackStatus() {
     return player.status || window.app?.lastPlayStatus || { current_meta: null };

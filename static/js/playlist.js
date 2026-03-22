@@ -4,10 +4,10 @@ import { Toast, loading, ConfirmModal } from './ui.js';
 import { operationLock } from './operationLock.js';
 import { thumbnailManager, escapeHTML, focusFirstFocusable, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js';
 import { i18n } from './i18n.js';
-import { player } from './player.js?v=14';
+import { player } from './player.js?v=16';
 import { unavailableSongs } from './unavailable.js';
-import { executePlayNow, rerenderQueueWithCurrentMeta } from './playNow.js?v=15';
-import { getCurrentPlaybackStatus } from './playbackState.js?v=14';
+import { executePlayNow, rerenderQueueWithCurrentMeta } from './playNow.js?v=17';
+import { getCurrentPlaybackStatus } from './playbackState.js?v=16';
 
 export class PlaylistManager {
     constructor() {
@@ -2387,8 +2387,6 @@ async function handleHistoryPlayNow(song) {
             refreshPlaylist: () => playlistManager.refreshAll(),
             addFailedMessage: i18n.t('search.addSongFailed')
         });
-
-        rerenderQueueWithCurrentMeta(renderPlaylistUI);
     } catch (error) {
         console.error('[历史-立即播放] 失败:', error);
         Toast.error('播放失败: ' + error.message);

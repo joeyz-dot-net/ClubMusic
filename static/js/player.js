@@ -247,6 +247,7 @@ export class Player {
                 this.updateStatus({
                     ...this.status,
                     current_meta: result.current,
+                    current_index: result.current_index ?? this.status?.current_index ?? -1,
                 }, { source: 'local' });
             }
 
@@ -325,6 +326,7 @@ export class Player {
             this.updateStatus({
                 ...this.status,
                 current_meta: result.current,
+                current_index: result.current_index ?? this.status?.current_index ?? -1,
             }, { source: 'local' });
         }
         this.emit('prev', result);
