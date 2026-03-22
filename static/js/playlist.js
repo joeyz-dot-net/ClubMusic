@@ -2313,16 +2313,7 @@ async function closeHistoryModal(historyModal) {
     await closeManagedModal(historyModal, {
         afterClose: async () => {
             const container = document.getElementById('playListContainer');
-            let currentStatus = { current_meta: null };
-            try {
-                const latestStatus = await api.getStatus();
-                if (!latestStatus?._error && latestStatus?.current_meta) {
-                    currentStatus = latestStatus;
-                }
-            } catch (err) {
-                console.warn('[历史] 获取最新播放状态失败:', err);
-                currentStatus = getCurrentPlaybackStatus();
-            }
+            const currentStatus = getCurrentPlaybackStatus();
 
             if (container) {
                 renderPlaylistUI({
