@@ -1750,10 +1750,7 @@ class MusicPlayerApp {
                 videoId: currentMeta.video_id || null,
                 currentVideoId: ktvSync.currentVideoId || null,
             }, { includeStack: false });
-            let requestedTrustedResume = false;
-            if (isResuming) {
-                requestedTrustedResume = ktvSync.requestTrustedResume?.() === true;
-            }
+            const requestedTrustedResume = ktvSync.requestTrustedResume?.() === true;
             const result = await player.togglePlayPause();
             recordTrace('ui.toggle_play_pause.result', {
                 paused: result?.paused ?? null,
@@ -1761,6 +1758,9 @@ class MusicPlayerApp {
                 trackType: currentMeta.type || null,
                 videoId: currentMeta.video_id || null,
             }, { includeStack: false });
+            if (result?.paused === true && requestedTrustedResume) {
+                ktvSync.cancelTrustedResumePlayback?.();
+            }
             if (result?.paused === false && !requestedTrustedResume) {
                 recordTrace('ui.toggle_play_pause.post_resume_request', {
                     trackType: currentMeta.type || null,
@@ -1769,6 +1769,7 @@ class MusicPlayerApp {
                 ktvSync.requestTrustedResume?.();
             }
         } catch (err) {
+            ktvSync.cancelTrustedResumePlayback?.();
             console.error('[播放/暂停] 错误:', err);
             Toast.error(i18n.t('player.playFailed'));
         }
@@ -2506,6 +2507,8 @@ app.diagnose = {
         console.log('  await app.diagnose.runEmbeddableVideoFlow()');
         console.log('  await app.diagnose.prepareTrustedPlayPauseResumeFlow()');
         console.log('  await app.diagnose.evaluateTrustedPlayPauseResumeFlow()');
+        console.log('  await app.diagnose.prepareTrustedPlayPauseResumeStaleLocalStateFlow()');
+        console.log('  await app.diagnose.evaluateTrustedPlayPauseResumeStaleLocalStateFlow()');
         console.log('  await app.diagnose.prepareTrustedNextClickFlow()');
         console.log('  await app.diagnose.evaluateTrustedNextClickFlow()');
         console.log('  await app.diagnose.prepareTrustedPrevClickFlow()');
@@ -2549,6 +2552,12 @@ app.diagnose = {
     },
     evaluateTrustedPlayPauseResumeFlow(options) {
         return app.regression.evaluateTrustedPlayPauseResumeFlow(options);
+    },
+    prepareTrustedPlayPauseResumeStaleLocalStateFlow(options) {
+        return app.regression.prepareTrustedPlayPauseResumeStaleLocalStateFlow(options);
+    },
+    evaluateTrustedPlayPauseResumeStaleLocalStateFlow(options) {
+        return app.regression.evaluateTrustedPlayPauseResumeStaleLocalStateFlow(options);
     },
     prepareTrustedNextClickFlow(options) {
         return app.regression.prepareTrustedNextClickFlow(options);

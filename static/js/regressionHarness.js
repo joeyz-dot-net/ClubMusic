@@ -78,6 +78,37 @@ export class RegressionHarness {
         return meta?.video_id || meta?.url || null;
     }
 
+    getPausedState(status = this.player.getStatus?.()) {
+        const mpvState = status?.mpv_state || status?.mpv || {};
+        return mpvState.paused ?? null;
+    }
+
+    overwriteLocalPausedCache(paused) {
+        const currentStatus = this.player.getStatus?.();
+        if (!currentStatus) {
+            return false;
+        }
+
+        const nextStatus = {
+            ...currentStatus,
+            mpv_state: {
+                ...(currentStatus.mpv_state || currentStatus.mpv || {}),
+                paused,
+            },
+        };
+
+        if (currentStatus.mpv) {
+            nextStatus.mpv = {
+                ...currentStatus.mpv,
+                paused,
+            };
+        }
+
+        this.player.status = nextStatus;
+        this.player._interpPlaying = paused === false;
+        return true;
+    }
+
     async waitForTrackMatch(expectedTrackId, { timeoutMs = 8000, intervalMs = 200 } = {}) {
         const startedAt = Date.now();
         while ((Date.now() - startedAt) <= timeoutMs) {
@@ -276,6 +307,7 @@ export class RegressionHarness {
         return {
             label,
             currentMeta: status.current_meta || null,
+            localPaused: this.getPausedState(status),
             noticeVisible: notice ? notice.classList.contains('visible') : false,
             noticeTitle: notice?.querySelector('.full-player-audio-only-title')?.textContent || null,
             noticeBody: notice?.querySelector('.full-player-audio-only-body')?.textContent || null,
@@ -722,6 +754,7 @@ export class RegressionHarness {
         songKey = 'embeddable',
         controlId = 'fullPlayerPlayPause',
         waitMs = DEFAULT_WAIT_MS,
+        simulateStaleLocalPausedState = false,
     } = {}) {
         const song = this.getSong(songKey);
         if (!song) {
@@ -745,13 +778,34 @@ export class RegressionHarness {
             throw new Error('Unable to stabilize paused state before trusted play/pause probe');
         }
 
+        const backendStatusBeforeProbe = await this.api.getStatus();
+        const backendPaused = this.getPausedState(backendStatusBeforeProbe);
+        if (backendPaused !== true) {
+            throw new Error(`Expected backend paused state before trusted play/pause probe, got ${backendPaused}`);
+        }
+
+        if (simulateStaleLocalPausedState) {
+            const localCacheUpdated = this.overwriteLocalPausedCache(false);
+            if (!localCacheUpdated) {
+                throw new Error('Unable to overwrite local paused cache for stale-state play/pause probe');
+            }
+        }
+
         const selector = this.installTrustedDomProbe(controlId, 'regression.playpause-resume.dom');
-        const beforeSnapshot = this.snapshot('trusted-playpause-resume-before');
+        const beforeSnapshot = {
+            ...this.snapshot('trusted-playpause-resume-before'),
+            backendPaused,
+            staleLocalPausedStateRequested: simulateStaleLocalPausedState,
+        };
+        beforeSnapshot.staleLocalPausedStatePrepared = simulateStaleLocalPausedState
+            ? beforeSnapshot.localPaused === false && beforeSnapshot.backendPaused === true
+            : false;
         const probeId = `playpause_probe_${Date.now().toString(36)}`;
         this.playPauseResumeProbe = {
             probeId,
             controlId,
             songKey,
+            simulateStaleLocalPausedState,
             traceStartIndex: this.getTraceEvents().length,
             beforeSnapshot,
             restoreAppMethodProbe: this.installAppMethodProbe('togglePlayPause', 'regression.playpause-resume.app-togglePlayPause'),
@@ -770,8 +824,16 @@ export class RegressionHarness {
             controlId,
             beforeSnapshot,
             expectedVideoId: song.video_id,
+            simulateStaleLocalPausedState,
             selector,
         };
+    }
+
+    async prepareTrustedPlayPauseResumeStaleLocalStateFlow(options = {}) {
+        return this.prepareTrustedPlayPauseResumeFlow({
+            ...options,
+            simulateStaleLocalPausedState: true,
+        });
     }
 
     async evaluateTrustedPlayPauseResumeFlow({
@@ -832,11 +894,16 @@ export class RegressionHarness {
             .map((event) => ({
                 type: event.type,
                 at: event.at,
+                traceToken: event.details?.traceToken ?? null,
                 state: event.details?.playerState ?? event.details?.eventState ?? null,
                 stateLabel: event.details?.playerStateLabel || event.details?.eventStateLabel || null,
                 currentTime: event.details?.currentTime ?? null,
                 context: event.details?.context || null,
             }));
+        const trustedResumeTraceToken = ytTraceTrail.find((entry) => entry.type === 'ktv.trusted_resume.requested')?.traceToken || null;
+        const scopedYtTraceTrail = trustedResumeTraceToken
+            ? ytTraceTrail.filter((entry) => entry.traceToken === trustedResumeTraceToken)
+            : ytTraceTrail;
         const toggleTraceTrail = traceEvents
             .filter((event) => event.type.startsWith('ui.toggle_play_pause.'))
             .map((event) => ({
@@ -848,8 +915,8 @@ export class RegressionHarness {
                 trackType: event.details?.trackType || null,
                 videoId: event.details?.videoId || null,
             }));
-        const traceSawPlaying = ytTraceTrail.some((entry) => entry.state === 1);
-        const traceEndedPaused = ytTraceTrail.length > 0 && ytTraceTrail[ytTraceTrail.length - 1].state === 2;
+        const traceSawPlaying = scopedYtTraceTrail.some((entry) => entry.state === 1);
+        const traceEndedPaused = scopedYtTraceTrail.length > 0 && scopedYtTraceTrail[scopedYtTraceTrail.length - 1].state === 2;
         if (!ytPlayingObserved) {
             if (traceSawPlaying && traceEndedPaused) {
                 failureMode = 'reverted_to_paused';
@@ -867,6 +934,9 @@ export class RegressionHarness {
             pointerDownSeen: traceMetrics.pointerDownSeen,
             appTogglePlayPauseSeen,
             currentTrackMatches: currentTrackId === this.getSongId(expectedSong),
+            staleLocalPausedStatePrepared: probe.simulateStaleLocalPausedState
+                ? probe.beforeSnapshot.staleLocalPausedStatePrepared === true
+                : true,
             resumedSeen,
             videoModeEnabled: snapshot.isVideoMode === true && snapshot.currentVideoId === expectedSong.video_id,
             ytPlayingObserved,
@@ -880,7 +950,8 @@ export class RegressionHarness {
             allPaused,
             traceSawPlaying,
             traceEndedPaused,
-            ytTraceTrail,
+            trustedResumeTraceToken,
+            ytTraceTrail: scopedYtTraceTrail,
             toggleTraceTrail,
         };
 
@@ -908,6 +979,10 @@ export class RegressionHarness {
         probe.restoreAppMethodProbe?.();
         this.playPauseResumeProbe = null;
         return result;
+    }
+
+    async evaluateTrustedPlayPauseResumeStaleLocalStateFlow(options = {}) {
+        return this.evaluateTrustedPlayPauseResumeFlow(options);
     }
 
     summarizeQuickSuite(result) {
@@ -969,6 +1044,8 @@ export class RegressionHarness {
         console.log('  await app.regression.runQuickSuiteAndPrint()');
         console.log('  await app.regression.prepareTrustedPlayPauseResumeFlow()');
         console.log('  await app.regression.evaluateTrustedPlayPauseResumeFlow()');
+        console.log('  await app.regression.prepareTrustedPlayPauseResumeStaleLocalStateFlow()');
+        console.log('  await app.regression.evaluateTrustedPlayPauseResumeStaleLocalStateFlow()');
         console.log('  await app.regression.prepareTrustedNextClickFlow()');
         console.log('  await app.regression.evaluateTrustedNextClickFlow()');
         console.log('  await app.regression.prepareTrustedPrevClickFlow()');

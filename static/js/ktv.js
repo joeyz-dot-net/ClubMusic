@@ -50,6 +50,8 @@ export class KTVSync {
         this.videoLoadSettlingUntil = 0;
         this.videoPendingSince = 0;
         this.lastPendingRecoveryAt = 0;
+        this.trustedResumeTraceToken = null;
+        this.trustedResumeTraceTimers = [];
 
         // 性能监控指标
         this.metrics = {
@@ -107,10 +109,44 @@ export class KTVSync {
         return {
             context,
             currentVideoId: this.currentVideoId,
+            traceToken: this.trustedResumeTraceToken,
             playerState,
             playerStateLabel: this.getPlayerStateLabel(playerState),
             currentTime: Number.isFinite(currentTime) ? currentTime : null,
         };
+    }
+
+    clearTrustedResumeTraceTimers() {
+        this.trustedResumeTraceTimers.forEach((timerId) => clearTimeout(timerId));
+        this.trustedResumeTraceTimers = [];
+    }
+
+    cancelTrustedResumePlayback() {
+        this.clearTrustedResumeTraceTimers();
+        this.trustedResumeTraceToken = null;
+        if (!this.player || !this.playerReady) {
+            return false;
+        }
+
+        try {
+            const playerState = this.player.getPlayerState();
+            if (playerState === YT.PlayerState.PLAYING || playerState === YT.PlayerState.BUFFERING || playerState === YT.PlayerState.UNSTARTED) {
+                this.player.pauseVideo();
+            }
+            recordTrace('ktv.trusted_resume.cancelled', {
+                currentVideoId: this.currentVideoId,
+                playerState,
+                playerStateLabel: this.getPlayerStateLabel(playerState),
+            }, { includeStack: false });
+            return true;
+        } catch (error) {
+            console.warn('[KTV] trusted resume 回滚失败:', error);
+            recordTrace('ktv.trusted_resume.cancel_failed', {
+                currentVideoId: this.currentVideoId,
+                error: String(error),
+            }, { includeStack: false });
+            return false;
+        }
     }
 
     requestTrustedResume() {
@@ -130,15 +166,24 @@ export class KTVSync {
                 return false;
             }
 
+            this.clearTrustedResumeTraceTimers();
+            this.trustedResumeTraceToken = `resume_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
             recordTrace('ktv.trusted_resume.requested', this.capturePlayerStateSnapshot('before-playVideo'), { includeStack: false });
             this.player.playVideo();
             recordTrace('ktv.trusted_resume.after_call', this.capturePlayerStateSnapshot('after-playVideo'), { includeStack: false });
-            setTimeout(() => {
+            const traceToken = this.trustedResumeTraceToken;
+            this.trustedResumeTraceTimers.push(setTimeout(() => {
+                if (this.trustedResumeTraceToken !== traceToken) {
+                    return;
+                }
                 recordTrace('ktv.trusted_resume.after_250ms', this.capturePlayerStateSnapshot('after-250ms'), { includeStack: false });
-            }, 250);
-            setTimeout(() => {
+            }, 250));
+            this.trustedResumeTraceTimers.push(setTimeout(() => {
+                if (this.trustedResumeTraceToken !== traceToken) {
+                    return;
+                }
                 recordTrace('ktv.trusted_resume.after_1000ms', this.capturePlayerStateSnapshot('after-1000ms'), { includeStack: false });
-            }, 1000);
+            }, 1000));
             return true;
         } catch (error) {
             console.warn('[KTV] trusted resume 触发失败:', error);
@@ -209,6 +254,8 @@ export class KTVSync {
         this.playerCreateStartedAt = 0;
         this.pendingMpvState = null;
         this.videoLoadSettlingUntil = 0;
+        this.clearTrustedResumeTraceTimers();
+        this.trustedResumeTraceToken = null;
     }
 
     rememberPendingVideo(videoId, mpvState = {}) {
@@ -667,6 +714,8 @@ export class KTVSync {
 
         this.currentVideoId = null;
         this.clearPendingVideo();
+        this.clearTrustedResumeTraceTimers();
+        this.trustedResumeTraceToken = null;
         if (this.artworkContainer) {
             this.artworkContainer.classList.remove('video-mode');
         }

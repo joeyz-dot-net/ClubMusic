@@ -40,6 +40,8 @@ DIAGNOSE_READY_JS = """
     && window.app?.diagnose?.evaluateTrustedPrevClickFlow
     && window.app?.diagnose?.prepareTrustedPlayPauseResumeFlow
     && window.app?.diagnose?.evaluateTrustedPlayPauseResumeFlow
+    && window.app?.diagnose?.prepareTrustedPlayPauseResumeStaleLocalStateFlow
+    && window.app?.diagnose?.evaluateTrustedPlayPauseResumeStaleLocalStateFlow
 )
 """
 
@@ -248,6 +250,19 @@ def run_trusted_playpause_resume(page, *, quiet=False):
     )
 
 
+def run_trusted_playpause_resume_stale_local_state(page, *, quiet=False):
+    log("[browser-regression] preparing trusted play/pause resume flow with stale local paused state", quiet=quiet)
+    prepared = evaluate(
+        page,
+        "async () => await window.app.diagnose.prepareTrustedPlayPauseResumeStaleLocalStateFlow()",
+    )
+    page.click(prepared["selector"])
+    return evaluate(
+        page,
+        "async () => await window.app.diagnose.evaluateTrustedPlayPauseResumeStaleLocalStateFlow()",
+    )
+
+
 def summarize_checks(checks):
     failed_checks = [name for name, passed in checks.items() if not passed]
     return {
@@ -257,7 +272,12 @@ def summarize_checks(checks):
     }
 
 
-def build_suite_result(trusted_next, trusted_prev, trusted_playpause_resume):
+def build_suite_result(
+    trusted_next,
+    trusted_prev,
+    trusted_playpause_resume,
+    trusted_playpause_resume_stale_local_state,
+):
     control_suite = {
         "trustedNext": trusted_next,
         "trustedPrev": trusted_prev,
@@ -269,16 +289,24 @@ def build_suite_result(trusted_next, trusted_prev, trusted_playpause_resume):
 
     trusted_resume_suite = {
         "trustedPlayPauseResume": trusted_playpause_resume,
+        "trustedPlayPauseResumeStaleLocalState": trusted_playpause_resume_stale_local_state,
     }
     trusted_resume_failure_mode = trusted_playpause_resume.get("diagnostics", {}).get("failureMode")
+    stale_local_state_failure_mode = trusted_playpause_resume_stale_local_state.get("diagnostics", {}).get("failureMode")
     trusted_resume_suite["summary"] = summarize_checks({
         "trustedPlayPauseResumeFlow": trusted_playpause_resume.get("summary", {}).get("passed") is True,
         "trustedPlayPauseResumeSync": trusted_playpause_resume.get("syncSummary", {}).get("passed") is True,
+        "trustedPlayPauseResumeStaleLocalStateFlow": trusted_playpause_resume_stale_local_state.get("summary", {}).get("passed") is True,
+        "trustedPlayPauseResumeStaleLocalStateSync": trusted_playpause_resume_stale_local_state.get("syncSummary", {}).get("passed") is True,
         "notStuckBuffering": trusted_resume_failure_mode != "stuck_buffering",
         "notStuckPaused": trusted_resume_failure_mode != "stuck_paused",
         "notRevertedToPaused": trusted_resume_failure_mode != "reverted_to_paused",
+        "staleLocalStateNotStuckBuffering": stale_local_state_failure_mode != "stuck_buffering",
+        "staleLocalStateNotStuckPaused": stale_local_state_failure_mode != "stuck_paused",
+        "staleLocalStateNotRevertedToPaused": stale_local_state_failure_mode != "reverted_to_paused",
     })
     trusted_resume_suite["failureMode"] = trusted_resume_failure_mode
+    trusted_resume_suite["staleLocalStateFailureMode"] = stale_local_state_failure_mode
 
     result = {
         "controlSuite": control_suite,
@@ -286,6 +314,7 @@ def build_suite_result(trusted_next, trusted_prev, trusted_playpause_resume):
         "trustedNext": trusted_next,
         "trustedPrev": trusted_prev,
         "trustedPlayPauseResume": trusted_playpause_resume,
+        "trustedPlayPauseResumeStaleLocalState": trusted_playpause_resume_stale_local_state,
     }
     result["summary"] = summarize_checks({
         "controlSuite": control_suite["summary"].get("passed") is True,
@@ -327,7 +356,13 @@ def main():
             trusted_next = run_trusted_next(page, quiet=args.quiet)
             trusted_prev = run_trusted_prev(page, quiet=args.quiet)
             trusted_playpause_resume = run_trusted_playpause_resume(page, quiet=args.quiet)
-            result = build_suite_result(trusted_next, trusted_prev, trusted_playpause_resume)
+            trusted_playpause_resume_stale_local_state = run_trusted_playpause_resume_stale_local_state(page, quiet=args.quiet)
+            result = build_suite_result(
+                trusted_next,
+                trusted_prev,
+                trusted_playpause_resume,
+                trusted_playpause_resume_stale_local_state,
+            )
             result["baseUrl"] = args.base_url
             result["browser"] = args.browser
             result["serverStartedByScript"] = bool(server_process)
