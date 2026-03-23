@@ -38,13 +38,15 @@ DIAGNOSE_READY_JS = """
     && window.app?.diagnose?.evaluateTrustedNextClickFlow
     && window.app?.diagnose?.prepareTrustedPrevClickFlow
     && window.app?.diagnose?.evaluateTrustedPrevClickFlow
+    && window.app?.diagnose?.prepareTrustedPlayPauseResumeFlow
+    && window.app?.diagnose?.evaluateTrustedPlayPauseResumeFlow
 )
 """
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Run the trusted next/prev browser regression suite against a ClubMusic server."
+        description="Run the trusted browser regression suite against a ClubMusic server."
     )
     parser.add_argument(
         "--base-url",
@@ -233,15 +235,63 @@ def run_trusted_prev(page, *, quiet=False):
     )
 
 
-def build_control_result(page, trusted_next, trusted_prev):
+def run_trusted_playpause_resume(page, *, quiet=False):
+    log("[browser-regression] preparing trusted play/pause resume flow", quiet=quiet)
+    prepared = evaluate(
+        page,
+        "async () => await window.app.diagnose.prepareTrustedPlayPauseResumeFlow()",
+    )
+    page.click(prepared["selector"])
     return evaluate(
         page,
-        "(payload) => window.app.diagnose.buildControlSuiteResult(payload)",
-        {
-            "trustedNext": trusted_next,
-            "trustedPrev": trusted_prev,
-        },
+        "async () => await window.app.diagnose.evaluateTrustedPlayPauseResumeFlow()",
     )
+
+
+def summarize_checks(checks):
+    failed_checks = [name for name, passed in checks.items() if not passed]
+    return {
+        "passed": not failed_checks,
+        "failedChecks": failed_checks,
+        "checks": checks,
+    }
+
+
+def build_suite_result(trusted_next, trusted_prev, trusted_playpause_resume):
+    control_suite = {
+        "trustedNext": trusted_next,
+        "trustedPrev": trusted_prev,
+    }
+    control_suite["summary"] = summarize_checks({
+        "trustedNextFlow": trusted_next.get("summary", {}).get("passed") is True,
+        "trustedPrevFlow": trusted_prev.get("summary", {}).get("passed") is True,
+    })
+
+    trusted_resume_suite = {
+        "trustedPlayPauseResume": trusted_playpause_resume,
+    }
+    trusted_resume_failure_mode = trusted_playpause_resume.get("diagnostics", {}).get("failureMode")
+    trusted_resume_suite["summary"] = summarize_checks({
+        "trustedPlayPauseResumeFlow": trusted_playpause_resume.get("summary", {}).get("passed") is True,
+        "trustedPlayPauseResumeSync": trusted_playpause_resume.get("syncSummary", {}).get("passed") is True,
+        "notStuckBuffering": trusted_resume_failure_mode != "stuck_buffering",
+        "notStuckPaused": trusted_resume_failure_mode != "stuck_paused",
+        "notRevertedToPaused": trusted_resume_failure_mode != "reverted_to_paused",
+    })
+    trusted_resume_suite["failureMode"] = trusted_resume_failure_mode
+
+    result = {
+        "controlSuite": control_suite,
+        "trustedResumeSuite": trusted_resume_suite,
+        "trustedNext": trusted_next,
+        "trustedPrev": trusted_prev,
+        "trustedPlayPauseResume": trusted_playpause_resume,
+    }
+    result["summary"] = summarize_checks({
+        "controlSuite": control_suite["summary"].get("passed") is True,
+        "trustedResumeSuite": trusted_resume_suite["summary"].get("passed") is True,
+    })
+    return result
 
 
 def maybe_capture_failure_artifacts(page, args):
@@ -276,9 +326,8 @@ def main():
 
             trusted_next = run_trusted_next(page, quiet=args.quiet)
             trusted_prev = run_trusted_prev(page, quiet=args.quiet)
-            result = build_control_result(page, trusted_next, trusted_prev)
-            result["trustedNext"] = trusted_next
-            result["trustedPrev"] = trusted_prev
+            trusted_playpause_resume = run_trusted_playpause_resume(page, quiet=args.quiet)
+            result = build_suite_result(trusted_next, trusted_prev, trusted_playpause_resume)
             result["baseUrl"] = args.base_url
             result["browser"] = args.browser
             result["serverStartedByScript"] = bool(server_process)

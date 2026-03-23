@@ -700,6 +700,24 @@ export class RegressionHarness {
         return false;
     }
 
+    async ensurePausedForPlayPauseProbe({ maxAttempts = 3, waitMs = 500 } = {}) {
+        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+            const refreshedStatus = await this.player.refreshStatus('回归准备阶段同步暂停状态失败');
+            const refreshedMpvState = refreshedStatus?.mpv_state || refreshedStatus?.mpv || {};
+            if (refreshedMpvState.paused === true) {
+                return true;
+            }
+
+            await this.player.pause();
+            await this.waitForPausedState(true, { timeoutMs: 3000, intervalMs: 150 });
+            await this.sleep(waitMs);
+        }
+
+        const finalStatus = await this.player.refreshStatus('回归准备阶段最终同步暂停状态失败');
+        const finalMpvState = finalStatus?.mpv_state || finalStatus?.mpv || {};
+        return finalMpvState.paused === true;
+    }
+
     async prepareTrustedPlayPauseResumeFlow({
         songKey = 'embeddable',
         controlId = 'fullPlayerPlayPause',
@@ -722,9 +740,10 @@ export class RegressionHarness {
         await this.rebuildQueue([song]);
         await this.playQueueIndex(0, waitMs);
         await this.sleep(600);
-        await this.player.pause();
-        await this.waitForPausedState(true, { timeoutMs: 5000 });
-        await this.sleep(400);
+        const pausedReady = await this.ensurePausedForPlayPauseProbe();
+        if (!pausedReady) {
+            throw new Error('Unable to stabilize paused state before trusted play/pause probe');
+        }
 
         const selector = this.installTrustedDomProbe(controlId, 'regression.playpause-resume.dom');
         const beforeSnapshot = this.snapshot('trusted-playpause-resume-before');
@@ -798,6 +817,50 @@ export class RegressionHarness {
             && (finiteYtTimes[finiteYtTimes.length - 1] - finiteYtTimes[0]) > 1.0;
         const ytPlayingObserved = samples.some((sample) => sample.ytState === 1);
         const resumedSeen = samples.some((sample) => sample.paused === false);
+        const ytStateCounts = samples.reduce((counts, sample) => {
+            const key = String(sample.ytState);
+            counts[key] = (counts[key] || 0) + 1;
+            return counts;
+        }, {});
+        const finalSample = samples[samples.length - 1] || null;
+        const finalYtState = finalSample?.ytState ?? snapshot.ytState ?? null;
+        const allBuffering = samples.length > 0 && samples.every((sample) => sample.ytState === 3);
+        const allPaused = samples.length > 0 && samples.every((sample) => sample.ytState === 2);
+        let failureMode = null;
+        const ytTraceTrail = traceEvents
+            .filter((event) => event.type.startsWith('ktv.trusted_resume.') || event.type === 'ktv.player_state_change')
+            .map((event) => ({
+                type: event.type,
+                at: event.at,
+                state: event.details?.playerState ?? event.details?.eventState ?? null,
+                stateLabel: event.details?.playerStateLabel || event.details?.eventStateLabel || null,
+                currentTime: event.details?.currentTime ?? null,
+                context: event.details?.context || null,
+            }));
+        const toggleTraceTrail = traceEvents
+            .filter((event) => event.type.startsWith('ui.toggle_play_pause.'))
+            .map((event) => ({
+                type: event.type,
+                at: event.at,
+                paused: event.details?.paused ?? null,
+                isResuming: event.details?.isResuming ?? null,
+                requestedTrustedResume: event.details?.requestedTrustedResume ?? null,
+                trackType: event.details?.trackType || null,
+                videoId: event.details?.videoId || null,
+            }));
+        const traceSawPlaying = ytTraceTrail.some((entry) => entry.state === 1);
+        const traceEndedPaused = ytTraceTrail.length > 0 && ytTraceTrail[ytTraceTrail.length - 1].state === 2;
+        if (!ytPlayingObserved) {
+            if (traceSawPlaying && traceEndedPaused) {
+                failureMode = 'reverted_to_paused';
+            } else if (allBuffering || finalYtState === 3) {
+                failureMode = 'stuck_buffering';
+            } else if (allPaused || finalYtState === 2) {
+                failureMode = 'stuck_paused';
+            } else {
+                failureMode = 'not_playing';
+            }
+        }
         const syncSummary = this.summarizeKtvSync(samples, { maxAllowedDrift });
         const summary = this.summarizeChecks({
             trustedClickSeen: traceMetrics.trustedClickSeen,
@@ -809,6 +872,17 @@ export class RegressionHarness {
             ytPlayingObserved,
             ytClockAdvanced,
         });
+        const diagnostics = {
+            failureMode,
+            finalYtState,
+            ytStateCounts,
+            allBuffering,
+            allPaused,
+            traceSawPlaying,
+            traceEndedPaused,
+            ytTraceTrail,
+            toggleTraceTrail,
+        };
 
         const result = {
             probeId: probe.probeId,
@@ -819,6 +893,7 @@ export class RegressionHarness {
             samples,
             syncSummary,
             traceMetrics,
+            diagnostics,
             summary,
         };
 
@@ -827,6 +902,7 @@ export class RegressionHarness {
             controlId: probe.controlId,
             summary,
             syncSummary,
+            diagnostics,
         }, { includeStack: false });
 
         probe.restoreAppMethodProbe?.();

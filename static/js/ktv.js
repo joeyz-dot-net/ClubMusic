@@ -82,6 +82,37 @@ export class KTVSync {
         return Number.isFinite(rawServerTime) ? rawServerTime : 0;
     }
 
+    getPlayerStateLabel(state) {
+        const states = {
+            '-1': 'unstarted',
+            '0': 'ended',
+            '1': 'playing',
+            '2': 'paused',
+            '3': 'buffering',
+            '5': 'cued'
+        };
+        return states[String(state)] || String(state);
+    }
+
+    capturePlayerStateSnapshot(context) {
+        let playerState = null;
+        let currentTime = null;
+        try {
+            playerState = this.player?.getPlayerState?.() ?? null;
+            currentTime = Number(this.player?.getCurrentTime?.());
+        } catch (error) {
+            currentTime = null;
+        }
+
+        return {
+            context,
+            currentVideoId: this.currentVideoId,
+            playerState,
+            playerStateLabel: this.getPlayerStateLabel(playerState),
+            currentTime: Number.isFinite(currentTime) ? currentTime : null,
+        };
+    }
+
     requestTrustedResume() {
         if (!this.player || !this.playerReady || !this.currentVideoId) {
             return false;
@@ -95,14 +126,19 @@ export class KTVSync {
                 || playerState === YT.PlayerState.BUFFERING;
 
             if (!canForcePlayback) {
+                recordTrace('ktv.trusted_resume.skipped', this.capturePlayerStateSnapshot('skipped'), { includeStack: false });
                 return false;
             }
 
-            recordTrace('ktv.trusted_resume.requested', {
-                currentVideoId: this.currentVideoId,
-                playerState,
-            }, { includeStack: false });
+            recordTrace('ktv.trusted_resume.requested', this.capturePlayerStateSnapshot('before-playVideo'), { includeStack: false });
             this.player.playVideo();
+            recordTrace('ktv.trusted_resume.after_call', this.capturePlayerStateSnapshot('after-playVideo'), { includeStack: false });
+            setTimeout(() => {
+                recordTrace('ktv.trusted_resume.after_250ms', this.capturePlayerStateSnapshot('after-250ms'), { includeStack: false });
+            }, 250);
+            setTimeout(() => {
+                recordTrace('ktv.trusted_resume.after_1000ms', this.capturePlayerStateSnapshot('after-1000ms'), { includeStack: false });
+            }, 1000);
             return true;
         } catch (error) {
             console.warn('[KTV] trusted resume 触发失败:', error);
@@ -358,15 +394,12 @@ export class KTVSync {
      * 播放器状态变化回调
      */
     onPlayerStateChange(event) {
-        const states = {
-            '-1': 'unstarted',
-            '0': 'ended',
-            '1': 'playing',
-            '2': 'paused',
-            '3': 'buffering',
-            '5': 'cued'
-        };
-        console.log('[KTV] 播放器状态:', states[event.data] || event.data);
+        console.log('[KTV] 播放器状态:', this.getPlayerStateLabel(event.data));
+        recordTrace('ktv.player_state_change', {
+            ...this.capturePlayerStateSnapshot('on-state-change'),
+            eventState: event.data,
+            eventStateLabel: this.getPlayerStateLabel(event.data),
+        }, { includeStack: false });
 
         if (event.data === YT.PlayerState.PLAYING) {
             this.videoPendingSince = 0;

@@ -15,11 +15,11 @@ import { localFiles } from './local.js?v=20';
 import { settingsManager } from './settingsManager.js?v=6';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
-import { ktvSync } from './ktv.js?v=39';
+import { ktvSync } from './ktv.js?v=40';
 import { playLock } from './playLock.js';
 import { unavailableSongs } from './unavailable.js';
 import { recordTrace } from './requestTrace.js?v=1';
-import { createRegressionHarness } from './regressionHarness.js?v=15';
+import { createRegressionHarness } from './regressionHarness.js?v=17';
 
 // ==========================================
 // 应用初始化
@@ -1740,12 +1740,34 @@ class MusicPlayerApp {
         if (playLock.isPreparing()) return;
         try {
             const status = player.getStatus();
+            const currentMeta = status?.current_meta || {};
             const mpvState = status?.mpv_state || status?.mpv || {};
             const isResuming = mpvState.paused === true;
+            recordTrace('ui.toggle_play_pause.intent', {
+                paused: mpvState.paused ?? null,
+                isResuming,
+                trackType: currentMeta.type || null,
+                videoId: currentMeta.video_id || null,
+                currentVideoId: ktvSync.currentVideoId || null,
+            }, { includeStack: false });
+            let requestedTrustedResume = false;
             if (isResuming) {
+                requestedTrustedResume = ktvSync.requestTrustedResume?.() === true;
+            }
+            const result = await player.togglePlayPause();
+            recordTrace('ui.toggle_play_pause.result', {
+                paused: result?.paused ?? null,
+                requestedTrustedResume,
+                trackType: currentMeta.type || null,
+                videoId: currentMeta.video_id || null,
+            }, { includeStack: false });
+            if (result?.paused === false && !requestedTrustedResume) {
+                recordTrace('ui.toggle_play_pause.post_resume_request', {
+                    trackType: currentMeta.type || null,
+                    videoId: currentMeta.video_id || null,
+                }, { includeStack: false });
                 ktvSync.requestTrustedResume?.();
             }
-            await player.togglePlayPause();
         } catch (err) {
             console.error('[播放/暂停] 错误:', err);
             Toast.error(i18n.t('player.playFailed'));

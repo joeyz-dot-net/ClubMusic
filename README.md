@@ -116,7 +116,7 @@ VS Code 里可直接运行任务：
 Run Task -> Browser Control Regression
 ```
 
-脚本会输出完整 JSON 结果；VS Code task 还会把结果写到 `logs/browser-control-regression.json`。启用 `--ensure-server` 时，脚本会在目标地址不可达时自动启动本地 Uvicorn，并在回归结束后自动停止它。
+脚本会输出完整 JSON 结果；VS Code task 还会把结果写到 `logs/browser-control-regression.json`。当前套件包含 trusted next、trusted prev，以及 embeddable YouTube 的 trusted play/pause resume probe。当前通过基线应为整套全绿，也就是结果文件顶层 `summary.passed = true`，并且 `checks.controlSuite = true`、`checks.trustedResumeSuite = true`。启用 `--ensure-server` 时，脚本会在目标地址不可达时自动启动本地 Uvicorn，并在回归结束后自动停止它。
 
 ---
 
