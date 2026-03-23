@@ -66,6 +66,13 @@ python run.py
 ```
 
 启动时会交互式选择音频输出设备（带实时倒计时显示），10 秒内未操作则自动使用系统默认设备。
+`run.py` 是长运行服务器入口；正常行为是持续占用终端并监听端口，而不是立即退出。
+
+在 VS Code 中也可以直接运行任务：
+
+```text
+Run Task -> Run App
+```
 
 ### 访问界面
 
@@ -74,6 +81,42 @@ python run.py
 ```
 http://localhost:9000
 ```
+
+### 浏览器控制回归
+
+用于一次性验证 trusted `Next` / `Prev` 控件链路是否仍然正确，包括：
+
+- 真实浏览器点击是否被识别为 trusted 事件
+- `/next` 与 `/prev` 是否各只发出一次
+- restricted YouTube 曲目是否正确退化为纯音频
+- 从 restricted 曲目点 `Prev` 后是否恢复到可嵌入视频模式
+
+安装浏览器回归依赖：
+
+```bash
+pip install ".[browser]"
+playwright install chromium
+```
+
+命令行执行：
+
+```bash
+py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/
+```
+
+如果你不想先手动启动服务，可让脚本自动拉起本地 Uvicorn：
+
+```bash
+py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server
+```
+
+VS Code 里可直接运行任务：
+
+```text
+Run Task -> Browser Control Regression
+```
+
+脚本会输出完整 JSON 结果；VS Code task 还会把结果写到 `logs/browser-control-regression.json`。启用 `--ensure-server` 时，脚本会在目标地址不可达时自动启动本地 Uvicorn，并在回归结束后自动停止它。
 
 ---
 

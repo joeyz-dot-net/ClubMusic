@@ -69,9 +69,14 @@ dev = [
     "mypy>=1.0.0",
 ]
 
+# 浏览器自动化回归
+browser = [
+    "playwright>=1.52.0",
+]
+
 # 所有依赖（用于完整开发环境）
 all = [
-    "clubmusic[build,dev]",
+    "clubmusic[build,dev,browser]",
 ]
 
 # 项目 URLs
