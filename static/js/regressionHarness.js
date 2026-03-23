@@ -821,6 +821,7 @@ export class RegressionHarness {
             throw new Error('Unknown regression song key');
         }
 
+        this.clearPlayPauseResumeProbe({ recordAbandoned: true, reason: 'replaced' });
         const previousVerboseTraceEnabled = this.enableVerboseTrace();
 
         try {
@@ -864,7 +865,6 @@ export class RegressionHarness {
                 ? beforeSnapshot.localPaused === false && beforeSnapshot.backendPaused === true
                 : false;
             const probeId = `playpause_probe_${Date.now().toString(36)}`;
-            this.clearPlayPauseResumeProbe({ recordAbandoned: true, reason: 'replaced' });
             this.playPauseResumeProbe = {
                 probeId,
                 controlId,
