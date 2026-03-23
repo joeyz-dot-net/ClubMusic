@@ -2,7 +2,7 @@
 import { api } from './api.js?v=4';
 import { settingsManager } from './settingsManager.js?v=6';
 import { operationLock } from './operationLock.js';
-import { recordTrace } from './requestTrace.js?v=1';
+import { recordTrace } from './requestTrace.js?v=2';
 
 const STATUS_TIME_EPSILON = 0.001;
 

@@ -118,6 +118,8 @@ Run Task -> Browser Control Regression
 
 脚本会输出完整 JSON 结果；VS Code task 还会把结果写到 `logs/browser-control-regression.json`。当前套件包含 trusted next、trusted prev、embeddable YouTube 的 trusted play/pause resume probe，以及“后端已暂停但前端本地 `paused` 仍是旧值”的 stale-local-state trusted resume probe。当前通过基线应为整套全绿，也就是结果文件顶层 `summary.passed = true`，并且 `checks.controlSuite = true`、`checks.trustedResumeSuite = true`。启用 `--ensure-server` 时，脚本会在目标地址不可达时自动启动本地 Uvicorn，并在回归结束后自动停止它。
 
+需要手工做 KTV/YouTube 诊断时，可在浏览器控制台用 `app.diagnose.isVerboseTraceEnabled()` 查看详细追踪是否开启，并用 `app.diagnose.setVerboseTraceEnabled(true)` 临时打开 verbose trace；回归 harness 会在 trusted play/pause probe 期间自动启停这个开关。
+
 ---
 
 ## 配置说明

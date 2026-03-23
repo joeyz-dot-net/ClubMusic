@@ -1,7 +1,7 @@
 // API 调用封装模块
 
 import { userSession } from './userSession.js';
-import { recordTrace } from './requestTrace.js?v=1';
+import { recordTrace } from './requestTrace.js?v=2';
 
 /**
  * Leading debounce（先到先得）：

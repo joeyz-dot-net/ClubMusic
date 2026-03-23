@@ -15,11 +15,11 @@ import { localFiles } from './local.js?v=20';
 import { settingsManager } from './settingsManager.js?v=6';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
-import { ktvSync } from './ktv.js?v=40';
+import { ktvSync } from './ktv.js?v=41';
 import { playLock } from './playLock.js';
 import { unavailableSongs } from './unavailable.js';
-import { recordTrace } from './requestTrace.js?v=1';
-import { createRegressionHarness } from './regressionHarness.js?v=17';
+import { recordTrace } from './requestTrace.js?v=2';
+import { createRegressionHarness } from './regressionHarness.js?v=18';
 
 // ==========================================
 // 应用初始化
@@ -2498,6 +2498,8 @@ app.diagnose = {
         console.log('  app.diagnose.printCurrentState()');
         console.log('  app.diagnose.reportCurrentState()');
         console.log('  app.diagnose.getKtvSyncSnapshot()');
+        console.log('  app.diagnose.isVerboseTraceEnabled()');
+        console.log('  app.diagnose.setVerboseTraceEnabled(true|false)');
         console.log('  await app.diagnose.sampleKtvSync()');
         console.log('  await app.diagnose.runEmbeddableSyncProbe()');
         console.log('  app.diagnose.summarizeKtvSync(samples)');
@@ -2525,6 +2527,12 @@ app.diagnose = {
     },
     getKtvSyncSnapshot(label) {
         return app.regression.getKtvSyncSnapshot(label);
+    },
+    isVerboseTraceEnabled() {
+        return app.regression.isVerboseTraceEnabled();
+    },
+    setVerboseTraceEnabled(enabled) {
+        return app.regression.setVerboseTraceEnabled(enabled);
     },
     sampleKtvSync(options) {
         return app.regression.sampleKtvSync(options);

@@ -1,4 +1,5 @@
 const TRACE_STORAGE_KEY = 'clubMusicTraceEvents';
+const TRACE_VERBOSE_STORAGE_KEY = 'clubMusicTraceVerboseEnabled';
 const TRACE_LIMIT = 120;
 const MAX_STACK_LINES = 12;
 
@@ -22,6 +23,23 @@ function persistTraceEvents(events) {
         sessionStorage.setItem(TRACE_STORAGE_KEY, JSON.stringify(events));
     } catch (error) {
         console.warn('[Trace] 写入追踪缓冲失败:', error);
+    }
+}
+
+function loadVerboseTraceEnabled() {
+    try {
+        return sessionStorage.getItem(TRACE_VERBOSE_STORAGE_KEY) === '1';
+    } catch (error) {
+        console.warn('[Trace] 读取 verbose 标志失败:', error);
+        return false;
+    }
+}
+
+function persistVerboseTraceEnabled(enabled) {
+    try {
+        sessionStorage.setItem(TRACE_VERBOSE_STORAGE_KEY, enabled ? '1' : '0');
+    } catch (error) {
+        console.warn('[Trace] 写入 verbose 标志失败:', error);
     }
 }
 
@@ -69,6 +87,7 @@ function toSerializable(value, depth = 0) {
 
 const traceState = {
     events: loadTraceEvents(),
+    verboseEnabled: loadVerboseTraceEnabled(),
 };
 
 function syncTraceGlobals() {
@@ -85,12 +104,24 @@ function syncTraceGlobals() {
         latest() {
             return traceState.events[traceState.events.length - 1] || null;
         },
+        isVerboseEnabled() {
+            return traceState.verboseEnabled;
+        },
+        setVerboseEnabled(enabled) {
+            traceState.verboseEnabled = enabled === true;
+            persistVerboseTraceEnabled(traceState.verboseEnabled);
+            syncTraceGlobals();
+        },
     };
 }
 
 syncTraceGlobals();
 
 export function recordTrace(type, details = {}, options = {}) {
+    if (options.verboseOnly === true && !traceState.verboseEnabled) {
+        return null;
+    }
+
     const includeStack = options.includeStack !== false;
     const entry = {
         id: `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
@@ -110,4 +141,14 @@ export function recordTrace(type, details = {}, options = {}) {
 
 export function getTraceEvents() {
     return [...traceState.events];
+}
+
+export function getVerboseTraceEnabled() {
+    return traceState.verboseEnabled;
+}
+
+export function setVerboseTraceEnabled(enabled) {
+    traceState.verboseEnabled = enabled === true;
+    persistVerboseTraceEnabled(traceState.verboseEnabled);
+    syncTraceGlobals();
 }

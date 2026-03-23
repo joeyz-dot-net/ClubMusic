@@ -8,7 +8,7 @@ import { player } from './player.js?v=21';
 import { Toast } from './ui.js';
 import { i18n } from './i18n.js';
 import { unavailableSongs } from './unavailable.js';
-import { recordTrace } from './requestTrace.js?v=1';
+import { recordTrace } from './requestTrace.js?v=2';
 
 function dismissSuccessToastsForTitle(title) {
     if (!title) {
@@ -162,7 +162,7 @@ export class KTVSync {
                 || playerState === YT.PlayerState.BUFFERING;
 
             if (!canForcePlayback) {
-                recordTrace('ktv.trusted_resume.skipped', this.capturePlayerStateSnapshot('skipped'), { includeStack: false });
+                recordTrace('ktv.trusted_resume.skipped', this.capturePlayerStateSnapshot('skipped'), { includeStack: false, verboseOnly: true });
                 return false;
             }
 
@@ -170,19 +170,19 @@ export class KTVSync {
             this.trustedResumeTraceToken = `resume_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
             recordTrace('ktv.trusted_resume.requested', this.capturePlayerStateSnapshot('before-playVideo'), { includeStack: false });
             this.player.playVideo();
-            recordTrace('ktv.trusted_resume.after_call', this.capturePlayerStateSnapshot('after-playVideo'), { includeStack: false });
+            recordTrace('ktv.trusted_resume.after_call', this.capturePlayerStateSnapshot('after-playVideo'), { includeStack: false, verboseOnly: true });
             const traceToken = this.trustedResumeTraceToken;
             this.trustedResumeTraceTimers.push(setTimeout(() => {
                 if (this.trustedResumeTraceToken !== traceToken) {
                     return;
                 }
-                recordTrace('ktv.trusted_resume.after_250ms', this.capturePlayerStateSnapshot('after-250ms'), { includeStack: false });
+                recordTrace('ktv.trusted_resume.after_250ms', this.capturePlayerStateSnapshot('after-250ms'), { includeStack: false, verboseOnly: true });
             }, 250));
             this.trustedResumeTraceTimers.push(setTimeout(() => {
                 if (this.trustedResumeTraceToken !== traceToken) {
                     return;
                 }
-                recordTrace('ktv.trusted_resume.after_1000ms', this.capturePlayerStateSnapshot('after-1000ms'), { includeStack: false });
+                recordTrace('ktv.trusted_resume.after_1000ms', this.capturePlayerStateSnapshot('after-1000ms'), { includeStack: false, verboseOnly: true });
             }, 1000));
             return true;
         } catch (error) {
@@ -446,7 +446,7 @@ export class KTVSync {
             ...this.capturePlayerStateSnapshot('on-state-change'),
             eventState: event.data,
             eventStateLabel: this.getPlayerStateLabel(event.data),
-        }, { includeStack: false });
+        }, { includeStack: false, verboseOnly: true });
 
         if (event.data === YT.PlayerState.PLAYING) {
             this.videoPendingSince = 0;

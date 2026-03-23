@@ -1,6 +1,7 @@
-import { recordTrace } from './requestTrace.js?v=1';
+import { getVerboseTraceEnabled, recordTrace, setVerboseTraceEnabled } from './requestTrace.js?v=2';
 
 const DEFAULT_WAIT_MS = 2600;
+const PROBE_AUTO_CLEANUP_MS = 20000;
 
 export class RegressionHarness {
     constructor({ app, api, player, ktvSync, playlistManager }) {
@@ -44,6 +45,64 @@ export class RegressionHarness {
 
     getTraceEvents() {
         return window.__clubMusicTrace?.getEvents?.() || [];
+    }
+
+    enableVerboseTrace() {
+        const previous = getVerboseTraceEnabled();
+        if (!previous) {
+            setVerboseTraceEnabled(true);
+        }
+        return previous;
+    }
+
+    restoreVerboseTrace(previous) {
+        setVerboseTraceEnabled(previous === true);
+    }
+
+    isVerboseTraceEnabled() {
+        return getVerboseTraceEnabled();
+    }
+
+    setVerboseTraceEnabled(enabled) {
+        setVerboseTraceEnabled(enabled === true);
+        return this.isVerboseTraceEnabled();
+    }
+
+    clearPlayPauseResumeProbe({ recordAbandoned = false, reason = 'cleanup' } = {}) {
+        const probe = this.playPauseResumeProbe;
+        if (!probe) {
+            return;
+        }
+
+        if (probe.cleanupTimer) {
+            clearTimeout(probe.cleanupTimer);
+        }
+
+        probe.restoreAppMethodProbe?.();
+        probe.restoreVerboseTrace?.();
+
+        if (recordAbandoned) {
+            recordTrace('regression.playpause-resume.abandoned', {
+                probeId: probe.probeId,
+                controlId: probe.controlId,
+                reason,
+            }, { includeStack: false });
+        }
+
+        this.playPauseResumeProbe = null;
+    }
+
+    schedulePlayPauseResumeProbeCleanup(probe, timeoutMs = PROBE_AUTO_CLEANUP_MS) {
+        if (!probe) {
+            return;
+        }
+
+        probe.cleanupTimer = setTimeout(() => {
+            if (this.playPauseResumeProbe?.probeId !== probe.probeId) {
+                return;
+            }
+            this.clearPlayPauseResumeProbe({ recordAbandoned: true, reason: 'timeout' });
+        }, timeoutMs);
     }
 
     getNoticeElement() {
@@ -106,6 +165,7 @@ export class RegressionHarness {
 
         this.player.status = nextStatus;
         this.player._interpPlaying = paused === false;
+        this.player._interpStamp = Date.now();
         return true;
     }
 
@@ -761,72 +821,82 @@ export class RegressionHarness {
             throw new Error('Unknown regression song key');
         }
 
-        recordTrace('regression.playpause-resume.prepare.start', {
-            songKey,
-            controlId,
-        }, { includeStack: false });
+        const previousVerboseTraceEnabled = this.enableVerboseTrace();
 
-        this.clearTrace();
-        this.removeWarningToasts();
-        this.resetKtvRegressionState();
-        await this.ensureFullPlayerOpen();
-        await this.rebuildQueue([song]);
-        await this.playQueueIndex(0, waitMs);
-        await this.sleep(600);
-        const pausedReady = await this.ensurePausedForPlayPauseProbe();
-        if (!pausedReady) {
-            throw new Error('Unable to stabilize paused state before trusted play/pause probe');
-        }
+        try {
+            recordTrace('regression.playpause-resume.prepare.start', {
+                songKey,
+                controlId,
+            }, { includeStack: false });
 
-        const backendStatusBeforeProbe = await this.api.getStatus();
-        const backendPaused = this.getPausedState(backendStatusBeforeProbe);
-        if (backendPaused !== true) {
-            throw new Error(`Expected backend paused state before trusted play/pause probe, got ${backendPaused}`);
-        }
-
-        if (simulateStaleLocalPausedState) {
-            const localCacheUpdated = this.overwriteLocalPausedCache(false);
-            if (!localCacheUpdated) {
-                throw new Error('Unable to overwrite local paused cache for stale-state play/pause probe');
+            this.clearTrace();
+            this.removeWarningToasts();
+            this.resetKtvRegressionState();
+            await this.ensureFullPlayerOpen();
+            await this.rebuildQueue([song]);
+            await this.playQueueIndex(0, waitMs);
+            await this.sleep(600);
+            const pausedReady = await this.ensurePausedForPlayPauseProbe();
+            if (!pausedReady) {
+                throw new Error('Unable to stabilize paused state before trusted play/pause probe');
             }
+
+            const backendStatusBeforeProbe = await this.api.getStatus();
+            const backendPaused = this.getPausedState(backendStatusBeforeProbe);
+            if (backendPaused !== true) {
+                throw new Error(`Expected backend paused state before trusted play/pause probe, got ${backendPaused}`);
+            }
+
+            if (simulateStaleLocalPausedState) {
+                const localCacheUpdated = this.overwriteLocalPausedCache(false);
+                if (!localCacheUpdated) {
+                    throw new Error('Unable to overwrite local paused cache for stale-state play/pause probe');
+                }
+            }
+
+            const selector = this.installTrustedDomProbe(controlId, 'regression.playpause-resume.dom');
+            const beforeSnapshot = {
+                ...this.snapshot('trusted-playpause-resume-before'),
+                backendPaused,
+                staleLocalPausedStateRequested: simulateStaleLocalPausedState,
+            };
+            beforeSnapshot.staleLocalPausedStatePrepared = simulateStaleLocalPausedState
+                ? beforeSnapshot.localPaused === false && beforeSnapshot.backendPaused === true
+                : false;
+            const probeId = `playpause_probe_${Date.now().toString(36)}`;
+            this.clearPlayPauseResumeProbe({ recordAbandoned: true, reason: 'replaced' });
+            this.playPauseResumeProbe = {
+                probeId,
+                controlId,
+                songKey,
+                simulateStaleLocalPausedState,
+                traceStartIndex: this.getTraceEvents().length,
+                beforeSnapshot,
+                restoreAppMethodProbe: this.installAppMethodProbe('togglePlayPause', 'regression.playpause-resume.app-togglePlayPause'),
+                restoreVerboseTrace: () => this.restoreVerboseTrace(previousVerboseTraceEnabled),
+                preparedAt: Date.now(),
+            };
+            this.schedulePlayPauseResumeProbeCleanup(this.playPauseResumeProbe);
+
+            recordTrace('regression.playpause-resume.prepared', {
+                probeId,
+                controlId,
+                traceStartIndex: this.playPauseResumeProbe.traceStartIndex,
+                songKey,
+            }, { includeStack: false });
+
+            return {
+                probeId,
+                controlId,
+                beforeSnapshot,
+                expectedVideoId: song.video_id,
+                simulateStaleLocalPausedState,
+                selector,
+            };
+        } catch (error) {
+            this.restoreVerboseTrace(previousVerboseTraceEnabled);
+            throw error;
         }
-
-        const selector = this.installTrustedDomProbe(controlId, 'regression.playpause-resume.dom');
-        const beforeSnapshot = {
-            ...this.snapshot('trusted-playpause-resume-before'),
-            backendPaused,
-            staleLocalPausedStateRequested: simulateStaleLocalPausedState,
-        };
-        beforeSnapshot.staleLocalPausedStatePrepared = simulateStaleLocalPausedState
-            ? beforeSnapshot.localPaused === false && beforeSnapshot.backendPaused === true
-            : false;
-        const probeId = `playpause_probe_${Date.now().toString(36)}`;
-        this.playPauseResumeProbe = {
-            probeId,
-            controlId,
-            songKey,
-            simulateStaleLocalPausedState,
-            traceStartIndex: this.getTraceEvents().length,
-            beforeSnapshot,
-            restoreAppMethodProbe: this.installAppMethodProbe('togglePlayPause', 'regression.playpause-resume.app-togglePlayPause'),
-            preparedAt: Date.now(),
-        };
-
-        recordTrace('regression.playpause-resume.prepared', {
-            probeId,
-            controlId,
-            traceStartIndex: this.playPauseResumeProbe.traceStartIndex,
-            songKey,
-        }, { includeStack: false });
-
-        return {
-            probeId,
-            controlId,
-            beforeSnapshot,
-            expectedVideoId: song.video_id,
-            simulateStaleLocalPausedState,
-            selector,
-        };
     }
 
     async prepareTrustedPlayPauseResumeStaleLocalStateFlow(options = {}) {
@@ -851,134 +921,136 @@ export class RegressionHarness {
             throw new Error(`Probe mismatch: expected ${probe.probeId}, got ${probeId}`);
         }
 
-        const expectedSong = this.getSong(probe.songKey);
-        await this.waitForPausedState(false, { timeoutMs: Math.max(settleMs, 8000) });
-        await this.sleep(settleMs);
+        try {
+            const expectedSong = this.getSong(probe.songKey);
+            await this.waitForPausedState(false, { timeoutMs: Math.max(settleMs, 8000) });
+            await this.sleep(settleMs);
 
-        const samples = await this.sampleKtvSync({
-            durationMs: sampleDurationMs,
-            intervalMs: sampleIntervalMs,
-            label: 'trusted-playpause-resume',
-        });
-        const snapshot = this.snapshot('trusted-playpause-resume-after');
-        const traceMetrics = this.buildTraceMetrics({
-            controlId: probe.controlId,
-            startIndex: probe.traceStartIndex,
-            requestEventType: 'regression.playpause-resume.noop',
-            clickEventTypes: ['regression.playpause-resume.dom.click'],
-            pointerEventTypes: ['regression.playpause-resume.dom.pointerdown'],
-            blockedEventTypes: [],
-        });
-        const traceEvents = this.getTraceEvents().slice(probe.traceStartIndex);
-        const appTogglePlayPauseSeen = traceEvents.some((event) => event.type === 'regression.playpause-resume.app-togglePlayPause');
-        const currentTrackId = this.getSongMatchId(snapshot.currentMeta);
-        const finiteYtTimes = samples
-            .map((sample) => sample.ytCurrentTime)
-            .filter((value) => Number.isFinite(value));
-        const ytClockAdvanced = finiteYtTimes.length >= 2
-            && (finiteYtTimes[finiteYtTimes.length - 1] - finiteYtTimes[0]) > 1.0;
-        const ytPlayingObserved = samples.some((sample) => sample.ytState === 1);
-        const resumedSeen = samples.some((sample) => sample.paused === false);
-        const ytStateCounts = samples.reduce((counts, sample) => {
-            const key = String(sample.ytState);
-            counts[key] = (counts[key] || 0) + 1;
-            return counts;
-        }, {});
-        const finalSample = samples[samples.length - 1] || null;
-        const finalYtState = finalSample?.ytState ?? snapshot.ytState ?? null;
-        const allBuffering = samples.length > 0 && samples.every((sample) => sample.ytState === 3);
-        const allPaused = samples.length > 0 && samples.every((sample) => sample.ytState === 2);
-        let failureMode = null;
-        const ytTraceTrail = traceEvents
-            .filter((event) => event.type.startsWith('ktv.trusted_resume.') || event.type === 'ktv.player_state_change')
-            .map((event) => ({
-                type: event.type,
-                at: event.at,
-                traceToken: event.details?.traceToken ?? null,
-                state: event.details?.playerState ?? event.details?.eventState ?? null,
-                stateLabel: event.details?.playerStateLabel || event.details?.eventStateLabel || null,
-                currentTime: event.details?.currentTime ?? null,
-                context: event.details?.context || null,
-            }));
-        const trustedResumeTraceToken = ytTraceTrail.find((entry) => entry.type === 'ktv.trusted_resume.requested')?.traceToken || null;
-        const scopedYtTraceTrail = trustedResumeTraceToken
-            ? ytTraceTrail.filter((entry) => entry.traceToken === trustedResumeTraceToken)
-            : ytTraceTrail;
-        const toggleTraceTrail = traceEvents
-            .filter((event) => event.type.startsWith('ui.toggle_play_pause.'))
-            .map((event) => ({
-                type: event.type,
-                at: event.at,
-                paused: event.details?.paused ?? null,
-                isResuming: event.details?.isResuming ?? null,
-                requestedTrustedResume: event.details?.requestedTrustedResume ?? null,
-                trackType: event.details?.trackType || null,
-                videoId: event.details?.videoId || null,
-            }));
-        const traceSawPlaying = scopedYtTraceTrail.some((entry) => entry.state === 1);
-        const traceEndedPaused = scopedYtTraceTrail.length > 0 && scopedYtTraceTrail[scopedYtTraceTrail.length - 1].state === 2;
-        if (!ytPlayingObserved) {
-            if (traceSawPlaying && traceEndedPaused) {
-                failureMode = 'reverted_to_paused';
-            } else if (allBuffering || finalYtState === 3) {
-                failureMode = 'stuck_buffering';
-            } else if (allPaused || finalYtState === 2) {
-                failureMode = 'stuck_paused';
-            } else {
-                failureMode = 'not_playing';
+            const samples = await this.sampleKtvSync({
+                durationMs: sampleDurationMs,
+                intervalMs: sampleIntervalMs,
+                label: 'trusted-playpause-resume',
+            });
+            const snapshot = this.snapshot('trusted-playpause-resume-after');
+            const traceMetrics = this.buildTraceMetrics({
+                controlId: probe.controlId,
+                startIndex: probe.traceStartIndex,
+                requestEventType: 'regression.playpause-resume.noop',
+                clickEventTypes: ['regression.playpause-resume.dom.click'],
+                pointerEventTypes: ['regression.playpause-resume.dom.pointerdown'],
+                blockedEventTypes: [],
+            });
+            const traceEvents = this.getTraceEvents().slice(probe.traceStartIndex);
+            const appTogglePlayPauseSeen = traceEvents.some((event) => event.type === 'regression.playpause-resume.app-togglePlayPause');
+            const currentTrackId = this.getSongMatchId(snapshot.currentMeta);
+            const finiteYtTimes = samples
+                .map((sample) => sample.ytCurrentTime)
+                .filter((value) => Number.isFinite(value));
+            const ytClockAdvanced = finiteYtTimes.length >= 2
+                && (finiteYtTimes[finiteYtTimes.length - 1] - finiteYtTimes[0]) > 1.0;
+            const ytPlayingObserved = samples.some((sample) => sample.ytState === 1);
+            const resumedSeen = samples.some((sample) => sample.paused === false);
+            const ytStateCounts = samples.reduce((counts, sample) => {
+                const key = String(sample.ytState);
+                counts[key] = (counts[key] || 0) + 1;
+                return counts;
+            }, {});
+            const finalSample = samples[samples.length - 1] || null;
+            const finalYtState = finalSample?.ytState ?? snapshot.ytState ?? null;
+            const allBuffering = samples.length > 0 && samples.every((sample) => sample.ytState === 3);
+            const allPaused = samples.length > 0 && samples.every((sample) => sample.ytState === 2);
+            let failureMode = null;
+            const ytTraceTrail = traceEvents
+                .filter((event) => event.type.startsWith('ktv.trusted_resume.') || event.type === 'ktv.player_state_change')
+                .map((event) => ({
+                    type: event.type,
+                    at: event.at,
+                    traceToken: event.details?.traceToken ?? null,
+                    state: event.details?.playerState ?? event.details?.eventState ?? null,
+                    stateLabel: event.details?.playerStateLabel || event.details?.eventStateLabel || null,
+                    currentTime: event.details?.currentTime ?? null,
+                    context: event.details?.context || null,
+                }));
+            const trustedResumeTraceToken = ytTraceTrail.find((entry) => entry.type === 'ktv.trusted_resume.requested')?.traceToken || null;
+            const scopedYtTraceTrail = trustedResumeTraceToken
+                ? ytTraceTrail.filter((entry) => entry.traceToken === trustedResumeTraceToken)
+                : ytTraceTrail;
+            const toggleTraceTrail = traceEvents
+                .filter((event) => event.type.startsWith('ui.toggle_play_pause.'))
+                .map((event) => ({
+                    type: event.type,
+                    at: event.at,
+                    paused: event.details?.paused ?? null,
+                    isResuming: event.details?.isResuming ?? null,
+                    requestedTrustedResume: event.details?.requestedTrustedResume ?? null,
+                    trackType: event.details?.trackType || null,
+                    videoId: event.details?.videoId || null,
+                }));
+            const traceSawPlaying = scopedYtTraceTrail.some((entry) => entry.state === 1);
+            const traceEndedPaused = scopedYtTraceTrail.length > 0 && scopedYtTraceTrail[scopedYtTraceTrail.length - 1].state === 2;
+            if (!ytPlayingObserved) {
+                if (traceSawPlaying && traceEndedPaused) {
+                    failureMode = 'reverted_to_paused';
+                } else if (allBuffering || finalYtState === 3) {
+                    failureMode = 'stuck_buffering';
+                } else if (allPaused || finalYtState === 2) {
+                    failureMode = 'stuck_paused';
+                } else {
+                    failureMode = 'not_playing';
+                }
             }
+            const syncSummary = this.summarizeKtvSync(samples, { maxAllowedDrift });
+            const summary = this.summarizeChecks({
+                trustedClickSeen: traceMetrics.trustedClickSeen,
+                pointerDownSeen: traceMetrics.pointerDownSeen,
+                appTogglePlayPauseSeen,
+                currentTrackMatches: currentTrackId === this.getSongId(expectedSong),
+                staleLocalPausedStatePrepared: probe.simulateStaleLocalPausedState
+                    ? probe.beforeSnapshot.staleLocalPausedStatePrepared === true
+                    : true,
+                resumedSeen,
+                videoModeEnabled: snapshot.isVideoMode === true && snapshot.currentVideoId === expectedSong.video_id,
+                ytPlayingObserved,
+                ytClockAdvanced,
+            });
+            const diagnostics = {
+                failureMode,
+                finalYtState,
+                ytStateCounts,
+                allBuffering,
+                allPaused,
+                traceSawPlaying,
+                traceEndedPaused,
+                trustedResumeTraceToken,
+                ytTraceTrail: scopedYtTraceTrail,
+                toggleTraceTrail,
+            };
+
+            const result = {
+                probeId: probe.probeId,
+                controlId: probe.controlId,
+                expectedVideoId: expectedSong.video_id,
+                beforeSnapshot: probe.beforeSnapshot,
+                afterSnapshot: snapshot,
+                samples,
+                syncSummary,
+                traceMetrics,
+                diagnostics,
+                summary,
+            };
+
+            recordTrace('regression.playpause-resume.evaluated', {
+                probeId: probe.probeId,
+                controlId: probe.controlId,
+                summary,
+                syncSummary,
+                diagnostics,
+            }, { includeStack: false });
+
+            return result;
+        } finally {
+            this.clearPlayPauseResumeProbe();
         }
-        const syncSummary = this.summarizeKtvSync(samples, { maxAllowedDrift });
-        const summary = this.summarizeChecks({
-            trustedClickSeen: traceMetrics.trustedClickSeen,
-            pointerDownSeen: traceMetrics.pointerDownSeen,
-            appTogglePlayPauseSeen,
-            currentTrackMatches: currentTrackId === this.getSongId(expectedSong),
-            staleLocalPausedStatePrepared: probe.simulateStaleLocalPausedState
-                ? probe.beforeSnapshot.staleLocalPausedStatePrepared === true
-                : true,
-            resumedSeen,
-            videoModeEnabled: snapshot.isVideoMode === true && snapshot.currentVideoId === expectedSong.video_id,
-            ytPlayingObserved,
-            ytClockAdvanced,
-        });
-        const diagnostics = {
-            failureMode,
-            finalYtState,
-            ytStateCounts,
-            allBuffering,
-            allPaused,
-            traceSawPlaying,
-            traceEndedPaused,
-            trustedResumeTraceToken,
-            ytTraceTrail: scopedYtTraceTrail,
-            toggleTraceTrail,
-        };
-
-        const result = {
-            probeId: probe.probeId,
-            controlId: probe.controlId,
-            expectedVideoId: expectedSong.video_id,
-            beforeSnapshot: probe.beforeSnapshot,
-            afterSnapshot: snapshot,
-            samples,
-            syncSummary,
-            traceMetrics,
-            diagnostics,
-            summary,
-        };
-
-        recordTrace('regression.playpause-resume.evaluated', {
-            probeId: probe.probeId,
-            controlId: probe.controlId,
-            summary,
-            syncSummary,
-            diagnostics,
-        }, { includeStack: false });
-
-        probe.restoreAppMethodProbe?.();
-        this.playPauseResumeProbe = null;
-        return result;
     }
 
     async evaluateTrustedPlayPauseResumeStaleLocalStateFlow(options = {}) {
@@ -1034,6 +1106,8 @@ export class RegressionHarness {
 
     printHelp() {
         console.log('Regression commands:');
+        console.log('  app.regression.isVerboseTraceEnabled()');
+        console.log('  app.regression.setVerboseTraceEnabled(true|false)');
         console.log('  await app.regression.runRestrictedAudioOnlyFlow()');
         console.log('  await app.regression.runEmbeddableVideoFlow()');
         console.log('  app.regression.getKtvSyncSnapshot()');
