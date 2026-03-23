@@ -3,7 +3,17 @@
 **Full-stack web music player**: FastAPI backend + ES6 frontend + MPV IPC engine.  
 **Key distinction**: Trilingual (zh/en/zh-TW), user-isolation via localStorage, event-driven auto-play, Windows/PyInstaller-optimized.
 
-> **Last Updated**: 2026-02-28 | **Focus**: Modular routers, dependency injection, WebSocket push, RoomPlayer, backend-controlled auto-play, API parity patterns, singleton architecture
+> **Last Updated**: 2026-03-23 | **Focus**: Modular routers, dependency injection, WebSocket push, RoomPlayer, backend-controlled auto-play, API parity patterns, singleton architecture, browser control regression workflow
+
+## Documentation Map
+
+Use this file for the non-obvious rules that repeatedly affect code changes. Link to the source docs below instead of duplicating long operational details in new agent instructions.
+
+- [README.md](../README.md): setup, runtime behavior, config sections, and end-user feature overview
+- `/memories/repo/player-status-sync.md`: polling/WebSocket reconciliation and local optimistic update pitfalls
+- `/memories/repo/request-source-tracing.md`: request attribution headers and browser/backend trace correlation
+- `/memories/repo/ws-playlist-updated.md`: `playlist_updated` semantics and queue refresh triggers
+- `/memories/repo/ui-room-aware-api.md`: room-aware API routing and frontend room behavior
 
 ## ⚠️ Critical Rules (Must Follow)
 
@@ -17,6 +27,8 @@
 | **UTF-8 Windows** | Every `.py` entry point needs UTF-8 wrapper (see [models/__init__.py#L6-11](../models/__init__.py)). Missing = Chinese chars garbled in logs. |
 | **i18n Completeness** | Always add `zh`, `en`, and `zh-TW` keys in [static/js/i18n.js](../static/js/i18n.js) when adding UI text. Missing lang = undefined strings. |
 | **Default Playlist** | Never delete or rename the `default` playlist (ID: `"default"`). Backend assumes it always exists for auto-play logic. |
+| **Frontend Singleton Imports** | Keep JS module import paths version-consistent. A stale path can create a second singleton instance (`player`, `localFiles`, etc.) and split app state. |
+| **Room-Aware Routing** | Endpoints that support rooms must use request-aware dependency helpers (`get_player_for_request()` / pipe-aware routing), not the main-player singleton blindly. |
 
 ## Architecture & Data Flow
 
@@ -253,11 +265,33 @@ python app.py
 
 | Task | Command | Purpose |
 |------|---------|---------|
+| **Run App** | `py run.py` | 🎵 Starts the local app with interactive audio device selection |
 | **Build** | `.\build_exe.bat` | 📦 Creates `dist/ClubMusic.exe` (local build only) |
 | **Deploy Remote** | `.\.vscode\deploy.ps1` | 🚀 Deploys exe to `\\B560\code\ClubMusic` (with backup) |
+| **Browser Control Regression** | `py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --output logs/browser-control-regression.json` | 🧪 Playwright regression for trusted next/prev and trusted resume flows |
 | **Build & Deploy** | Sequential combo | 🔨➡️🚀 Builds then deploys (default task: `Ctrl+Shift+B`) |
 
 **Access**: `Ctrl+Shift+P` → "Run Task" → Select task name
+
+### Browser Control Regression
+```powershell
+# Manual
+py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/
+
+# Auto-start local server if needed
+py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --output logs/browser-control-regression.json
+```
+
+Use this before and after changing trusted browser controls, KTV resume behavior, request tracing, or frontend/backend pause-state synchronization.
+
+**Passing baseline**:
+- Top-level `summary.passed = true`
+- `checks.controlSuite = true`
+- `checks.trustedResumeSuite = true`
+
+**When it fails**:
+- Correlate browser traces and backend logs using the request-source headers described in `/memories/repo/request-source-tracing.md`
+- Re-check polling/WebSocket merge behavior in `/memories/repo/player-status-sync.md`
 
 ### Build Windows Executable
 ```powershell
@@ -325,6 +359,11 @@ Key settings:
 **Console**: [static/js/debug.js](../static/js/debug.js) — press `` ` `` (backtick) to toggle debug panel.
 **Logs**: File-based logs in `logs/` directory (daily rotation, 7-day retention). Also stdout in dev mode.
 
+**Trace workflow**:
+- Frontend requests attach `X-ClubMusic-*` headers from [static/js/api.js](../static/js/api.js) so backend logs can distinguish tab, page, room, and user source.
+- For unexpected `next`/`play` transitions, inspect browser-side `window.__clubMusicTrace` / `window.__clubMusicTraceEvents` before assuming an autoplay bug.
+- If the visible queue refreshes too often or not at all, verify `playlist_updated` handling against `/memories/repo/ws-playlist-updated.md`.
+
 ## High-Value Files (Read These First)
 
 | File | Purpose |
@@ -338,6 +377,7 @@ Key settings:
 | [static/js/api.js](../static/js/api.js) | Frontend API wrapper—**must mirror routers/*.py** |
 | [static/js/main.js](../static/js/main.js) | App initialization, state management, polling loop |
 | [static/js/i18n.js](../static/js/i18n.js) | Translations (zh/en/zh-TW)—add all languages for new strings |
+| [tools/browser_control_regression.py](../tools/browser_control_regression.py) | Regression harness for trusted browser control flows |
 
 ## Common Mistakes & How to Avoid
 
