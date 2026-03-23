@@ -11,6 +11,7 @@ export class RegressionHarness {
         this.playlistManager = playlistManager;
         this.nextClickProbe = null;
         this.prevClickProbe = null;
+        this.playPauseResumeProbe = null;
         this.songs = {
             embeddable: {
                 url: 'https://www.youtube.com/watch?v=FQyEkN_9CXU',
@@ -298,6 +299,119 @@ export class RegressionHarness {
         };
     }
 
+    getKtvSyncSnapshot(label = 'ktv-sync-snapshot') {
+        const status = this.player.getStatus?.() || {};
+        const mpvState = status?.mpv_state || status?.mpv || {};
+        const rawServerTime = Number(mpvState.time_pos ?? mpvState.time ?? NaN);
+        const interpolatedTime = Number(this.player.getInterpolatedTime?.());
+        let ytCurrentTime = null;
+        let ytState = null;
+        try {
+            ytCurrentTime = Number(this.ktvSync?.player?.getCurrentTime?.());
+            ytState = this.ktvSync?.player?.getPlayerState?.() ?? null;
+        } catch (error) {
+            ytCurrentTime = null;
+            ytState = `error:${String(error)}`;
+        }
+
+        const normalizedRawServerTime = Number.isFinite(rawServerTime) ? rawServerTime : null;
+        const normalizedInterpolatedTime = Number.isFinite(interpolatedTime) ? interpolatedTime : null;
+        const normalizedYtCurrentTime = Number.isFinite(ytCurrentTime) ? ytCurrentTime : null;
+
+        return {
+            label,
+            currentMeta: status.current_meta || null,
+            rawServerTime: normalizedRawServerTime,
+            interpolatedTime: normalizedInterpolatedTime,
+            ytCurrentTime: normalizedYtCurrentTime,
+            ytState,
+            paused: mpvState.paused ?? null,
+            isVideoMode: !!this.ktvSync?.isVideoMode,
+            currentVideoId: this.ktvSync?.currentVideoId || null,
+            pendingVideoId: this.ktvSync?.pendingVideoId || null,
+            failedVideoId: this.ktvSync?._failedVideoId ?? null,
+            playerReady: !!this.ktvSync?.playerReady,
+            videoOffset: this.ktvSync?.videoOffset ?? null,
+            driftVsRaw: Number.isFinite(rawServerTime) && Number.isFinite(ytCurrentTime)
+                ? Number((ytCurrentTime - rawServerTime).toFixed(3))
+                : null,
+            driftVsInterpolated: Number.isFinite(interpolatedTime) && Number.isFinite(ytCurrentTime)
+                ? Number((ytCurrentTime - interpolatedTime).toFixed(3))
+                : null,
+            metrics: this.ktvSync?.getMetrics?.() || null,
+        };
+    }
+
+    async sampleKtvSync({ durationMs = 5000, intervalMs = 500, label = 'ktv-sync-sample' } = {}) {
+        const samples = [];
+        const startedAt = Date.now();
+        let sampleIndex = 0;
+
+        while ((Date.now() - startedAt) <= durationMs) {
+            samples.push({
+                sampleIndex,
+                elapsedMs: Date.now() - startedAt,
+                ...this.getKtvSyncSnapshot(`${label}-${sampleIndex}`),
+            });
+            sampleIndex += 1;
+            await this.sleep(intervalMs);
+        }
+
+        return samples;
+    }
+
+    summarizeKtvSync(samples = [], { maxAllowedDrift = 1.0 } = {}) {
+        const finiteInterpolatedDrifts = samples
+            .map((sample) => sample.driftVsInterpolated)
+            .filter((value) => Number.isFinite(value));
+        const finiteRawDrifts = samples
+            .map((sample) => sample.driftVsRaw)
+            .filter((value) => Number.isFinite(value));
+        const maxAbsInterpolatedDrift = finiteInterpolatedDrifts.length
+            ? Math.max(...finiteInterpolatedDrifts.map((value) => Math.abs(value)))
+            : null;
+        const maxAbsRawDrift = finiteRawDrifts.length
+            ? Math.max(...finiteRawDrifts.map((value) => Math.abs(value)))
+            : null;
+        const playingSamples = samples.filter((sample) => sample.ytState === 1).length;
+        const bufferingSamples = samples.filter((sample) => sample.ytState === 3).length;
+
+        const summary = this.summarizeChecks({
+            hasSamples: samples.length > 0,
+            videoModeSeen: samples.some((sample) => sample.isVideoMode === true),
+            ytClockObserved: finiteRawDrifts.length > 0,
+            interpolatedDriftWithinThreshold: maxAbsInterpolatedDrift == null || maxAbsInterpolatedDrift <= maxAllowedDrift,
+        });
+
+        return {
+            ...summary,
+            sampleCount: samples.length,
+            playingSamples,
+            bufferingSamples,
+            maxAbsInterpolatedDrift,
+            maxAbsRawDrift,
+        };
+    }
+
+    async runEmbeddableSyncProbe({
+        settleMs = 2200,
+        sampleDurationMs = 5000,
+        sampleIntervalMs = 500,
+        maxAllowedDrift = 1.0,
+    } = {}) {
+        await this.runEmbeddableVideoFlow();
+        await this.sleep(settleMs);
+        const samples = await this.sampleKtvSync({
+            durationMs: sampleDurationMs,
+            intervalMs: sampleIntervalMs,
+            label: 'embeddable-sync-probe',
+        });
+        return {
+            samples,
+            summary: this.summarizeKtvSync(samples, { maxAllowedDrift }),
+        };
+    }
+
     reportCurrentState(label = 'diagnose-current-state') {
         return this.snapshot(label);
     }
@@ -573,6 +687,153 @@ export class RegressionHarness {
         return result;
     }
 
+    async waitForPausedState(expectedPaused, { timeoutMs = 8000, intervalMs = 200 } = {}) {
+        const startedAt = Date.now();
+        while ((Date.now() - startedAt) <= timeoutMs) {
+            const status = this.player.getStatus?.() || {};
+            const mpvState = status?.mpv_state || status?.mpv || {};
+            if ((mpvState.paused ?? null) === expectedPaused) {
+                return true;
+            }
+            await this.sleep(intervalMs);
+        }
+        return false;
+    }
+
+    async prepareTrustedPlayPauseResumeFlow({
+        songKey = 'embeddable',
+        controlId = 'fullPlayerPlayPause',
+        waitMs = DEFAULT_WAIT_MS,
+    } = {}) {
+        const song = this.getSong(songKey);
+        if (!song) {
+            throw new Error('Unknown regression song key');
+        }
+
+        recordTrace('regression.playpause-resume.prepare.start', {
+            songKey,
+            controlId,
+        }, { includeStack: false });
+
+        this.clearTrace();
+        this.removeWarningToasts();
+        this.resetKtvRegressionState();
+        await this.ensureFullPlayerOpen();
+        await this.rebuildQueue([song]);
+        await this.playQueueIndex(0, waitMs);
+        await this.sleep(600);
+        await this.player.pause();
+        await this.waitForPausedState(true, { timeoutMs: 5000 });
+        await this.sleep(400);
+
+        const selector = this.installTrustedDomProbe(controlId, 'regression.playpause-resume.dom');
+        const beforeSnapshot = this.snapshot('trusted-playpause-resume-before');
+        const probeId = `playpause_probe_${Date.now().toString(36)}`;
+        this.playPauseResumeProbe = {
+            probeId,
+            controlId,
+            songKey,
+            traceStartIndex: this.getTraceEvents().length,
+            beforeSnapshot,
+            restoreAppMethodProbe: this.installAppMethodProbe('togglePlayPause', 'regression.playpause-resume.app-togglePlayPause'),
+            preparedAt: Date.now(),
+        };
+
+        recordTrace('regression.playpause-resume.prepared', {
+            probeId,
+            controlId,
+            traceStartIndex: this.playPauseResumeProbe.traceStartIndex,
+            songKey,
+        }, { includeStack: false });
+
+        return {
+            probeId,
+            controlId,
+            beforeSnapshot,
+            expectedVideoId: song.video_id,
+            selector,
+        };
+    }
+
+    async evaluateTrustedPlayPauseResumeFlow({
+        probeId = null,
+        settleMs = 1800,
+        sampleDurationMs = 3200,
+        sampleIntervalMs = 400,
+        maxAllowedDrift = 1.0,
+    } = {}) {
+        const probe = this.playPauseResumeProbe;
+        if (!probe) {
+            throw new Error('No prepared playpause-resume probe');
+        }
+        if (probeId && probe.probeId !== probeId) {
+            throw new Error(`Probe mismatch: expected ${probe.probeId}, got ${probeId}`);
+        }
+
+        const expectedSong = this.getSong(probe.songKey);
+        await this.waitForPausedState(false, { timeoutMs: Math.max(settleMs, 8000) });
+        await this.sleep(settleMs);
+
+        const samples = await this.sampleKtvSync({
+            durationMs: sampleDurationMs,
+            intervalMs: sampleIntervalMs,
+            label: 'trusted-playpause-resume',
+        });
+        const snapshot = this.snapshot('trusted-playpause-resume-after');
+        const traceMetrics = this.buildTraceMetrics({
+            controlId: probe.controlId,
+            startIndex: probe.traceStartIndex,
+            requestEventType: 'regression.playpause-resume.noop',
+            clickEventTypes: ['regression.playpause-resume.dom.click'],
+            pointerEventTypes: ['regression.playpause-resume.dom.pointerdown'],
+            blockedEventTypes: [],
+        });
+        const traceEvents = this.getTraceEvents().slice(probe.traceStartIndex);
+        const appTogglePlayPauseSeen = traceEvents.some((event) => event.type === 'regression.playpause-resume.app-togglePlayPause');
+        const currentTrackId = this.getSongMatchId(snapshot.currentMeta);
+        const finiteYtTimes = samples
+            .map((sample) => sample.ytCurrentTime)
+            .filter((value) => Number.isFinite(value));
+        const ytClockAdvanced = finiteYtTimes.length >= 2
+            && (finiteYtTimes[finiteYtTimes.length - 1] - finiteYtTimes[0]) > 1.0;
+        const ytPlayingObserved = samples.some((sample) => sample.ytState === 1);
+        const resumedSeen = samples.some((sample) => sample.paused === false);
+        const syncSummary = this.summarizeKtvSync(samples, { maxAllowedDrift });
+        const summary = this.summarizeChecks({
+            trustedClickSeen: traceMetrics.trustedClickSeen,
+            pointerDownSeen: traceMetrics.pointerDownSeen,
+            appTogglePlayPauseSeen,
+            currentTrackMatches: currentTrackId === this.getSongId(expectedSong),
+            resumedSeen,
+            videoModeEnabled: snapshot.isVideoMode === true && snapshot.currentVideoId === expectedSong.video_id,
+            ytPlayingObserved,
+            ytClockAdvanced,
+        });
+
+        const result = {
+            probeId: probe.probeId,
+            controlId: probe.controlId,
+            expectedVideoId: expectedSong.video_id,
+            beforeSnapshot: probe.beforeSnapshot,
+            afterSnapshot: snapshot,
+            samples,
+            syncSummary,
+            traceMetrics,
+            summary,
+        };
+
+        recordTrace('regression.playpause-resume.evaluated', {
+            probeId: probe.probeId,
+            controlId: probe.controlId,
+            summary,
+            syncSummary,
+        }, { includeStack: false });
+
+        probe.restoreAppMethodProbe?.();
+        this.playPauseResumeProbe = null;
+        return result;
+    }
+
     summarizeQuickSuite(result) {
         return this.summarizeChecks({
             restrictedFlow: result?.restricted?.summary?.passed === true,
@@ -624,8 +885,14 @@ export class RegressionHarness {
         console.log('Regression commands:');
         console.log('  await app.regression.runRestrictedAudioOnlyFlow()');
         console.log('  await app.regression.runEmbeddableVideoFlow()');
+        console.log('  app.regression.getKtvSyncSnapshot()');
+        console.log('  await app.regression.sampleKtvSync()');
+        console.log('  await app.regression.runEmbeddableSyncProbe()');
+        console.log('  app.regression.summarizeKtvSync(samples)');
         console.log('  await app.regression.runQuickSuite()');
         console.log('  await app.regression.runQuickSuiteAndPrint()');
+        console.log('  await app.regression.prepareTrustedPlayPauseResumeFlow()');
+        console.log('  await app.regression.evaluateTrustedPlayPauseResumeFlow()');
         console.log('  await app.regression.prepareTrustedNextClickFlow()');
         console.log('  await app.regression.evaluateTrustedNextClickFlow()');
         console.log('  await app.regression.prepareTrustedPrevClickFlow()');

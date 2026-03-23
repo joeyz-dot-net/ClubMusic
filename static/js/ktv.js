@@ -4,7 +4,7 @@
  */
 
 import { api } from './api.js?v=4';
-import { player } from './player.js?v=20';
+import { player } from './player.js?v=21';
 import { Toast } from './ui.js';
 import { i18n } from './i18n.js';
 import { unavailableSongs } from './unavailable.js';
@@ -48,6 +48,8 @@ export class KTVSync {
         this.videoOffset = 0;  // 视频时间偏移量（秒），正值=视频提前，负值=视频延迟
         this.loadOffset();
         this.videoLoadSettlingUntil = 0;
+        this.videoPendingSince = 0;
+        this.lastPendingRecoveryAt = 0;
 
         // 性能监控指标
         this.metrics = {
@@ -63,6 +65,53 @@ export class KTVSync {
 
     getMpvState(status) {
         return status?.mpv_state || status?.mpv || {};
+    }
+
+    getReferencePlaybackTime(mpvState = {}) {
+        const rawServerTime = Number(mpvState.time_pos ?? mpvState.time ?? 0);
+        const isPaused = mpvState.paused !== false;
+        if (isPaused) {
+            return Number.isFinite(rawServerTime) ? rawServerTime : 0;
+        }
+
+        const interpolatedTime = Number(player.getInterpolatedTime?.());
+        if (Number.isFinite(interpolatedTime)) {
+            return interpolatedTime;
+        }
+
+        return Number.isFinite(rawServerTime) ? rawServerTime : 0;
+    }
+
+    requestTrustedResume() {
+        if (!this.player || !this.playerReady || !this.currentVideoId) {
+            return false;
+        }
+
+        try {
+            const playerState = this.player.getPlayerState();
+            const canForcePlayback = playerState === YT.PlayerState.PAUSED
+                || playerState === YT.PlayerState.CUED
+                || playerState === YT.PlayerState.UNSTARTED
+                || playerState === YT.PlayerState.BUFFERING;
+
+            if (!canForcePlayback) {
+                return false;
+            }
+
+            recordTrace('ktv.trusted_resume.requested', {
+                currentVideoId: this.currentVideoId,
+                playerState,
+            }, { includeStack: false });
+            this.player.playVideo();
+            return true;
+        } catch (error) {
+            console.warn('[KTV] trusted resume 触发失败:', error);
+            recordTrace('ktv.trusted_resume.failed', {
+                currentVideoId: this.currentVideoId,
+                error: String(error),
+            }, { includeStack: false });
+            return false;
+        }
     }
 
     hasEmbeddedPlayer() {
@@ -318,6 +367,24 @@ export class KTVSync {
             '5': 'cued'
         };
         console.log('[KTV] 播放器状态:', states[event.data] || event.data);
+
+        if (event.data === YT.PlayerState.PLAYING) {
+            this.videoPendingSince = 0;
+            this.lastPendingRecoveryAt = 0;
+            this.videoLoadSettlingUntil = 0;
+            this.lastSyncTime = 0;
+            const currentStatus = player.getStatus();
+            const currentMeta = currentStatus?.current_meta || {};
+            if (currentMeta.type === 'youtube' && currentMeta.video_id === this.currentVideoId) {
+                this.syncPlayback(this.getMpvState(currentStatus));
+            }
+        } else if (event.data === YT.PlayerState.BUFFERING || event.data === YT.PlayerState.UNSTARTED) {
+            if (!this.videoPendingSince) {
+                this.videoPendingSince = Date.now();
+            }
+        } else {
+            this.videoPendingSince = 0;
+        }
     }
 
     /**
@@ -600,11 +667,11 @@ export class KTVSync {
         this.resetMetrics();
         this.currentVideoId = videoId;
         this.videoLoadSettlingUntil = Date.now() + 1500;
+        this.videoPendingSince = Date.now();
         console.log('[KTV] 加载视频:', videoId);
 
         try {
-            const rawServerTime = mpvState.time_pos ?? mpvState.time ?? 0;
-            const serverTime = Number(rawServerTime);
+            const serverTime = this.getReferencePlaybackTime(mpvState);
             const startSeconds = Number.isFinite(serverTime)
                 ? Math.max(0, serverTime + this.videoOffset)
                 : 0;
@@ -663,8 +730,7 @@ export class KTVSync {
         if (!this.player || !this.playerReady || this.isSyncing) return;
 
         try {
-            const rawServerTime = mpvState.time_pos ?? mpvState.time ?? 0;
-            const serverTime = Number(rawServerTime);
+            const serverTime = this.getReferencePlaybackTime(mpvState);
             if (!Number.isFinite(serverTime)) {
                 return;
             }
@@ -692,6 +758,28 @@ export class KTVSync {
             }
 
             if (isPlayerPending) {
+                const pendingSince = this.videoPendingSince || now;
+                const pendingDuration = now - pendingSince;
+                const videoTime = Number(this.player.getCurrentTime());
+                const hasVideoTime = Number.isFinite(videoTime);
+                const driftWhilePending = hasVideoTime ? Math.abs(videoTime - targetTime) : null;
+                const shouldRecoverPendingPlayer = Boolean(
+                    this.currentVideoId
+                    && pendingDuration > 3000
+                    && (now - this.lastPendingRecoveryAt) > 3000
+                    && (!hasVideoTime || driftWhilePending == null || driftWhilePending > 1.0)
+                );
+
+                if (shouldRecoverPendingPlayer) {
+                    console.warn(`[KTV] 播放器卡在 pending ${Math.round(pendingDuration)}ms，按当前音频时间重载视频`);
+                    this.lastPendingRecoveryAt = now;
+                    this.videoLoadSettlingUntil = now + 1500;
+                    this.player.loadVideoById({
+                        videoId: this.currentVideoId,
+                        startSeconds: targetTime,
+                    });
+                }
+
                 this.lastSyncTime = now;
                 return;
             }

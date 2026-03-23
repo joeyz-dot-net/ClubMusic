@@ -708,6 +708,9 @@ export class Player {
             this._interpPlaying = !paused;
         }
 
+        // KTV 同步需要每次已接受的服务器时间戳，不能依赖 UI 去重后的 statusUpdate。
+        this.emit('statusTick', { status, oldStatus, source });
+
         const newUiSignature = this._buildStatusUiSignature(status);
         if (oldStatus && oldUiSignature === newUiSignature) {
             return status;

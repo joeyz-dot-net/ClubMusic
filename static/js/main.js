@@ -2,7 +2,7 @@
 // 这是一个使用新模块系统的示例文件
 
 import { api } from './api.js?v=4';
-import { player } from './player.js?v=20';
+import { player } from './player.js?v=21';
 import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=34';
 import { playlistsManagement } from './playlists-management.js?v=23';
 import { volumeControl } from './volume.js?v=14';
@@ -15,11 +15,11 @@ import { localFiles } from './local.js?v=20';
 import { settingsManager } from './settingsManager.js?v=6';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
-import { ktvSync } from './ktv.js?v=35';
+import { ktvSync } from './ktv.js?v=39';
 import { playLock } from './playLock.js';
 import { unavailableSongs } from './unavailable.js';
 import { recordTrace } from './requestTrace.js?v=1';
-import { createRegressionHarness } from './regressionHarness.js?v=13';
+import { createRegressionHarness } from './regressionHarness.js?v=15';
 
 // ==========================================
 // 应用初始化
@@ -241,6 +241,12 @@ class MusicPlayerApp {
 
     // 初始化播放器
     initPlayer() {
+        player.on('statusTick', ({ status }) => {
+            if (ktvSync) {
+                ktvSync.updateStatus(status);
+            }
+        });
+
         // 监听播放状态更新
         player.on('statusUpdate', async ({ status }) => {
             // 【用户隔离】不再从后端同步 current_playlist_id
@@ -1316,11 +1322,6 @@ class MusicPlayerApp {
             this.elements.fullPlayerPlaylist.textContent = playlistName;
         }
 
-        // KTV视频同步 ���在更新完UI后调用
-        if (ktvSync) {
-            ktvSync.updateStatus(status);
-        }
-
         // 更新进度信息（支持两种字段名）
         const mpvData = this.getMpvData(status);
         if (mpvData) {
@@ -1738,6 +1739,12 @@ class MusicPlayerApp {
     async togglePlayPause() {
         if (playLock.isPreparing()) return;
         try {
+            const status = player.getStatus();
+            const mpvState = status?.mpv_state || status?.mpv || {};
+            const isResuming = mpvState.paused === true;
+            if (isResuming) {
+                ktvSync.requestTrustedResume?.();
+            }
             await player.togglePlayPause();
         } catch (err) {
             console.error('[播放/暂停] 错误:', err);
@@ -2467,10 +2474,16 @@ app.diagnose = {
         console.log('Diagnose commands:');
         console.log('  app.diagnose.printCurrentState()');
         console.log('  app.diagnose.reportCurrentState()');
+        console.log('  app.diagnose.getKtvSyncSnapshot()');
+        console.log('  await app.diagnose.sampleKtvSync()');
+        console.log('  await app.diagnose.runEmbeddableSyncProbe()');
+        console.log('  app.diagnose.summarizeKtvSync(samples)');
         console.log('  await app.diagnose.runQuickSuite()');
         console.log('  await app.diagnose.runQuickSuiteAndPrint()');
         console.log('  await app.diagnose.runRestrictedAudioOnlyFlow()');
         console.log('  await app.diagnose.runEmbeddableVideoFlow()');
+        console.log('  await app.diagnose.prepareTrustedPlayPauseResumeFlow()');
+        console.log('  await app.diagnose.evaluateTrustedPlayPauseResumeFlow()');
         console.log('  await app.diagnose.prepareTrustedNextClickFlow()');
         console.log('  await app.diagnose.evaluateTrustedNextClickFlow()');
         console.log('  await app.diagnose.prepareTrustedPrevClickFlow()');
@@ -2485,6 +2498,18 @@ app.diagnose = {
     printCurrentState(label) {
         return app.regression.printCurrentState(label);
     },
+    getKtvSyncSnapshot(label) {
+        return app.regression.getKtvSyncSnapshot(label);
+    },
+    sampleKtvSync(options) {
+        return app.regression.sampleKtvSync(options);
+    },
+    runEmbeddableSyncProbe(options) {
+        return app.regression.runEmbeddableSyncProbe(options);
+    },
+    summarizeKtvSync(samples, options) {
+        return app.regression.summarizeKtvSync(samples, options);
+    },
     runQuickSuite() {
         return app.regression.runQuickSuite();
     },
@@ -2496,6 +2521,12 @@ app.diagnose = {
     },
     runEmbeddableVideoFlow() {
         return app.regression.runEmbeddableVideoFlow();
+    },
+    prepareTrustedPlayPauseResumeFlow(options) {
+        return app.regression.prepareTrustedPlayPauseResumeFlow(options);
+    },
+    evaluateTrustedPlayPauseResumeFlow(options) {
+        return app.regression.evaluateTrustedPlayPauseResumeFlow(options);
     },
     prepareTrustedNextClickFlow(options) {
         return app.regression.prepareTrustedNextClickFlow(options);
