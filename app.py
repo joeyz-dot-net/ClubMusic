@@ -35,6 +35,7 @@ import routers.state as state
 from routers.state import (
     PLAYER, PLAYLISTS_MANAGER, PLAYBACK_HISTORY,
     DEFAULT_PLAYLIST_ID,
+    get_runtime_playlist,
     StreamSong, LocalSong,
     _get_resource_path,
 )
@@ -342,7 +343,7 @@ def auto_fill_and_play_if_idle():
         return unique
 
     def fill_and_play():
-        playlist = PLAYLISTS_MANAGER.get_playlist(DEFAULT_PLAYLIST_ID)
+        playlist = get_runtime_playlist(PLAYER)
         if not playlist:
             return
         if playlist.songs:
@@ -374,8 +375,8 @@ def auto_fill_and_play_if_idle():
             playlist.songs.append(song_dict)
 
         playlist.updated_at = _time.time()
-        PLAYLISTS_MANAGER.save()
-        logger.info(f"[自动填充] 已添加 {len(selected)} 首歌曲到默认歌单 (包含网络歌曲: {sum(1 for x in selected if x['type'] in ('youtube','stream'))})")
+        logger.info(f"[自动填充] 已添加 {len(selected)} 首歌曲到运行时队列 (包含网络歌曲: {sum(1 for x in selected if x['type'] in ('youtube','stream'))})")
+        state._broadcast_from_thread(playlist_updated=True)
 
         try:
             first = playlist.songs[0]
@@ -397,6 +398,7 @@ def auto_fill_and_play_if_idle():
                     save_to_history=True,
                     mpv_cmd=PLAYER.mpv_cmd
                 )
+                PLAYER.current_index = 0
                 logger.info("[自动填充] 自动播放已启动（第一首）")
         except Exception as e:
             logger.error(f"[自动填充] 自动播放第一首失败: {e}")
@@ -408,7 +410,7 @@ def auto_fill_and_play_if_idle():
         IDLE_SECONDS = 60
         while True:
             try:
-                playlist = PLAYLISTS_MANAGER.get_playlist(DEFAULT_PLAYLIST_ID)
+                playlist = get_runtime_playlist(PLAYER)
                 is_playing = bool(PLAYER.current_meta and PLAYER.current_meta.get("url"))
                 if is_playing:
                     last_play_ts = _time.time()

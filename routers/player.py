@@ -20,7 +20,7 @@ routers/player.py - 播放器控制路由
 import os
 import time
 import logging
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
@@ -28,8 +28,9 @@ from fastapi.responses import JSONResponse
 from models import MusicPlayer, Playlists, PlayHistory
 from routers.dependencies import get_player_for_request, get_playlists, get_playback_history, get_player_lock
 from routers.state import (
-    DEFAULT_PLAYLIST_ID, CURRENT_PLAYLIST_ID,
+    DEFAULT_PLAYLIST_ID,
     get_current_playlist_id,
+    get_runtime_playlist,
     _broadcast_state,
     mpv_get, mpv_command,
     LocalSong, StreamSong,
@@ -89,12 +90,20 @@ def _room_output_not_ready_response(player: MusicPlayer, endpoint: str):
 
 def _describe_request_source(request: Request) -> str:
     """格式化客户端来源，便于追踪是谁发起了控制请求。"""
+    def _decode_header_value(value: str) -> str:
+        if not value:
+            return ""
+        try:
+            return unquote(value)
+        except Exception:
+            return value
+
     client_host = request.client.host if request.client else "unknown"
-    user_id = request.headers.get("x-clubmusic-user", "")
-    tab_id = request.headers.get("x-clubmusic-tab", "")
-    page = request.headers.get("x-clubmusic-page", "")
-    room = request.headers.get("x-clubmusic-room", "")
-    request_id = request.headers.get("x-clubmusic-request", "")
+    user_id = _decode_header_value(request.headers.get("x-clubmusic-user", ""))
+    tab_id = _decode_header_value(request.headers.get("x-clubmusic-tab", ""))
+    page = _decode_header_value(request.headers.get("x-clubmusic-page", ""))
+    room = _decode_header_value(request.headers.get("x-clubmusic-room", ""))
+    request_id = _decode_header_value(request.headers.get("x-clubmusic-request", ""))
     user_agent = request.headers.get("user-agent", "")
     return (
         f"host={client_host}, user={user_id or '-'}, tab={tab_id or '-'}, "
@@ -177,8 +186,7 @@ async def play(
             logger.info(f"▶️ [播放状态改变] 正在播放: {title} (类型: {song_type})")
 
             try:
-                current_pid = get_current_playlist_id(player)
-                playlist = playlists.get_playlist(current_pid)
+                playlist = get_runtime_playlist(player)
                 if playlist:
                     for idx, song_item in enumerate(playlist.songs):
                         song_item_url = song_item.get("url") if isinstance(song_item, dict) else str(song_item)
@@ -247,8 +255,7 @@ async def next_track(
             return room_output_error
 
         with player_lock:
-            current_pid = get_current_playlist_id(player)
-            playlist = playlists.get_playlist(current_pid)
+            playlist = get_runtime_playlist(player)
             songs = playlist.songs if playlist else []
 
             if not songs:
@@ -293,7 +300,6 @@ async def next_track(
                     logger.info(f"[/next] 已删除第一首: {song_title}")
 
             playlist.updated_at = time.time()
-            playlists.save()
             should_broadcast_playlist_update = True
 
             if not songs:
@@ -355,7 +361,6 @@ async def next_track(
                         logger.warning(f"[/next] 跳过失败歌曲 ({attempt+1}/{MAX_SKIP}): {title}")
 
                 playlist.updated_at = time.time()
-                playlists.save()
 
                 if not success:
                     player.current_meta = {}
@@ -396,52 +401,77 @@ async def prev_track(
     playback_history: PlayHistory = Depends(get_playback_history),
     player_lock=Depends(get_player_lock),
 ):
-    """播放上一首"""
+    """按播放历史回退到当前歌曲之前播放的歌曲。"""
     try:
         room_output_error = _room_output_not_ready_response(player, "/prev")
         if room_output_error:
             return room_output_error
 
         with player_lock:
-            current_pid = get_current_playlist_id(player)
-            playlist = playlists.get_playlist(current_pid)
+            playlist = get_runtime_playlist(player)
             songs = playlist.songs if playlist else []
 
-            if not songs:
-                logger.error("[ERROR] /prev: 当前歌单为空")
+            history_items = playback_history.get_all() if playback_history else []
+            current_url = (
+                player.current_meta.get("url")
+                or player.current_meta.get("rel")
+                or player.current_meta.get("raw_url")
+            )
+
+            if not current_url:
+                logger.error("[上一首] 当前没有可识别的播放 URL，无法从历史回退")
                 return JSONResponse(
-                    {"status": "ERROR", "error": "当前歌单为空"},
+                    {"status": "ERROR", "error": "当前没有可回退的播放历史"},
                     status_code=400
                 )
 
-            current_idx = player.current_index if player.current_index >= 0 else 0
-            prev_idx = current_idx - 1 if current_idx > 0 else len(songs) - 1
+            history_index = -1
+            for idx, item in enumerate(history_items):
+                item_url = item.get("url") if isinstance(item, dict) else None
+                if item_url == current_url:
+                    history_index = idx
+                    break
 
-            if prev_idx < 0 or current_idx == 0:
-                prev_idx = len(songs) - 1
+            if history_index < 0:
+                logger.warning(f"[上一首] 当前歌曲未命中播放历史，current_url={current_url}")
+                return JSONResponse(
+                    {"status": "ERROR", "error": "当前歌曲不在播放历史中"},
+                    status_code=404
+                )
 
-            logger.info(f"[上一首] 从索引 {current_idx} 跳到 {prev_idx}，总歌曲数：{len(songs)}")
+            prev_history_index = history_index + 1
+            if prev_history_index >= len(history_items):
+                logger.info("[上一首] 播放历史中没有更早的歌曲")
+                return JSONResponse(
+                    {"status": "EMPTY", "message": "播放历史中没有上一首"},
+                    status_code=200
+                )
 
-            # 跳过循环：从 prev_idx 向前扫描，最多尝试 MAX_SKIP 首
+            logger.info(
+                f"[上一首] 当前历史索引 {history_index}，尝试回退到历史索引 {prev_history_index}，历史条数：{len(history_items)}"
+            )
+
+            # 跳过循环：从历史中的上一条开始向后扫描，最多尝试 MAX_SKIP 首
             MAX_SKIP = 5
             skipped_songs = []
             success = False
-            tried_idx = prev_idx
-            start_idx = prev_idx
+            tried_history_index = prev_history_index
 
             for attempt in range(MAX_SKIP):
-                url, title, song_type, duration = _extract_song_info(songs[tried_idx])
+                if tried_history_index >= len(history_items):
+                    break
+
+                history_item = history_items[tried_history_index]
+                url, title, song_type, duration = _extract_song_info(history_item)
 
                 if not url:
                     skipped_songs.append({"url": url, "title": title})
-                    logger.warning(f"[上一首] 跳过数据不完整的歌曲 ({attempt+1}/{MAX_SKIP}): {title}")
-                    tried_idx = (tried_idx - 1) % len(songs)
-                    if tried_idx == start_idx:
-                        break
+                    logger.warning(f"[上一首] 跳过历史中的无效歌曲 ({attempt+1}/{MAX_SKIP}): {title}")
+                    tried_history_index += 1
                     continue
 
                 song = _create_song_object(url, title, song_type, duration)
-                logger.info(f"[上一首] 尝试播放: {title}")
+                logger.info(f"[上一首] 尝试按历史回退播放: {title}")
 
                 success = player.play(
                     song,
@@ -453,24 +483,44 @@ async def prev_track(
                 )
 
                 if success:
-                    player.current_index = tried_idx
-                    logger.info(f"[上一首] ✓ 已切换到上一首: {title}")
+                    queue_index = -1
+                    for idx, song_data in enumerate(songs):
+                        song_url = song_data.get("url") if isinstance(song_data, dict) else str(song_data)
+                        if song_url == url:
+                            queue_index = idx
+                            break
+
+                    queue_song = song.to_dict() if hasattr(song, "to_dict") else {
+                        "url": url,
+                        "title": title,
+                        "type": song_type,
+                        "duration": duration,
+                    }
+
+                    if queue_index > 0:
+                        songs.insert(0, songs.pop(queue_index))
+                    elif queue_index < 0:
+                        songs.insert(0, queue_song)
+
+                    playlist.updated_at = time.time()
+                    player.current_index = 0
+                    logger.info(
+                        f"[上一首] ✓ 已按历史回退到: {title}, history_index={tried_history_index}, queue_index={queue_index}, synced_queue_index=0"
+                    )
                     break
                 else:
                     skipped_songs.append({"url": url, "title": title})
-                    logger.warning(f"[上一首] 跳过失败歌曲 ({attempt+1}/{MAX_SKIP}): {title}")
-                    tried_idx = (tried_idx - 1) % len(songs)
-                    if tried_idx == start_idx:
-                        break
+                    logger.warning(f"[上一首] 跳过历史中播放失败的歌曲 ({attempt+1}/{MAX_SKIP}): {title}")
+                    tried_history_index += 1
 
             if not success:
-                logger.error(f"[上一首] 连续 {len(skipped_songs)} 首播放失败")
+                logger.error(f"[上一首] 连续 {len(skipped_songs)} 条历史记录播放失败")
                 return JSONResponse(
                     {"status": "ERROR", "error": "连续播放失败", "skipped_songs": skipped_songs},
                     status_code=500
                 )
 
-        await _broadcast_state(player)
+        await _broadcast_state(player, playlist_updated=True)
         return {
             "status": "OK",
             "current": player.current_meta,
@@ -490,7 +540,7 @@ async def get_status(
     """获取播放器状态"""
     try:
         current_pid = get_current_playlist_id(player)
-        playlist = playlists.get_playlist(current_pid)
+        playlist = get_runtime_playlist(player)
 
         mpv_state = {"paused": True, "time_pos": 0, "duration": 0, "volume": 50}
         try:
@@ -677,9 +727,7 @@ async def play_youtube_playlist(
             )
 
         current_pid = get_current_playlist_id(player)
-        playlist = playlists.get_playlist(current_pid)
-        if not playlist:
-            playlist = playlists.get_playlist(DEFAULT_PLAYLIST_ID)
+        playlist = get_runtime_playlist(player)
 
         for video in videos:
             playlist.songs.append({
@@ -691,7 +739,6 @@ async def play_youtube_playlist(
             })
 
         playlist.updated_at = time.time()
-        playlists.save()
 
         return {"status": "OK", "added": len(videos)}
     except Exception as e:

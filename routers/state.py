@@ -11,6 +11,7 @@ import time
 import logging
 import asyncio
 import threading
+from typing import Dict
 
 from fastapi import WebSocket
 from fastapi.responses import JSONResponse
@@ -51,28 +52,12 @@ SETTINGS = initialize_settings()
 PLAYER = MusicPlayer.initialize(data_dir=".")
 
 PLAYLISTS_MANAGER = Playlists()
-PLAYLISTS_MANAGER.load()
 
 logger.info("\n✓ 所有模块初始化完成！\n")
 
 DEFAULT_PLAYLIST_ID = "default"
 CURRENT_PLAYLIST_ID = DEFAULT_PLAYLIST_ID
 PLAYBACK_HISTORY = PLAYER.playback_history
-
-
-def _init_default_playlist():
-    """初始化系统默认歌单"""
-    default_pl = PLAYLISTS_MANAGER.get_playlist(DEFAULT_PLAYLIST_ID)
-    if not default_pl:
-        default_pl = PLAYLISTS_MANAGER.create_playlist("正在播放")
-        default_pl.id = DEFAULT_PLAYLIST_ID
-        PLAYLISTS_MANAGER._playlists[DEFAULT_PLAYLIST_ID] = default_pl
-        PLAYLISTS_MANAGER.save()
-        logger.debug(f"创建默认歌单: {DEFAULT_PLAYLIST_ID}")
-    return default_pl
-
-
-_init_default_playlist()
 
 # ==================== 并发保护 ====================
 # 复用 PLAYER 内已有的 RLock 作为全局播放锁
@@ -167,7 +152,7 @@ def _build_state_message(player: MusicPlayer = None, playlist_updated: bool = Fa
         player: 目标播放器实例。None 则使用全局默认 PLAYER。
     """
     p = player or PLAYER
-    current_playlist = PLAYLISTS_MANAGER.get_playlist(get_current_playlist_id(p))
+    current_playlist = get_runtime_playlist(p)
     try:
         mpv_state = {
             "paused": p.mpv_get("pause"),
@@ -290,8 +275,6 @@ if PLAYER.mpv_cmd is not None:
 
 
 # ==================== PipePlayer 池（多房间支持）====================
-from typing import Dict
-
 PIPE_PLAYERS: Dict[str, MusicPlayer] = {}
 _pipe_players_lock = threading.Lock()
 
@@ -382,6 +365,38 @@ def get_current_playlist_id(player: MusicPlayer) -> str:
     if room_pid:
         return room_pid
     return CURRENT_PLAYLIST_ID
+
+
+def get_runtime_playlist(player: MusicPlayer):
+    """获取播放器专属运行时队列。"""
+    if player is None:
+        return None
+    queue = player.get_runtime_queue()
+    queue.current_playing_index = getattr(player, 'current_index', -1)
+    return queue
+
+
+def is_runtime_playlist_id(player: MusicPlayer, playlist_id: str) -> bool:
+    """判断请求的 playlist_id 是否指向当前播放器运行时队列。"""
+    if not playlist_id:
+        return False
+    active_pid = get_current_playlist_id(player)
+    return playlist_id == active_pid or playlist_id == DEFAULT_PLAYLIST_ID
+
+
+def resolve_playlist_for_request(player: MusicPlayer, playlists: Playlists, playlist_id: str = None):
+    """解析前端请求的歌单：运行时队列优先，其余走共享歌单。"""
+    active_pid = get_current_playlist_id(player)
+    target_playlist_id = playlist_id or active_pid
+
+    if is_runtime_playlist_id(player, target_playlist_id):
+        return get_runtime_playlist(player), active_pid, True
+
+    playlist = playlists.get_playlist(target_playlist_id)
+    if playlist:
+        return playlist, target_playlist_id, False
+
+    return get_runtime_playlist(player), active_pid, True
 
 
 def cleanup_pipe_player(pipe_name: str):

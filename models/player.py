@@ -303,6 +303,12 @@ class MusicPlayer:
         from models import CurrentPlaylist
         self.current_playlist = CurrentPlaylist()
         self.current_playlist_file = os.path.join(self.data_dir, "playlist.json")
+        self._runtime_queue_id = "default"
+        self._runtime_queue_name = "正在播放"
+        self.runtime_queue = Playlist(
+            playlist_id=self._runtime_queue_id,
+            name=self._runtime_queue_name,
+        )
 
         # 线程锁
         self._lock = threading.RLock()
@@ -333,6 +339,21 @@ class MusicPlayer:
         self._ext_broadcast_from_thread = None
 
         logger.info(f"播放器初始化完成: music_dir={self.music_dir}, extensions={self.allowed_extensions}")
+
+    def _init_runtime_queue(self, queue_id: str, queue_name: str):
+        """初始化运行时播放队列。"""
+        self._runtime_queue_id = queue_id
+        self._runtime_queue_name = queue_name
+        self.runtime_queue = Playlist(playlist_id=queue_id, name=queue_name)
+
+    def get_runtime_queue(self):
+        """获取播放器专属的运行时播放队列。"""
+        if getattr(self, "runtime_queue", None) is None:
+            queue_id = getattr(self, "_runtime_queue_id", "default")
+            queue_name = getattr(self, "_runtime_queue_name", "正在播放")
+            self.runtime_queue = Playlist(playlist_id=queue_id, name=queue_name)
+        self.runtime_queue.current_playing_index = self.current_index
+        return self.runtime_queue
 
     def get_current_meta_snapshot(self) -> dict:
         """线程安全地获取 current_meta 的快照副本。
@@ -413,6 +434,8 @@ class MusicPlayer:
         safe_id = id_key.replace("\\", "_").replace(".", "_").replace(":", "_")
         instance._room_playlist_id = f"room_{safe_id}"
         instance._ext_default_playlist_id = instance._room_playlist_id
+        short_name = id_key.split("-")[-1][:12] if "-" in id_key else id_key[-12:]
+        instance._init_runtime_queue(instance._room_playlist_id, f"Room {short_name}")
 
         # 共享播放历史
         instance.playback_history = playback_history
@@ -425,13 +448,6 @@ class MusicPlayer:
         instance.config = config_overrides or {}
         instance.current_playlist = None
         instance.current_playlist_file = ""
-
-        # 自动创建房间队列播放列表（临时，不持久化）
-        room_pl = playlists_manager.get_playlist(instance._room_playlist_id)
-        if not room_pl:
-            short_name = id_key.split("-")[-1][:12] if "-" in id_key else id_key[-12:]
-            room_pl = Playlist(playlist_id=instance._room_playlist_id, name=f"Room {short_name}")
-            playlists_manager._playlists[instance._room_playlist_id] = room_pl
 
     @classmethod
     def create_pipe_player(cls, pipe_name: str, playlists_manager,
@@ -467,20 +483,12 @@ class MusicPlayer:
         instance._start_event_listener()
 
         logger.info(f"[PipePlayer] ✓ 已创建 PipePlayer: {pipe_name}")
-        logger.info(f"[PipePlayer] 已创建房间临时播放列表: {instance._room_playlist_id}")
+        logger.info(f"[PipePlayer] 已初始化运行时队列: {instance._room_playlist_id}")
         return instance
 
     def destroy_pipe_player(self):
         """销毁 PipePlayer 实例，停止事件监听线程。"""
         self._stop_flag = True
-        # 清理房间临时播放列表
-        if self._ext_playlists_manager and hasattr(self, '_room_playlist_id'):
-            self._ext_playlists_manager._playlists.pop(self._room_playlist_id, None)
-            try:
-                self._ext_playlists_manager._order.remove(self._room_playlist_id)
-            except ValueError:
-                pass
-            logger.info(f"[PipePlayer] 已清理房间临时播放列表: {self._room_playlist_id}")
         logger.info(f"[PipePlayer] 已标记停止: {self.pipe_name}")
 
     # ===================== RoomPlayer =====================
@@ -537,7 +545,7 @@ class MusicPlayer:
         )
 
         logger.info(f"[RoomPlayer] ✓ 已创建 RoomPlayer: room_id={room_id}, ipc={ipc_pipe}, pcm={pcm_pipe}")
-        logger.info(f"[RoomPlayer] 已创建房间临时播放列表: {instance._room_playlist_id}")
+        logger.info(f"[RoomPlayer] 已初始化房间运行时队列: {instance._room_playlist_id}")
         return instance
 
     def start_room_mpv(self) -> bool:
@@ -637,15 +645,6 @@ class MusicPlayer:
                 logger.warning(f"[RoomPlayer] 杀 MPV 异常: {e}")
             finally:
                 self.mpv_process = None
-
-        # 3. 清理房间临时播放列表
-        if self._ext_playlists_manager and hasattr(self, '_room_playlist_id'):
-            self._ext_playlists_manager._playlists.pop(self._room_playlist_id, None)
-            try:
-                self._ext_playlists_manager._order.remove(self._room_playlist_id)
-            except ValueError:
-                pass
-            logger.info(f"[RoomPlayer] 已清理房间临时播放列表: {self._room_playlist_id}")
 
         logger.info(f"[RoomPlayer] ✓ 已销毁: {room_id}")
 
@@ -1199,13 +1198,7 @@ class MusicPlayer:
         shuffle_mode: True=播放下一首前随机打乱队列
         """
         try:
-            playlists_mgr = self._ext_playlists_manager
-            default_pid = self._ext_default_playlist_id
             ext_history = self._ext_playback_history
-
-            if playlists_mgr is None or default_pid is None:
-                logger.warning("[自动播放] ⚠️ 外部依赖未注入，跳过自动播放")
-                return
 
             logger.info("[自动播放] ✓ 检测到歌曲播放结束，开始后端自动播放逻辑")
 
@@ -1214,9 +1207,9 @@ class MusicPlayer:
             should_broadcast_state = False
 
             with self._lock:
-                default_playlist = playlists_mgr.get_playlist(default_pid)
+                default_playlist = self.get_runtime_queue()
                 if not default_playlist or len(default_playlist.songs) == 0:
-                    logger.info(f"[自动播放] ⚠️ 歌单 '{default_pid}' 为空，停止自动播放")
+                    logger.info(f"[自动播放] ⚠️ 队列 '{default_playlist.id}' 为空，停止自动播放")
                     return
 
                 current_playing_url = self.current_meta.get("url") or self.current_meta.get("rel") or self.current_meta.get("raw_url")
@@ -1311,7 +1304,6 @@ class MusicPlayer:
                             logger.info(f"[自动播放] ✓ 已删除列表第一首: {song_title}")
 
                     default_playlist.updated_at = time.time()
-                    playlists_mgr.save()
                     should_broadcast_state = True
 
                     # 随机播放：打乱剩余队列顺序
@@ -1319,7 +1311,6 @@ class MusicPlayer:
                         import random
                         random.shuffle(default_playlist.songs)
                         default_playlist.updated_at = time.time()
-                        playlists_mgr.save()
                         logger.info("[自动播放] 🔀 随机模式: 已重新排列队列")
 
                     # 播放下一首（队首），跳过失败歌曲（最多5首）
@@ -1380,7 +1371,6 @@ class MusicPlayer:
                             logger.warning(f"[自动播放] 跳过失败歌曲 ({attempt+1}/{MAX_SKIP}): {title}")
 
                     default_playlist.updated_at = time.time()
-                    playlists_mgr.save()
 
                     if not auto_play_success and not default_playlist.songs:
                         logger.info("[自动播放] ℹ️ 播放列表已空，停止自动播放")
@@ -2700,11 +2690,7 @@ class MusicPlayer:
         """
         def _do():
             try:
-                playlists_mgr = self._ext_playlists_manager
-                default_pid = self._ext_default_playlist_id
-                if playlists_mgr is None or default_pid is None:
-                    return
-                playlist = playlists_mgr.get_playlist(default_pid)
+                playlist = self.get_runtime_queue()
                 if not playlist or not playlist.songs:
                     return
 

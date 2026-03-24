@@ -275,6 +275,11 @@ class Playlists:
         """判断是否为房间临时播放列表（不持久化）"""
         return playlist_id.startswith(ROOM_PLAYLIST_PREFIX)
 
+    @staticmethod
+    def is_runtime_playlist(playlist_id: str) -> bool:
+        """判断是否为运行时播放队列（不持久化）。"""
+        return playlist_id == DEFAULT_PLAYLIST_ID or Playlists.is_room_playlist(playlist_id)
+
     def __init__(self, data_file: str = "playlists.json"):
         """初始化多歌单管理器
 
@@ -305,8 +310,8 @@ class Playlists:
                     hydration_changed = False
                     for pl_data in playlists_data:
                         pl = Playlist.from_dict(pl_data)
-                        # 跳过残留的房间临时播放列表
-                        if self.is_room_playlist(pl.id):
+                        # 跳过运行时播放队列（默认队列、房间队列）
+                        if self.is_runtime_playlist(pl.id):
                             continue
                         # 再次补全缩略图（兼容旧数据），如有变更稍后保存
                         if pl._hydrate_stream_thumbnails():
@@ -315,12 +320,12 @@ class Playlists:
                         if pl.id not in self._order:
                             self._order.append(pl.id)
 
-                    # 清理 _order 中残留的房间播放列表 ID
-                    room_ids_in_order = [pid for pid in self._order if self.is_room_playlist(pid)]
-                    if room_ids_in_order:
-                        for rid in room_ids_in_order:
+                    # 清理 _order 中残留的运行时播放列表 ID
+                    runtime_ids_in_order = [pid for pid in self._order if self.is_runtime_playlist(pid)]
+                    if runtime_ids_in_order:
+                        for rid in runtime_ids_in_order:
                             self._order.remove(rid)
-                        logger.info(f"已清理 {len(room_ids_in_order)} 个残留的房间临时播放列表")
+                        logger.info(f"已清理 {len(runtime_ids_in_order)} 个残留的运行时播放列表")
 
                     if hydration_changed:
                         self.save()
@@ -335,21 +340,13 @@ class Playlists:
             self._playlists = {}
             self._order = []
 
-        # 确保存在默认歌单
-        if DEFAULT_PLAYLIST_ID not in self._playlists:
-            default_pl = Playlist(playlist_id=DEFAULT_PLAYLIST_ID, name="默认歌单")
-            self._playlists[DEFAULT_PLAYLIST_ID] = default_pl
-            if DEFAULT_PLAYLIST_ID not in self._order:
-                self._order.insert(0, DEFAULT_PLAYLIST_ID)
-            self.save()
-
     def _do_save(self):
         """执行实际的原子化磁盘写入（.tmp 写入后原子替换）
 
-        房间临时播放列表（room_ 前缀）不会写入磁盘。
+        运行时播放队列（default / room_*）不会写入磁盘。
         """
         try:
-            persistent_order = [pid for pid in self._order if not self.is_room_playlist(pid)]
+            persistent_order = [pid for pid in self._order if not self.is_runtime_playlist(pid)]
             data = {
                 "order": persistent_order,
                 "playlists": [
@@ -365,7 +362,7 @@ class Playlists:
                 encoding="utf-8"
             )
             tmp.replace(path)  # 原子操作，POSIX 和 Windows 均支持
-            logger.debug(f"已保存 {len(self._playlists)} 个歌单")
+            logger.debug(f"已保存 {len(persistent_order)} 个共享歌单")
         except Exception as e:
             logger.error(f"保存歌单失败: {e}")
 

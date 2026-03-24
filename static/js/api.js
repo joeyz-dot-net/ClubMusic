@@ -49,6 +49,23 @@ function generateTabId() {
     return `tab_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function normalizeHeaderValue(value, maxLength = 240) {
+    const text = String(value ?? '');
+    const truncated = text.slice(0, maxLength);
+
+    if (!truncated) {
+        return '';
+    }
+
+    for (const char of truncated) {
+        if (char.charCodeAt(0) > 0xFF) {
+            return encodeURIComponent(truncated);
+        }
+    }
+
+    return truncated;
+}
+
 export class MusicAPI {
     constructor(baseURL = '') {
         this.baseURL = baseURL;
@@ -74,11 +91,11 @@ export class MusicAPI {
     _buildTraceHeaders(endpoint) {
         const requestId = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
         return {
-            'X-ClubMusic-User': this.clientUserId || '',
-            'X-ClubMusic-Tab': this.clientTabId,
-            'X-ClubMusic-Page': `${window.location.pathname}${window.location.search}${window.location.hash}`.slice(0, 240),
-            'X-ClubMusic-Room': this.roomId || this.pipeParam || 'default',
-            'X-ClubMusic-Request': `${endpoint}:${requestId}`,
+            'X-ClubMusic-User': normalizeHeaderValue(this.clientUserId || ''),
+            'X-ClubMusic-Tab': normalizeHeaderValue(this.clientTabId),
+            'X-ClubMusic-Page': normalizeHeaderValue(`${window.location.pathname}${window.location.search}${window.location.hash}`),
+            'X-ClubMusic-Room': normalizeHeaderValue(this.roomId || this.pipeParam || 'default'),
+            'X-ClubMusic-Request': normalizeHeaderValue(`${endpoint}:${requestId}`),
         };
     }
 

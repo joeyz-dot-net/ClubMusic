@@ -179,6 +179,19 @@ export class Player {
         };
     }
 
+    _buildDisplayFieldPatchFromMeta(meta = {}, fallbackStatus = this.status) {
+        const title = meta.title || meta.name || fallbackStatus?.current_title || fallbackStatus?.title || '';
+        const artist = meta.artist || fallbackStatus?.artist || '';
+        const thumbnailUrl = meta.thumbnail_url || fallbackStatus?.thumbnail_url || '';
+
+        return {
+            current_title: title,
+            title,
+            artist,
+            thumbnail_url: thumbnailUrl,
+        };
+    }
+
     _buildStatusUiSignature(status) {
         if (!status) {
             return '';
@@ -255,11 +268,13 @@ export class Player {
 
             // 立即更新状态缓存（与 next/prev 保持一致），无需等待下次轮询或 WebSocket
             if (result?.status === 'OK' && result?.current && this.status) {
+                const displayPatch = this._buildDisplayFieldPatchFromMeta(result.current, this.status);
                 this._markLocalStatusBarrier();
                 this.updateStatus({
                     ...this.status,
                     current_meta: result.current,
                     current_index: result.current_index ?? this.status?.current_index ?? -1,
+                    ...displayPatch,
                 }, { source: 'local' });
             }
 
@@ -287,10 +302,12 @@ export class Player {
 
             this._markLocalStatusBarrier();
             const currentMpvState = this.status?.mpv_state || this.status?.mpv || {};
+            const displayPatch = this._buildDisplayFieldPatchFromMeta(result.current, this.status);
             const nextStatus = {
                 ...this.status,
                 current_meta: result.current,
                 current_index: result.current_index ?? this.status?.current_index ?? -1,
+                ...displayPatch,
             };
 
             if (result.status === 'EMPTY' || result.status === 'ERROR') {
@@ -343,12 +360,35 @@ export class Player {
         });
         const result = this._ensureSuccess(await api.prev(), '上一首播放失败');
         // 利用响应中的 current_meta 立即更新 UI，无需等待下次 1000ms 轮询
-        if (result?.status === 'OK' && result?.current && this.status) {
+        if (result?.status === 'OK' && result?.current) {
             this._markLocalStatusBarrier();
+            const baseStatus = this.status || {
+                status: 'OK',
+                current_meta: {},
+                current_playlist_id: '',
+                current_index: -1,
+                loop_mode: 0,
+                shuffle_mode: false,
+                pitch_shift: 0,
+                mpv_state: {
+                    paused: false,
+                    time_pos: 0,
+                    duration: Number(result?.current?.duration) || 0,
+                    volume: 50,
+                },
+            };
+            const currentMpvState = baseStatus?.mpv_state || baseStatus?.mpv || {};
+            const displayPatch = this._buildDisplayFieldPatchFromMeta(result.current, baseStatus);
+
             this.updateStatus({
-                ...this.status,
+                ...baseStatus,
                 current_meta: result.current,
-                current_index: result.current_index ?? this.status?.current_index ?? -1,
+                current_index: result.current_index ?? baseStatus?.current_index ?? -1,
+                ...displayPatch,
+                mpv_state: {
+                    ...currentMpvState,
+                    paused: false,
+                },
             }, { source: 'local' });
         }
         this.emit('prev', result);
