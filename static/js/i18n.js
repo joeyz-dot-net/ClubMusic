@@ -107,6 +107,7 @@ const translations = {
         'player.youtubeAudioOnly': '当前视频无法嵌入，正在继续纯音频播放',
         'player.youtubeAudioOnlyBody': '这是 YouTube 对嵌入播放的限制，音频会继续正常播放。',
         'player.youtubeVideoSkipped': 'YouTube 视频无法嵌入，已切换为纯音频播放: {title}',
+        'player.mobileSafariAudioHint': 'iPhone Safari 当前页面主要用于控制服务器或房间播放器，普通歌曲音频不会直接在本页输出。',
 
         // 搜索
         'search.title': '搜索结果',
@@ -341,6 +342,7 @@ const translations = {
         'player.youtubeAudioOnly': 'This video cannot be embedded, continuing with audio only',
         'player.youtubeAudioOnlyBody': 'YouTube blocks embedded playback for this video, but audio continues normally.',
         'player.youtubeVideoSkipped': 'YouTube video could not be embedded, continuing with audio only: {title}',
+        'player.mobileSafariAudioHint': 'On iPhone Safari, this page mainly controls the server or room player. Regular track audio does not play directly from this page.',
 
         // Search
         'search.title': 'Search Results',
@@ -575,6 +577,7 @@ const translations = {
         'player.youtubeAudioOnly': '目前影片無法嵌入，正在繼續純音訊播放',
         'player.youtubeAudioOnlyBody': '這是 YouTube 的嵌入限制，音訊會繼續正常播放。',
         'player.youtubeVideoSkipped': 'YouTube 視訊無法嵌入，已切換為純音訊播放: {title}',
+        'player.mobileSafariAudioHint': '在 iPhone Safari 中，這個頁面主要用來控制伺服器或房間播放器，一般歌曲音訊不會直接在本頁輸出。',
 
         // 搜尋
         'search.title': '搜尋結果',

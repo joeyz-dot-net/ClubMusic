@@ -173,6 +173,7 @@ async def add_to_playlist(
 ):
     """添加歌曲到歌单（支持指定插入位置）"""
     try:
+        should_broadcast_playlist_update = False
         data = await request.json()
         playlist_id = data.get("playlist_id", get_current_playlist_id(player))
         song_data = data.get("song")
@@ -238,10 +239,13 @@ async def add_to_playlist(
         playlist.updated_at = time.time()
         if is_runtime_playlist:
             playlist.current_playing_index = getattr(player, 'current_index', -1)
+            should_broadcast_playlist_update = True
         else:
             playlists.save()
 
         logger.info(f"[添加歌曲] ✓ 已插入 - 歌单: {playlist_id}, 位置: {insert_index}, 歌曲: {song_data.get('title', 'N/A')}")
+        if should_broadcast_playlist_update:
+            await _broadcast_state(player, playlist_updated=True)
         return {
             "status": "OK",
             "message": f"已添加到下一曲（位置 {insert_index}）"
@@ -259,6 +263,7 @@ async def add_song_to_playlist_next(
 ):
     """添加歌曲到下一曲位置"""
     try:
+        should_broadcast_playlist_update = False
         form_data = await request.form()
         url = form_data.get('url', '')
         title = form_data.get('title', '')
@@ -314,9 +319,12 @@ async def add_song_to_playlist_next(
         playlist.updated_at = time.time()
         if is_runtime_playlist:
             playlist.current_playing_index = getattr(player, 'current_index', -1)
+            should_broadcast_playlist_update = True
         else:
             playlists.save()
 
+        if should_broadcast_playlist_update:
+            await _broadcast_state(player, playlist_updated=True)
         return {"status": "OK", "message": "已添加到下一曲"}
     except Exception as e:
         return error_response("[/playlists/{id}/add_next] 添加歌曲失败", exc=e, _logger=logger)
@@ -331,6 +339,7 @@ async def add_song_to_playlist_top(
 ):
     """添加歌曲到歌单顶部"""
     try:
+        should_broadcast_playlist_update = False
         form_data = await request.form()
         url = form_data.get('url', '')
         title = form_data.get('title', '')
@@ -363,9 +372,12 @@ async def add_song_to_playlist_top(
         playlist.updated_at = time.time()
         if is_runtime_playlist:
             playlist.current_playing_index = getattr(player, 'current_index', -1)
+            should_broadcast_playlist_update = True
         else:
             playlists.save()
 
+        if should_broadcast_playlist_update:
+            await _broadcast_state(player, playlist_updated=True)
         return {"status": "OK", "message": "已添加到歌单顶部"}
     except Exception as e:
         return error_response("[/playlists/{id}/add_top] 添加歌曲到顶部失败", exc=e, _logger=logger)
@@ -680,6 +692,7 @@ async def playlist_reorder(
 ):
     """重新排序播放队列"""
     try:
+        should_broadcast_playlist_update = False
         data = await request.json()
         from_index = data.get("from_index")
         to_index = data.get("to_index")
@@ -694,8 +707,11 @@ async def playlist_reorder(
                 playlist.updated_at = time.time()
                 if is_runtime_playlist:
                     playlist.current_playing_index = getattr(player, 'current_index', -1)
+                    should_broadcast_playlist_update = True
                 else:
                     playlists.save()
+            if should_broadcast_playlist_update:
+                await _broadcast_state(player, playlist_updated=True)
             return JSONResponse({"status": "OK", "message": "重新排序成功"})
         else:
             return JSONResponse(

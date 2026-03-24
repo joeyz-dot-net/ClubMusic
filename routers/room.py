@@ -26,6 +26,30 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _build_room_status_payload(room_id: str, player) -> dict:
+    """Build a room bot status snapshot for API callers."""
+    ipc_pipe = rf'\\.\pipe\mpv-ipc-{room_id}'
+    runtime_queue = player.get_runtime_queue() if player else None
+    mpv_running = bool(player and player.mpv_process is not None and player.mpv_process.poll() is None)
+    pipe_exists = bool(player and player.mpv_pipe_exists())
+
+    return {
+        "room_id": room_id,
+        "ipc_pipe": ipc_pipe,
+        "pcm_pipe": getattr(player, '_pcm_pipe_name', '') if player else '',
+        "exists": player is not None,
+        "mpv_running": mpv_running,
+        "pipe_exists": pipe_exists,
+        "bot_ready": mpv_running and pipe_exists,
+        "current_playlist_id": getattr(runtime_queue, 'id', ''),
+        "current_index": getattr(player, 'current_index', -1) if player else -1,
+        "queue_length": len(getattr(runtime_queue, 'songs', []) or []),
+        "playlist_updated_at": getattr(runtime_queue, 'updated_at', 0) if runtime_queue else 0,
+        "current_meta": player.get_current_meta_snapshot() if player else {},
+        "last_activity": ROOM_LAST_ACTIVITY.get(room_id, 0),
+    }
+
+
 @router.post("/room/init")
 async def init_room(request: Request):
     """为自定义房间创建 RoomPlayer + 启动 MPV。
@@ -49,11 +73,23 @@ async def init_room(request: Request):
     with _room_players_lock:
         if room_id in ROOM_PLAYERS:
             player = ROOM_PLAYERS[room_id]
-            pcm_pipe = getattr(player, '_pcm_pipe_name', '')
+            room_status = _build_room_status_payload(room_id, player)
+            if not room_status["bot_ready"]:
+                logger.warning(f"[Room] 房间存在但 bot 未就绪，尝试恢复 MPV: {room_id}")
+                if not player.start_room_mpv():
+                    return JSONResponse(
+                        {
+                            "status": "error",
+                            "message": "room exists but MPV recovery failed",
+                            **room_status,
+                        },
+                        500,
+                    )
+                room_status = _build_room_status_payload(room_id, player)
             touch_room_activity(room_id)
             elapsed_ms = (time.perf_counter() - init_started_at) * 1000
             logger.info(f"[Room] 房间已存在: {room_id}, elapsed_ms={elapsed_ms:.1f}")
-            return {"status": "ok", "ipc_pipe": ipc_pipe, "pcm_pipe": pcm_pipe, "existed": True}
+            return {"status": "ok", "existed": True, **room_status}
 
         # 防止并发创建同一房间的竞态
         if room_id in _creating_rooms:
@@ -119,7 +155,7 @@ async def init_room(request: Request):
             f"register_ms={registration_elapsed_ms:.1f}, mpv_start_ms={mpv_start_elapsed_ms:.1f}, "
             f"total_ms={total_elapsed_ms:.1f}"
         )
-        return {"status": "ok", "ipc_pipe": ipc_pipe, "pcm_pipe": pcm_pipe, "existed": False}
+        return {"status": "ok", "existed": False, **_build_room_status_payload(room_id, player)}
     finally:
         with _room_players_lock:
             _creating_rooms.discard(room_id)
@@ -144,24 +180,13 @@ async def destroy_room(room_id: str):
 @router.get("/room/{room_id}/status")
 async def room_status(room_id: str):
     """查询房间 RoomPlayer 状态。"""
-    ipc_pipe = rf'\\.\pipe\mpv-ipc-{room_id}'
-
     with _room_players_lock:
         player = ROOM_PLAYERS.get(room_id)
 
     if not player:
-        return {"exists": False}
+        return {"status": "ok", **_build_room_status_payload(room_id, None)}
 
-    mpv_running = player.mpv_process is not None and player.mpv_process.poll() is None
-
-    return {
-        "exists": True,
-        "room_id": room_id,
-        "ipc_pipe": ipc_pipe,
-        "pcm_pipe": getattr(player, '_pcm_pipe_name', ''),
-        "mpv_running": mpv_running,
-        "pipe_exists": player.mpv_pipe_exists(),
-    }
+    return {"status": "ok", **_build_room_status_payload(room_id, player)}
 
 
 @router.get("/room/list")
@@ -175,10 +200,5 @@ async def list_rooms():
         with _room_players_lock:
             player = ROOM_PLAYERS.get(rid)
         if player:
-            mpv_running = player.mpv_process is not None and player.mpv_process.poll() is None
-            rooms.append({
-                "room_id": rid,
-                "mpv_running": mpv_running,
-                "last_activity": ROOM_LAST_ACTIVITY.get(rid, 0),
-            })
-    return {"rooms": rooms, "count": len(rooms), "max": ROOM_MAX}
+            rooms.append(_build_room_status_payload(rid, player))
+    return {"status": "ok", "rooms": rooms, "count": len(rooms), "max": ROOM_MAX}

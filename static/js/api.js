@@ -123,8 +123,22 @@ export class MusicAPI {
     _fetchWithTimeout(url, options = {}, timeout) {
         const ms = timeout || this.defaultTimeout;
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), ms);
+        let didTimeout = false;
+        const timer = setTimeout(() => {
+            didTimeout = true;
+            controller.abort();
+        }, ms);
         return fetch(url, { ...options, signal: controller.signal })
+            .catch((error) => {
+                if (didTimeout) {
+                    const timeoutError = new Error(`Request timeout after ${ms}ms`);
+                    timeoutError.name = 'TimeoutError';
+                    timeoutError.__clubMusicTimedOut = true;
+                    timeoutError.cause = error;
+                    throw timeoutError;
+                }
+                throw error;
+            })
             .finally(() => clearTimeout(timer));
     }
 
@@ -357,6 +371,25 @@ export class MusicAPI {
 
     async getInstanceStatus() {
         return this.get('/diagnostic/instance-status');
+    }
+
+    async initRoom(roomId, defaultVolume = 80) {
+        return this.post('/room/init', {
+            room_id: roomId,
+            default_volume: defaultVolume,
+        }, { quietHttpStatuses: [409] });
+    }
+
+    async getRoomStatus(roomId) {
+        return this.get(`/room/${encodeURIComponent(roomId)}/status`);
+    }
+
+    async listRooms() {
+        return this.get('/room/list');
+    }
+
+    async destroyRoom(roomId) {
+        return this.delete(`/room/${encodeURIComponent(roomId)}`);
     }
 
     // 播放列表 API

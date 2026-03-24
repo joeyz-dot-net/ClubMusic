@@ -19,6 +19,7 @@ export class Player {
         this._lastServerTime = 0;
         this._minAcceptedServerTime = 0;
         this._isShuttingDown = false;
+        this._pollRequestInFlight = false;
 
         window.__clubMusicPageUnloading = false;
 
@@ -486,12 +487,29 @@ export class Player {
                 return;
             }
 
+            if (this._pollRequestInFlight) {
+                console.log('[Player] 上一次状态轮询仍未完成，跳过本次更新');
+                return;
+            }
+
             try {
+                this._pollRequestInFlight = true;
                 await this.refreshStatus();
             } catch (error) {
                 if (!this._isShuttingDown) {
-                    console.error('状态轮询失败:', error);
+                    const message = error?.result?.message || error?.message || '';
+                    const isTimeout = error?.result?.message?.includes('Request timeout')
+                        || error?.message?.includes('Request timeout')
+                        || error?.name === 'TimeoutError';
+
+                    if (isTimeout) {
+                        console.warn('状态轮询超时:', message || error);
+                    } else {
+                        console.error('状态轮询失败:', error);
+                    }
                 }
+            } finally {
+                this._pollRequestInFlight = false;
             }
         }, interval);
 
@@ -529,6 +547,7 @@ export class Player {
     }
 
     stopPolling() {
+        this._pollRequestInFlight = false;
         if (this.pollInterval) {
             clearInterval(this.pollInterval);
             this.pollInterval = null;

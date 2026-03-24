@@ -479,7 +479,7 @@ async def prev_track(
                     mpv_pipe_exists_func=player.mpv_pipe_exists,
                     ensure_mpv_func=player.ensure_mpv,
                     add_to_history_func=playback_history.add_to_history,
-                    save_to_history=True
+                    save_to_history=False
                 )
 
                 if success:
@@ -739,6 +739,7 @@ async def play_youtube_playlist(
             })
 
         playlist.updated_at = time.time()
+        await _broadcast_state(player, playlist_updated=True)
 
         return {"status": "OK", "added": len(videos)}
     except Exception as e:

@@ -544,6 +544,11 @@
 <script>
 	// Safari Storage Access API - 请求存储权限（修复Tracking Prevention）
 	async function requestStorageAccess() {
+		if (window.top !== window.self) {
+			console.log('[Safari] 嵌入式上下文，跳过 Storage Access 请求');
+			return false;
+		}
+
 		if (!document.hasStorageAccess) {
 			return true; // 不支持Storage Access API的浏览器直接返回
 		}
@@ -563,9 +568,11 @@
 	}
 	
 	// 用户首次交互时请求存储权限（Safari要求用户手势）
-	document.addEventListener('click', async function handleFirstClick() {
-		await requestStorageAccess();
-		document.removeEventListener('click', handleFirstClick);
-	}, { once: true });
+	if (window.top === window.self) {
+		document.addEventListener('click', async function handleFirstClick() {
+			await requestStorageAccess();
+			document.removeEventListener('click', handleFirstClick);
+		}, { once: true });
+	}
 </script>
 

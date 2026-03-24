@@ -20,6 +20,7 @@ import { playLock } from './playLock.js';
 import { unavailableSongs } from './unavailable.js';
 import { recordTrace } from './requestTrace.js?v=2';
 import { createRegressionHarness } from './regressionHarness.js?v=18';
+import { roomBotManager } from './roomBot.js?v=1';
 
 // ==========================================
 // 应用初始化
@@ -63,6 +64,27 @@ class MusicPlayerApp {
         return status?.mpv_state || status?.mpv || {};
     }
 
+    isIPhoneSafari() {
+        const ua = navigator.userAgent || '';
+        const isIPhone = /iPhone|iPod/i.test(ua);
+        const isSafari = /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|DuckDuckGo|OPiOS/i.test(ua);
+        return isIPhone && isSafari;
+    }
+
+    showMobileSafariAudioHint() {
+        if (!this.isIPhoneSafari()) {
+            return;
+        }
+
+        const storageKey = 'clubMusicMobileSafariAudioHintShown';
+        if (sessionStorage.getItem(storageKey) === '1') {
+            return;
+        }
+
+        sessionStorage.setItem(storageKey, '1');
+        Toast.info(i18n.t('player.mobileSafariAudioHint'), 7000);
+    }
+
     async init() {
         if (this.initialized) return;
         
@@ -71,6 +93,10 @@ class MusicPlayerApp {
         try {
             // 0.1 初始化多语言系统
             i18n.init();
+            this.showMobileSafariAudioHint();
+
+            // 0.2 房间页先确保对应 RoomPlayer 已经就绪，避免初始化窗口命中默认播放器
+            await this.ensureRoomBotReady();
             
             // 1. 初始化 UI 元素
             this.initUIElements();
@@ -142,6 +168,25 @@ class MusicPlayerApp {
             console.error('❌ 初始化失败:', error);
             Toast.error(i18n.t('player.initFailed') + ': ' + error.message);
         }
+    }
+
+    async ensureRoomBotReady() {
+        if (!api.roomId) {
+            return null;
+        }
+
+        const result = await roomBotManager.ensureRoomReady();
+        if (result?._error || result?.status !== 'ok' || result?.bot_ready !== true) {
+            throw new Error(result?.error || result?.message || `房间播放器初始化失败: ${api.roomId}`);
+        }
+
+        if (result.ensured) {
+            console.log('[RoomBot] ✓ 已创建并就绪:', api.roomId);
+        } else {
+            console.log('[RoomBot] 已存在并就绪:', api.roomId);
+        }
+
+        return result;
     }
 
     // 初始化 UI 元素引用
