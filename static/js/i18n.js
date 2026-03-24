@@ -10,7 +10,9 @@ const translations = {
 
         // 外观设置
         'settings.appearance': '🎨 外观设置',
+        'settings.diagnostics': '🩺 诊断',
         'settings.theme': '主题',
+        'settings.instanceStatus': '实例状态',
         'settings.theme.dark': '深色主题',
         'settings.theme.light': '浅色主题',
         'settings.theme.auto': '自动',
@@ -43,6 +45,9 @@ const translations = {
         'nav.debug': '调试',
         'debug.noData': '暂无数据',
         'debug.noLogs': '暂无日志',
+        'debug.loading': '加载中...',
+        'debug.loadFailed': '加载失败',
+        'debug.instanceStatus': '实例状态',
 
         // 播放历史 - 操作菜单
         'history.actionMenu.playNow': '立即播放',
@@ -239,7 +244,9 @@ const translations = {
 
         // Appearance settings
         'settings.appearance': '🎨 Appearance',
+        'settings.diagnostics': '🩺 Diagnostics',
         'settings.theme': 'Theme',
+        'settings.instanceStatus': 'Instance Status',
         'settings.theme.dark': 'Dark Theme',
         'settings.theme.light': 'Light Theme',
         'settings.theme.auto': 'Auto',
@@ -272,6 +279,9 @@ const translations = {
         'nav.debug': 'Debug',
         'debug.noData': 'No data',
         'debug.noLogs': 'No logs',
+        'debug.loading': 'Loading...',
+        'debug.loadFailed': 'Load failed',
+        'debug.instanceStatus': 'Instance Status',
 
         // Play history - Action menu
         'history.actionMenu.playNow': 'Play Now',
@@ -468,7 +478,9 @@ const translations = {
 
         // 外觀設定
         'settings.appearance': '🎨 外觀設定',
+        'settings.diagnostics': '🩺 診斷',
         'settings.theme': '主題',
+        'settings.instanceStatus': '實例狀態',
         'settings.theme.dark': '深色主題',
         'settings.theme.light': '淺色主題',
         'settings.theme.auto': '自動',
@@ -501,6 +513,9 @@ const translations = {
         'nav.debug': '除錯',
         'debug.noData': '暫無資料',
         'debug.noLogs': '暫無日誌',
+        'debug.loading': '載入中...',
+        'debug.loadFailed': '載入失敗',
+        'debug.instanceStatus': '實例狀態',
 
         // 播放記錄 - 操作選單
         'history.actionMenu.playNow': '立即播放',

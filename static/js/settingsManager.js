@@ -26,6 +26,11 @@ export const settingsManager = {
     player: null,
     schema: {},
 
+    renderDiagnosticsStatus(container, lines, fallbackText) {
+        if (!container) return;
+        container.textContent = lines && lines.length > 0 ? lines.join('\n') : fallbackText;
+    },
+
     setButtonGroupValue(groupId, value) {
         const group = document.getElementById(groupId);
         if (!group) return;
@@ -100,6 +105,9 @@ export const settingsManager = {
 
             // 加载版本号
             await this.loadVersion();
+
+            // 加载实例状态
+            await this.loadInstanceStatus();
 
             // 应用主题
             this.applyTheme();
@@ -218,6 +226,39 @@ export const settingsManager = {
             }
         } catch (error) {
             console.error('[设置] 版本号加载失败:', error);
+        }
+    },
+
+    async loadInstanceStatus() {
+        const container = document.getElementById('settingsInstanceStatus');
+        if (!container) {
+            return null;
+        }
+
+        this.renderDiagnosticsStatus(container, [i18n.t('debug.loading')], i18n.t('debug.noData'));
+
+        try {
+            const result = this.assertApiSuccess(
+                await api.getInstanceStatus(),
+                i18n.t('debug.loadFailed')
+            );
+            const status = result.data || {};
+            const lines = Object.entries(status).map(([key, value]) => {
+                const serializedValue = typeof value === 'object' && value !== null
+                    ? JSON.stringify(value)
+                    : String(value);
+                return `${key}: ${serializedValue}`;
+            });
+            this.renderDiagnosticsStatus(container, lines, i18n.t('debug.noData'));
+            return status;
+        } catch (error) {
+            console.error('[设置] 实例状态加载失败:', error);
+            this.renderDiagnosticsStatus(
+                container,
+                [`${i18n.t('debug.loadFailed')}: ${error.message}`],
+                i18n.t('debug.noData')
+            );
+            return null;
         }
     },
 
@@ -473,6 +514,12 @@ export const settingsManager = {
         const appearanceSection = document.getElementById('appearanceSectionTitle');
         if (appearanceSection) appearanceSection.textContent = i18n.t('settings.appearance', language);
 
+        const diagnosticsSection = document.getElementById('diagnosticsSectionTitle');
+        if (diagnosticsSection) diagnosticsSection.textContent = i18n.t('settings.diagnostics', language);
+
+        const instanceStatusLabel = document.getElementById('instanceStatusLabel');
+        if (instanceStatusLabel) instanceStatusLabel.textContent = i18n.t('settings.instanceStatus', language);
+
         const themeLabel = document.getElementById('themeLabel');
         if (themeLabel) themeLabel.textContent = i18n.t('settings.theme', language);
 
@@ -648,6 +695,7 @@ export const settingsManager = {
             }
 
             document.addEventListener('keydown', panel._keydownHandler);
+            void this.loadInstanceStatus();
             setTimeout(() => {
                 focusFirstFocusable(panel, '#settingsCloseBtn');
             }, 10);

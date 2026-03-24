@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 
-from startup_cleanup import cleanup_stale_mpv_processes
+from startup_cleanup import cleanup_stale_mpv_processes, ensure_single_service_instance
 
 cleanup_stale_mpv_processes(logger=logger)
 
@@ -635,7 +635,25 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 
 if __name__ == "__main__":
+    import configparser
     import uvicorn
+
+    config = configparser.ConfigParser()
+    config.read("settings.ini", encoding="utf-8")
+    server_host = config.get("app", "server_host", fallback="0.0.0.0")
+    server_port = config.getint("app", "server_port", fallback=80)
+
+    try:
+        ensure_single_service_instance(
+            server_host=server_host,
+            server_port=server_port,
+            logger=logger,
+            interactive=False,
+            prompt_for_takeover=False,
+        )
+    except RuntimeError as e:
+        logger.error(f"[Startup] {e}")
+        raise SystemExit(1) from e
 
     # 过滤 /status 和 /volume 的访问日志，防止刷屏
     class EndpointFilter(logging.Filter):
@@ -647,4 +665,4 @@ if __name__ == "__main__":
 
     logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
 
-    uvicorn.run(app, host="0.0.0.0", port=80, access_log=False)
+    uvicorn.run(app, host=server_host, port=server_port, access_log=False)

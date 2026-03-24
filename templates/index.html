@@ -384,6 +384,12 @@
 					<div id="debugPlayer" style="background: #0a0a0a; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; color: #51cf66; font-family: 'Courier New', monospace; min-height: 80px; border-left: 3px solid #51cf66;">加载中...</div>
 				</div>
 
+				<!-- 实例状态 -->
+				<div style="margin-bottom: 20px;">
+					<h4 style="margin: 0 0 10px 0; color: #51cf66; font-size: 14px; font-weight: bold;" data-i18n="debug.instanceStatus">实例状态</h4>
+					<div id="debugInstance" style="background: #0a0a0a; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; color: #51cf66; font-family: 'Courier New', monospace; min-height: 80px; border-left: 3px solid #51cf66;">加载中...</div>
+				</div>
+
 				<!-- 歌单信息 -->
 				<div style="margin-bottom: 20px;">
 					<h4 style="margin: 0 0 10px 0; color: #51cf66; font-size: 14px; font-weight: bold;">歌单信息</h4>
@@ -486,6 +492,14 @@
 							<span class="btn-label">English</span>
 						</button>
 					</div>
+					</div>
+				</div>
+
+				<div class="settings-section">
+					<h3 class="section-title" id="diagnosticsSectionTitle" data-i18n="settings.diagnostics">诊断</h3>
+					<div class="settings-item settings-item-vertical settings-item-diagnostics">
+						<div class="settings-label" id="instanceStatusLabel" data-i18n="settings.instanceStatus">实例状态</div>
+						<div id="settingsInstanceStatus" class="settings-diagnostics-panel">加载中...</div>
 					</div>
 				</div>
 

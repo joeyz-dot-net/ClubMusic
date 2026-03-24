@@ -10,6 +10,7 @@ routers/room.py - 自定义房间 RoomPlayer 管理 API
 """
 
 import logging
+import time
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
@@ -42,6 +43,7 @@ async def init_room(request: Request):
 
     default_volume = int(body.get("default_volume", 80))
     ipc_pipe = rf'\\.\pipe\mpv-ipc-{room_id}'
+    init_started_at = time.perf_counter()
 
     # 检查是否已存在
     with _room_players_lock:
@@ -49,7 +51,8 @@ async def init_room(request: Request):
             player = ROOM_PLAYERS[room_id]
             pcm_pipe = getattr(player, '_pcm_pipe_name', '')
             touch_room_activity(room_id)
-            logger.info(f"[Room] 房间已存在: {room_id}")
+            elapsed_ms = (time.perf_counter() - init_started_at) * 1000
+            logger.info(f"[Room] 房间已存在: {room_id}, elapsed_ms={elapsed_ms:.1f}")
             return {"status": "ok", "ipc_pipe": ipc_pipe, "pcm_pipe": pcm_pipe, "existed": True}
 
         # 防止并发创建同一房间的竞态
@@ -64,11 +67,16 @@ async def init_room(request: Request):
         _creating_rooms.add(room_id)
 
     try:
+        logger.info(f"[Room] 初始化开始: room_id={room_id}, default_volume={default_volume}")
+
         # 创建房间独立播放历史
+        history_started_at = time.perf_counter()
         room_history = PlayHistory(max_size=500)
         ROOM_HISTORIES[room_id] = room_history
+        history_elapsed_ms = (time.perf_counter() - history_started_at) * 1000
 
         # 创建 RoomPlayer（锁外执行，避免长时间持锁）
+        player_create_started_at = time.perf_counter()
         logger.info(f"[Room] 创建 RoomPlayer: {room_id}")
         player = MusicPlayer.create_room_player(
             room_id=room_id,
@@ -78,21 +86,39 @@ async def init_room(request: Request):
             default_volume=default_volume,
             music_dir=PLAYER.music_dir,
         )
+        player_create_elapsed_ms = (time.perf_counter() - player_create_started_at) * 1000
+
+        registration_started_at = time.perf_counter()
+        with _room_players_lock:
+            ROOM_PLAYERS[room_id] = player
+        registration_elapsed_ms = (time.perf_counter() - registration_started_at) * 1000
 
         # 启动 MPV（PCM 音频直接写入 ClubVoice 的 Named Pipe）
+        mpv_start_started_at = time.perf_counter()
         ok = player.start_room_mpv()
+        mpv_start_elapsed_ms = (time.perf_counter() - mpv_start_started_at) * 1000
         if not ok:
-            logger.error(f"[Room] MPV 启动失败: {room_id}")
+            total_elapsed_ms = (time.perf_counter() - init_started_at) * 1000
+            logger.error(
+                f"[Room] MPV 启动失败: {room_id}, history_ms={history_elapsed_ms:.1f}, "
+                f"create_ms={player_create_elapsed_ms:.1f}, register_ms={registration_elapsed_ms:.1f}, "
+                f"mpv_start_ms={mpv_start_elapsed_ms:.1f}, total_ms={total_elapsed_ms:.1f}"
+            )
+            with _room_players_lock:
+                ROOM_PLAYERS.pop(room_id, None)
             player.destroy_room_player()
             ROOM_HISTORIES.pop(room_id, None)
             return JSONResponse({"status": "error", "message": "MPV start failed"}, 500)
 
-        with _room_players_lock:
-            ROOM_PLAYERS[room_id] = player
-
         touch_room_activity(room_id)
         pcm_pipe = getattr(player, '_pcm_pipe_name', '')
-        logger.info(f"[Room] ✓ 房间就绪: {room_id}, ipc={ipc_pipe}, pcm={pcm_pipe}")
+        total_elapsed_ms = (time.perf_counter() - init_started_at) * 1000
+        logger.info(
+            f"[Room] ✓ 房间就绪: {room_id}, ipc={ipc_pipe}, pcm={pcm_pipe}, "
+            f"history_ms={history_elapsed_ms:.1f}, create_ms={player_create_elapsed_ms:.1f}, "
+            f"register_ms={registration_elapsed_ms:.1f}, mpv_start_ms={mpv_start_elapsed_ms:.1f}, "
+            f"total_ms={total_elapsed_ms:.1f}"
+        )
         return {"status": "ok", "ipc_pipe": ipc_pipe, "pcm_pipe": pcm_pipe, "existed": False}
     finally:
         with _room_players_lock:

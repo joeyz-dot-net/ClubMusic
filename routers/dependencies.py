@@ -14,6 +14,8 @@ routers/dependencies.py - FastAPI 依赖注入提供函数
         player.play(song, ...)
 """
 
+import logging
+
 from fastapi import Request
 
 from routers.state import (
@@ -22,6 +24,7 @@ from routers.state import (
     PLAYBACK_HISTORY,
     SETTINGS,
     _player_lock,
+    _creating_rooms,
     ws_manager,
     get_player_for_pipe,
     get_player_for_room_id,
@@ -29,6 +32,9 @@ from routers.state import (
     touch_room_activity,
 )
 from models import MusicPlayer, Playlists, PlayHistory
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_player() -> MusicPlayer:
@@ -50,6 +56,15 @@ def get_player_for_request(request: Request) -> MusicPlayer:
         if player:
             touch_room_activity(room_id)
             return player
+        endpoint = request.url.path
+        if room_id in _creating_rooms:
+            logger.warning(
+                f"[RoomRouting] room_id={room_id} 请求命中初始化窗口，临时回退默认播放器: {endpoint}"
+            )
+        else:
+            logger.warning(
+                f"[RoomRouting] room_id={room_id} 未找到对应 RoomPlayer，回退默认播放器: {endpoint}"
+            )
         # RoomPlayer 不存在（可能尚未创建或已销毁）→ 回退默认播放器
         return PLAYER
 

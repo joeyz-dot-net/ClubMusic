@@ -484,3 +484,24 @@ html[data-theme="light"] {
     cursor: not-allowed;
     opacity: 0.6;
 }
+
+.settings-item-diagnostics {
+    align-items: stretch;
+}
+
+.settings-diagnostics-panel {
+    width: 100%;
+    min-height: 96px;
+    max-height: 220px;
+    overflow: auto;
+    padding: 12px;
+    border-radius: 8px;
+    border-left: 3px solid var(--accent-color, #007AFF);
+    background: var(--bg-primary, #121212);
+    color: var(--text-primary, #fff);
+    font-size: 12px;
+    line-height: 1.6;
+    font-family: 'Courier New', monospace;
+    white-space: pre-wrap;
+    word-break: break-word;
+}

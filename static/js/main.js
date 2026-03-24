@@ -1226,7 +1226,7 @@ class MusicPlayerApp {
         }
 
         // 初始化调试面板模块
-        debug.init(player, playlistManager);
+        debug.init(player, playlistManager, api);
         
         // 安全地初始化音频格式按钮
         if (debug && typeof debug.initAudioFormatButtons === 'function') {

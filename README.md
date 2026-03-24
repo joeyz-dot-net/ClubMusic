@@ -68,10 +68,25 @@ python run.py
 启动时会交互式选择音频输出设备（带实时倒计时显示），10 秒内未操作则自动使用系统默认设备。
 `run.py` 是长运行服务器入口；正常行为是持续占用终端并监听端口，而不是立即退出。
 
+启动前会先做主服务单实例检查：
+
+- 如果当前端口还没有 ClubMusic 服务实例，继续正常启动
+- 如果检测到同代码目录的 ClubMusic 实例已在运行，会提示是否结束旧实例并由当前进程接管，并显示访问地址、启动时间与锁文件路径
+- 如果端口被其他程序占用，则直接退出并提示占用进程 PID
+
+开发入口 `python run.py` / `python main.py` 为交互式模式，会显示接管提示；直接运行 `python app.py` 为非交互兜底入口，发现已有实例时会直接失败退出，不会尝试接管。
+
 在 VS Code 中也可以直接运行任务：
 
 ```text
 Run Task -> Run App
+```
+
+实例诊断相关任务：
+
+```text
+Run Task -> Instance Status
+Run Task -> Cleanup Stale Instance Lock
 ```
 
 ### 访问界面
@@ -114,6 +129,34 @@ VS Code 里可直接运行任务：
 
 ```text
 Run Task -> Browser Control Regression
+```
+
+查看当前主服务单实例状态：
+
+```bash
+py tools/instance_status.py
+```
+
+如需完整 JSON：
+
+```bash
+py tools/instance_status.py --json
+```
+
+如需通过后端接口读取同一份实例状态数据：
+
+```text
+GET /diagnostic/instance-status
+```
+
+浏览器中的调试面板也会显示这一份实例状态数据，便于直接确认当前实例锁、端口监听和陈旧锁状态。
+
+设置面板中也提供了只读实例状态卡片，并会在打开设置面板时自动刷新，便于确认当前服务实例、锁文件和端口监听是否一致。
+
+如需清理没有对应存活进程的陈旧锁文件：
+
+```bash
+py tools/instance_status.py --cleanup-stale-lock
 ```
 
 脚本会输出完整 JSON 结果；VS Code task 还会把结果写到 `logs/browser-control-regression.json`。当前套件包含 trusted next、trusted prev、embeddable YouTube 的 trusted play/pause resume probe，以及“后端已暂停但前端本地 `paused` 仍是旧值”的 stale-local-state trusted resume probe。当前通过基线应为整套全绿，也就是结果文件顶层 `summary.passed = true`，并且 `checks.controlSuite = true`、`checks.trustedResumeSuite = true`。启用 `--ensure-server` 时，脚本会在目标地址不可达时自动启动本地 Uvicorn，并在回归结束后自动停止它。

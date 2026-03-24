@@ -338,6 +338,10 @@ export class MusicAPI {
         return this.post('/ui-config', data);
     }
 
+    async getInstanceStatus() {
+        return this.get('/diagnostic/instance-status');
+    }
+
     // 播放列表 API
     async getPlaylist(playlistId = null) {
         const url = playlistId ? `/playlist?playlist_id=${encodeURIComponent(playlistId)}` : '/playlist';

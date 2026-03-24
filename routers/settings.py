@@ -10,6 +10,7 @@ routers/settings.py - 用户设置和 UI 配置路由
   GET  /settings/schema
   GET  /ui-config
   POST /ui-config
+    GET  /diagnostic/instance-status
   GET  /diagnostic/ytdlp
 """
 
@@ -23,6 +24,7 @@ from fastapi.responses import JSONResponse
 from routers.state import error_response
 from routers.dependencies import get_player
 from models import MusicPlayer
+from startup_cleanup import get_service_instance_status
 
 logger = logging.getLogger(__name__)
 
@@ -232,6 +234,29 @@ async def update_ui_config(request: Request):
         }
     except Exception as e:
         return error_response("[POST /ui-config] 保存UI配置异常", exc=e, _logger=logger)
+
+
+@router.get("/diagnostic/instance-status")
+async def diagnostic_instance_status():
+    """诊断主服务实例锁和端口状态。"""
+    try:
+        import configparser
+        from pathlib import Path
+
+        config = configparser.ConfigParser()
+        config_file = Path("settings.ini")
+        if config_file.exists():
+            config.read(config_file, encoding="utf-8")
+
+        server_host = config.get("app", "server_host", fallback="0.0.0.0")
+        server_port = config.getint("app", "server_port", fallback=80)
+        status = get_service_instance_status(server_host, server_port)
+        return {
+            "status": "OK",
+            "data": status,
+        }
+    except Exception as e:
+        return error_response("[GET /diagnostic/instance-status] 诊断异常", exc=e, _logger=logger)
 
 
 @router.get("/diagnostic/ytdlp")

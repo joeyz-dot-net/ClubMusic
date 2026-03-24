@@ -20,7 +20,7 @@ import configparser
 
 # 导入日志模块
 from models.logger import setup_logging, logger
-from startup_cleanup import cleanup_stale_mpv_processes
+from startup_cleanup import cleanup_stale_mpv_processes, ensure_single_service_instance
 
 
 def disable_uvicorn_access_logs():
@@ -371,10 +371,31 @@ def main():
     # 导入日志模块
     from models.logger import setup_logging, logger
 
+    # 加载配置文件
+    config = configparser.ConfigParser()
+    config_file = Path("settings.ini")
+    if config_file.exists():
+        config.read(config_file, encoding="utf-8")
+
     # 设置日志
     setup_logging()
 
     cleanup_stale_mpv_processes(logger=logger)
+
+    server_host = config.get("app", "server_host", fallback="0.0.0.0")
+    server_port = config.getint("app", "server_port", fallback=80)
+
+    try:
+        ensure_single_service_instance(
+            server_host=server_host,
+            server_port=server_port,
+            logger=logger,
+            interactive=True,
+            prompt_for_takeover=True,
+        )
+    except RuntimeError as e:
+        print(f"\n[启动检查] {e}")
+        return
 
     # 禁用 uvicorn 访问日志
     disable_uvicorn_access_logs()
@@ -382,12 +403,6 @@ def main():
     print("\n" + "=" * 60)
     print("🎵 ClubMusic 启动中...")
     print("=" * 60)
-
-    # 加载配置文件
-    config = configparser.ConfigParser()
-    config_file = Path("settings.ini")
-    if config_file.exists():
-        config.read(config_file, encoding="utf-8")
 
     # 【第一步】交互式选择音频设备
     # 获取主程序目录
@@ -465,9 +480,6 @@ def main():
 
     # 启动 FastAPI 服务器
     import uvicorn
-
-    server_host = config.get("app", "server_host", fallback="0.0.0.0")
-    server_port = config.getint("app", "server_port", fallback=80)
 
     uvicorn.run(
         fastapi_app,

@@ -32,6 +32,7 @@ export class Debug {
             debugRefresh: document.getElementById('debugRefresh'),
             debugClearLogs: document.getElementById('debugClearLogs'),
             debugPlayer: document.getElementById('debugPlayer'),
+            debugInstance: document.getElementById('debugInstance'),
             debugPlaylist: document.getElementById('debugPlaylist'),
             debugStorage: document.getElementById('debugStorage'),
             debugLogs: document.getElementById('debugLogs'),
@@ -43,10 +44,11 @@ export class Debug {
     }
 
     // 初始化调试面板
-    init(player, playlistManager) {
+    init(player, playlistManager, api) {
         this.player = player;
         this.updateThemeButtons();
         this.playlistManager = playlistManager;
+        this.api = api;
         this.setupConsoleCapture();
         this.setupEventListeners();
     }
@@ -132,7 +134,7 @@ export class Debug {
         // 刷新调试信息
         if (this.elements.debugRefresh) {
             this.elements.debugRefresh.addEventListener('click', () => {
-                this.updateInfo();
+                void this.updateInfo();
             });
         }
 
@@ -162,7 +164,7 @@ export class Debug {
     show() {
         if (this.elements.debugModal) {
             this.elements.debugModal.style.display = 'block';
-            this.updateInfo();
+            void this.updateInfo();
         }
     }
 
@@ -174,8 +176,9 @@ export class Debug {
     }
 
     // 更新调试信息
-    updateInfo() {
+    async updateInfo() {
         this.updatePlayerInfo();
+        await this.updateInstanceInfo();
         this.updatePlaylistInfo();
         this.updateStorageInfo();
         this.updateLogs();
@@ -190,6 +193,42 @@ export class Debug {
                 text: `[${timestamp}] ${key}: ${stringifyDebugValue(value)}`,
                 color: '#51cf66'
             })), i18n.t('debug.noData'));
+        }
+    }
+
+    async updateInstanceInfo() {
+        if (!this.elements.debugInstance) {
+            return;
+        }
+
+        const timestamp = new Date().toLocaleTimeString();
+        this.renderDebugEntries(this.elements.debugInstance, [{
+            text: `[${timestamp}] ${i18n.t('debug.loading')}`,
+            color: '#ffd93d'
+        }], i18n.t('debug.noData'));
+
+        try {
+            const result = await this.api?.getInstanceStatus();
+            if (!result || result._error || result.status !== 'OK') {
+                const errorMessage = result?.error || result?.message || i18n.t('debug.loadFailed');
+                this.renderDebugEntries(this.elements.debugInstance, [{
+                    text: `[${timestamp}] ${i18n.t('debug.loadFailed')}: ${errorMessage}`,
+                    color: '#ff6b6b'
+                }], i18n.t('debug.noData'));
+                return;
+            }
+
+            const status = result.data || {};
+            const entries = Object.entries(status).map(([key, value]) => ({
+                text: `[${timestamp}] ${key}: ${stringifyDebugValue(value)}`,
+                color: '#51cf66'
+            }));
+            this.renderDebugEntries(this.elements.debugInstance, entries, i18n.t('debug.noData'));
+        } catch (error) {
+            this.renderDebugEntries(this.elements.debugInstance, [{
+                text: `[${timestamp}] ${i18n.t('debug.loadFailed')}: ${error.message}`,
+                color: '#ff6b6b'
+            }], i18n.t('debug.noData'));
         }
     }
 
