@@ -4,6 +4,9 @@ import threading
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+from fastapi import HTTPException
+
 from models.player import MusicPlayer
 from models.playlists import Playlist, Playlists
 from routers import dependencies as router_dependencies
@@ -117,6 +120,7 @@ class DummyHistory:
 class DummyWebSocket:
     def __init__(self, query_params=None):
         self.accepted = False
+        self.closed = None
         self.messages = []
         self.query_params = query_params or {}
         self.receive_count = 0
@@ -126,6 +130,9 @@ class DummyWebSocket:
 
     async def send_json(self, message):
         self.messages.append(message)
+
+    async def close(self, code=1000, reason=""):
+        self.closed = {"code": code, "reason": reason}
 
     async def receive_text(self):
         self.receive_count += 1
@@ -299,6 +306,32 @@ def test_get_player_for_request_falls_back_to_pipe_when_no_room(monkeypatch):
     resolved = router_dependencies.get_player_for_request(request)
 
     assert resolved is pipe_player
+
+
+def test_get_player_for_request_raises_when_room_is_being_created(monkeypatch):
+    monkeypatch.setattr(router_dependencies, "get_player_for_room_id", lambda room_id: None)
+    monkeypatch.setattr(router_dependencies, "_creating_rooms", {"room-pending"})
+
+    request = DummyDependencyRequest(room_id="room-pending", path="/status")
+
+    with pytest.raises(HTTPException) as exc_info:
+        router_dependencies.get_player_for_request(request)
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail == "room is being created"
+
+
+def test_get_player_for_request_raises_when_room_is_missing(monkeypatch):
+    monkeypatch.setattr(router_dependencies, "get_player_for_room_id", lambda room_id: None)
+    monkeypatch.setattr(router_dependencies, "_creating_rooms", set())
+
+    request = DummyDependencyRequest(room_id="room-missing", path="/status")
+
+    with pytest.raises(HTTPException) as exc_info:
+        router_dependencies.get_player_for_request(request)
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "room not found"
 
 
 def test_get_playback_history_returns_room_history(monkeypatch):
@@ -590,6 +623,38 @@ def test_websocket_endpoint_defaults_to_main_player_snapshot(monkeypatch):
     assert manager.disconnected == [websocket]
     assert selected_players == [default_player]
     assert websocket.messages == [{"type": "state_update", "player_id": "default-player", "playlist_updated": False}]
+
+
+def test_websocket_endpoint_closes_when_room_is_being_created(monkeypatch):
+    manager = DummyWsManager()
+
+    monkeypatch.setattr(websocket_router, "get_player_for_room_id", lambda room_id: None)
+    monkeypatch.setattr(websocket_router, "_creating_rooms", {"room-pending"})
+
+    websocket = DummyWebSocket(query_params={"room_id": "room-pending"})
+
+    asyncio.run(websocket_router.websocket_endpoint(websocket, manager=manager))
+
+    assert manager.connected == []
+    assert manager.disconnected == []
+    assert websocket.closed == {"code": 1013, "reason": "room is being created"}
+    assert websocket.messages == []
+
+
+def test_websocket_endpoint_closes_when_room_is_missing(monkeypatch):
+    manager = DummyWsManager()
+
+    monkeypatch.setattr(websocket_router, "get_player_for_room_id", lambda room_id: None)
+    monkeypatch.setattr(websocket_router, "_creating_rooms", set())
+
+    websocket = DummyWebSocket(query_params={"room_id": "room-missing"})
+
+    asyncio.run(websocket_router.websocket_endpoint(websocket, manager=manager))
+
+    assert manager.connected == []
+    assert manager.disconnected == []
+    assert websocket.closed == {"code": 1008, "reason": "room not found"}
+    assert websocket.messages == []
 
 
 def test_resolve_playlist_for_request_maps_default_to_room_runtime_queue():

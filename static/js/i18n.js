@@ -108,6 +108,9 @@ const translations = {
         'player.youtubeAudioOnlyBody': '这是 YouTube 对嵌入播放的限制，音频会继续正常播放。',
         'player.youtubeVideoSkipped': 'YouTube 视频无法嵌入，已切换为纯音频播放: {title}',
         'player.mobileSafariAudioHint': 'iPhone Safari 当前页面主要用于控制服务器或房间播放器，普通歌曲音频不会直接在本页输出。',
+        'player.roomRecoveryStart': '房间播放器连接已断开，正在尝试恢复...',
+        'player.roomRecoverySuccess': '房间播放器已恢复',
+        'player.roomRecoveryFailed': '房间播放器恢复失败',
 
         // 搜索
         'search.title': '搜索结果',
@@ -343,6 +346,9 @@ const translations = {
         'player.youtubeAudioOnlyBody': 'YouTube blocks embedded playback for this video, but audio continues normally.',
         'player.youtubeVideoSkipped': 'YouTube video could not be embedded, continuing with audio only: {title}',
         'player.mobileSafariAudioHint': 'On iPhone Safari, this page mainly controls the server or room player. Regular track audio does not play directly from this page.',
+        'player.roomRecoveryStart': 'Room player connection was lost. Attempting recovery...',
+        'player.roomRecoverySuccess': 'Room player recovered',
+        'player.roomRecoveryFailed': 'Room player recovery failed',
 
         // Search
         'search.title': 'Search Results',
@@ -578,6 +584,9 @@ const translations = {
         'player.youtubeAudioOnlyBody': '這是 YouTube 的嵌入限制，音訊會繼續正常播放。',
         'player.youtubeVideoSkipped': 'YouTube 視訊無法嵌入，已切換為純音訊播放: {title}',
         'player.mobileSafariAudioHint': '在 iPhone Safari 中，這個頁面主要用來控制伺服器或房間播放器，一般歌曲音訊不會直接在本頁輸出。',
+        'player.roomRecoveryStart': '房間播放器連線已中斷，正在嘗試恢復...',
+        'player.roomRecoverySuccess': '房間播放器已恢復',
+        'player.roomRecoveryFailed': '房間播放器恢復失敗',
 
         // 搜尋
         'search.title': '搜尋結果',

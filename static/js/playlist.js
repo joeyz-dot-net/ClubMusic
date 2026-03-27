@@ -15,10 +15,11 @@ export class PlaylistManager {
         this.playlists = [];
         this.urlSet = new Set();
         this.currentPlaylistName = i18n.t('playlist.current'); // 添加歌单名称
+        this.roomPlaylist = null;
         // ✅ 从 localStorage 恢复当前选择的歌单ID，默认为 'default'
         this.selectedPlaylistId = this._loadSelectedPlaylistFromStorage();
         console.log('[PlaylistManager] ✓ 初始化完成，selectedPlaylistId:', this.selectedPlaylistId);
-        console.log('[PlaylistManager] ℹ localStorage 中的完整值:', localStorage.getItem('selectedPlaylistId'));
+        console.log('[PlaylistManager] ℹ localStorage 中的完整值:', localStorage.getItem(this._getStorageKey()));
     }
 
     _getApiErrorMessage(result, fallbackMessage) {
@@ -45,10 +46,29 @@ export class PlaylistManager {
         return result;
     }
 
+    _hasRoomContext() {
+        return Boolean(api.roomId);
+    }
+
+    _getRoomRuntimePlaylistId() {
+        return api.roomId ? `room_${api.roomId}` : 'default';
+    }
+
+    _getStorageKey() {
+        if (this._hasRoomContext()) {
+            return `selectedPlaylistId:${api.roomId}`;
+        }
+        return 'selectedPlaylistId';
+    }
+
+    _getDefaultSelectedPlaylistId() {
+        return this._hasRoomContext() ? this._getRoomRuntimePlaylistId() : 'default';
+    }
+
     // ✅ 新增：从 localStorage 读取保存的歌单ID
     _loadSelectedPlaylistFromStorage() {
         try {
-            const saved = localStorage.getItem('selectedPlaylistId');
+            const saved = localStorage.getItem(this._getStorageKey());
             console.log('[PlaylistManager] localStorage中的值:', saved);
             if (saved && saved !== 'undefined' && saved !== '') {
                 console.log('[歌单管理] 从本地存储恢复选择歌单:', saved);
@@ -57,8 +77,9 @@ export class PlaylistManager {
         } catch (e) {
             console.warn('[歌单管理] 读取 localStorage 失败:', e);
         }
-        console.log('[歌单管理] 使用默认歌单: default');
-        return 'default';
+        const defaultPlaylistId = this._getDefaultSelectedPlaylistId();
+        console.log('[歌单管理] 使用默认歌单:', defaultPlaylistId);
+        return defaultPlaylistId;
     }
 
     // 加载当前播放队列（用户隔离：使用前端保存的 selectedPlaylistId）
@@ -322,13 +343,11 @@ export class PlaylistManager {
 
     // ✅ 新增：设置当前选择的歌单（并保存到 localStorage）
     setSelectedPlaylist(playlistId) {
-        this.selectedPlaylistId = playlistId;
-        // 房间歌单不写入 localStorage（房间销毁后 ID 失效）
+        const normalizedPlaylistId = playlistId || this.getActiveDefaultId();
+        this.selectedPlaylistId = normalizedPlaylistId;
         try {
-            if (!playlistId.startsWith('room_')) {
-                localStorage.setItem('selectedPlaylistId', playlistId);
-            }
-            console.log('[歌单管理] 设置当前选择歌单:', playlistId);
+            localStorage.setItem(this._getStorageKey(), normalizedPlaylistId);
+            console.log('[歌单管理] 设置当前选择歌单:', normalizedPlaylistId);
         } catch (e) {
             console.warn('[歌单管理] 保存到 localStorage 失败:', e);
         }
@@ -431,7 +450,7 @@ export class PlaylistManager {
         if (this.roomPlaylist) {
             return this.roomPlaylist.id;
         }
-        return 'default';
+        return this._getDefaultSelectedPlaylistId();
     }
 
     // 获取当前歌单图标

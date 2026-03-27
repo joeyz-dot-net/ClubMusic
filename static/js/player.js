@@ -3,6 +3,7 @@ import { api } from './api.js?v=4';
 import { settingsManager } from './settingsManager.js?v=6';
 import { operationLock } from './operationLock.js';
 import { recordTrace } from './requestTrace.js?v=2';
+import { roomBotManager } from './roomBot.js?v=1';
 
 const STATUS_TIME_EPSILON = 0.001;
 
@@ -20,6 +21,7 @@ export class Player {
         this._minAcceptedServerTime = 0;
         this._isShuttingDown = false;
         this._pollRequestInFlight = false;
+        this._roomRecoveryPromise = null;
 
         window.__clubMusicPageUnloading = false;
 
@@ -85,12 +87,59 @@ export class Player {
     }
 
     _createApiError(result, fallbackMessage) {
-        const message = result?.error || result?.message || fallbackMessage;
+        const detailMessage = typeof result?.detail === 'string' ? result.detail : '';
+        const message = result?.error || result?.message || detailMessage || fallbackMessage;
         const error = new Error(message);
         if (result && typeof result === 'object') {
             error.result = result;
         }
         return error;
+    }
+
+    _isRecoverableRoomError(result) {
+        if (!api.roomId || !result?._error) {
+            return false;
+        }
+
+        const status = Number(result.status || 0);
+        const detailMessage = typeof result?.detail === 'string' ? result.detail : '';
+        const message = result?.error || result?.message || detailMessage;
+
+        return (status === 404 && message === 'room not found')
+            || (status === 409 && message === 'room is being created');
+    }
+
+    async _recoverRoomContext(reason, { source = 'status' } = {}) {
+        if (!api.roomId) {
+            return false;
+        }
+
+        if (this._roomRecoveryPromise) {
+            return this._roomRecoveryPromise;
+        }
+
+        this.emit('roomRecovery', { phase: 'start', source, reason });
+        this._roomRecoveryPromise = (async () => {
+            const result = await roomBotManager.ensureRoomReady();
+            const statusText = String(result?.status || '').toLowerCase();
+            const success = !result?._error && statusText === 'ok' && result?.bot_ready === true;
+
+            this.emit('roomRecovery', {
+                phase: success ? 'success' : 'failure',
+                source,
+                reason,
+                result,
+            });
+
+            return success;
+        })().catch((error) => {
+            this.emit('roomRecovery', { phase: 'failure', source, reason, error });
+            return false;
+        }).finally(() => {
+            this._roomRecoveryPromise = null;
+        });
+
+        return this._roomRecoveryPromise;
     }
 
     _ensureSuccess(result, fallbackMessage, { allowStatuses = [] } = {}) {
@@ -245,7 +294,15 @@ export class Player {
     }
 
     async refreshStatus(fallbackMessage = '获取播放器状态失败') {
-        const status = await api.getStatus();
+        let status = await api.getStatus();
+
+        if (this._isRecoverableRoomError(status)) {
+            const recovered = await this._recoverRoomContext(status, { source: 'status' });
+            if (recovered) {
+                status = await api.getStatus();
+            }
+        }
+
         return this._applyStatus(status, fallbackMessage);
     }
 
@@ -670,10 +727,21 @@ export class Player {
                     this.wsHeartbeatInterval = null;
                 }
                 // 指数退避重连（上限 30s）
-                this.wsReconnectTimer = setTimeout(() => {
-                    this.wsReconnectDelay = Math.min(30000, this.wsReconnectDelay * 2);
+                const shouldRecoverRoom = api.roomId && (event.code === 1008 || event.code === 1013);
+                const retryDelay = this.wsReconnectDelay;
+                this.wsReconnectTimer = setTimeout(async () => {
+                    if (shouldRecoverRoom) {
+                        const recovered = await this._recoverRoomContext({
+                            _error: true,
+                            status: event.code === 1013 ? 409 : 404,
+                            detail: event.reason || '',
+                        }, { source: 'ws' });
+                        this.wsReconnectDelay = recovered ? 1000 : Math.min(30000, this.wsReconnectDelay * 2);
+                    } else {
+                        this.wsReconnectDelay = Math.min(30000, this.wsReconnectDelay * 2);
+                    }
                     this.connectWebSocket();
-                }, this.wsReconnectDelay);
+                }, retryDelay);
             };
 
             this.ws.onerror = () => {

@@ -16,7 +16,7 @@ routers/dependencies.py - FastAPI 依赖注入提供函数
 
 import logging
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 
 from routers.state import (
     PLAYER,
@@ -59,14 +59,20 @@ def get_player_for_request(request: Request) -> MusicPlayer:
         endpoint = request.url.path
         if room_id in _creating_rooms:
             logger.warning(
-                f"[RoomRouting] room_id={room_id} 请求命中初始化窗口，临时回退默认播放器: {endpoint}"
+                f"[RoomRouting] room_id={room_id} 请求命中初始化窗口，拒绝回退默认播放器: {endpoint}"
             )
-        else:
-            logger.warning(
-                f"[RoomRouting] room_id={room_id} 未找到对应 RoomPlayer，回退默认播放器: {endpoint}"
+            raise HTTPException(
+                status_code=409,
+                detail="room is being created",
             )
-        # RoomPlayer 不存在（可能尚未创建或已销毁）→ 回退默认播放器
-        return PLAYER
+
+        logger.warning(
+            f"[RoomRouting] room_id={room_id} 未找到对应 RoomPlayer，拒绝回退默认播放器: {endpoint}"
+        )
+        raise HTTPException(
+            status_code=404,
+            detail="room not found",
+        )
 
     # 向后兼容：pipe 参数（旧方式）
     pipe = request.query_params.get('pipe', None)

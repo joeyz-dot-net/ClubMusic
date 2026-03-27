@@ -29,8 +29,7 @@ import { roomBotManager } from './roomBot.js?v=1';
 class MusicPlayerApp {
     constructor() {
         this.initialized = false;
-        // 【用户隔离】从 localStorage 恢复歌单选择，默认为 'default'
-        this.currentPlaylistId = localStorage.getItem('selectedPlaylistId') || 'default';
+        this.currentPlaylistId = playlistManager.getSelectedPlaylistId();
         this.lastPlayStatus = null;  // 追踪上一次的播放状态，用于检测播放停止
 
         // 状态追踪变量 - 用于只在改变时输出日志
@@ -290,6 +289,26 @@ class MusicPlayerApp {
             if (ktvSync) {
                 ktvSync.updateStatus(status);
             }
+        });
+
+        player.on('roomRecovery', ({ phase, result, error }) => {
+            if (!api.roomId) {
+                return;
+            }
+
+            if (phase === 'start') {
+                Toast.info(i18n.t('player.roomRecoveryStart'), 2500);
+                return;
+            }
+
+            if (phase === 'success') {
+                Toast.success(i18n.t('player.roomRecoverySuccess'));
+                return;
+            }
+
+            const detailMessage = typeof result?.detail === 'string' ? result.detail : '';
+            const failureMessage = result?.error || result?.message || detailMessage || error?.message || i18n.t('player.roomRecoveryFailed');
+            Toast.error(i18n.t('player.roomRecoveryFailed') + ': ' + failureMessage);
         });
 
         // 监听播放状态更新

@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
 from models import MusicPlayer
-from routers.dependencies import get_player
+from routers.dependencies import get_player_for_request
 from routers.state import StreamSong, error_response
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ router = APIRouter()
 
 
 @router.post("/search_song")
-async def search_song(request: Request, player: MusicPlayer = Depends(get_player)):
+async def search_song(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
     """搜索歌曲（本地 + YouTube）"""
     try:
         import time as time_module
@@ -91,7 +91,7 @@ async def search_song(request: Request, player: MusicPlayer = Depends(get_player
 
 
 @router.get("/youtube_search_config")
-async def get_youtube_search_config(player: MusicPlayer = Depends(get_player)):
+async def get_youtube_search_config(player: MusicPlayer = Depends(get_player_for_request)):
     """获取YouTube搜索配置"""
     return {
         "local_max_results": player.local_search_max_results,
@@ -123,7 +123,7 @@ async def search_youtube(request: Request):
 
 
 @router.post("/get_directory_songs")
-async def get_directory_songs(request: Request, player: MusicPlayer = Depends(get_player)):
+async def get_directory_songs(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
     """获取目录下的所有歌曲"""
     try:
         data = await request.json()
