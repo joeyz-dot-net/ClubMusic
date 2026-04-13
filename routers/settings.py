@@ -21,6 +21,18 @@ import logging
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse
 
+from models.api_contracts import (
+    DiagnosticInstanceStatusResponse,
+    SettingsMutationResponse,
+    SettingsSchemaResponse,
+    SettingsValueRequest,
+    UIConfigMutationResponse,
+    UIConfigRequest,
+    UIConfigResponse,
+    UserSettingsResponse,
+    UserSettingsUpdateRequest,
+    VersionResponse,
+)
 from routers.state import error_response
 from routers.dependencies import get_player
 from models import MusicPlayer
@@ -33,13 +45,13 @@ router = APIRouter()
 APP_VERSION = "2.0.0"
 
 
-@router.get("/version")
+@router.get("/version", response_model=VersionResponse, response_model_exclude_none=True)
 async def get_version():
     """返回应用版本号"""
     return {"status": "OK", "version": APP_VERSION}
 
 
-@router.get("/settings")
+@router.get("/settings", response_model=UserSettingsResponse, response_model_exclude_none=True)
 async def get_user_settings():
     """获取默认设置（用户设置由浏览器 localStorage 管理）"""
     try:
@@ -54,11 +66,11 @@ async def get_user_settings():
         return error_response("[GET /settings] 获取设置异常", exc=e, _logger=logger)
 
 
-@router.post("/settings")
-async def update_user_settings(request: Request):
+@router.post("/settings", response_model=SettingsMutationResponse, response_model_exclude_none=True)
+async def update_user_settings(payload: UserSettingsUpdateRequest):
     """设置已由浏览器 localStorage 管理，此接口仅返回成功响应"""
     try:
-        data = await request.json()
+        data = payload.model_dump(exclude_none=True)
         logger.info(f"[设置] 浏览器端发送的设置: {data}（已由客户端保存到 localStorage）")
         return {
             "status": "OK",
@@ -69,7 +81,7 @@ async def update_user_settings(request: Request):
         return error_response("[POST /settings] 处理设置异常", exc=e, _logger=logger)
 
 
-@router.post("/settings/reset")
+@router.post("/settings/reset", response_model=SettingsMutationResponse, response_model_exclude_none=True)
 async def reset_settings():
     """重置设置为默认值（浏览器 localStorage）"""
     try:
@@ -90,12 +102,11 @@ async def reset_settings():
         return error_response("[POST /settings/reset] 重置设置异常", exc=e, _logger=logger)
 
 
-@router.post("/settings/{key}")
-async def update_single_setting(key: str, request: Request):
+@router.post("/settings/{key}", response_model=SettingsMutationResponse, response_model_exclude_none=True)
+async def update_single_setting(key: str, payload: SettingsValueRequest):
     """更新单个设置（由浏览器 localStorage 管理）"""
     try:
-        data = await request.json()
-        value = data.get("value")
+        value = payload.value
 
         default_settings = {
             "theme": "dark",
@@ -118,7 +129,7 @@ async def update_single_setting(key: str, request: Request):
         return error_response(f"[POST /settings/{key}] 更新设置异常", exc=e, _logger=logger)
 
 
-@router.get("/settings/schema")
+@router.get("/settings/schema", response_model=SettingsSchemaResponse, response_model_exclude_none=True)
 async def get_settings_schema():
     """获取设置项的描述和可选值"""
     return {
@@ -148,7 +159,7 @@ async def get_settings_schema():
     }
 
 
-@router.get("/ui-config")
+@router.get("/ui-config", response_model=UIConfigResponse, response_model_exclude_none=True)
 async def get_ui_config():
     """获取 UI 配置（从 settings.ini）"""
     try:
@@ -186,17 +197,16 @@ async def get_ui_config():
         return error_response("[GET /ui-config] 读取UI配置异常", exc=e, _logger=logger)
 
 
-@router.post("/ui-config")
-async def update_ui_config(request: Request):
+@router.post("/ui-config", response_model=UIConfigMutationResponse, response_model_exclude_none=True)
+async def update_ui_config(payload: UIConfigRequest):
     """更新 UI 配置（写入 settings.ini）"""
     try:
         import configparser
         from pathlib import Path
 
-        data = await request.json()
-        youtube_controls = data.get("youtube_controls", True)
-        expand_button = data.get("expand_button", True)
-        url_cache_enabled = data.get("url_cache_enabled", True)
+        youtube_controls = payload.youtube_controls
+        expand_button = payload.expand_button
+        url_cache_enabled = payload.url_cache_enabled
 
         config = configparser.ConfigParser()
         config_file = Path("settings.ini")
@@ -236,7 +246,7 @@ async def update_ui_config(request: Request):
         return error_response("[POST /ui-config] 保存UI配置异常", exc=e, _logger=logger)
 
 
-@router.get("/diagnostic/instance-status")
+@router.get("/diagnostic/instance-status", response_model=DiagnosticInstanceStatusResponse, response_model_exclude_none=True)
 async def diagnostic_instance_status():
     """诊断主服务实例锁和端口状态。"""
     try:

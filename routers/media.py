@@ -19,6 +19,12 @@ from fastapi import APIRouter, Request, HTTPException, Depends
 from fastapi.responses import JSONResponse, FileResponse, Response
 
 from models import MusicPlayer
+from models.api_contracts import (
+    RefreshVideoUrlResponse,
+    VolumeDefaultsResponse,
+    VolumeRequestForm,
+    VolumeResponse,
+)
 from routers.dependencies import get_player_for_request
 from routers.state import _get_resource_path, error_response
 
@@ -291,7 +297,7 @@ async def video_proxy(url: str, request: Request):
         return error_response("[/video_proxy] 视频代理异常", exc=e, _logger=logger)
 
 
-@router.post("/refresh_video_url")
+@router.post("/refresh_video_url", response_model=RefreshVideoUrlResponse, response_model_exclude_none=True)
 async def refresh_video_url(player: MusicPlayer = Depends(get_player_for_request)):
     """重新获取当前播放歌曲的视频直链（当直链过期时调用）"""
     try:
@@ -359,12 +365,14 @@ async def refresh_video_url(player: MusicPlayer = Depends(get_player_for_request
         return error_response("[/refresh_video_url] 异常", exc=e, _logger=logger)
 
 
-@router.post("/volume")
-async def set_volume(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
+@router.post("/volume", response_model=VolumeResponse, response_model_exclude_none=True)
+async def set_volume(
+    payload: VolumeRequestForm = Depends(VolumeRequestForm.as_form),
+    player: MusicPlayer = Depends(get_player_for_request),
+):
     """设置或获取音量"""
     try:
-        form = await request.form()
-        volume_str = form.get("value", "").strip()
+        volume_str = payload.value.strip()
 
         if volume_str:
             try:
@@ -394,7 +402,7 @@ async def set_volume(request: Request, player: MusicPlayer = Depends(get_player_
         return error_response("[/volume] 路由异常", exc=e, _logger=logger)
 
 
-@router.get("/volume/defaults")
+@router.get("/volume/defaults", response_model=VolumeDefaultsResponse, response_model_exclude_none=True)
 async def get_volume_defaults(player: MusicPlayer = Depends(get_player_for_request)):
     """获取默认音量配置（从settings.ini）"""
     try:

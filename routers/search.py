@@ -15,6 +15,15 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
 from models import MusicPlayer
+from models.api_contracts import (
+    DirectorySongsRequest,
+    DirectorySongsResponse,
+    SearchSongRequest,
+    SearchSongResponse,
+    SearchYoutubeRequestForm,
+    SearchYoutubeResponse,
+    YouTubeSearchConfigResponse,
+)
 from routers.dependencies import get_player_for_request
 from routers.state import StreamSong, error_response
 
@@ -23,16 +32,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post("/search_song")
-async def search_song(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
+@router.post("/search_song", response_model=SearchSongResponse, response_model_exclude_none=True)
+async def search_song(payload: SearchSongRequest, player: MusicPlayer = Depends(get_player_for_request)):
     """搜索歌曲（本地 + YouTube）"""
     try:
         import time as time_module
         start_time = time_module.time()
 
-        data = await request.json()
-        query = data.get("query", "").strip()
-        max_results = data.get("max_results", player.youtube_search_max_results)
+        query = payload.query.strip()
+        max_results = payload.max_results if payload.max_results is not None else player.youtube_search_max_results
 
         if not query:
             return JSONResponse(
@@ -90,7 +98,7 @@ async def search_song(request: Request, player: MusicPlayer = Depends(get_player
         return error_response("[/search_song] 搜索异常", exc=e, _logger=logger)
 
 
-@router.get("/youtube_search_config")
+@router.get("/youtube_search_config", response_model=YouTubeSearchConfigResponse, response_model_exclude_none=True)
 async def get_youtube_search_config(player: MusicPlayer = Depends(get_player_for_request)):
     """获取YouTube搜索配置"""
     return {
@@ -100,12 +108,11 @@ async def get_youtube_search_config(player: MusicPlayer = Depends(get_player_for
     }
 
 
-@router.post("/search_youtube")
-async def search_youtube(request: Request):
+@router.post("/search_youtube", response_model=SearchYoutubeResponse, response_model_exclude_none=True)
+async def search_youtube(payload: SearchYoutubeRequestForm = Depends(SearchYoutubeRequestForm.as_form)):
     """搜索 YouTube 视频"""
     try:
-        form = await request.form()
-        query = form.get("query", "").strip()
+        query = payload.query.strip()
 
         if not query:
             return JSONResponse(
@@ -122,12 +129,11 @@ async def search_youtube(request: Request):
         return error_response("[/search_youtube] 搜索异常", exc=e, _logger=logger)
 
 
-@router.post("/get_directory_songs")
-async def get_directory_songs(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
+@router.post("/get_directory_songs", response_model=DirectorySongsResponse, response_model_exclude_none=True)
+async def get_directory_songs(payload: DirectorySongsRequest, player: MusicPlayer = Depends(get_player_for_request)):
     """获取目录下的所有歌曲"""
     try:
-        data = await request.json()
-        directory = data.get("directory", "").strip()
+        directory = payload.directory.strip()
 
         if not directory:
             return JSONResponse(

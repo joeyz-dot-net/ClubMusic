@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import threading
 from pathlib import Path
 from types import SimpleNamespace
@@ -7,12 +8,52 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
+from models.api_contracts import (
+    DiagnosticInstanceStatusResponse,
+    HistoryAddRequest,
+    HistoryDeleteRequest,
+    LoopModeResponse,
+    PauseToggleResponse,
+    PlaybackHistoryMergedResponse,
+    PlaybackHistoryResponse,
+    PitchShiftResponse,
+    PlaylistCreateResponse,
+    PlaylistCreateRestResponse,
+    PlaylistQueryResponse,
+    PlaylistRenameResponse,
+    PlaylistsListResponse,
+    PlayerStatusResponse,
+    PlaySuccessResponse,
+    RefreshVideoUrlResponse,
+    RoomDestroyResponse,
+    RoomInitRequest,
+    RoomInitResponse,
+    RoomListResponse,
+    RoomStatusResponse,
+    SearchSongResponse,
+    SeekResponse,
+    SettingsMutationResponse,
+    SettingsSchemaResponse,
+    ShuffleModeResponse,
+    StatusMessageResponse,
+    UIConfigResponse,
+    UserSettingsResponse,
+    VersionResponse,
+    VolumeDefaultsResponse,
+    VolumeRequestForm,
+    VolumeResponse,
+)
+from models.api_contracts import PlaylistAddRequest, SongSnapshot
 from models.player import MusicPlayer
 from models.playlists import Playlist, Playlists
 from routers import dependencies as router_dependencies
+from routers import history as history_router
+from routers import media as media_router
 from routers import player as player_router
 from routers import playlist as playlist_router
 from routers import room as room_router
+from routers import search as search_router
+from routers import settings as settings_router
 from routers import state as state_router
 from routers import websocket as websocket_router
 
@@ -60,13 +101,34 @@ class DummyPlayer:
         self._lock = threading.RLock()
         self.mpv_cmd = None
         self.pipe_ready = True
+        self.mpv_state = {
+            "pause": False,
+            "time-pos": 0,
+            "duration": 0,
+            "volume": 50,
+        }
+        self.local_file_tree = {"name": "root", "dirs": [], "files": []}
+        self.local_search_max_results = 5
+        self.youtube_search_max_results = 8
+        self.youtube_url_extra_max = 16
+        self.music_dir = os.getcwd()
+        self.allowed_extensions = {".mp3", ".flac"}
+        self.config = {"LOCAL_VOLUME": "50"}
 
     def get_runtime_queue(self):
         self.runtime_queue.current_playing_index = self.current_index
         return self.runtime_queue
 
-    def mpv_command(self, *_args, **_kwargs):
+    def mpv_command(self, cmd, *_args, **_kwargs):
+        if cmd[:2] == ["set_property", "volume"] and len(cmd) >= 3:
+            self.mpv_state["volume"] = int(cmd[2])
         return True
+
+    def mpv_get(self, property_name):
+        return self.mpv_state.get(property_name)
+
+    def search_local(self, query, max_results=20):
+        return [{"url": f"{query}.mp3", "title": query, "type": "local", "duration": 0}][:max_results]
 
     def mpv_pipe_exists(self):
         return self.pipe_ready
@@ -116,6 +178,11 @@ class DummyHistory:
     def add_to_history(self, *args, **kwargs):
         self.add_calls.append((args, kwargs))
 
+    def remove_by_url(self, url):
+        before = len(self._items)
+        self._items = [item for item in self._items if item.get("url") != url]
+        return len(self._items) != before
+
 
 class DummyWebSocket:
     def __init__(self, query_params=None):
@@ -149,6 +216,14 @@ class DummyWsManager:
 
     def disconnect(self, websocket):
         self.disconnected.append(websocket)
+
+
+def _get_route(router_obj, path, method):
+    routes = router_obj.routes if hasattr(router_obj, "routes") else router_obj
+    for route in routes:
+        if getattr(route, "path", None) == path and method in getattr(route, "methods", set()):
+            return route
+    raise AssertionError(f"route not found: {method} {path}")
 
 
 def test_prev_track_walks_backward_without_rewriting_history(monkeypatch):
@@ -210,11 +285,167 @@ def test_runtime_queue_add_broadcasts_playlist_updated(monkeypatch):
         }
     )
 
-    result = asyncio.run(playlist_router.add_to_playlist(request, player, None))
+    payload = PlaylistAddRequest(
+        playlist_id="default",
+        song=SongSnapshot(url="song-new.mp3", title="Song New", type="local", duration=0),
+    )
+
+    result = asyncio.run(playlist_router.add_to_playlist(payload, player, None))
 
     assert result["status"] == "OK"
     assert player.runtime_queue.songs[0]["url"] == "song-new.mp3"
     assert broadcasts == [(None, True, 1)]
+
+
+def test_player_router_registers_core_response_models():
+    assert _get_route(player_router.router, "/play", "POST").response_model is PlaySuccessResponse
+    assert _get_route(player_router.router, "/play_song", "POST").response_model is PlaySuccessResponse
+    assert _get_route(player_router.router, "/status", "GET").response_model is PlayerStatusResponse
+    assert _get_route(player_router.router, "/pause", "POST").response_model is PauseToggleResponse
+    assert _get_route(player_router.router, "/toggle_pause", "POST").response_model is PauseToggleResponse
+    assert _get_route(player_router.router, "/seek", "POST").response_model is SeekResponse
+    assert _get_route(player_router.router, "/loop", "POST").response_model is LoopModeResponse
+    assert _get_route(player_router.router, "/shuffle", "POST").response_model is ShuffleModeResponse
+    assert _get_route(player_router.router, "/pitch", "POST").response_model is PitchShiftResponse
+
+
+def test_playlist_search_settings_history_media_and_room_routes_register_response_models():
+    assert _get_route(playlist_router.router, "/playlists", "GET").response_model is PlaylistsListResponse
+    assert _get_route(playlist_router.router, "/playlists", "POST").response_model is PlaylistCreateRestResponse
+    assert _get_route(playlist_router.router, "/playlist_create", "POST").response_model is PlaylistCreateResponse
+    assert _get_route(playlist_router.router, "/playlist", "GET").response_model is PlaylistQueryResponse
+    assert _get_route(playlist_router.router, "/playlists/{playlist_id}", "PUT").response_model is PlaylistRenameResponse
+    assert _get_route(search_router.router, "/search_song", "POST").response_model is SearchSongResponse
+    assert _get_route(settings_router.router, "/version", "GET").response_model is VersionResponse
+    assert _get_route(settings_router.router, "/settings", "POST").response_model is SettingsMutationResponse
+    assert _get_route(settings_router.router, "/settings/schema", "GET").response_model is SettingsSchemaResponse
+    assert _get_route(settings_router.router, "/ui-config", "GET").response_model is UIConfigResponse
+    assert _get_route(settings_router.router, "/diagnostic/instance-status", "GET").response_model is DiagnosticInstanceStatusResponse
+    assert _get_route(history_router.router, "/playback_history", "GET").response_model is PlaybackHistoryResponse
+    assert _get_route(history_router.router, "/playback_history_merged", "GET").response_model is PlaybackHistoryMergedResponse
+    assert _get_route(history_router.router, "/song_add_to_history", "POST").response_model is StatusMessageResponse
+    assert _get_route(history_router.router, "/playback_history_delete", "POST").response_model is StatusMessageResponse
+    assert _get_route(media_router.router, "/refresh_video_url", "POST").response_model is RefreshVideoUrlResponse
+    assert _get_route(media_router.router, "/volume", "POST").response_model is VolumeResponse
+    assert _get_route(media_router.router, "/volume/defaults", "GET").response_model is VolumeDefaultsResponse
+    assert _get_route(room_router.router, "/room/init", "POST").response_model is RoomInitResponse
+    assert _get_route(room_router.router, "/room/{room_id}", "DELETE").response_model is RoomDestroyResponse
+    assert _get_route(room_router.router, "/room/{room_id}/status", "GET").response_model is RoomStatusResponse
+    assert _get_route(room_router.router, "/room/list", "GET").response_model is RoomListResponse
+
+
+def test_get_status_payload_matches_response_schema():
+    player = DummyPlayer(
+        songs=[{"url": "status-song.mp3", "title": "Status Song", "type": "local"}],
+        current_meta={"url": "status-song.mp3", "title": "Status Song", "type": "local"},
+        current_index=0,
+    )
+    player.loop_mode = 2
+    player.shuffle_mode = True
+    player.pitch_shift = 1
+    player.runtime_queue.updated_at = 123.0
+    player.mpv_state = {
+        "pause": False,
+        "time-pos": 12.5,
+        "duration": 240.0,
+        "volume": 65,
+    }
+
+    result = asyncio.run(player_router.get_status(None, player, None))
+    validated = PlayerStatusResponse(**result)
+
+    assert validated.current_meta.url == "status-song.mp3"
+    assert validated.current_index == 0
+    assert validated.loop_mode == 2
+    assert validated.shuffle_mode is True
+    assert validated.pitch_shift == 1
+    assert validated.mpv_state.time_pos == 12.5
+    assert validated.mpv_state.volume == 65
+
+
+def test_get_current_playlist_payload_matches_response_schema():
+    room_player = DummyRoomPlayer("room-contract")
+    room_player.runtime_queue.songs = [
+        {"url": "room-song.mp3", "title": "Room Song", "type": "local", "duration": 123}
+    ]
+    room_player.current_index = 0
+
+    shared_playlists = SimpleNamespace(get_playlist=lambda playlist_id: None)
+
+    result = asyncio.run(
+        playlist_router.get_current_playlist(
+            request=None,
+            playlist_id="default",
+            player=room_player,
+            playlists=shared_playlists,
+        )
+    )
+    validated = PlaylistQueryResponse(**result)
+
+    assert validated.playlist_id == "room_room-contract"
+    assert validated.current_index == 0
+    assert validated.playlist[0].url == "room-song.mp3"
+
+
+def test_settings_and_search_payloads_match_response_schema(monkeypatch):
+    settings_payload = asyncio.run(settings_router.get_user_settings())
+    validated_settings = UserSettingsResponse(**settings_payload)
+    assert validated_settings.data.language == "auto"
+
+    version_payload = asyncio.run(settings_router.get_version())
+    validated_version = VersionResponse(**version_payload)
+    assert validated_version.version
+
+    player = DummyPlayer()
+    monkeypatch.setattr(search_router.StreamSong, "search", staticmethod(lambda query, max_results=10: {"status": "OK", "results": []}))
+    search_payload = asyncio.run(
+        search_router.search_song(
+            payload=SimpleNamespace(query="hello", max_results=3),
+            player=player,
+        )
+    )
+    validated_search = SearchSongResponse(**search_payload)
+    assert validated_search.status == "OK"
+    assert validated_search.local_max_results == 5
+
+
+def test_history_and_media_payloads_match_response_schema():
+    player = DummyPlayer()
+    player.playback_history = DummyHistory([
+        {"url": "song-a.mp3", "title": "Song A", "is_local": True, "ts": 20},
+        {"url": "song-b.mp3", "title": "Song B", "is_local": False, "ts": 10},
+    ])
+
+    history_payload = asyncio.run(history_router.get_playback_history(player))
+    validated_history = PlaybackHistoryResponse(**history_payload)
+    assert len(validated_history.history) == 2
+    assert validated_history.history[0].url == "song-a.mp3"
+
+    merged_payload = asyncio.run(history_router.get_playback_history_merged(player))
+    validated_merged = PlaybackHistoryMergedResponse(**merged_payload)
+    assert validated_merged.count == 2
+
+    add_payload = asyncio.run(
+        history_router.song_add_to_history(
+            HistoryAddRequest(url="song-c.mp3", title="Song C", type="local", thumbnail_url=""),
+            player,
+        )
+    )
+    assert StatusMessageResponse(**add_payload).message
+    assert player.playback_history.add_calls[-1][0][0] == "song-c.mp3"
+
+    delete_payload = asyncio.run(
+        history_router.delete_playback_history(HistoryDeleteRequest(url="song-a.mp3"), player)
+    )
+    assert StatusMessageResponse(**delete_payload).message
+
+    volume_payload = asyncio.run(media_router.set_volume(VolumeRequestForm(value="65"), player))
+    validated_volume = VolumeResponse(**volume_payload)
+    assert validated_volume.volume == 65
+
+    defaults_payload = asyncio.run(media_router.get_volume_defaults(player))
+    validated_defaults = VolumeDefaultsResponse(**defaults_payload)
+    assert validated_defaults.local_volume == 50
 
 
 def test_runtime_queues_are_player_owned_and_isolated():
@@ -382,11 +613,11 @@ def test_room_init_registers_player_and_history(monkeypatch):
         lambda room_id_arg: room_router.ROOM_LAST_ACTIVITY.__setitem__(room_id_arg, 1.0),
     )
 
-    request = DummyRequest(json_data={"room_id": room_id, "default_volume": 65})
-
-    result = asyncio.run(room_router.init_room(request))
+    result = asyncio.run(room_router.init_room(RoomInitRequest(room_id=room_id, default_volume=65)))
+    validated = RoomInitResponse(**result)
 
     assert result["status"] == "ok"
+    assert validated.existed is False
     assert result["existed"] is False
     assert room_id in room_router.ROOM_PLAYERS
     assert room_id in room_router.ROOM_HISTORIES
@@ -421,11 +652,11 @@ def test_room_init_recovers_existing_unready_room_player(monkeypatch):
         lambda room_id_arg: room_router.ROOM_LAST_ACTIVITY.__setitem__(room_id_arg, 2.0),
     )
 
-    request = DummyRequest(json_data={"room_id": room_id, "default_volume": 80})
-
-    result = asyncio.run(room_router.init_room(request))
+    result = asyncio.run(room_router.init_room(RoomInitRequest(room_id=room_id, default_volume=80)))
+    validated = RoomInitResponse(**result)
 
     assert result["status"] == "ok"
+    assert validated.bot_ready is True
     assert result["existed"] is True
     assert result["bot_ready"] is True
     assert result["mpv_running"] is True
@@ -449,8 +680,10 @@ def test_room_status_returns_room_bot_snapshot(monkeypatch):
     monkeypatch.setattr(room_router, "_room_players_lock", threading.Lock())
 
     result = asyncio.run(room_router.room_status(room_id))
+    validated = RoomStatusResponse(**result)
 
     assert result["status"] == "ok"
+    assert validated.current_meta.url == "status-song.mp3"
     assert result["exists"] is True
     assert result["bot_ready"] is True
     assert result["current_playlist_id"] == f"room_{room_id}"
@@ -469,8 +702,10 @@ def test_room_status_returns_empty_snapshot_when_room_missing(monkeypatch):
     monkeypatch.setattr(room_router, "_room_players_lock", threading.Lock())
 
     result = asyncio.run(room_router.room_status(room_id))
+    validated = RoomStatusResponse(**result)
 
     assert result["status"] == "ok"
+    assert validated.exists is False
     assert result["exists"] is False
     assert result["bot_ready"] is False
     assert result["queue_length"] == 0
@@ -498,8 +733,10 @@ def test_list_rooms_returns_room_bot_snapshots(monkeypatch):
     monkeypatch.setattr(room_router, "_room_players_lock", threading.Lock())
 
     result = asyncio.run(room_router.list_rooms())
+    validated = RoomListResponse(**result)
 
     assert result["status"] == "ok"
+    assert validated.count == 2
     assert result["count"] == 2
     assert result["max"] == 10
     assert {room["room_id"] for room in result["rooms"]} == {"room-alpha-list", "room-beta-list"}
@@ -519,8 +756,10 @@ def test_destroy_room_cleans_registered_state(monkeypatch):
     monkeypatch.setattr(room_router, "_room_players_lock", threading.Lock())
 
     result = asyncio.run(room_router.destroy_room(room_id))
+    validated = RoomDestroyResponse(**result)
 
     assert result["status"] == "ok"
+    assert validated.status == "ok"
     assert room_player.destroyed is True
     assert room_id not in room_router.ROOM_PLAYERS
     assert room_id not in room_router.ROOM_HISTORIES

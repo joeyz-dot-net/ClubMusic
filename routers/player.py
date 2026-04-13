@@ -26,6 +26,18 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
 from models import MusicPlayer, Playlists, PlayHistory
+from models.api_contracts import (
+    LoopModeResponse,
+    PauseToggleResponse,
+    PitchShiftRequest,
+    PitchShiftResponse,
+    PlayerStatusResponse,
+    PlayRequestForm,
+    PlaySuccessResponse,
+    SeekRequestForm,
+    SeekResponse,
+    ShuffleModeResponse,
+)
 from routers.dependencies import get_player_for_request, get_playlists, get_playback_history, get_player_lock
 from routers.state import (
     DEFAULT_PLAYLIST_ID,
@@ -113,9 +125,10 @@ def _describe_request_source(request: Request) -> str:
 
 # ==================== 路由 ====================
 
-@router.post("/play")
+@router.post("/play", response_model=PlaySuccessResponse, response_model_exclude_none=True)
 async def play(
     request: Request,
+    payload: PlayRequestForm = Depends(PlayRequestForm.as_form),
     player: MusicPlayer = Depends(get_player_for_request),
     playlists: Playlists = Depends(get_playlists),
     playback_history: PlayHistory = Depends(get_playback_history),
@@ -123,12 +136,11 @@ async def play(
 ):
     """播放指定歌曲 - 服务器MPV播放 + 浏览器推流"""
     try:
-        form = await request.form()
-        url = form.get("url", "").strip()
-        title = form.get("title", "").strip()
-        song_type = form.get("type", "local").strip()
-        stream_format = form.get("stream_format", "mp3").strip() or "mp3"
-        duration = float(form.get("duration", "0") or "0")
+        url = payload.url.strip()
+        title = payload.title.strip()
+        song_type = payload.type.strip()
+        stream_format = payload.stream_format.strip() or "mp3"
+        duration = float(payload.duration or 0)
 
         is_network_song = song_type == "youtube" or url.startswith("http")
         logger.info("=" * 60)
@@ -223,16 +235,17 @@ async def debug_pipe_check(
     }
 
 
-@router.post("/play_song")
+@router.post("/play_song", response_model=PlaySuccessResponse, response_model_exclude_none=True)
 async def play_song(
     request: Request,
+    payload: PlayRequestForm = Depends(PlayRequestForm.as_form),
     player: MusicPlayer = Depends(get_player_for_request),
     playlists: Playlists = Depends(get_playlists),
     playback_history: PlayHistory = Depends(get_playback_history),
     player_lock=Depends(get_player_lock),
 ):
     """播放指定歌曲（别名）"""
-    return await play(request, player, playlists, playback_history, player_lock)
+    return await play(request, payload, player, playlists, playback_history, player_lock)
 
 
 @router.post("/next")
@@ -531,7 +544,7 @@ async def prev_track(
         return error_response("[/prev] 切换上一首异常", exc=e, _logger=logger)
 
 
-@router.get("/status")
+@router.get("/status", response_model=PlayerStatusResponse, response_model_exclude_none=True)
 async def get_status(
     request: Request,
     player: MusicPlayer = Depends(get_player_for_request),
@@ -592,7 +605,7 @@ async def get_status(
         )
 
 
-@router.post("/pause")
+@router.post("/pause", response_model=PauseToggleResponse, response_model_exclude_none=True)
 async def pause(
     request: Request,
     player: MusicPlayer = Depends(get_player_for_request),
@@ -616,7 +629,7 @@ async def pause(
         return error_response("[/pause] 暂停/继续异常", exc=e, _logger=logger)
 
 
-@router.post("/toggle_pause")
+@router.post("/toggle_pause", response_model=PauseToggleResponse, response_model_exclude_none=True)
 async def toggle_pause(
     request: Request,
     player: MusicPlayer = Depends(get_player_for_request),
@@ -626,12 +639,15 @@ async def toggle_pause(
     return await pause(request, player, player_lock)
 
 
-@router.post("/seek")
-async def seek(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
+@router.post("/seek", response_model=SeekResponse, response_model_exclude_none=True)
+async def seek(
+    request: Request,
+    payload: SeekRequestForm = Depends(SeekRequestForm.as_form),
+    player: MusicPlayer = Depends(get_player_for_request),
+):
     """跳转到指定位置"""
     try:
-        form = await request.form()
-        percent = float(form.get("percent", 0))
+        percent = float(payload.percent)
 
         duration = player.mpv_get("duration")
         if duration and duration > 0:
@@ -645,7 +661,7 @@ async def seek(request: Request, player: MusicPlayer = Depends(get_player_for_re
         return error_response("[/seek] 跳转异常", exc=e, _logger=logger)
 
 
-@router.post("/loop")
+@router.post("/loop", response_model=LoopModeResponse, response_model_exclude_none=True)
 async def set_loop_mode(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
     """设置循环模式"""
     try:
@@ -660,7 +676,7 @@ async def set_loop_mode(request: Request, player: MusicPlayer = Depends(get_play
         return error_response("[/loop] 设置循环模式异常", exc=e, _logger=logger)
 
 
-@router.post("/shuffle")
+@router.post("/shuffle", response_model=ShuffleModeResponse, response_model_exclude_none=True)
 async def set_shuffle_mode(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
     """设置随机播放模式"""
     try:
@@ -674,12 +690,15 @@ async def set_shuffle_mode(request: Request, player: MusicPlayer = Depends(get_p
         return error_response("[/shuffle] 设置随机模式异常", exc=e, _logger=logger)
 
 
-@router.post("/pitch")
-async def set_pitch_shift(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
+@router.post("/pitch", response_model=PitchShiftResponse, response_model_exclude_none=True)
+async def set_pitch_shift(
+    request: Request,
+    payload: PitchShiftRequest,
+    player: MusicPlayer = Depends(get_player_for_request),
+):
     """设置音调偏移（KTV升降调，-6 到 +6 个半音）"""
     try:
-        data = await request.json()
-        semitones = max(-6, min(6, int(data.get("semitones", 0))))
+        semitones = max(-6, min(6, int(payload.semitones)))
         player.set_pitch_shift(semitones)
         direction = "升" if semitones > 0 else ("降" if semitones < 0 else "原")
         logger.info(f"[播放状态改变] {direction}调: {semitones:+d} 半音")

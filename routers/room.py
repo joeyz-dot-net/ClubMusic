@@ -11,10 +11,17 @@ routers/room.py - 自定义房间 RoomPlayer 管理 API
 
 import logging
 import time
-from fastapi import APIRouter, Request
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from models import MusicPlayer, PlayHistory
+from models.api_contracts import (
+    RoomDestroyResponse,
+    RoomInitRequest,
+    RoomInitResponse,
+    RoomListResponse,
+    RoomStatusResponse,
+)
 from routers.state import (
     ROOM_PLAYERS, _room_players_lock, _creating_rooms,
     PLAYLISTS_MANAGER,
@@ -50,8 +57,8 @@ def _build_room_status_payload(room_id: str, player) -> dict:
     }
 
 
-@router.post("/room/init")
-async def init_room(request: Request):
+@router.post("/room/init", response_model=RoomInitResponse, response_model_exclude_none=True)
+async def init_room(payload: RoomInitRequest):
     """为自定义房间创建 RoomPlayer + 启动 MPV。
 
     MPV 通过 --ao-pcm-file 直接写入 ClubVoice 创建的 Named Pipe，
@@ -60,12 +67,11 @@ async def init_room(request: Request):
     请求体: {"room_id": "testbots_ef36", "default_volume": 80}
     返回: {"status": "ok", "ipc_pipe": "...", "pcm_pipe": "..."}
     """
-    body = await request.json()
-    room_id = body.get("room_id", "").strip()
+    room_id = payload.room_id.strip()
     if not room_id:
         return JSONResponse({"status": "error", "message": "missing room_id"}, 400)
 
-    default_volume = int(body.get("default_volume", 80))
+    default_volume = int(payload.default_volume)
     ipc_pipe = rf'\\.\pipe\mpv-ipc-{room_id}'
     init_started_at = time.perf_counter()
 
@@ -161,7 +167,7 @@ async def init_room(request: Request):
             _creating_rooms.discard(room_id)
 
 
-@router.delete("/room/{room_id}")
+@router.delete("/room/{room_id}", response_model=RoomDestroyResponse, response_model_exclude_none=True)
 async def destroy_room(room_id: str):
     """销毁自定义房间的 RoomPlayer。"""
     with _room_players_lock:
@@ -177,7 +183,7 @@ async def destroy_room(room_id: str):
     return {"status": "ok"}
 
 
-@router.get("/room/{room_id}/status")
+@router.get("/room/{room_id}/status", response_model=RoomStatusResponse, response_model_exclude_none=True)
 async def room_status(room_id: str):
     """查询房间 RoomPlayer 状态。"""
     with _room_players_lock:
@@ -189,7 +195,7 @@ async def room_status(room_id: str):
     return {"status": "ok", **_build_room_status_payload(room_id, player)}
 
 
-@router.get("/room/list")
+@router.get("/room/list", response_model=RoomListResponse, response_model_exclude_none=True)
 async def list_rooms():
     """列出所有活跃房间及其状态。"""
     with _room_players_lock:

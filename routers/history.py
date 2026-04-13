@@ -10,10 +10,17 @@ routers/history.py - 播放历史相关路由
 """
 
 import logging
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
 from models import MusicPlayer
+from models.api_contracts import (
+    HistoryAddRequest,
+    HistoryDeleteRequest,
+    PlaybackHistoryMergedResponse,
+    PlaybackHistoryResponse,
+    StatusMessageResponse,
+)
 from routers.dependencies import get_player_for_request
 from routers.state import error_response
 
@@ -22,7 +29,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/playback_history")
+@router.get("/playback_history", response_model=PlaybackHistoryResponse, response_model_exclude_none=True)
 async def get_playback_history(player: MusicPlayer = Depends(get_player_for_request)):
     """获取播放历史"""
     try:
@@ -35,7 +42,7 @@ async def get_playback_history(player: MusicPlayer = Depends(get_player_for_requ
         return error_response("[/playback_history] 获取播放历史异常", exc=e, _logger=logger)
 
 
-@router.get("/playback_history_merged")
+@router.get("/playback_history_merged", response_model=PlaybackHistoryMergedResponse, response_model_exclude_none=True)
 async def get_playback_history_merged(player: MusicPlayer = Depends(get_player_for_request)):
     """获取已合并的播放历史 - 相同URL只显示一次，最后播放时间降序排列"""
     try:
@@ -67,22 +74,17 @@ async def get_playback_history_merged(player: MusicPlayer = Depends(get_player_f
         return error_response("[/playback_history_merged] 获取合并历史异常", exc=e, _logger=logger)
 
 
-@router.post("/song_add_to_history")
-async def song_add_to_history(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
+@router.post("/song_add_to_history", response_model=StatusMessageResponse, response_model_exclude_none=True)
+async def song_add_to_history(
+    payload: HistoryAddRequest = Depends(HistoryAddRequest.from_request),
+    player: MusicPlayer = Depends(get_player_for_request),
+):
     """新增一条播放历史记录"""
     try:
-        payload = {}
-        content_type = (request.headers.get("content-type") or "").lower()
-        if "application/json" in content_type:
-            payload = await request.json()
-        else:
-            form = await request.form()
-            payload = {k: v for k, v in form.items()}
-
-        url = (payload.get("url") or "").strip()
-        title = (payload.get("title") or url).strip()
-        song_type = (payload.get("type") or "local").strip().lower()
-        thumbnail_url = (payload.get("thumbnail_url") or "").strip() or None
+        url = (payload.url or "").strip()
+        title = (payload.title or url).strip()
+        song_type = (payload.type or "local").strip().lower()
+        thumbnail_url = (payload.thumbnail_url or "").strip() or None
 
         if not url:
             return JSONResponse(
@@ -103,19 +105,14 @@ async def song_add_to_history(request: Request, player: MusicPlayer = Depends(ge
         return error_response("[/song_add_to_history] 添加播放历史异常", exc=e, _logger=logger)
 
 
-@router.post("/playback_history_delete")
-async def delete_playback_history(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
+@router.post("/playback_history_delete", response_model=StatusMessageResponse, response_model_exclude_none=True)
+async def delete_playback_history(
+    payload: HistoryDeleteRequest = Depends(HistoryDeleteRequest.from_request),
+    player: MusicPlayer = Depends(get_player_for_request),
+):
     """删除单条播放历史记录"""
     try:
-        payload = {}
-        content_type = (request.headers.get("content-type") or "").lower()
-        if "application/json" in content_type:
-            payload = await request.json()
-        else:
-            form = await request.form()
-            payload = {k: v for k, v in form.items()}
-
-        url = (payload.get("url") or "").strip()
+        url = (payload.url or "").strip()
 
         if not url:
             return JSONResponse(

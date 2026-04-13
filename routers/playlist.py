@@ -33,6 +33,24 @@ from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse, HTMLResponse
 
 from models import MusicPlayer, Playlists, PlayHistory
+from models.api_contracts import (
+    FileTreeResponse,
+    IndexRequestForm,
+    PlaylistAddRequest,
+    PlaylistCreateResponse,
+    PlaylistCreateRestResponse,
+    PlaylistNameRequest,
+    PlaylistQueryResponse,
+    PlaylistRenameResponse,
+    PlaylistSongForm,
+    PlaylistsListResponse,
+    PlaylistSongsResponse,
+    PlaylistSwitchResponse,
+    PlaylistUpdateRequest,
+    PlaylistReorderRequest,
+    PlaySuccessResponse,
+    StatusMessageResponse,
+)
 from models.playlists import sanitize_playlist_name
 from routers.dependencies import get_player_for_request, get_playlists, get_playback_history, get_player_lock
 from routers.state import (
@@ -62,7 +80,7 @@ async def index():
         return HTMLResponse(f"<h1>错误</h1><p>{str(e)}</p>", status_code=500)
 
 
-@router.get("/playlist_songs")
+@router.get("/playlist_songs", response_model=PlaylistSongsResponse, response_model_exclude_none=True)
 async def get_playlist_songs(
     request: Request,
     player: MusicPlayer = Depends(get_player_for_request),
@@ -80,7 +98,7 @@ async def get_playlist_songs(
     }
 
 
-@router.get("/tree")
+@router.get("/tree", response_model=FileTreeResponse, response_model_exclude_none=True)
 async def get_file_tree(player: MusicPlayer = Depends(get_player_for_request)):
     """获取本地文件树结构"""
     return {
@@ -89,7 +107,7 @@ async def get_file_tree(player: MusicPlayer = Depends(get_player_for_request)):
     }
 
 
-@router.get("/playlists")
+@router.get("/playlists", response_model=PlaylistsListResponse, response_model_exclude_none=True)
 async def list_playlists(
     request: Request,
     player: MusicPlayer = Depends(get_player_for_request),
@@ -125,12 +143,11 @@ async def list_playlists(
     return {"status": "OK", "playlists": result_playlists}
 
 
-@router.post("/playlists")
-async def create_playlist_restful(request: Request, playlists: Playlists = Depends(get_playlists)):
+@router.post("/playlists", response_model=PlaylistCreateRestResponse, response_model_exclude_none=True)
+async def create_playlist_restful(payload: PlaylistNameRequest, playlists: Playlists = Depends(get_playlists)):
     """创建新歌单 (RESTful API)"""
     try:
-        data = await request.json()
-        name = sanitize_playlist_name(data.get("name", "新歌单"), fallback="")
+        name = sanitize_playlist_name(payload.name or "新歌单", fallback="")
 
         if not name:
             return error_response("歌单名称不能为空", 400)
@@ -145,12 +162,11 @@ async def create_playlist_restful(request: Request, playlists: Playlists = Depen
         return error_response("[POST /playlists] 创建歌单异常", exc=e, _logger=logger)
 
 
-@router.post("/playlist_create")
-async def create_playlist(request: Request, playlists: Playlists = Depends(get_playlists)):
+@router.post("/playlist_create", response_model=PlaylistCreateResponse, response_model_exclude_none=True)
+async def create_playlist(payload: PlaylistNameRequest, playlists: Playlists = Depends(get_playlists)):
     """创建新歌单"""
     try:
-        data = await request.json()
-        name = sanitize_playlist_name(data.get("name", "新歌单"), fallback="")
+        name = sanitize_playlist_name(payload.name or "新歌单", fallback="")
 
         if not name:
             return error_response("歌单名称不能为空", 400)
@@ -165,19 +181,18 @@ async def create_playlist(request: Request, playlists: Playlists = Depends(get_p
         return error_response("[/playlist_create] 创建歌单异常", exc=e, _logger=logger)
 
 
-@router.post("/playlist_add")
+@router.post("/playlist_add", response_model=StatusMessageResponse, response_model_exclude_none=True)
 async def add_to_playlist(
-    request: Request,
+    payload: PlaylistAddRequest,
     player: MusicPlayer = Depends(get_player_for_request),
     playlists: Playlists = Depends(get_playlists),
 ):
     """添加歌曲到歌单（支持指定插入位置）"""
     try:
         should_broadcast_playlist_update = False
-        data = await request.json()
-        playlist_id = data.get("playlist_id", get_current_playlist_id(player))
-        song_data = data.get("song")
-        insert_index = data.get("insert_index")
+        playlist_id = payload.playlist_id or get_current_playlist_id(player)
+        song_data = payload.song.model_dump(exclude_none=True)
+        insert_index = payload.insert_index
 
         if not song_data:
             return JSONResponse(
@@ -254,21 +269,20 @@ async def add_to_playlist(
         return error_response("[/playlist_add] 添加歌曲失败", exc=e, _logger=logger)
 
 
-@router.post("/playlists/{playlist_id}/add_next")
+@router.post("/playlists/{playlist_id}/add_next", response_model=StatusMessageResponse, response_model_exclude_none=True)
 async def add_song_to_playlist_next(
     playlist_id: str,
-    request: Request,
+    payload: PlaylistSongForm = Depends(PlaylistSongForm.as_form),
     player: MusicPlayer = Depends(get_player_for_request),
     playlists: Playlists = Depends(get_playlists),
 ):
     """添加歌曲到下一曲位置"""
     try:
         should_broadcast_playlist_update = False
-        form_data = await request.form()
-        url = form_data.get('url', '')
-        title = form_data.get('title', '')
-        song_type = form_data.get('type', 'local')
-        thumbnail_url = form_data.get('thumbnail_url', '')
+        url = payload.url
+        title = payload.title
+        song_type = payload.type
+        thumbnail_url = payload.thumbnail_url
 
         if not url or not title:
             return JSONResponse(
@@ -330,21 +344,20 @@ async def add_song_to_playlist_next(
         return error_response("[/playlists/{id}/add_next] 添加歌曲失败", exc=e, _logger=logger)
 
 
-@router.post("/playlists/{playlist_id}/add_top")
+@router.post("/playlists/{playlist_id}/add_top", response_model=StatusMessageResponse, response_model_exclude_none=True)
 async def add_song_to_playlist_top(
     playlist_id: str,
-    request: Request,
+    payload: PlaylistSongForm = Depends(PlaylistSongForm.as_form),
     player: MusicPlayer = Depends(get_player_for_request),
     playlists: Playlists = Depends(get_playlists),
 ):
     """添加歌曲到歌单顶部"""
     try:
         should_broadcast_playlist_update = False
-        form_data = await request.form()
-        url = form_data.get('url', '')
-        title = form_data.get('title', '')
-        song_type = form_data.get('type', 'local')
-        thumbnail_url = form_data.get('thumbnail_url', '')
+        url = payload.url
+        title = payload.title
+        song_type = payload.type
+        thumbnail_url = payload.thumbnail_url
 
         if not url or not title:
             return JSONResponse(
@@ -383,7 +396,7 @@ async def add_song_to_playlist_top(
         return error_response("[/playlists/{id}/add_top] 添加歌曲到顶部失败", exc=e, _logger=logger)
 
 
-@router.get("/playlist")
+@router.get("/playlist", response_model=PlaylistQueryResponse, response_model_exclude_none=True)
 async def get_current_playlist(
     request: Request,
     playlist_id: str = None,
@@ -433,7 +446,7 @@ async def get_current_playlist(
         return error_response("[/playlist] 获取歌单异常", exc=e, _logger=logger)
 
 
-@router.delete("/playlists/{playlist_id}")
+@router.delete("/playlists/{playlist_id}", response_model=StatusMessageResponse, response_model_exclude_none=True)
 async def delete_playlist(playlist_id: str, playlists: Playlists = Depends(get_playlists)):
     """删除歌单"""
     try:
@@ -460,7 +473,7 @@ async def delete_playlist(playlist_id: str, playlists: Playlists = Depends(get_p
         return error_response("[DELETE /playlists/{id}] 删除歌单异常", exc=e, _logger=logger)
 
 
-@router.post("/playlists/{playlist_id}/clear")
+@router.post("/playlists/{playlist_id}/clear", response_model=StatusMessageResponse, response_model_exclude_none=True)
 async def clear_playlist(
     playlist_id: str,
     player: MusicPlayer = Depends(get_player_for_request),
@@ -503,18 +516,17 @@ async def clear_playlist(
         return error_response("[POST /playlists/{id}/clear] 清空歌单异常", exc=e, _logger=logger)
 
 
-@router.post("/playlists/{playlist_id}/remove")
+@router.post("/playlists/{playlist_id}/remove", response_model=StatusMessageResponse, response_model_exclude_none=True)
 async def remove_song_from_playlist(
     playlist_id: str,
-    request: Request,
+    payload: IndexRequestForm = Depends(IndexRequestForm.as_form),
     player: MusicPlayer = Depends(get_player_for_request),
     playlists: Playlists = Depends(get_playlists),
     player_lock=Depends(get_player_lock),
 ):
     """从指定歌单中移除歌曲"""
     try:
-        form = await request.form()
-        index = int(form.get("index", -1))
+        index = int(payload.index)
 
         logger.debug(f"remove_song_from_playlist - playlist_id: {playlist_id}, index: {index}")
 
@@ -555,8 +567,8 @@ async def remove_song_from_playlist(
         return error_response("[/playlists/{id}/remove] 移除歌曲异常", exc=e, _logger=logger)
 
 
-@router.put("/playlists/{playlist_id}")
-async def update_playlist(playlist_id: str, data: dict, playlists: Playlists = Depends(get_playlists)):
+@router.put("/playlists/{playlist_id}", response_model=PlaylistRenameResponse, response_model_exclude_none=True)
+async def update_playlist(playlist_id: str, payload: PlaylistUpdateRequest, playlists: Playlists = Depends(get_playlists)):
     """更新歌单信息（如名称）"""
     try:
         if playlist_id == "default":
@@ -571,7 +583,7 @@ async def update_playlist(playlist_id: str, data: dict, playlists: Playlists = D
                 status_code=400
             )
 
-        new_name = sanitize_playlist_name(data.get('name', ''), fallback='')
+        new_name = sanitize_playlist_name(payload.name, fallback='')
         if not new_name:
             return JSONResponse(
                 {"status": "ERROR", "error": "歌单名称不能为空"},
@@ -593,7 +605,7 @@ async def update_playlist(playlist_id: str, data: dict, playlists: Playlists = D
         return error_response("[PUT /playlists/{id}] 更新歌单异常", exc=e, _logger=logger)
 
 
-@router.post("/playlists/{playlist_id}/switch")
+@router.post("/playlists/{playlist_id}/switch", response_model=PlaylistSwitchResponse, response_model_exclude_none=True)
 async def switch_playlist(
     playlist_id: str,
     player: MusicPlayer = Depends(get_player_for_request),
@@ -617,9 +629,9 @@ async def switch_playlist(
         return error_response("[/playlists/{id}/switch] 切换歌单异常", exc=e, _logger=logger)
 
 
-@router.post("/playlist_play")
+@router.post("/playlist_play", response_model=PlaySuccessResponse, response_model_exclude_none=True)
 async def playlist_play(
-    request: Request,
+    payload: IndexRequestForm = Depends(IndexRequestForm.as_form),
     player: MusicPlayer = Depends(get_player_for_request),
     playlists: Playlists = Depends(get_playlists),
     playback_history: PlayHistory = Depends(get_playback_history),
@@ -627,8 +639,7 @@ async def playlist_play(
 ):
     """播放队列中指定索引的歌曲"""
     try:
-        form = await request.form()
-        index = int(form.get("index", 0))
+        index = int(payload.index)
 
         current_pid = get_current_playlist_id(player)
         playlist = get_runtime_playlist(player)
@@ -684,19 +695,18 @@ async def playlist_play(
         return error_response("[/playlist_play] 播放异常", exc=e, _logger=logger)
 
 
-@router.post("/playlist_reorder")
+@router.post("/playlist_reorder", response_model=StatusMessageResponse, response_model_exclude_none=True)
 async def playlist_reorder(
-    request: Request,
+    payload: PlaylistReorderRequest,
     player: MusicPlayer = Depends(get_player_for_request),
     playlists: Playlists = Depends(get_playlists),
 ):
     """重新排序播放队列"""
     try:
         should_broadcast_playlist_update = False
-        data = await request.json()
-        from_index = data.get("from_index")
-        to_index = data.get("to_index")
-        playlist_id = data.get("playlist_id", get_current_playlist_id(player))
+        from_index = payload.from_index
+        to_index = payload.to_index
+        playlist_id = payload.playlist_id or get_current_playlist_id(player)
 
         if from_index is not None and to_index is not None:
             is_runtime_playlist = is_runtime_playlist_id(player, playlist_id)
@@ -722,17 +732,16 @@ async def playlist_reorder(
         return error_response("[/playlist_reorder] 排序异常", exc=e, _logger=logger)
 
 
-@router.post("/playlist_remove")
+@router.post("/playlist_remove", response_model=StatusMessageResponse, response_model_exclude_none=True)
 async def playlist_remove(
-    request: Request,
+    payload: IndexRequestForm = Depends(IndexRequestForm.as_form),
     player: MusicPlayer = Depends(get_player_for_request),
     playlists: Playlists = Depends(get_playlists),
     player_lock=Depends(get_player_lock),
 ):
     """从队列移除歌曲"""
     try:
-        form = await request.form()
-        index = int(form.get("index", -1))
+        index = int(payload.index)
 
         current_pid = get_current_playlist_id(player)
         logger.debug(f"playlist_remove - index: {index}, current_playlist_id: {current_pid}")
@@ -773,7 +782,7 @@ async def playlist_remove(
         return error_response("[/playlist_remove] 移除歌曲异常", exc=e, _logger=logger)
 
 
-@router.post("/playlist_clear")
+@router.post("/playlist_clear", response_model=StatusMessageResponse, response_model_exclude_none=True)
 async def playlist_clear(
     request: Request,
     player: MusicPlayer = Depends(get_player_for_request),
