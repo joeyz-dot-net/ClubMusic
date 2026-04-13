@@ -4,6 +4,7 @@ import os
 import threading
 from pathlib import Path
 from types import SimpleNamespace
+from typing import get_args
 
 import pytest
 from fastapi import HTTPException
@@ -27,6 +28,7 @@ from models.api_contracts import (
     PlaylistQueryResponse,
     PlaylistRenameResponse,
     PlaylistsListResponse,
+    PlayerStatusErrorResponse,
     PlayerStatusResponse,
     PlaySuccessResponse,
     RefreshVideoUrlResponse,
@@ -332,7 +334,10 @@ def test_player_router_registers_core_response_models():
     assert _get_route(player_router.router, "/play_song", "POST").response_model is PlaySuccessResponse
     assert _get_route(player_router.router, "/next", "POST").response_model is PlaybackAdvanceResponse
     assert _get_route(player_router.router, "/prev", "POST").response_model is PlaybackAdvanceResponse
-    assert _get_route(player_router.router, "/status", "GET").response_model is PlayerStatusResponse
+    assert set(get_args(_get_route(player_router.router, "/status", "GET").response_model)) == {
+        PlayerStatusResponse,
+        PlayerStatusErrorResponse,
+    }
     assert _get_route(player_router.router, "/pause", "POST").response_model is PauseToggleResponse
     assert _get_route(player_router.router, "/toggle_pause", "POST").response_model is PauseToggleResponse
     assert _get_route(player_router.router, "/seek", "POST").response_model is SeekResponse
@@ -395,6 +400,27 @@ def test_get_status_payload_matches_response_schema():
     assert validated.pitch_shift == 1
     assert validated.mpv_state.time_pos == 12.5
     assert validated.mpv_state.volume == 65
+
+
+def test_get_status_fallback_payload_matches_error_schema(monkeypatch):
+    player = DummyPlayer(
+        songs=[{"url": "status-song.mp3", "title": "Status Song", "type": "local"}],
+        current_meta={"url": "status-song.mp3", "title": "Status Song", "type": "local"},
+        current_index=0,
+    )
+
+    monkeypatch.setattr(player_router, "get_runtime_playlist", lambda player_arg: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    response = asyncio.run(player_router.get_status(None, player, None))
+    payload = json.loads(response.body)
+    validated = PlayerStatusErrorResponse(**payload)
+
+    assert response.status_code == 200
+    assert validated.status == "ERROR"
+    assert validated.error == "获取播放器状态失败"
+    assert validated.current_playlist_id == "default"
+    assert validated.current_index == 0
+    assert validated.mpv_state.volume == 50
 
 
 def test_get_current_playlist_payload_matches_response_schema():

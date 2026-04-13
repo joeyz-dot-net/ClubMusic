@@ -34,6 +34,7 @@ from models.api_contracts import (
     PlayYoutubePlaylistResponse,
     PlaybackAdvanceResponse,
     PlaybackControlErrorResponse,
+    PlayerStatusErrorResponse,
     PitchShiftRequest,
     PitchShiftResponse,
     PlayerStatusResponse,
@@ -588,7 +589,11 @@ async def prev_track(
         return error_response("[/prev] 切换上一首异常", exc=e, _logger=logger)
 
 
-@router.get("/status", response_model=PlayerStatusResponse, response_model_exclude_none=True)
+@router.get(
+    "/status",
+    response_model=PlayerStatusResponse | PlayerStatusErrorResponse,
+    response_model_exclude_none=True,
+)
 async def get_status(
     request: Request,
     player: MusicPlayer = Depends(get_player_for_request),

@@ -132,6 +132,21 @@ class PlayerStatusResponse(BaseModel):
     server_time: float | None = None
 
 
+class PlayerStatusErrorResponse(BaseModel):
+    status: Literal["ERROR"]
+    error: str
+    current_meta: SongSnapshot = Field(default_factory=SongSnapshot)
+    current_playlist_id: str
+    current_playlist_name: str
+    current_index: int
+    playlist_updated_at: float
+    loop_mode: int
+    shuffle_mode: bool
+    pitch_shift: int
+    mpv_state: MpvStateSnapshot = Field(default_factory=MpvStateSnapshot)
+    server_time: float | None = None
+
+
 class PauseToggleResponse(BaseModel):
     status: Literal["OK"]
     paused: bool

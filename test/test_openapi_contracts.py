@@ -33,12 +33,16 @@ def _get_parameter(operation: dict, name: str) -> dict:
 def test_openapi_core_contract_refs_are_stable():
     schema = build_openapi_schema()
     paths = schema["paths"]
+    status_schema = paths["/status"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
 
     assert paths["/play"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/PlaySuccessResponse"
     assert paths["/debug/pipe-check"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/DebugPipeCheckResponse"
     assert paths["/next"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/PlaybackAdvanceResponse"
     assert paths["/prev"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/PlaybackAdvanceResponse"
-    assert paths["/status"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/PlayerStatusResponse"
+    assert {item["$ref"] for item in status_schema["anyOf"]} == {
+        "#/components/schemas/PlayerStatusResponse",
+        "#/components/schemas/PlayerStatusErrorResponse",
+    }
     assert paths["/playlists"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/PlaylistsListResponse"
     assert paths["/search_song"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/SearchSongResponse"
     assert paths["/playback_history"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/PlaybackHistoryResponse"
