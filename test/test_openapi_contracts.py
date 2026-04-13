@@ -69,6 +69,13 @@ def _extract_backend_api_contracts(schema: dict) -> set[tuple[str, str]]:
     return set(_extract_backend_api_operations(schema))
 
 
+def _extract_js_method_body(source: str, method_name: str, next_marker: str) -> str:
+    start = source.index(f"async {method_name}(")
+    body_start = source.index("{", start) + 1
+    end = source.index(next_marker, body_start)
+    return source[body_start:end]
+
+
 def build_openapi_schema():
     app = FastAPI()
     app.include_router(playlist_router.router)
@@ -313,3 +320,27 @@ def test_frontend_api_body_encodings_match_openapi_schema():
 
     assert mismatched_form_routes == []
     assert mismatched_json_routes == []
+
+
+def test_frontend_transport_helpers_preserve_room_context_and_trace_headers():
+    source = _API_JS_PATH.read_text(encoding="utf-8")
+
+    assert "'X-ClubMusic-Room': normalizeHeaderValue(this.roomId || this.pipeParam || 'default')" in source
+
+    room_id_index = source.index("if (this.roomId) {")
+    pipe_param_index = source.index("if (!this.pipeParam) return url;")
+    assert room_id_index < pipe_param_index
+
+    helper_bodies = {
+        "get": _extract_js_method_body(source, "get", "\n\n    async post("),
+        "post": _extract_js_method_body(source, "post", "\n\n    async postForm("),
+        "postForm": _extract_js_method_body(source, "postForm", "\n\n    async delete("),
+        "delete": _extract_js_method_body(source, "delete", "\n\n    async put("),
+        "put": _extract_js_method_body(source, "put", "\n\n    // 播放器相关 API"),
+    }
+
+    for helper_name, body in helper_bodies.items():
+        assert "const url = this._appendPipe(`${this.baseURL}${endpoint}`);" in body, helper_name
+        assert "headers: this._buildHeaders(endpoint" in body, helper_name
+
+    assert source.count("const url = this._appendPipe(`${this.baseURL}${endpoint}`);") == 5

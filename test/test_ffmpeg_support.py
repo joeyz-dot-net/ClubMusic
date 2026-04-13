@@ -10,14 +10,19 @@ import subprocess
 import sys
 import os
 
+import pytest
+
+
+_CREATE_NO_WINDOW = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+
 
 def find_ffmpeg():
     """查找 FFmpeg 可执行文件"""
     # 方案1: 检查 bin 目录
     try:
         from pathlib import Path
-        
-        ffmpeg_path = Path(__file__).parent / "bin" / "ffmpeg.exe"
+
+        ffmpeg_path = Path(__file__).resolve().parents[1] / "bin" / "ffmpeg.exe"
         
         if ffmpeg_path.exists():
             print(f"✅ 在 bin 目录找到 FFmpeg: {ffmpeg_path}")
@@ -45,6 +50,31 @@ def find_ffmpeg():
     return "ffmpeg"
 
 
+@pytest.fixture(scope="module")
+def ffmpeg_cmd():
+    """为 pytest 提供可用的 FFmpeg 命令；缺失时跳过能力探测测试。"""
+    command = find_ffmpeg()
+
+    try:
+        result = subprocess.run(
+            [command, "-version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            creationflags=_CREATE_NO_WINDOW,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        pytest.skip(f"FFmpeg unavailable for capability probe: {exc}")
+    except Exception as exc:
+        pytest.skip(f"Unable to start FFmpeg capability probe: {exc}")
+
+    if result.returncode != 0:
+        details = (result.stderr or result.stdout or "unknown error").strip()
+        pytest.skip(f"FFmpeg unavailable for capability probe: {details}")
+
+    return command
+
+
 def get_ffmpeg_version(ffmpeg_cmd):
     """获取 FFmpeg 版本信息"""
     print("\n" + "="*70)
@@ -57,7 +87,7 @@ def get_ffmpeg_version(ffmpeg_cmd):
             capture_output=True,
             text=True,
             timeout=5,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            creationflags=_CREATE_NO_WINDOW
         )
         
         if result.returncode == 0:
@@ -84,7 +114,7 @@ def check_format_support(ffmpeg_cmd, format_name):
             capture_output=True,
             text=True,
             timeout=5,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            creationflags=_CREATE_NO_WINDOW
         )
         
         if result.returncode == 0:
@@ -98,8 +128,8 @@ def check_format_support(ffmpeg_cmd, format_name):
         return False
 
 
-def test_wasapi_support(ffmpeg_cmd):
-    """测试 wasapi 支持"""
+def probe_wasapi_support(ffmpeg_cmd):
+    """检测 wasapi 支持情况。"""
     print("="*70)
     print("🎙️  WASAPI 支持检测")
     print("="*70 + "\n")
@@ -124,8 +154,8 @@ def test_wasapi_support(ffmpeg_cmd):
         return False
 
 
-def test_dshow_support(ffmpeg_cmd):
-    """测试 dshow 支持"""
+def probe_dshow_support(ffmpeg_cmd):
+    """检测 dshow 支持情况。"""
     print("\n" + "="*70)
     print("🎙️  DirectShow (dshow) 支持检测")
     print("="*70 + "\n")
@@ -146,6 +176,16 @@ def test_dshow_support(ffmpeg_cmd):
         return False
 
 
+def test_wasapi_support(ffmpeg_cmd):
+    """能力测试应能稳定探测 WASAPI 支持，而不是依赖返回值告警。"""
+    assert isinstance(probe_wasapi_support(ffmpeg_cmd), bool)
+
+
+def test_dshow_support(ffmpeg_cmd):
+    """能力测试应能稳定探测 dshow 支持，而不是依赖返回值告警。"""
+    assert isinstance(probe_dshow_support(ffmpeg_cmd), bool)
+
+
 def list_all_input_formats(ffmpeg_cmd):
     """列出所有支持的输入格式"""
     print("\n" + "="*70)
@@ -158,7 +198,7 @@ def list_all_input_formats(ffmpeg_cmd):
             capture_output=True,
             text=True,
             timeout=5,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            creationflags=_CREATE_NO_WINDOW
         )
         
         if result.returncode == 0:
@@ -214,10 +254,10 @@ def main():
         return False
     
     # 测试 wasapi 支持
-    wasapi_support = test_wasapi_support(ffmpeg_cmd)
+    wasapi_support = probe_wasapi_support(ffmpeg_cmd)
     
     # 测试 dshow 支持
-    dshow_support = test_dshow_support(ffmpeg_cmd)
+    dshow_support = probe_dshow_support(ffmpeg_cmd)
     
     # 列出所有输入格式
     list_all_input_formats(ffmpeg_cmd)
