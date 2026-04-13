@@ -1,7 +1,7 @@
 from typing import Any, Literal
 
 from fastapi import Form, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 async def _read_json_or_form_payload(request: Request) -> dict[str, Any]:
@@ -470,8 +470,10 @@ class SettingsMutationResponse(BaseModel):
 
 
 class SettingsSchemaResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     status: Literal["OK"]
-    schema: dict[str, Any]
+    settings_schema: dict[str, Any] = Field(alias="schema")
 
 
 class UIConfigData(BaseModel):

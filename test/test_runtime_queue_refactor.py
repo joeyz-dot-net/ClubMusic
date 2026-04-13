@@ -420,6 +420,10 @@ def test_settings_and_search_payloads_match_response_schema(monkeypatch):
     validated_settings = UserSettingsResponse(**settings_payload)
     assert validated_settings.data.language == "auto"
 
+    settings_schema_payload = asyncio.run(settings_router.get_settings_schema())
+    validated_schema = SettingsSchemaResponse(**settings_schema_payload)
+    assert validated_schema.model_dump(by_alias=True)["schema"]["theme"]["default"] == "dark"
+
     version_payload = asyncio.run(settings_router.get_version())
     validated_version = VersionResponse(**version_payload)
     assert validated_version.version
