@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 
 from models import MusicPlayer
 from models.api_contracts import (
+    ErrorResponse,
     HistoryAddRequest,
     HistoryDeleteRequest,
     PlaybackHistoryMergedResponse,
@@ -27,6 +28,19 @@ from routers.state import error_response
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+_HISTORY_GET_ERROR_RESPONSES = {
+    500: {"model": ErrorResponse, "description": "Unexpected server error"},
+}
+_HISTORY_ADD_ERROR_RESPONSES = {
+    400: {"model": ErrorResponse, "description": "Missing history URL"},
+    500: {"model": ErrorResponse, "description": "Unexpected server error"},
+}
+_HISTORY_DELETE_ERROR_RESPONSES = {
+    400: {"model": ErrorResponse, "description": "Missing history URL"},
+    404: {"model": ErrorResponse, "description": "History entry not found"},
+    500: {"model": ErrorResponse, "description": "Unexpected server error"},
+}
 
 _history_add_request_schema = HistoryAddRequest.model_json_schema()
 _history_delete_request_schema = HistoryDeleteRequest.model_json_schema()
@@ -50,7 +64,12 @@ _history_delete_openapi_extra = {
 }
 
 
-@router.get("/playback_history", response_model=PlaybackHistoryResponse, response_model_exclude_none=True)
+@router.get(
+    "/playback_history",
+    response_model=PlaybackHistoryResponse,
+    response_model_exclude_none=True,
+    responses=_HISTORY_GET_ERROR_RESPONSES,
+)
 async def get_playback_history(player: MusicPlayer = Depends(get_player_for_request)):
     """获取播放历史"""
     try:
@@ -63,7 +82,12 @@ async def get_playback_history(player: MusicPlayer = Depends(get_player_for_requ
         return error_response("[/playback_history] 获取播放历史异常", exc=e, _logger=logger)
 
 
-@router.get("/playback_history_merged", response_model=PlaybackHistoryMergedResponse, response_model_exclude_none=True)
+@router.get(
+    "/playback_history_merged",
+    response_model=PlaybackHistoryMergedResponse,
+    response_model_exclude_none=True,
+    responses=_HISTORY_GET_ERROR_RESPONSES,
+)
 async def get_playback_history_merged(player: MusicPlayer = Depends(get_player_for_request)):
     """获取已合并的播放历史 - 相同URL只显示一次，最后播放时间降序排列"""
     try:
@@ -99,6 +123,7 @@ async def get_playback_history_merged(player: MusicPlayer = Depends(get_player_f
     "/song_add_to_history",
     response_model=StatusMessageResponse,
     response_model_exclude_none=True,
+    responses=_HISTORY_ADD_ERROR_RESPONSES,
     openapi_extra=_history_add_openapi_extra,
 )
 async def song_add_to_history(
@@ -135,6 +160,7 @@ async def song_add_to_history(
     "/playback_history_delete",
     response_model=StatusMessageResponse,
     response_model_exclude_none=True,
+    responses=_HISTORY_DELETE_ERROR_RESPONSES,
     openapi_extra=_history_delete_openapi_extra,
 )
 async def delete_playback_history(

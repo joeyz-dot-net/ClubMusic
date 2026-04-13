@@ -27,6 +27,7 @@ from fastapi.responses import JSONResponse
 
 from models import MusicPlayer, Playlists, PlayHistory
 from models.api_contracts import (
+    ErrorResponse,
     LoopModeResponse,
     PauseToggleResponse,
     PitchShiftRequest,
@@ -52,6 +53,18 @@ from routers.state import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+_PLAYER_CONTROL_ERROR_RESPONSES = {
+    500: {"model": ErrorResponse, "description": "Unexpected player error"},
+}
+_PLAYER_PITCH_ERROR_RESPONSES = {
+    400: {"model": ErrorResponse, "description": "Invalid semitone value"},
+    500: {"model": ErrorResponse, "description": "Unexpected player error"},
+}
+_PLAYER_YOUTUBE_ERROR_RESPONSES = {
+    400: {"model": ErrorResponse, "description": "Invalid YouTube request"},
+    500: {"model": ErrorResponse, "description": "Unexpected player error"},
+}
 
 
 # ==================== 辅助函数 ====================
@@ -605,7 +618,12 @@ async def get_status(
         )
 
 
-@router.post("/pause", response_model=PauseToggleResponse, response_model_exclude_none=True)
+@router.post(
+    "/pause",
+    response_model=PauseToggleResponse,
+    response_model_exclude_none=True,
+    responses=_PLAYER_CONTROL_ERROR_RESPONSES,
+)
 async def pause(
     request: Request,
     player: MusicPlayer = Depends(get_player_for_request),
@@ -629,7 +647,12 @@ async def pause(
         return error_response("[/pause] 暂停/继续异常", exc=e, _logger=logger)
 
 
-@router.post("/toggle_pause", response_model=PauseToggleResponse, response_model_exclude_none=True)
+@router.post(
+    "/toggle_pause",
+    response_model=PauseToggleResponse,
+    response_model_exclude_none=True,
+    responses=_PLAYER_CONTROL_ERROR_RESPONSES,
+)
 async def toggle_pause(
     request: Request,
     player: MusicPlayer = Depends(get_player_for_request),
@@ -639,7 +662,12 @@ async def toggle_pause(
     return await pause(request, player, player_lock)
 
 
-@router.post("/seek", response_model=SeekResponse, response_model_exclude_none=True)
+@router.post(
+    "/seek",
+    response_model=SeekResponse,
+    response_model_exclude_none=True,
+    responses=_PLAYER_CONTROL_ERROR_RESPONSES,
+)
 async def seek(
     request: Request,
     payload: SeekRequestForm = Depends(SeekRequestForm.as_form),
@@ -661,7 +689,12 @@ async def seek(
         return error_response("[/seek] 跳转异常", exc=e, _logger=logger)
 
 
-@router.post("/loop", response_model=LoopModeResponse, response_model_exclude_none=True)
+@router.post(
+    "/loop",
+    response_model=LoopModeResponse,
+    response_model_exclude_none=True,
+    responses=_PLAYER_CONTROL_ERROR_RESPONSES,
+)
 async def set_loop_mode(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
     """设置循环模式"""
     try:
@@ -676,7 +709,12 @@ async def set_loop_mode(request: Request, player: MusicPlayer = Depends(get_play
         return error_response("[/loop] 设置循环模式异常", exc=e, _logger=logger)
 
 
-@router.post("/shuffle", response_model=ShuffleModeResponse, response_model_exclude_none=True)
+@router.post(
+    "/shuffle",
+    response_model=ShuffleModeResponse,
+    response_model_exclude_none=True,
+    responses=_PLAYER_CONTROL_ERROR_RESPONSES,
+)
 async def set_shuffle_mode(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
     """设置随机播放模式"""
     try:
@@ -690,7 +728,12 @@ async def set_shuffle_mode(request: Request, player: MusicPlayer = Depends(get_p
         return error_response("[/shuffle] 设置随机模式异常", exc=e, _logger=logger)
 
 
-@router.post("/pitch", response_model=PitchShiftResponse, response_model_exclude_none=True)
+@router.post(
+    "/pitch",
+    response_model=PitchShiftResponse,
+    response_model_exclude_none=True,
+    responses=_PLAYER_PITCH_ERROR_RESPONSES,
+)
 async def set_pitch_shift(
     request: Request,
     payload: PitchShiftRequest,
@@ -709,7 +752,7 @@ async def set_pitch_shift(
         return error_response("[/pitch] 设置音调异常", exc=e, _logger=logger)
 
 
-@router.post("/youtube_extract_playlist")
+@router.post("/youtube_extract_playlist", responses=_PLAYER_YOUTUBE_ERROR_RESPONSES)
 async def youtube_extract_playlist(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
     """提取YouTube播放列表"""
     try:
@@ -728,7 +771,7 @@ async def youtube_extract_playlist(request: Request, player: MusicPlayer = Depen
         return error_response("[/youtube_extract_playlist] 提取播放列表异常", exc=e, _logger=logger)
 
 
-@router.post("/play_youtube_playlist")
+@router.post("/play_youtube_playlist", responses=_PLAYER_YOUTUBE_ERROR_RESPONSES)
 async def play_youtube_playlist(
     request: Request,
     player: MusicPlayer = Depends(get_player_for_request),

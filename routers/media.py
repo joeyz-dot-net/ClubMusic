@@ -20,6 +20,7 @@ from fastapi.responses import JSONResponse, FileResponse, Response
 
 from models import MusicPlayer
 from models.api_contracts import (
+    ErrorResponse,
     RefreshVideoUrlResponse,
     VolumeDefaultsResponse,
     VolumeRequestForm,
@@ -31,6 +32,11 @@ from routers.state import _get_resource_path, error_response
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+_MEDIA_OPERATION_ERROR_RESPONSES = {
+    400: {"model": ErrorResponse, "description": "Invalid media request"},
+    500: {"model": ErrorResponse, "description": "Unexpected server error"},
+}
 
 # ==================== 封面辅助函数 ====================
 
@@ -331,7 +337,12 @@ async def video_proxy(url: str, request: Request):
         return error_response("[/video_proxy] 视频代理异常", exc=e, _logger=logger)
 
 
-@router.post("/refresh_video_url", response_model=RefreshVideoUrlResponse, response_model_exclude_none=True)
+@router.post(
+    "/refresh_video_url",
+    response_model=RefreshVideoUrlResponse,
+    response_model_exclude_none=True,
+    responses=_MEDIA_OPERATION_ERROR_RESPONSES,
+)
 async def refresh_video_url(player: MusicPlayer = Depends(get_player_for_request)):
     """重新获取当前播放歌曲的视频直链（当直链过期时调用）"""
     try:
@@ -399,7 +410,12 @@ async def refresh_video_url(player: MusicPlayer = Depends(get_player_for_request
         return error_response("[/refresh_video_url] 异常", exc=e, _logger=logger)
 
 
-@router.post("/volume", response_model=VolumeResponse, response_model_exclude_none=True)
+@router.post(
+    "/volume",
+    response_model=VolumeResponse,
+    response_model_exclude_none=True,
+    responses=_MEDIA_OPERATION_ERROR_RESPONSES,
+)
 async def set_volume(
     payload: VolumeRequestForm = Depends(VolumeRequestForm.as_form),
     player: MusicPlayer = Depends(get_player_for_request),

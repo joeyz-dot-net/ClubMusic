@@ -45,7 +45,7 @@ from models.api_contracts import (
     VolumeRequestForm,
     VolumeResponse,
 )
-from models.api_contracts import PlaylistAddRequest, SongSnapshot
+from models.api_contracts import PlaylistAddRequest, PlaylistNameRequest, SongSnapshot
 from models.player import MusicPlayer
 from models.playlists import Playlist, Playlists
 from routers import dependencies as router_dependencies
@@ -799,6 +799,131 @@ def test_update_single_setting_rejects_unknown_key():
     assert response.status_code == 400
     assert validated.error == "未知的设置项: unknown"
     assert payload == {"status": "ERROR", "error": "未知的设置项: unknown"}
+
+
+def test_create_playlist_restful_rejects_blank_name():
+    response = asyncio.run(
+        playlist_router.create_playlist_restful(
+            PlaylistNameRequest(name="   "),
+            playlists=SimpleNamespace(create_playlist=lambda name: None),
+        )
+    )
+    payload = json.loads(response.body)
+    validated = ErrorResponse(**payload)
+
+    assert response.status_code == 400
+    assert validated.error == "歌单名称不能为空"
+    assert payload == {"status": "ERROR", "error": "歌单名称不能为空"}
+
+
+def test_delete_playback_history_rejects_missing_url():
+    player = SimpleNamespace(playback_history=DummyHistory([]))
+
+    response = asyncio.run(history_router.delete_playback_history(HistoryDeleteRequest(url=""), player=player))
+    payload = json.loads(response.body)
+    validated = ErrorResponse(**payload)
+
+    assert response.status_code == 400
+    assert validated.error == "url不能为空"
+    assert payload == {"status": "ERROR", "error": "url不能为空"}
+
+
+def test_delete_playback_history_returns_404_when_entry_missing():
+    player = SimpleNamespace(playback_history=DummyHistory([]))
+
+    response = asyncio.run(history_router.delete_playback_history(HistoryDeleteRequest(url="missing.mp3"), player=player))
+    payload = json.loads(response.body)
+    validated = ErrorResponse(**payload)
+
+    assert response.status_code == 404
+    assert validated.error == "未找到该播放历史记录"
+    assert payload == {"status": "ERROR", "error": "未找到该播放历史记录"}
+
+
+def test_refresh_video_url_rejects_non_youtube_song():
+    player = DummyPlayer(current_meta={"url": "local.mp3", "title": "Local", "type": "local"})
+
+    response = asyncio.run(media_router.refresh_video_url(player=player))
+    payload = json.loads(response.body)
+    validated = ErrorResponse(**payload)
+
+    assert response.status_code == 400
+    assert validated.error == "当前不是YouTube歌曲"
+    assert payload == {"status": "ERROR", "error": "当前不是YouTube歌曲"}
+
+
+def test_set_volume_rejects_invalid_value():
+    player = DummyPlayer()
+
+    response = asyncio.run(media_router.set_volume(VolumeRequestForm(value="loud"), player=player))
+    payload = json.loads(response.body)
+    validated = ErrorResponse(**payload)
+
+    assert response.status_code == 400
+    assert validated.error == "无效的音量值: loud"
+    assert payload == {"status": "ERROR", "error": "无效的音量值: loud"}
+
+
+def test_search_song_rejects_blank_query():
+    player = DummyPlayer()
+
+    response = asyncio.run(search_router.search_song(search_router.SearchSongRequest(query="   "), player=player))
+    payload = json.loads(response.body)
+    validated = ErrorResponse(**payload)
+
+    assert response.status_code == 400
+    assert validated.error == "搜索词不能为空"
+    assert payload == {"status": "ERROR", "error": "搜索词不能为空"}
+
+
+def test_get_directory_songs_rejects_path_escape():
+    player = DummyPlayer()
+    player.music_dir = "D:/Music"
+
+    response = asyncio.run(search_router.get_directory_songs(search_router.DirectorySongsRequest(directory="../outside"), player=player))
+    payload = json.loads(response.body)
+    validated = ErrorResponse(**payload)
+
+    assert response.status_code == 400
+    assert validated.error == "无效的目录路径"
+    assert payload == {"status": "ERROR", "error": "无效的目录路径"}
+
+
+def test_set_pitch_shift_rejects_invalid_semitones():
+    player = DummyPlayer()
+
+    response = asyncio.run(player_router.set_pitch_shift(None, SimpleNamespace(semitones="bad"), player=player))
+    payload = json.loads(response.body)
+    validated = ErrorResponse(**payload)
+
+    assert response.status_code == 400
+    assert "无效的半音值" in validated.error
+
+
+def test_youtube_extract_playlist_requires_url():
+    player = DummyPlayer()
+    request = DummyRequest(form_data={})
+
+    response = asyncio.run(player_router.youtube_extract_playlist(request, player=player))
+    payload = json.loads(response.body)
+    validated = ErrorResponse(**payload)
+
+    assert response.status_code == 400
+    assert validated.error == "URL不能为空"
+    assert payload == {"status": "ERROR", "error": "URL不能为空"}
+
+
+def test_play_youtube_playlist_rejects_empty_list():
+    player = DummyPlayer()
+    request = DummyRequest(json_data={"videos": []})
+
+    response = asyncio.run(player_router.play_youtube_playlist(request, player=player, playlists=SimpleNamespace()))
+    payload = json.loads(response.body)
+    validated = ErrorResponse(**payload)
+
+    assert response.status_code == 400
+    assert validated.error == "播放列表为空"
+    assert payload == {"status": "ERROR", "error": "播放列表为空"}
 
 
 def test_connection_manager_broadcasts_only_to_target_room():

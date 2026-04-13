@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 
 from models import MusicPlayer
 from models.api_contracts import (
+    ErrorResponse,
     DirectorySongsRequest,
     DirectorySongsResponse,
     SearchSongRequest,
@@ -31,8 +32,23 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+_SEARCH_ERROR_RESPONSES = {
+    400: {"model": ErrorResponse, "description": "Invalid search request"},
+    500: {"model": ErrorResponse, "description": "Unexpected search error"},
+}
+_DIRECTORY_ERROR_RESPONSES = {
+    400: {"model": ErrorResponse, "description": "Invalid directory request"},
+    404: {"model": ErrorResponse, "description": "Directory not found"},
+    500: {"model": ErrorResponse, "description": "Unexpected search error"},
+}
 
-@router.post("/search_song", response_model=SearchSongResponse, response_model_exclude_none=True)
+
+@router.post(
+    "/search_song",
+    response_model=SearchSongResponse,
+    response_model_exclude_none=True,
+    responses=_SEARCH_ERROR_RESPONSES,
+)
 async def search_song(payload: SearchSongRequest, player: MusicPlayer = Depends(get_player_for_request)):
     """搜索歌曲（本地 + YouTube）"""
     try:
@@ -108,7 +124,12 @@ async def get_youtube_search_config(player: MusicPlayer = Depends(get_player_for
     }
 
 
-@router.post("/search_youtube", response_model=SearchYoutubeResponse, response_model_exclude_none=True)
+@router.post(
+    "/search_youtube",
+    response_model=SearchYoutubeResponse,
+    response_model_exclude_none=True,
+    responses=_SEARCH_ERROR_RESPONSES,
+)
 async def search_youtube(payload: SearchYoutubeRequestForm = Depends(SearchYoutubeRequestForm.as_form)):
     """搜索 YouTube 视频"""
     try:
@@ -129,7 +150,12 @@ async def search_youtube(payload: SearchYoutubeRequestForm = Depends(SearchYoutu
         return error_response("[/search_youtube] 搜索异常", exc=e, _logger=logger)
 
 
-@router.post("/get_directory_songs", response_model=DirectorySongsResponse, response_model_exclude_none=True)
+@router.post(
+    "/get_directory_songs",
+    response_model=DirectorySongsResponse,
+    response_model_exclude_none=True,
+    responses=_DIRECTORY_ERROR_RESPONSES,
+)
 async def get_directory_songs(payload: DirectorySongsRequest, player: MusicPlayer = Depends(get_player_for_request)):
     """获取目录下的所有歌曲"""
     try:
