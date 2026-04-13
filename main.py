@@ -30,6 +30,12 @@ def disable_uvicorn_access_logs():
 
 
 def _supports_interactive_startup_prompts(stdin=None) -> bool:
+    override = (os.environ.get("CLUBMUSIC_STARTUP_PROMPTS") or "").strip().lower()
+    if override in {"0", "false", "no", "off"}:
+        return False
+    if override in {"1", "true", "yes", "on"}:
+        return True
+
     target = stdin if stdin is not None else getattr(sys, "stdin", None)
     return bool(target and hasattr(target, "isatty") and target.isatty())
 

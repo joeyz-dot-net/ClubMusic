@@ -15,6 +15,14 @@ def test_supports_interactive_startup_prompts_respects_stdin_isatty():
     assert clubmusic_main._supports_interactive_startup_prompts(None) is False
 
 
+def test_supports_interactive_startup_prompts_honors_env_override(monkeypatch):
+    monkeypatch.setenv('CLUBMUSIC_STARTUP_PROMPTS', '0')
+    assert clubmusic_main._supports_interactive_startup_prompts(_FakeStdin(True)) is False
+
+    monkeypatch.setenv('CLUBMUSIC_STARTUP_PROMPTS', '1')
+    assert clubmusic_main._supports_interactive_startup_prompts(_FakeStdin(False)) is True
+
+
 def test_status_has_running_clubmusic_instance_requires_live_matching_listener():
     active_status = {
         'existing_instance_summary': 'PID=1234',
