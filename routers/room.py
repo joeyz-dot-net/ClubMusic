@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 
 from models import MusicPlayer, PlayHistory
 from models.api_contracts import (
+    RoomErrorResponse,
     RoomDestroyResponse,
     RoomInitRequest,
     RoomInitResponse,
@@ -31,6 +32,16 @@ from routers.state import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+_ROOM_INIT_ERROR_RESPONSES = {
+    400: {"model": RoomErrorResponse, "description": "Missing room id"},
+    409: {"model": RoomErrorResponse, "description": "Room is being created"},
+    429: {"model": RoomErrorResponse, "description": "Room limit reached"},
+    500: {"model": RoomErrorResponse, "description": "Room initialization failed"},
+}
+_ROOM_DESTROY_ERROR_RESPONSES = {
+    404: {"model": RoomErrorResponse, "description": "Room not found"},
+}
 
 
 def _build_room_status_payload(room_id: str, player) -> dict:
@@ -57,7 +68,12 @@ def _build_room_status_payload(room_id: str, player) -> dict:
     }
 
 
-@router.post("/room/init", response_model=RoomInitResponse, response_model_exclude_none=True)
+@router.post(
+    "/room/init",
+    response_model=RoomInitResponse,
+    response_model_exclude_none=True,
+    responses=_ROOM_INIT_ERROR_RESPONSES,
+)
 async def init_room(payload: RoomInitRequest):
     """为自定义房间创建 RoomPlayer + 启动 MPV。
 
@@ -167,7 +183,12 @@ async def init_room(payload: RoomInitRequest):
             _creating_rooms.discard(room_id)
 
 
-@router.delete("/room/{room_id}", response_model=RoomDestroyResponse, response_model_exclude_none=True)
+@router.delete(
+    "/room/{room_id}",
+    response_model=RoomDestroyResponse,
+    response_model_exclude_none=True,
+    responses=_ROOM_DESTROY_ERROR_RESPONSES,
+)
 async def destroy_room(room_id: str):
     """销毁自定义房间的 RoomPlayer。"""
     with _room_players_lock:

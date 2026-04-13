@@ -10,6 +10,7 @@ from fastapi import HTTPException
 
 from models.api_contracts import (
     DiagnosticInstanceStatusResponse,
+    ErrorResponse,
     HistoryAddRequest,
     HistoryDeleteRequest,
     LoopModeResponse,
@@ -25,6 +26,7 @@ from models.api_contracts import (
     PlayerStatusResponse,
     PlaySuccessResponse,
     RefreshVideoUrlResponse,
+    RoomErrorResponse,
     RoomDestroyResponse,
     RoomInitRequest,
     RoomInitResponse,
@@ -764,6 +766,39 @@ def test_destroy_room_cleans_registered_state(monkeypatch):
     assert room_id not in room_router.ROOM_PLAYERS
     assert room_id not in room_router.ROOM_HISTORIES
     assert room_id not in room_router.ROOM_LAST_ACTIVITY
+
+
+def test_room_init_rejects_missing_room_id():
+    response = asyncio.run(room_router.init_room(RoomInitRequest(room_id="  ", default_volume=80)))
+    payload = json.loads(response.body)
+    validated = RoomErrorResponse(**payload)
+
+    assert response.status_code == 400
+    assert validated.message == "missing room_id"
+    assert payload == {"status": "error", "message": "missing room_id"}
+
+
+def test_destroy_room_returns_404_when_room_is_missing(monkeypatch):
+    monkeypatch.setattr(room_router, "ROOM_PLAYERS", {})
+    monkeypatch.setattr(room_router, "_room_players_lock", threading.Lock())
+
+    response = asyncio.run(room_router.destroy_room("room-missing"))
+    payload = json.loads(response.body)
+    validated = RoomErrorResponse(**payload)
+
+    assert response.status_code == 404
+    assert validated.message == "room not found"
+    assert payload == {"status": "error", "message": "room not found"}
+
+
+def test_update_single_setting_rejects_unknown_key():
+    response = asyncio.run(settings_router.update_single_setting("unknown", settings_router.SettingsValueRequest(value="x")))
+    payload = json.loads(response.body)
+    validated = ErrorResponse(**payload)
+
+    assert response.status_code == 400
+    assert validated.error == "未知的设置项: unknown"
+    assert payload == {"status": "ERROR", "error": "未知的设置项: unknown"}
 
 
 def test_connection_manager_broadcasts_only_to_target_room():

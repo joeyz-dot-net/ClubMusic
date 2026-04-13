@@ -124,6 +124,11 @@ class StatusMessageResponse(BaseModel):
     message: str
 
 
+class ErrorResponse(BaseModel):
+    status: Literal["ERROR"]
+    error: str
+
+
 class HistoryEntrySnapshot(BaseModel):
     url: str | None = None
     title: str | None = None
@@ -213,6 +218,24 @@ class RoomStatusSnapshot(BaseModel):
     playlist_updated_at: float
     current_meta: SongSnapshot = Field(default_factory=SongSnapshot)
     last_activity: float
+
+
+class RoomErrorResponse(BaseModel):
+    status: Literal["error"]
+    message: str
+    room_id: str | None = None
+    ipc_pipe: str | None = None
+    pcm_pipe: str | None = None
+    exists: bool | None = None
+    mpv_running: bool | None = None
+    pipe_exists: bool | None = None
+    bot_ready: bool | None = None
+    current_playlist_id: str | None = None
+    current_index: int | None = None
+    queue_length: int | None = None
+    playlist_updated_at: float | None = None
+    current_meta: SongSnapshot | None = None
+    last_activity: float | None = None
 
 
 class RoomInitResponse(RoomStatusSnapshot):

@@ -24,6 +24,7 @@ from fastapi.responses import JSONResponse
 from models.api_contracts import (
     DiagnosticInstanceStatusResponse,
     DiagnosticYtDlpResponse,
+    ErrorResponse,
     SettingsMutationResponse,
     SettingsSchemaResponse,
     SettingsValueRequest,
@@ -45,6 +46,14 @@ router = APIRouter()
 
 APP_VERSION = "2.0.0"
 
+_SETTINGS_ERROR_RESPONSES = {
+    500: {"model": ErrorResponse, "description": "Unexpected server error"},
+}
+_SETTINGS_KEY_ERROR_RESPONSES = {
+    400: {"model": ErrorResponse, "description": "Unknown setting key"},
+    500: {"model": ErrorResponse, "description": "Unexpected server error"},
+}
+
 
 @router.get("/version", response_model=VersionResponse, response_model_exclude_none=True)
 async def get_version():
@@ -52,7 +61,12 @@ async def get_version():
     return {"status": "OK", "version": APP_VERSION}
 
 
-@router.get("/settings", response_model=UserSettingsResponse, response_model_exclude_none=True)
+@router.get(
+    "/settings",
+    response_model=UserSettingsResponse,
+    response_model_exclude_none=True,
+    responses=_SETTINGS_ERROR_RESPONSES,
+)
 async def get_user_settings():
     """获取默认设置（用户设置由浏览器 localStorage 管理）"""
     try:
@@ -67,7 +81,12 @@ async def get_user_settings():
         return error_response("[GET /settings] 获取设置异常", exc=e, _logger=logger)
 
 
-@router.post("/settings", response_model=SettingsMutationResponse, response_model_exclude_none=True)
+@router.post(
+    "/settings",
+    response_model=SettingsMutationResponse,
+    response_model_exclude_none=True,
+    responses=_SETTINGS_ERROR_RESPONSES,
+)
 async def update_user_settings(payload: UserSettingsUpdateRequest):
     """设置已由浏览器 localStorage 管理，此接口仅返回成功响应"""
     try:
@@ -82,7 +101,12 @@ async def update_user_settings(payload: UserSettingsUpdateRequest):
         return error_response("[POST /settings] 处理设置异常", exc=e, _logger=logger)
 
 
-@router.post("/settings/reset", response_model=SettingsMutationResponse, response_model_exclude_none=True)
+@router.post(
+    "/settings/reset",
+    response_model=SettingsMutationResponse,
+    response_model_exclude_none=True,
+    responses=_SETTINGS_ERROR_RESPONSES,
+)
 async def reset_settings():
     """重置设置为默认值（浏览器 localStorage）"""
     try:
@@ -103,7 +127,12 @@ async def reset_settings():
         return error_response("[POST /settings/reset] 重置设置异常", exc=e, _logger=logger)
 
 
-@router.post("/settings/{key}", response_model=SettingsMutationResponse, response_model_exclude_none=True)
+@router.post(
+    "/settings/{key}",
+    response_model=SettingsMutationResponse,
+    response_model_exclude_none=True,
+    responses=_SETTINGS_KEY_ERROR_RESPONSES,
+)
 async def update_single_setting(key: str, payload: SettingsValueRequest):
     """更新单个设置（由浏览器 localStorage 管理）"""
     try:
@@ -160,7 +189,12 @@ async def get_settings_schema():
     }
 
 
-@router.get("/ui-config", response_model=UIConfigResponse, response_model_exclude_none=True)
+@router.get(
+    "/ui-config",
+    response_model=UIConfigResponse,
+    response_model_exclude_none=True,
+    responses=_SETTINGS_ERROR_RESPONSES,
+)
 async def get_ui_config():
     """获取 UI 配置（从 settings.ini）"""
     try:
@@ -198,7 +232,12 @@ async def get_ui_config():
         return error_response("[GET /ui-config] 读取UI配置异常", exc=e, _logger=logger)
 
 
-@router.post("/ui-config", response_model=UIConfigMutationResponse, response_model_exclude_none=True)
+@router.post(
+    "/ui-config",
+    response_model=UIConfigMutationResponse,
+    response_model_exclude_none=True,
+    responses=_SETTINGS_ERROR_RESPONSES,
+)
 async def update_ui_config(payload: UIConfigRequest):
     """更新 UI 配置（写入 settings.ini）"""
     try:
@@ -247,7 +286,12 @@ async def update_ui_config(payload: UIConfigRequest):
         return error_response("[POST /ui-config] 保存UI配置异常", exc=e, _logger=logger)
 
 
-@router.get("/diagnostic/instance-status", response_model=DiagnosticInstanceStatusResponse, response_model_exclude_none=True)
+@router.get(
+    "/diagnostic/instance-status",
+    response_model=DiagnosticInstanceStatusResponse,
+    response_model_exclude_none=True,
+    responses=_SETTINGS_ERROR_RESPONSES,
+)
 async def diagnostic_instance_status():
     """诊断主服务实例锁和端口状态。"""
     try:
@@ -270,7 +314,12 @@ async def diagnostic_instance_status():
         return error_response("[GET /diagnostic/instance-status] 诊断异常", exc=e, _logger=logger)
 
 
-@router.get("/diagnostic/ytdlp", response_model=DiagnosticYtDlpResponse, response_model_exclude_none=True)
+@router.get(
+    "/diagnostic/ytdlp",
+    response_model=DiagnosticYtDlpResponse,
+    response_model_exclude_none=True,
+    responses=_SETTINGS_ERROR_RESPONSES,
+)
 async def diagnostic_ytdlp(player: MusicPlayer = Depends(get_player)):
     """诊断 yt-dlp 配置状态（用于排查网络歌曲播放问题）"""
     try:
