@@ -1,10 +1,10 @@
 # Browser Regression Validation
 
-Use this prompt after changing playback, browser controls, status synchronization, KTV behavior, request tracing, or queue refresh logic.
+Use this prompt after changing playback, browser controls, status synchronization, KTV behavior, request tracing, queue refresh logic, or room-aware routing and recovery.
 
 ## Goal
 
-Validate that the change did not regress trusted browser controls or trusted resume behavior, then summarize the result against the repository baseline.
+Validate that the change did not regress trusted browser controls, trusted resume behavior, or room-scoped recovery and isolation, then summarize the result against the repository baseline.
 
 ## Workflow
 
@@ -15,23 +15,35 @@ Validate that the change did not regress trusted browser controls or trusted res
    - KTV or YouTube playback coordination
    - request-source tracing
    - playlist refresh and `playlist_updated` behavior
-2. If the change touches any of those areas, run the browser regression workflow:
+   - room routing, room bootstrap, room recovery, or WebSocket room scoping
+2. If the change touches trusted controls, resume, KTV, request tracing, or queue refresh behavior, run the base browser regression workflow:
 
 ```powershell
 py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --output logs/browser-control-regression.json
 ```
 
-3. Treat this as the passing baseline:
+3. If the change touches room routing, room bootstrap, room recovery, or default-page isolation, run the room suite instead of the base-only flow:
+
+```powershell
+py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --include-room-suite --output logs/browser-control-regression-room.json
+```
+
+4. Treat this as the passing baseline:
    - top-level `summary.passed = true`
    - `checks.controlSuite = true`
    - `checks.trustedResumeSuite = true`
-4. If the regression fails, inspect and summarize the most relevant evidence before proposing code changes:
+   - `checks.roomSuite = true` when `--include-room-suite` is used
+5. If the regression fails, inspect and summarize the most relevant evidence before proposing code changes:
    - `logs/browser-control-regression.json`
+   - `logs/browser-control-regression-room.json` when the room suite was used
    - request-source tracing expectations from `/memories/repo/request-source-tracing.md`
    - status merge and optimistic update expectations from `/memories/repo/player-status-sync.md`
    - queue refresh semantics from `/memories/repo/ws-playlist-updated.md`
-5. Report back with:
+   - room routing expectations from `/memories/repo/clubmusic-room-routing-strict.md`
+   - room recovery expectations from `/memories/repo/clubmusic-room-frontend-recovery.md`
+6. Report back with:
    - whether the regression was run
+   - whether the base suite or room suite was used
    - whether it passed or failed
    - the failing check names, if any
    - the most likely regression source
@@ -40,13 +52,15 @@ py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensur
 ## Response Format
 
 - `Regression run`: yes or no
+- `Suite`: base, room, or skipped
 - `Result`: pass or fail
-- `Baseline status`: whether `summary.passed`, `checks.controlSuite`, and `checks.trustedResumeSuite` all matched the expected baseline
+- `Baseline status`: whether `summary.passed`, `checks.controlSuite`, and `checks.trustedResumeSuite` matched the expected baseline, plus `checks.roomSuite` when applicable
 - `Relevant findings`: concise explanation of any failing or suspicious checks
 - `Next action`: either `none` or the specific fix / investigation to do next
 
 ## Notes
 
 - Prefer the command above over ad hoc browser testing so the result is reproducible.
+- The room suite already includes the base trusted-control and trusted-resume checks; do not run both unless you need separate artifacts.
 - If the task clearly does not touch playback or browser-control behavior, say so explicitly and skip the regression instead of running it blindly.
 - Do not claim the regression passed unless the output actually matches the expected baseline.

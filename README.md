@@ -99,12 +99,14 @@ http://localhost:9000
 
 ### 浏览器控制回归
 
-用于一次性验证 trusted `Next` / `Prev` 控件链路是否仍然正确，包括：
+用于一次性验证 trusted `Next` / `Prev`、trusted resume，以及 room-scoped 恢复链路是否仍然正确，包括：
 
 - 真实浏览器点击是否被识别为 trusted 事件
 - `/next` 与 `/prev` 是否各只发出一次
 - restricted YouTube 曲目是否正确退化为纯音频
 - 从 restricted 曲目点 `Prev` 后是否恢复到可嵌入视频模式
+- trusted `Play/Pause` 恢复与 stale local paused state 同步是否正常
+- 可选 room suite 是否正确验证房间歌单绑定、WebSocket room 作用域、房间删除后的自动恢复，以及默认页并行隔离
 
 安装浏览器回归依赖：
 
@@ -113,23 +115,39 @@ pip install ".[browser]"
 playwright install chromium
 ```
 
-命令行执行：
+基础回归：
 
 ```bash
-py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/
+py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --output logs/browser-control-regression.json
 ```
 
-如果你不想先手动启动服务，可让脚本自动拉起本地 Uvicorn：
+如需验证 room 路由、roomBot 自动恢复、WebSocket room 校验或默认页隔离，运行 room suite：
 
 ```bash
-py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server
+py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --include-room-suite --output logs/browser-control-regression-room.json
 ```
+
+如需复现特定房间问题，可固定 room ID：
+
+```bash
+py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --include-room-suite --room-id regression_room_debug --output logs/browser-control-regression-room.json
+```
+
+room suite 会先等待页面 app context 初始化，再开始断言房间状态；默认页如果始终未 ready，会按 isolation failure 处理，而不是静默跳过检查。
 
 VS Code 里可直接运行任务：
 
 ```text
 Run Task -> Browser Control Regression
+Run Task -> Browser Control Regression (Room)
 ```
+
+通过基线：
+
+- 顶层 `summary.passed = true`
+- `checks.controlSuite = true`
+- `checks.trustedResumeSuite = true`
+- 使用 `--include-room-suite` 时，`checks.roomSuite = true`
 
 查看当前主服务单实例状态：
 

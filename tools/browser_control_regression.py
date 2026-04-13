@@ -14,6 +14,7 @@ import json
 import subprocess
 import time
 from pathlib import Path
+from urllib.parse import parse_qsl, quote, urlencode
 from urllib.error import URLError
 from urllib.parse import urlparse, urlunparse
 from urllib.request import urlopen
@@ -43,6 +44,84 @@ DIAGNOSE_READY_JS = """
     && window.app?.diagnose?.prepareTrustedPlayPauseResumeStaleLocalStateFlow
     && window.app?.diagnose?.evaluateTrustedPlayPauseResumeStaleLocalStateFlow
 )
+"""
+
+APP_CONTEXT_READY_JS = """
+() => Boolean(
+    window.app?.initialized
+    && window.app?.modules?.api
+    && window.app?.modules?.player
+    && window.app?.modules?.playlistManager
+)
+"""
+
+ROOM_CONTEXT_SNAPSHOT_JS = """
+async ({ roomId, expectedPlaylistId }) => {
+    const app = window.app;
+    if (!app?.modules?.api || !app?.modules?.player || !app?.modules?.playlistManager || !app?.initialized) {
+        return {
+            ready: false,
+            reason: 'app-not-ready',
+            roomId: app?.modules?.api?.roomId || '',
+            expectedPlaylistId,
+        };
+    }
+
+    const roomStatus = await app.modules.api.getRoomStatus(roomId);
+    const playerStatus = app.modules.player.getStatus?.() || null;
+    const selectedPlaylistId = app.modules.playlistManager.getSelectedPlaylistId?.() || '';
+    const activeDefaultId = app.modules.playlistManager.getActiveDefaultId?.() || '';
+    const wsUrl = app.modules.player.ws?.url || '';
+    const currentPlaylistId = playerStatus?.current_playlist_id || '';
+    const expectedRoomQuery = `room_id=${encodeURIComponent(roomId)}`;
+
+    return {
+        ready: app.modules.api.roomId === roomId
+            && roomStatus?.status === 'ok'
+            && roomStatus?.bot_ready === true
+            && selectedPlaylistId === expectedPlaylistId
+            && activeDefaultId === expectedPlaylistId
+            && currentPlaylistId === expectedPlaylistId
+            && wsUrl.includes(expectedRoomQuery),
+        roomId: app.modules.api.roomId || '',
+        selectedPlaylistId,
+        activeDefaultId,
+        expectedPlaylistId,
+        currentPlaylistId,
+        wsUrl,
+        roomStatus,
+        playerStatus,
+    };
+}
+"""
+
+DEFAULT_PAGE_ISOLATION_SNAPSHOT_JS = """
+({ roomId }) => {
+    const app = window.app;
+    if (!app?.modules?.api || !app?.modules?.player || !app?.modules?.playlistManager || !app?.initialized) {
+        return {
+            ready: false,
+            reason: 'app-not-ready',
+            roomId: app?.modules?.api?.roomId || '',
+            targetRoomId: roomId,
+        };
+    }
+
+    const selectedPlaylistId = app.modules.playlistManager.getSelectedPlaylistId?.() || '';
+    const activeDefaultId = app.modules.playlistManager.getActiveDefaultId?.() || '';
+    const wsUrl = app.modules.player.ws?.url || '';
+    const playerStatus = app.modules.player.getStatus?.() || null;
+    const currentPlaylistId = playerStatus?.current_playlist_id || '';
+    return {
+        ready: true,
+        roomId: app.modules.api.roomId || '',
+        selectedPlaylistId,
+        activeDefaultId,
+        currentPlaylistId,
+        wsUrl,
+        targetRoomId: roomId,
+    };
+}
 """
 
 
@@ -104,6 +183,15 @@ def parse_args():
         action="store_true",
         help="Only print the final JSON payload.",
     )
+    parser.add_argument(
+        "--include-room-suite",
+        action="store_true",
+        help="Also validate room-scoped player binding and room auto-recovery.",
+    )
+    parser.add_argument(
+        "--room-id",
+        help="Optional fixed room_id for the room suite. Defaults to a generated regression room id.",
+    )
     return parser.parse_args()
 
 
@@ -118,6 +206,30 @@ def get_healthcheck_url(base_url):
     if parsed.path and parsed.path not in ("", "/"):
         path = f"{parsed.path.rstrip('/')}/status"
     return urlunparse((parsed.scheme, parsed.netloc, path, "", "", ""))
+
+
+def build_expected_room_playlist_id(room_id):
+    safe_id = room_id.replace("\\", "_").replace(".", "_").replace(":", "_")
+    return f"room_{safe_id}"
+
+
+def build_room_query_fragment(room_id):
+    return f"room_id={quote(room_id, safe='')}"
+
+
+def build_room_url(base_url, room_id):
+    parsed = urlparse(base_url)
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query["room_id"] = room_id
+    return urlunparse(parsed._replace(query=urlencode(query)))
+
+
+def build_room_context_payload(room_id):
+    return {
+        "roomId": room_id,
+        "expectedPlaylistId": build_expected_room_playlist_id(room_id),
+        "expectedRoomQuery": build_room_query_fragment(room_id),
+    }
 
 
 def is_server_ready(base_url, timeout_seconds=2):
@@ -211,6 +323,55 @@ def evaluate(page, expression, arg=None):
     return page.evaluate(expression, arg)
 
 
+def is_page_closed(page):
+    try:
+        return page.is_closed()
+    except Exception:
+        return False
+
+
+def capture_snapshot(page, expression, arg=None, *, reason):
+    try:
+        return evaluate(page, expression, arg)
+    except (PlaywrightTimeoutError, PlaywrightError) as error:
+        return {
+            "ready": False,
+            "reason": reason,
+            "error": str(error),
+            "pageClosed": is_page_closed(page),
+        }
+    except Exception as error:
+        return {
+            "ready": False,
+            "reason": reason,
+            "error": str(error),
+            "pageClosed": is_page_closed(page),
+        }
+
+
+def wait_for_app_context(page, *, timeout_ms=30000):
+    page.wait_for_load_state("domcontentloaded")
+    page.wait_for_function(APP_CONTEXT_READY_JS, timeout=timeout_ms)
+
+
+def get_room_context_snapshot(page, room_id):
+    return capture_snapshot(
+        page,
+        ROOM_CONTEXT_SNAPSHOT_JS,
+        build_room_context_payload(room_id),
+        reason="room-context-snapshot-failed",
+    )
+
+
+def get_default_page_isolation_snapshot(page, room_id):
+    return capture_snapshot(
+        page,
+        DEFAULT_PAGE_ISOLATION_SNAPSHOT_JS,
+        build_room_context_payload(room_id),
+        reason="default-page-isolation-snapshot-failed",
+    )
+
+
 def run_trusted_next(page, *, quiet=False):
     log("[browser-regression] preparing trusted next flow", quiet=quiet)
     prepared = evaluate(
@@ -263,6 +424,154 @@ def run_trusted_playpause_resume_stale_local_state(page, *, quiet=False):
     )
 
 
+def wait_for_room_context(page, room_id, *, timeout_ms=30000):
+    deadline = time.monotonic() + (timeout_ms / 1000)
+    last_snapshot = None
+
+    try:
+        wait_for_app_context(page, timeout_ms=timeout_ms)
+    except (PlaywrightTimeoutError, PlaywrightError) as error:
+        last_snapshot = get_room_context_snapshot(page, room_id)
+        last_snapshot.setdefault("error", str(error))
+        raise RuntimeError(f"Timed out waiting for room app context to become ready: {last_snapshot}") from error
+
+    while time.monotonic() < deadline:
+        last_snapshot = get_room_context_snapshot(page, room_id)
+
+        if last_snapshot.get("ready") is True:
+            return last_snapshot
+
+        if is_page_closed(page):
+            break
+
+        time.sleep(0.25)
+
+    raise RuntimeError(f"Timed out waiting for room context to become ready: {last_snapshot}")
+
+
+def get_default_page_snapshot(page, room_id, *, timeout_ms=5000):
+    try:
+        wait_for_app_context(page, timeout_ms=timeout_ms)
+    except (PlaywrightTimeoutError, PlaywrightError) as error:
+        snapshot = get_default_page_isolation_snapshot(page, room_id)
+        snapshot.setdefault("error", str(error))
+        return snapshot
+
+    return get_default_page_isolation_snapshot(page, room_id)
+
+
+def build_room_suite_checks(
+    room_id,
+    initial,
+    deleted,
+    refresh_probe,
+    recovered,
+    *,
+    expected_playlist_id,
+    expected_room_query,
+    isolation_result=None,
+):
+    checks = {
+        "roomContextPropagated": initial.get("roomId") == room_id and recovered.get("roomId") == room_id,
+        "roomBotReady": initial.get("roomStatus", {}).get("status") == "ok" and initial.get("roomStatus", {}).get("bot_ready") is True,
+        "selectedPlaylistBoundToRoom": initial.get("selectedPlaylistId") == expected_playlist_id,
+        "activeDefaultBoundToRoom": initial.get("activeDefaultId") == expected_playlist_id,
+        "playerStatusBoundToRoom": initial.get("currentPlaylistId") == expected_playlist_id,
+        "websocketScopedToRoom": expected_room_query in (initial.get("wsUrl") or ""),
+        "roomDeleteSucceeded": deleted.get("ok") is True,
+        "refreshProbeReturnedStatus": refresh_probe.get("ok") is True,
+        "roomRecovered": recovered.get("roomStatus", {}).get("status") == "ok" and recovered.get("roomStatus", {}).get("bot_ready") is True,
+        "recoveredStatusBoundToRoom": recovered.get("currentPlaylistId") == expected_playlist_id,
+    }
+    if isolation_result is not None:
+        isolation_ready = isolation_result.get("ready") is True
+        checks["defaultPageNotInRoom"] = isolation_ready and isolation_result.get("roomId") == ""
+        checks["defaultPagePlaylistNotLeaked"] = isolation_ready and isolation_result.get("selectedPlaylistId") != expected_playlist_id
+        checks["defaultPageWsNotScopedToRoom"] = isolation_ready and expected_room_query not in (isolation_result.get("wsUrl") or "")
+    return checks
+
+
+def run_room_suite(page, base_url, room_id, *, quiet=False, timeout_ms=30000, default_page=None):
+    log(f"[browser-regression] opening room page for {room_id}", quiet=quiet)
+    page.goto(build_room_url(base_url, room_id), wait_until="domcontentloaded")
+    initial = wait_for_room_context(page, room_id, timeout_ms=timeout_ms)
+    room_context = build_room_context_payload(room_id)
+
+    log(f"[browser-regression] forcing room recovery for {room_id}", quiet=quiet)
+    deleted = evaluate(
+        page,
+        """
+        async (targetRoomId) => {
+            const response = await fetch(`/room/${encodeURIComponent(targetRoomId)}`, { method: 'DELETE' });
+            let body = null;
+            try {
+                body = await response.json();
+            } catch (error) {
+                body = { parseError: String(error) };
+            }
+            return { ok: response.ok, status: response.status, body };
+        }
+        """,
+        room_id,
+    )
+
+    refresh_probe = evaluate(
+        page,
+        """
+        async () => {
+            try {
+                const status = await window.app.modules.player.refreshStatus('room regression recovery probe failed');
+                return { ok: true, status };
+            } catch (error) {
+                return {
+                    ok: false,
+                    message: error?.message || String(error),
+                    result: error?.result || null,
+                };
+            }
+        }
+        """,
+    )
+
+    recovered = wait_for_room_context(page, room_id, timeout_ms=timeout_ms)
+    expected_playlist_id = room_context["expectedPlaylistId"]
+    expected_room_query = room_context["expectedRoomQuery"]
+
+    # --- Parallel isolation: verify default page is NOT affected by room ---
+    isolation_result = None
+    if default_page is not None:
+        log(f"[browser-regression] checking parallel isolation (default vs room {room_id})", quiet=quiet)
+        isolation_result = get_default_page_snapshot(
+            default_page,
+            room_id,
+            timeout_ms=min(timeout_ms, 5000),
+        )
+
+    checks = build_room_suite_checks(
+        room_id,
+        initial,
+        deleted,
+        refresh_probe,
+        recovered,
+        expected_playlist_id=expected_playlist_id,
+        expected_room_query=expected_room_query,
+        isolation_result=isolation_result,
+    )
+
+    result = {
+        "roomId": room_id,
+        "roomUrl": build_room_url(base_url, room_id),
+        "initial": initial,
+        "delete": deleted,
+        "refreshProbe": refresh_probe,
+        "recovered": recovered,
+    }
+    if isolation_result is not None:
+        result["isolation"] = isolation_result
+    result["summary"] = summarize_checks(checks)
+    return result
+
+
 def summarize_checks(checks):
     failed_checks = [name for name, passed in checks.items() if not passed]
     return {
@@ -277,6 +586,7 @@ def build_suite_result(
     trusted_prev,
     trusted_playpause_resume,
     trusted_playpause_resume_stale_local_state,
+    room_suite=None,
 ):
     control_suite = {
         "trustedNext": trusted_next,
@@ -316,10 +626,14 @@ def build_suite_result(
         "trustedPlayPauseResume": trusted_playpause_resume,
         "trustedPlayPauseResumeStaleLocalState": trusted_playpause_resume_stale_local_state,
     }
-    result["summary"] = summarize_checks({
+    summary_checks = {
         "controlSuite": control_suite["summary"].get("passed") is True,
         "trustedResumeSuite": trusted_resume_suite["summary"].get("passed") is True,
-    })
+    }
+    if room_suite is not None:
+        result["roomSuite"] = room_suite
+        summary_checks["roomSuite"] = room_suite.get("summary", {}).get("passed") is True
+    result["summary"] = summarize_checks(summary_checks)
     return result
 
 
@@ -357,11 +671,29 @@ def main():
             trusted_prev = run_trusted_prev(page, quiet=args.quiet)
             trusted_playpause_resume = run_trusted_playpause_resume(page, quiet=args.quiet)
             trusted_playpause_resume_stale_local_state = run_trusted_playpause_resume_stale_local_state(page, quiet=args.quiet)
+            room_suite = None
+            if args.include_room_suite:
+                room_page = context.new_page()
+                try:
+                    room_page.set_default_timeout(args.timeout_ms)
+                    room_id = args.room_id or f"regression_room_{int(time.time())}"
+                    room_suite = run_room_suite(
+                        room_page,
+                        args.base_url,
+                        room_id,
+                        quiet=args.quiet,
+                        timeout_ms=args.timeout_ms,
+                        default_page=page,
+                    )
+                finally:
+                    if not is_page_closed(room_page):
+                        room_page.close()
             result = build_suite_result(
                 trusted_next,
                 trusted_prev,
                 trusted_playpause_resume,
                 trusted_playpause_resume_stale_local_state,
+                room_suite=room_suite,
             )
             result["baseUrl"] = args.base_url
             result["browser"] = args.browser

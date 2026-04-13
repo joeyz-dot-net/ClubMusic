@@ -269,6 +269,7 @@ python app.py
 | **Build** | `.\build_exe.bat` | 📦 Creates `dist/ClubMusic.exe` (local build only) |
 | **Deploy Remote** | `.\.vscode\deploy.ps1` | 🚀 Deploys exe to `\\B560\code\ClubMusic` (with backup) |
 | **Browser Control Regression** | `py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --output logs/browser-control-regression.json` | 🧪 Playwright regression for trusted next/prev and trusted resume flows |
+| **Browser Control Regression (Room)** | `py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --include-room-suite --output logs/browser-control-regression-room.json` | 🧪 Full regression including room-scoped player binding, recovery, and parallel isolation |
 | **Build & Deploy** | Sequential combo | 🔨➡️🚀 Builds then deploys (default task: `Ctrl+Shift+B`) |
 
 **Access**: `Ctrl+Shift+P` → "Run Task" → Select task name
@@ -284,14 +285,23 @@ py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensur
 
 Use this before and after changing trusted browser controls, KTV resume behavior, request tracing, or frontend/backend pause-state synchronization.
 
+**Room suite** (opt-in with `--include-room-suite`):
+```powershell
+py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --include-room-suite --output logs/browser-control-regression-room.json
+```
+Also run when changing room routing, `get_player_for_request()`, WebSocket room validation, or `roomBot.js` bootstrap. Validates: room context propagation, playlist binding, WS scoping, room delete + auto-recovery, and **parallel isolation** (default page state is unaffected by room page).
+Use `--room-id` when reproducing a specific room issue. The harness waits for app initialization before evaluating room state, normalizes expected room playlist IDs the same way as `RoomPlayer`, and treats an unready default page as an explicit isolation failure instead of silently skipping those checks.
+
 **Passing baseline**:
 - Top-level `summary.passed = true`
 - `checks.controlSuite = true`
 - `checks.trustedResumeSuite = true`
+- `checks.roomSuite = true` (only when `--include-room-suite`)
 
 **When it fails**:
 - Correlate browser traces and backend logs using the request-source headers described in `/memories/repo/request-source-tracing.md`
 - Re-check polling/WebSocket merge behavior in `/memories/repo/player-status-sync.md`
+- For room suite failures, check room routing rules in `/memories/repo/clubmusic-room-routing-strict.md` and recovery behavior in `/memories/repo/clubmusic-room-frontend-recovery.md`
 
 ### Build Windows Executable
 ```powershell
@@ -377,7 +387,7 @@ Key settings:
 | [static/js/api.js](../static/js/api.js) | Frontend API wrapper—**must mirror routers/*.py** |
 | [static/js/main.js](../static/js/main.js) | App initialization, state management, polling loop |
 | [static/js/i18n.js](../static/js/i18n.js) | Translations (zh/en/zh-TW)—add all languages for new strings |
-| [tools/browser_control_regression.py](../tools/browser_control_regression.py) | Regression harness for trusted browser control flows |
+| [tools/browser_control_regression.py](../tools/browser_control_regression.py) | Regression harness for trusted browser controls, room recovery, and default-page isolation |
 
 ## Common Mistakes & How to Avoid
 
