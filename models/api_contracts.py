@@ -15,6 +15,8 @@ async def _read_json_or_form_payload(request: Request) -> dict[str, Any]:
 
 
 class SongSnapshot(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     url: str | None = None
     title: str | None = None
     name: str | None = None
@@ -23,9 +25,6 @@ class SongSnapshot(BaseModel):
     thumbnail_url: str | None = None
     artist: str | None = None
     video_id: str | None = None
-
-    class Config:
-        extra = "allow"
 
 
 class MpvStateSnapshot(BaseModel):
@@ -79,6 +78,13 @@ class PlaySuccessResponse(BaseModel):
     current_index: int
 
 
+class DebugPipeCheckResponse(BaseModel):
+    pipe_param: str
+    pipe_name: str | None = None
+    is_pipe_player: bool
+    pipe_exists: bool
+
+
 class SkippedSongSnapshot(BaseModel):
     url: str | None = None
     title: str | None = None
@@ -100,6 +106,16 @@ class PlaybackControlErrorResponse(BaseModel):
     skipped_songs: list[SkippedSongSnapshot] | None = None
     room_id: str | None = None
     pcm_pipe: str | None = None
+
+
+class YoutubeExtractPlaylistResponse(BaseModel):
+    status: Literal["OK"]
+    videos: Any
+
+
+class PlayYoutubePlaylistResponse(BaseModel):
+    status: Literal["OK"]
+    added: int
 
 
 class PlayerStatusResponse(BaseModel):
@@ -153,15 +169,14 @@ class ErrorResponse(BaseModel):
 
 
 class HistoryEntrySnapshot(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     url: str | None = None
     title: str | None = None
     is_local: bool | None = None
     thumbnail_url: str | None = None
     ts: float | None = None
     type: str | None = None
-
-    class Config:
-        extra = "allow"
 
 
 class PlaybackHistoryResponse(BaseModel):
@@ -452,11 +467,10 @@ class UserSettingsResponse(BaseModel):
 
 
 class UserSettingsUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     theme: str | None = None
     language: str | None = None
-
-    class Config:
-        extra = "allow"
 
 
 class SettingsValueRequest(BaseModel):

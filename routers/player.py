@@ -27,9 +27,11 @@ from fastapi.responses import JSONResponse
 
 from models import MusicPlayer, Playlists, PlayHistory
 from models.api_contracts import (
+    DebugPipeCheckResponse,
     ErrorResponse,
     LoopModeResponse,
     PauseToggleResponse,
+    PlayYoutubePlaylistResponse,
     PlaybackAdvanceResponse,
     PlaybackControlErrorResponse,
     PitchShiftRequest,
@@ -40,6 +42,7 @@ from models.api_contracts import (
     SeekRequestForm,
     SeekResponse,
     ShuffleModeResponse,
+    YoutubeExtractPlaylistResponse,
 )
 from routers.dependencies import get_player_for_request, get_playlists, get_playback_history, get_player_lock
 from routers.state import (
@@ -251,7 +254,7 @@ async def play(
         return error_response("[/play] 播放异常", exc=e, _logger=logger)
 
 
-@router.get("/debug/pipe-check")
+@router.get("/debug/pipe-check", response_model=DebugPipeCheckResponse, response_model_exclude_none=True)
 async def debug_pipe_check(
     request: Request,
     player: MusicPlayer = Depends(get_player_for_request),
@@ -780,7 +783,12 @@ async def set_pitch_shift(
         return error_response("[/pitch] 设置音调异常", exc=e, _logger=logger)
 
 
-@router.post("/youtube_extract_playlist", responses=_PLAYER_YOUTUBE_ERROR_RESPONSES)
+@router.post(
+    "/youtube_extract_playlist",
+    response_model=YoutubeExtractPlaylistResponse,
+    response_model_exclude_none=True,
+    responses=_PLAYER_YOUTUBE_ERROR_RESPONSES,
+)
 async def youtube_extract_playlist(request: Request, player: MusicPlayer = Depends(get_player_for_request)):
     """提取YouTube播放列表"""
     try:
@@ -799,7 +807,12 @@ async def youtube_extract_playlist(request: Request, player: MusicPlayer = Depen
         return error_response("[/youtube_extract_playlist] 提取播放列表异常", exc=e, _logger=logger)
 
 
-@router.post("/play_youtube_playlist", responses=_PLAYER_YOUTUBE_ERROR_RESPONSES)
+@router.post(
+    "/play_youtube_playlist",
+    response_model=PlayYoutubePlaylistResponse,
+    response_model_exclude_none=True,
+    responses=_PLAYER_YOUTUBE_ERROR_RESPONSES,
+)
 async def play_youtube_playlist(
     request: Request,
     player: MusicPlayer = Depends(get_player_for_request),

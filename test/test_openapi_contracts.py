@@ -35,6 +35,7 @@ def test_openapi_core_contract_refs_are_stable():
     paths = schema["paths"]
 
     assert paths["/play"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/PlaySuccessResponse"
+    assert paths["/debug/pipe-check"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/DebugPipeCheckResponse"
     assert paths["/next"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/PlaybackAdvanceResponse"
     assert paths["/prev"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/PlaybackAdvanceResponse"
     assert paths["/status"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/PlayerStatusResponse"
@@ -44,6 +45,8 @@ def test_openapi_core_contract_refs_are_stable():
     assert paths["/volume"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/VolumeResponse"
     assert paths["/room/init"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/RoomInitResponse"
     assert paths["/diagnostic/ytdlp"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/DiagnosticYtDlpResponse"
+    assert paths["/youtube_extract_playlist"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/YoutubeExtractPlaylistResponse"
+    assert paths["/play_youtube_playlist"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/PlayYoutubePlaylistResponse"
 
 
 def test_openapi_settings_diagnostics_and_room_contract_refs_are_stable():

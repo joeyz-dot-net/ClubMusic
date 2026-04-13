@@ -9,12 +9,14 @@ import pytest
 from fastapi import HTTPException
 
 from models.api_contracts import (
+    DebugPipeCheckResponse,
     DiagnosticInstanceStatusResponse,
     ErrorResponse,
     HistoryAddRequest,
     HistoryDeleteRequest,
     LoopModeResponse,
     PauseToggleResponse,
+    PlayYoutubePlaylistResponse,
     PlaybackAdvanceResponse,
     PlaybackControlErrorResponse,
     PlaybackHistoryMergedResponse,
@@ -46,6 +48,7 @@ from models.api_contracts import (
     VolumeDefaultsResponse,
     VolumeRequestForm,
     VolumeResponse,
+    YoutubeExtractPlaylistResponse,
 )
 from models.api_contracts import PlaylistAddRequest, PlaylistNameRequest, SongSnapshot
 from models.player import MusicPlayer
@@ -325,6 +328,7 @@ def test_runtime_queue_add_broadcasts_playlist_updated(monkeypatch):
 
 def test_player_router_registers_core_response_models():
     assert _get_route(player_router.router, "/play", "POST").response_model is PlaySuccessResponse
+    assert _get_route(player_router.router, "/debug/pipe-check", "GET").response_model is DebugPipeCheckResponse
     assert _get_route(player_router.router, "/play_song", "POST").response_model is PlaySuccessResponse
     assert _get_route(player_router.router, "/next", "POST").response_model is PlaybackAdvanceResponse
     assert _get_route(player_router.router, "/prev", "POST").response_model is PlaybackAdvanceResponse
@@ -335,6 +339,8 @@ def test_player_router_registers_core_response_models():
     assert _get_route(player_router.router, "/loop", "POST").response_model is LoopModeResponse
     assert _get_route(player_router.router, "/shuffle", "POST").response_model is ShuffleModeResponse
     assert _get_route(player_router.router, "/pitch", "POST").response_model is PitchShiftResponse
+    assert _get_route(player_router.router, "/youtube_extract_playlist", "POST").response_model is YoutubeExtractPlaylistResponse
+    assert _get_route(player_router.router, "/play_youtube_playlist", "POST").response_model is PlayYoutubePlaylistResponse
 
 
 def test_playlist_search_settings_history_media_and_room_routes_register_response_models():
@@ -1039,6 +1045,51 @@ def test_play_youtube_playlist_rejects_empty_list():
     assert response.status_code == 400
     assert validated.error == "播放列表为空"
     assert payload == {"status": "ERROR", "error": "播放列表为空"}
+
+
+def test_debug_pipe_check_payload_matches_response_schema():
+    player = DummyPlayer()
+    player.pipe_name = r"\\.\pipe\mpv-pipe"
+    request = DummyRequest(query_params={"pipe": "room-alpha"})
+
+    result = asyncio.run(player_router.debug_pipe_check(request, player=player))
+    validated = DebugPipeCheckResponse(**result)
+
+    assert validated.pipe_param == "room-alpha"
+    assert validated.pipe_name == r"\\.\pipe\mpv-pipe"
+    assert validated.is_pipe_player is True
+    assert validated.pipe_exists is True
+
+
+def test_youtube_extract_playlist_success_payload_matches_response_schema(monkeypatch):
+    player = DummyPlayer()
+    request = DummyRequest(form_data={"url": "https://youtube.com/playlist?list=abc"})
+    extracted = {"status": "OK", "entries": [{"url": "https://youtu.be/1", "title": "Track 1"}]}
+
+    monkeypatch.setattr(player_router.StreamSong, "extract_playlist", staticmethod(lambda url, max_results=0: extracted))
+
+    result = asyncio.run(player_router.youtube_extract_playlist(request, player=player))
+    validated = YoutubeExtractPlaylistResponse(**result)
+
+    assert validated.status == "OK"
+    assert validated.videos["entries"][0]["title"] == "Track 1"
+
+
+def test_play_youtube_playlist_success_payload_matches_response_schema():
+    player = DummyPlayer(songs=[])
+    request = DummyRequest(json_data={
+        "videos": [
+            {"url": "https://youtu.be/1", "title": "Track 1", "duration": 12, "thumbnail_url": "thumb1"},
+            {"url": "https://youtu.be/2", "title": "Track 2", "duration": 13, "thumbnail_url": "thumb2"},
+        ]
+    })
+
+    result = asyncio.run(player_router.play_youtube_playlist(request, player=player, playlists=SimpleNamespace()))
+    validated = PlayYoutubePlaylistResponse(**result)
+
+    assert validated.status == "OK"
+    assert validated.added == 2
+    assert len(player.runtime_queue.songs) == 2
 
 
 def test_connection_manager_broadcasts_only_to_target_room():
