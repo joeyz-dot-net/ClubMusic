@@ -20,13 +20,32 @@ import configparser
 
 # 导入日志模块
 from models.logger import setup_logging, logger
-from startup_cleanup import cleanup_stale_mpv_processes, ensure_single_service_instance
+from startup_cleanup import cleanup_stale_mpv_processes, ensure_single_service_instance, get_service_instance_status
 
 
 def disable_uvicorn_access_logs():
     """禁用 uvicorn 的 HTTP 访问日志，但保留应用日志"""
     access_log = logging.getLogger("uvicorn.access")
     access_log.disabled = True
+
+
+def _supports_interactive_startup_prompts(stdin=None) -> bool:
+    target = stdin if stdin is not None else getattr(sys, "stdin", None)
+    return bool(target and hasattr(target, "isatty") and target.isatty())
+
+
+def _status_has_running_clubmusic_instance(status: dict) -> bool:
+    return bool(
+        status.get("existing_instance_summary")
+        and status.get("port_accepting")
+        and status.get("listening_is_clubmusic")
+    )
+
+
+def _report_existing_clubmusic_instance(status: dict):
+    print("\n[启动检查] 检测到已有 ClubMusic 实例正在运行，沿用现有实例:")
+    print(status["existing_instance_summary"])
+    print(f"访问地址: {status['expected_url']}")
 
 
 def get_mpv_audio_devices(mpv_path: str = "mpv") -> list:
@@ -385,17 +404,23 @@ def main():
     server_host = config.get("app", "server_host", fallback="0.0.0.0")
     server_port = config.getint("app", "server_port", fallback=80)
 
+    startup_prompts_enabled = _supports_interactive_startup_prompts()
+
     try:
         ensure_single_service_instance(
             server_host=server_host,
             server_port=server_port,
             logger=logger,
-            interactive=True,
-            prompt_for_takeover=True,
+            interactive=startup_prompts_enabled,
+            prompt_for_takeover=startup_prompts_enabled,
         )
     except RuntimeError as e:
+        status = get_service_instance_status(server_host, server_port)
+        if _status_has_running_clubmusic_instance(status):
+            _report_existing_clubmusic_instance(status)
+            return
         print(f"\n[启动检查] {e}")
-        return
+        raise SystemExit(1) from e
 
     # 禁用 uvicorn 访问日志
     disable_uvicorn_access_logs()
