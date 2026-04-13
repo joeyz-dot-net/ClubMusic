@@ -28,6 +28,27 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+_history_add_request_schema = HistoryAddRequest.model_json_schema()
+_history_delete_request_schema = HistoryDeleteRequest.model_json_schema()
+_history_add_openapi_extra = {
+    "requestBody": {
+        "required": True,
+        "content": {
+            "application/json": {"schema": _history_add_request_schema},
+            "multipart/form-data": {"schema": _history_add_request_schema},
+        },
+    }
+}
+_history_delete_openapi_extra = {
+    "requestBody": {
+        "required": True,
+        "content": {
+            "application/json": {"schema": _history_delete_request_schema},
+            "multipart/form-data": {"schema": _history_delete_request_schema},
+        },
+    }
+}
+
 
 @router.get("/playback_history", response_model=PlaybackHistoryResponse, response_model_exclude_none=True)
 async def get_playback_history(player: MusicPlayer = Depends(get_player_for_request)):
@@ -74,7 +95,12 @@ async def get_playback_history_merged(player: MusicPlayer = Depends(get_player_f
         return error_response("[/playback_history_merged] 获取合并历史异常", exc=e, _logger=logger)
 
 
-@router.post("/song_add_to_history", response_model=StatusMessageResponse, response_model_exclude_none=True)
+@router.post(
+    "/song_add_to_history",
+    response_model=StatusMessageResponse,
+    response_model_exclude_none=True,
+    openapi_extra=_history_add_openapi_extra,
+)
 async def song_add_to_history(
     payload: HistoryAddRequest = Depends(HistoryAddRequest.from_request),
     player: MusicPlayer = Depends(get_player_for_request),
@@ -105,7 +131,12 @@ async def song_add_to_history(
         return error_response("[/song_add_to_history] 添加播放历史异常", exc=e, _logger=logger)
 
 
-@router.post("/playback_history_delete", response_model=StatusMessageResponse, response_model_exclude_none=True)
+@router.post(
+    "/playback_history_delete",
+    response_model=StatusMessageResponse,
+    response_model_exclude_none=True,
+    openapi_extra=_history_delete_openapi_extra,
+)
 async def delete_playback_history(
     payload: HistoryDeleteRequest = Depends(HistoryDeleteRequest.from_request),
     player: MusicPlayer = Depends(get_player_for_request),

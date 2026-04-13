@@ -454,3 +454,16 @@ class UIConfigMutationResponse(BaseModel):
 class DiagnosticInstanceStatusResponse(BaseModel):
     status: Literal["OK"]
     data: dict[str, Any]
+
+
+class DiagnosticYtDlpResponse(BaseModel):
+    status: Literal["OK"]
+    yt_dlp_path: str
+    exists: bool
+    executable: bool
+    mpv_running: bool
+    mpv_cmd: str | None = None
+    env_yt_dlp_path: str
+    version: str | None = None
+    working: bool | None = None
+    test_error: str | None = None

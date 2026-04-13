@@ -23,6 +23,7 @@ from fastapi.responses import JSONResponse
 
 from models.api_contracts import (
     DiagnosticInstanceStatusResponse,
+    DiagnosticYtDlpResponse,
     SettingsMutationResponse,
     SettingsSchemaResponse,
     SettingsValueRequest,
@@ -269,7 +270,7 @@ async def diagnostic_instance_status():
         return error_response("[GET /diagnostic/instance-status] 诊断异常", exc=e, _logger=logger)
 
 
-@router.get("/diagnostic/ytdlp")
+@router.get("/diagnostic/ytdlp", response_model=DiagnosticYtDlpResponse, response_model_exclude_none=True)
 async def diagnostic_ytdlp(player: MusicPlayer = Depends(get_player)):
     """诊断 yt-dlp 配置状态（用于排查网络歌曲播放问题）"""
     try:

@@ -100,7 +100,17 @@ def _extract_embedded_cover_bytes(file_path: str) -> bytes:
 
 # ==================== 路由 ====================
 
-@router.get("/static/images/preview.png")
+@router.get(
+    "/static/images/preview.png",
+    responses={
+        200: {
+            "description": "Preview placeholder image",
+            "content": {
+                "image/png": {},
+            },
+        }
+    },
+)
 async def get_preview_image():
     """获取预览图片（优先程序运行目录，回退到 static 目录）"""
     local_preview = os.path.join(os.getcwd(), "preview.png")
@@ -114,7 +124,19 @@ async def get_preview_image():
     raise HTTPException(status_code=404, detail="Preview image not found")
 
 
-@router.get("/cover/{file_path:path}")
+@router.get(
+    "/cover/{file_path:path}",
+    responses={
+        200: {
+            "description": "Embedded or directory cover image",
+            "content": {
+                "image/jpeg": {},
+                "image/png": {},
+                "image/webp": {},
+            },
+        }
+    },
+)
 async def get_cover(file_path: str, player: MusicPlayer = Depends(get_player_for_request)):
     """获取本地歌曲或目录的封面
 
@@ -181,7 +203,19 @@ async def get_cover(file_path: str, player: MusicPlayer = Depends(get_player_for
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/video_proxy")
+@router.get(
+    "/video_proxy",
+    responses={
+        200: {
+            "description": "Proxy HLS manifest or video segment",
+            "content": {
+                "application/vnd.apple.mpegurl": {},
+                "video/mp2t": {},
+                "video/mp4": {},
+            },
+        }
+    },
+)
 async def video_proxy(url: str, request: Request):
     """代理YouTube视频流，绕过CORS限制"""
     logger.info(f"[KTV] 📥 代理请求: {url[:200]}...")
