@@ -79,6 +79,29 @@ class PlaySuccessResponse(BaseModel):
     current_index: int
 
 
+class SkippedSongSnapshot(BaseModel):
+    url: str | None = None
+    title: str | None = None
+
+
+class PlaybackAdvanceResponse(BaseModel):
+    status: Literal["OK", "EMPTY"]
+    message: str | None = None
+    current: SongSnapshot | None = None
+    current_index: int | None = None
+    skipped_songs: list[SkippedSongSnapshot] | None = None
+
+
+class PlaybackControlErrorResponse(BaseModel):
+    status: Literal["ERROR"]
+    error: str
+    current: SongSnapshot | None = None
+    current_index: int | None = None
+    skipped_songs: list[SkippedSongSnapshot] | None = None
+    room_id: str | None = None
+    pcm_pipe: str | None = None
+
+
 class PlayerStatusResponse(BaseModel):
     status: Literal["OK"]
     current_meta: SongSnapshot = Field(default_factory=SongSnapshot)

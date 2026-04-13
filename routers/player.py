@@ -30,6 +30,8 @@ from models.api_contracts import (
     ErrorResponse,
     LoopModeResponse,
     PauseToggleResponse,
+    PlaybackAdvanceResponse,
+    PlaybackControlErrorResponse,
     PitchShiftRequest,
     PitchShiftResponse,
     PlayerStatusResponse,
@@ -64,6 +66,17 @@ _PLAYER_PITCH_ERROR_RESPONSES = {
 _PLAYER_YOUTUBE_ERROR_RESPONSES = {
     400: {"model": ErrorResponse, "description": "Invalid YouTube request"},
     500: {"model": ErrorResponse, "description": "Unexpected player error"},
+}
+_PLAY_ROUTE_ERROR_RESPONSES = {
+    400: {"model": PlaybackControlErrorResponse, "description": "Invalid play request"},
+    409: {"model": PlaybackControlErrorResponse, "description": "Room output is not ready"},
+    500: {"model": PlaybackControlErrorResponse, "description": "Playback failed"},
+}
+_PLAYER_TRANSITION_ERROR_RESPONSES = {
+    400: {"model": PlaybackControlErrorResponse, "description": "Invalid transition request"},
+    404: {"model": PlaybackControlErrorResponse, "description": "History entry not found"},
+    409: {"model": PlaybackControlErrorResponse, "description": "Room output is not ready"},
+    500: {"model": PlaybackControlErrorResponse, "description": "Transition failed"},
 }
 
 
@@ -138,7 +151,12 @@ def _describe_request_source(request: Request) -> str:
 
 # ==================== 路由 ====================
 
-@router.post("/play", response_model=PlaySuccessResponse, response_model_exclude_none=True)
+@router.post(
+    "/play",
+    response_model=PlaySuccessResponse,
+    response_model_exclude_none=True,
+    responses=_PLAY_ROUTE_ERROR_RESPONSES,
+)
 async def play(
     request: Request,
     payload: PlayRequestForm = Depends(PlayRequestForm.as_form),
@@ -261,7 +279,12 @@ async def play_song(
     return await play(request, payload, player, playlists, playback_history, player_lock)
 
 
-@router.post("/next")
+@router.post(
+    "/next",
+    response_model=PlaybackAdvanceResponse,
+    response_model_exclude_none=True,
+    responses=_PLAYER_TRANSITION_ERROR_RESPONSES,
+)
 async def next_track(
     request: Request,
     player: MusicPlayer = Depends(get_player_for_request),
@@ -419,7 +442,12 @@ async def next_track(
         return error_response("[/next] 切换下一首异常", exc=e, _logger=logger)
 
 
-@router.post("/prev")
+@router.post(
+    "/prev",
+    response_model=PlaybackAdvanceResponse,
+    response_model_exclude_none=True,
+    responses=_PLAYER_TRANSITION_ERROR_RESPONSES,
+)
 async def prev_track(
     request: Request,
     player: MusicPlayer = Depends(get_player_for_request),

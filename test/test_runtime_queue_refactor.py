@@ -15,6 +15,8 @@ from models.api_contracts import (
     HistoryDeleteRequest,
     LoopModeResponse,
     PauseToggleResponse,
+    PlaybackAdvanceResponse,
+    PlaybackControlErrorResponse,
     PlaybackHistoryMergedResponse,
     PlaybackHistoryResponse,
     PitchShiftResponse,
@@ -61,9 +63,12 @@ from routers import websocket as websocket_router
 
 
 class DummyRequest:
-    def __init__(self, json_data=None, form_data=None):
+    def __init__(self, json_data=None, form_data=None, query_params=None, headers=None, client=None):
         self._json_data = json_data or {}
         self._form_data = form_data or {}
+        self.query_params = query_params or {}
+        self.headers = headers or {}
+        self.client = client
 
     async def json(self):
         return self._json_data
@@ -102,6 +107,7 @@ class DummyPlayer:
         self.pitch_shift = 0
         self._lock = threading.RLock()
         self.mpv_cmd = None
+        self.pipe_name = r"\\.\pipe\mpv-pipe"
         self.pipe_ready = True
         self.mpv_state = {
             "pause": False,
@@ -138,6 +144,21 @@ class DummyPlayer:
     def ensure_mpv(self):
         return True
 
+    def is_room_output_ready(self):
+        return True
+
+    def reset_pitch_shift(self):
+        self.pitch_shift = 0
+
+    def toggle_loop_mode(self):
+        self.loop_mode = (self.loop_mode + 1) % 3
+
+    def toggle_shuffle_mode(self):
+        self.shuffle_mode = not self.shuffle_mode
+
+    def set_pitch_shift(self, semitones):
+        self.pitch_shift = semitones
+
     def play(self, song, **_kwargs):
         self.current_meta = song.to_dict()
         return True
@@ -164,6 +185,9 @@ class DummyRoomPlayer(DummyPlayer):
         self.pipe_ready = True
         self.mpv_process = SimpleNamespace(poll=lambda: None)
         return True
+
+    def is_room_output_ready(self):
+        return self.pipe_ready
 
     def destroy_room_player(self):
         self.destroyed = True
@@ -302,6 +326,8 @@ def test_runtime_queue_add_broadcasts_playlist_updated(monkeypatch):
 def test_player_router_registers_core_response_models():
     assert _get_route(player_router.router, "/play", "POST").response_model is PlaySuccessResponse
     assert _get_route(player_router.router, "/play_song", "POST").response_model is PlaySuccessResponse
+    assert _get_route(player_router.router, "/next", "POST").response_model is PlaybackAdvanceResponse
+    assert _get_route(player_router.router, "/prev", "POST").response_model is PlaybackAdvanceResponse
     assert _get_route(player_router.router, "/status", "GET").response_model is PlayerStatusResponse
     assert _get_route(player_router.router, "/pause", "POST").response_model is PauseToggleResponse
     assert _get_route(player_router.router, "/toggle_pause", "POST").response_model is PauseToggleResponse
@@ -862,6 +888,91 @@ def test_set_volume_rejects_invalid_value():
     assert response.status_code == 400
     assert validated.error == "无效的音量值: loud"
     assert payload == {"status": "ERROR", "error": "无效的音量值: loud"}
+
+
+def test_play_rejects_blank_url():
+    player = DummyPlayer()
+    request = DummyRequest(headers={}, query_params={})
+
+    response = asyncio.run(
+        player_router.play(
+            request,
+            player_router.PlayRequestForm(url="", title="", type="local", stream_format="mp3", duration=0),
+            player,
+            SimpleNamespace(),
+            DummyHistory([]),
+            player._lock,
+        )
+    )
+    payload = json.loads(response.body)
+    validated = PlaybackControlErrorResponse(**payload)
+
+    assert response.status_code == 400
+    assert validated.error == "URL不能为空"
+    assert payload == {"status": "ERROR", "error": "URL不能为空"}
+
+
+def test_next_track_empty_payload_matches_response_schema():
+    player = DummyPlayer(songs=[])
+    request = DummyRequest(headers={}, query_params={})
+
+    result = asyncio.run(player_router.next_track(request, player, None, DummyHistory([]), player._lock))
+    validated = PlaybackAdvanceResponse(**result)
+
+    assert validated.status == "EMPTY"
+    assert validated.message == "队列为空"
+    assert result == {"status": "EMPTY", "message": "队列为空"}
+
+
+def test_next_track_returns_room_output_not_ready_error_shape():
+    player = DummyRoomPlayer("room-blocked")
+    request = DummyRequest(headers={}, query_params={})
+
+    response = asyncio.run(player_router.next_track(request, player, None, DummyHistory([]), player._lock))
+    payload = json.loads(response.body)
+    validated = PlaybackControlErrorResponse(**payload)
+
+    assert response.status_code == 409
+    assert validated.error == "房间音频输出未就绪，请先连接 ClubVoice"
+    assert validated.room_id == "room-blocked"
+    assert validated.pcm_pipe == player._pcm_pipe_name
+
+
+def test_prev_track_empty_payload_matches_response_schema():
+    player = DummyPlayer(
+        songs=[{"url": "song-c.mp3", "title": "Song C", "type": "local"}],
+        current_meta={"url": "song-c.mp3", "title": "Song C", "type": "local"},
+        current_index=0,
+    )
+    history = DummyHistory([
+        {"url": "song-c.mp3", "title": "Song C", "type": "local"},
+    ])
+
+    response = asyncio.run(player_router.prev_track(None, player, None, history, player._lock))
+    payload = json.loads(response.body)
+    validated = PlaybackAdvanceResponse(**payload)
+
+    assert response.status_code == 200
+    assert validated.status == "EMPTY"
+    assert validated.message == "播放历史中没有上一首"
+
+
+def test_prev_track_rejects_song_missing_from_history():
+    player = DummyPlayer(
+        songs=[{"url": "song-x.mp3", "title": "Song X", "type": "local"}],
+        current_meta={"url": "song-x.mp3", "title": "Song X", "type": "local"},
+        current_index=0,
+    )
+    history = DummyHistory([
+        {"url": "other.mp3", "title": "Other", "type": "local"},
+    ])
+
+    response = asyncio.run(player_router.prev_track(None, player, None, history, player._lock))
+    payload = json.loads(response.body)
+    validated = PlaybackControlErrorResponse(**payload)
+
+    assert response.status_code == 404
+    assert validated.error == "当前歌曲不在播放历史中"
 
 
 def test_search_song_rejects_blank_query():

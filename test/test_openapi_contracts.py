@@ -35,6 +35,8 @@ def test_openapi_core_contract_refs_are_stable():
     paths = schema["paths"]
 
     assert paths["/play"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/PlaySuccessResponse"
+    assert paths["/next"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/PlaybackAdvanceResponse"
+    assert paths["/prev"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/PlaybackAdvanceResponse"
     assert paths["/status"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/PlayerStatusResponse"
     assert paths["/playlists"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/PlaylistsListResponse"
     assert paths["/search_song"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/SearchSongResponse"
@@ -65,6 +67,9 @@ def test_openapi_error_contract_refs_are_stable():
     schema = build_openapi_schema()
     paths = schema["paths"]
 
+    assert paths["/play"]["post"]["responses"]["409"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/PlaybackControlErrorResponse"
+    assert paths["/next"]["post"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/PlaybackControlErrorResponse"
+    assert paths["/prev"]["post"]["responses"]["404"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/PlaybackControlErrorResponse"
     assert paths["/pause"]["post"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/ErrorResponse"
     assert paths["/seek"]["post"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/ErrorResponse"
     assert paths["/loop"]["post"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/ErrorResponse"
