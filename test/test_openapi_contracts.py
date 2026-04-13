@@ -1,3 +1,6 @@
+import re
+from pathlib import Path
+
 from fastapi import FastAPI
 
 from routers import history as history_router
@@ -8,6 +11,62 @@ from routers import room as room_router
 from routers import search as search_router
 from routers import settings as settings_router
 from routers import websocket as websocket_router
+
+
+_API_JS_PATH = Path(__file__).resolve().parents[1] / "static" / "js" / "api.js"
+_FRONTEND_DIRECT_API_CALL_PATTERN = re.compile(
+    r"this\.(get|post|postForm|put|delete)\(\s*([`'\"])(/.*?)(?<!\\)\2",
+    re.DOTALL,
+)
+_FRONTEND_PLAYLIST_ROUTE_PATTERN = re.compile(
+    r"playlistId\s*\?\s*`/playlist\?playlist_id=\$\{[^}]+}`\s*:\s*['\"]/playlist['\"]"
+)
+_FORM_CONTENT_TYPES = {"multipart/form-data", "application/x-www-form-urlencoded"}
+
+
+def _normalize_contract_path(path: str) -> str:
+    normalized = path.split("?", 1)[0]
+    normalized = re.sub(r"\$\{[^}]+}", "{param}", normalized)
+    normalized = re.sub(r"\{[^}]+}", "{param}", normalized)
+    return normalized
+
+
+def _extract_frontend_api_calls() -> set[tuple[str, str, str]]:
+    source = _API_JS_PATH.read_text(encoding="utf-8")
+    calls: set[tuple[str, str, str]] = set()
+
+    for method_name, _delimiter, endpoint in _FRONTEND_DIRECT_API_CALL_PATTERN.findall(source):
+        http_method = "POST" if method_name == "postForm" else method_name.upper()
+        calls.add((method_name, http_method, _normalize_contract_path(endpoint)))
+
+    if _FRONTEND_PLAYLIST_ROUTE_PATTERN.search(source):
+        calls.add(("get", "GET", "/playlist"))
+
+    return calls
+
+
+def _extract_frontend_api_contracts() -> set[tuple[str, str]]:
+    return {
+        (http_method, path)
+        for _helper_name, http_method, path in _extract_frontend_api_calls()
+    }
+
+
+def _extract_backend_api_operations(schema: dict) -> dict[tuple[str, str], dict]:
+    operations: dict[tuple[str, str], dict] = {}
+
+    for path, path_item in schema["paths"].items():
+        normalized_path = _normalize_contract_path(path)
+        for method_name in ("get", "post", "put", "delete"):
+            operation = path_item.get(method_name)
+            if operation:
+                operations[(method_name.upper(), normalized_path)] = operation
+
+    return operations
+
+
+def _extract_backend_api_contracts(schema: dict) -> set[tuple[str, str]]:
+    return set(_extract_backend_api_operations(schema))
 
 
 def build_openapi_schema():
@@ -197,3 +256,60 @@ def test_websocket_route_is_not_emitted_in_http_openapi_schema():
     schema = build_openapi_schema()
 
     assert "/ws" not in schema["paths"]
+
+
+def test_frontend_api_contracts_exist_in_openapi_schema():
+    schema = build_openapi_schema()
+    frontend_contracts = _extract_frontend_api_contracts()
+    backend_contracts = _extract_backend_api_contracts(schema)
+
+    assert {
+        ("POST", "/play"),
+        ("GET", "/playlist"),
+        ("POST", "/settings/{param}"),
+        ("GET", "/room/{param}/status"),
+        ("POST", "/playlists/{param}/add_next"),
+    }.issubset(frontend_contracts)
+
+    missing_contracts = sorted(frontend_contracts - backend_contracts)
+
+    assert missing_contracts == []
+
+
+def test_frontend_api_body_encodings_match_openapi_schema():
+    schema = build_openapi_schema()
+    backend_operations = _extract_backend_api_operations(schema)
+    frontend_calls = _extract_frontend_api_calls()
+
+    frontend_form_contracts = {
+        (http_method, path)
+        for helper_name, http_method, path in frontend_calls
+        if helper_name == "postForm"
+    }
+    assert {
+        ("POST", "/play"),
+        ("POST", "/volume"),
+        ("POST", "/seek"),
+        ("POST", "/playlist_remove"),
+        ("POST", "/search_youtube"),
+    }.issubset(frontend_form_contracts)
+
+    mismatched_form_routes = []
+    mismatched_json_routes = []
+
+    for helper_name, http_method, path in sorted(frontend_calls):
+        operation = backend_operations.get((http_method, path))
+        assert operation is not None, (http_method, path)
+
+        request_content = set(operation.get("requestBody", {}).get("content", {}))
+
+        if helper_name == "postForm":
+            if request_content and not (_FORM_CONTENT_TYPES & request_content):
+                mismatched_form_routes.append((http_method, path, sorted(request_content)))
+            continue
+
+        if helper_name in {"post", "put"} and request_content and "application/json" not in request_content:
+            mismatched_json_routes.append((http_method, path, sorted(request_content)))
+
+    assert mismatched_form_routes == []
+    assert mismatched_json_routes == []

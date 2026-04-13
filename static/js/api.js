@@ -338,7 +338,8 @@ export class MusicAPI {
     }
 
     async getVolume() {
-        return this.post('/volume', {});
+        const formData = new FormData();
+        return this.postForm('/volume', formData);
     }
 
     async getVolumeDefaults() {
