@@ -17,9 +17,6 @@ if sys.stdout.encoding != "utf-8":
 
 import uvicorn
 import configparser
-
-# 导入日志模块
-from models.logger import setup_logging, logger
 from startup_cleanup import cleanup_stale_mpv_processes, ensure_single_service_instance, get_service_instance_status
 
 
@@ -36,8 +33,7 @@ def _supports_interactive_startup_prompts(stdin=None) -> bool:
     if override in {"1", "true", "yes", "on"}:
         return True
 
-    target = stdin if stdin is not None else getattr(sys, "stdin", None)
-    return bool(target and hasattr(target, "isatty") and target.isatty())
+    return False
 
 
 def _status_has_running_clubmusic_instance(status: dict) -> bool:
@@ -393,19 +389,11 @@ def main():
     if sys.stdout.encoding != "utf-8":
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
-    # 导入日志模块
-    from models.logger import setup_logging, logger
-
     # 加载配置文件
     config = configparser.ConfigParser()
     config_file = Path("settings.ini")
     if config_file.exists():
         config.read(config_file, encoding="utf-8")
-
-    # 设置日志
-    setup_logging()
-
-    cleanup_stale_mpv_processes(logger=logger)
 
     server_host = config.get("app", "server_host", fallback="0.0.0.0")
     server_port = config.getint("app", "server_port", fallback=80)
@@ -416,7 +404,7 @@ def main():
         ensure_single_service_instance(
             server_host=server_host,
             server_port=server_port,
-            logger=logger,
+            logger=None,
             interactive=startup_prompts_enabled,
             prompt_for_takeover=startup_prompts_enabled,
         )
@@ -427,6 +415,14 @@ def main():
             return
         print(f"\n[启动检查] {e}")
         raise SystemExit(1) from e
+
+    # 仅在当前进程确认需要继续启动时，才加载重型模型/日志模块。
+    from models.logger import setup_logging, logger
+
+    # 设置日志
+    setup_logging()
+
+    cleanup_stale_mpv_processes(logger=logger)
 
     # 禁用 uvicorn 访问日志
     disable_uvicorn_access_logs()
