@@ -1,4 +1,5 @@
 import main as clubmusic_main
+import run as clubmusic_run
 
 
 class _FakeStdin:
@@ -37,3 +38,28 @@ def test_status_has_running_clubmusic_instance_requires_live_matching_listener()
 
     assert clubmusic_main._status_has_running_clubmusic_instance(active_status) is True
     assert clubmusic_main._status_has_running_clubmusic_instance(missing_listener_status) is False
+
+
+def test_run_cli_returns_zero_when_main_returns_normally(monkeypatch):
+    monkeypatch.setattr(clubmusic_run, 'main', lambda: None)
+
+    assert clubmusic_run.run_cli() == 0
+
+
+def test_run_cli_returns_system_exit_code(monkeypatch):
+    def raise_system_exit():
+        raise SystemExit(1)
+
+    monkeypatch.setattr(clubmusic_run, 'main', raise_system_exit)
+
+    assert clubmusic_run.run_cli() == 1
+
+
+def test_run_cli_returns_one_for_unexpected_error(monkeypatch):
+    def raise_runtime_error():
+        raise RuntimeError('boom')
+
+    monkeypatch.setattr(clubmusic_run, 'main', raise_runtime_error)
+    monkeypatch.setattr(clubmusic_run.traceback, 'print_exc', lambda: None)
+
+    assert clubmusic_run.run_cli() == 1

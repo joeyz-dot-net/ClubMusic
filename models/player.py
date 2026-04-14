@@ -767,6 +767,33 @@ class MusicPlayer:
                 self.config["MPV_CMD"] = self.mpv_cmd
             self._extract_pipe_name_from_cmd()
 
+    def _resolve_runtime_audio_device(self) -> str:
+        """返回仍然可用的运行时音频设备覆盖值。"""
+        runtime_audio_device = os.environ.get("MPV_AUDIO_DEVICE", "").strip()
+        if not runtime_audio_device:
+            return ""
+
+        devices = self._list_available_audio_devices()
+        if devices and runtime_audio_device not in devices:
+            logger.warning(
+                f"[MPV 配置] 运行时音频设备已不可用，忽略环境变量覆盖: {runtime_audio_device}"
+            )
+            os.environ.pop("MPV_AUDIO_DEVICE", None)
+            return ""
+
+        return runtime_audio_device
+
+    def _build_effective_mpv_launch_cmd(self, mpv_cmd: str | None = None) -> tuple[str, str]:
+        """构建最终 MPV 启动命令，并应用运行时音频设备覆盖。"""
+        effective_cmd = (mpv_cmd if mpv_cmd is not None else self.mpv_cmd) or ""
+        runtime_audio_device = self._resolve_runtime_audio_device()
+
+        if runtime_audio_device:
+            effective_cmd = MusicPlayer._strip_audio_device_arg(effective_cmd)
+            effective_cmd = effective_cmd.strip() + f" --audio-device={runtime_audio_device}"
+
+        return effective_cmd.strip(), runtime_audio_device
+
     def is_room_output_ready(self) -> bool:
         """RoomPlayer 的 PCM 接收端是否已就绪。"""
         if not hasattr(self, '_room_id'):
@@ -1526,7 +1553,6 @@ class MusicPlayer:
         except Exception as e:
             logger.debug(f"清理 mpv 进程时的异常（可忽略）: {e}")
 
-        logger.info(f"尝试启动 mpv: {self.mpv_cmd}")
         try:
             # 主程序目录下的 bin 子目录中查找 yt-dlp
             app_dir = MusicPlayer._get_app_dir()
@@ -1538,22 +1564,8 @@ class MusicPlayer:
                 logger.info(f"在主程序目录 {app_dir}\\bin 找到 yt-dlp: {bin_yt_dlp}")
             
             # 构建完整的启动命令
-            mpv_launch_cmd = self.mpv_cmd
-            
-            # 【新增】检查环境变量中是否有运行时选择的音频设备
-            runtime_audio_device = os.environ.get("MPV_AUDIO_DEVICE", "")
+            mpv_launch_cmd, runtime_audio_device = self._build_effective_mpv_launch_cmd()
             if runtime_audio_device:
-                devices = self._list_available_audio_devices()
-                if devices and runtime_audio_device not in devices:
-                    logger.warning(
-                        f"[MPV 配置] 运行时音频设备已不可用，忽略环境变量覆盖: {runtime_audio_device}"
-                    )
-                    os.environ.pop("MPV_AUDIO_DEVICE", None)
-                    runtime_audio_device = ""
-            if runtime_audio_device:
-                # 移除现有的 --audio-device 参数
-                mpv_launch_cmd = re.sub(r'\s*--audio-device=[^\s]+', '', mpv_launch_cmd)
-                mpv_launch_cmd = mpv_launch_cmd.strip() + f" --audio-device={runtime_audio_device}"
                 logger.info(f"使用运行时选择的音频设备: {runtime_audio_device}")
             
             # 确保启用 mpv 的 ytdl 集成
@@ -1569,6 +1581,8 @@ class MusicPlayer:
                 logger.info(f"配置 MPV 使用 yt-dlp (绝对路径+环境变量): {abs_yt_dlp_path}")
             else:
                 logger.info(f"未找到 yt-dlp，将使用系统 PATH")
+
+            logger.info(f"尝试启动 mpv: {mpv_launch_cmd}")
             
             # ✅ 显示完整的启动命令（多种格式）
             logger.info("=" * 120)
@@ -1654,7 +1668,7 @@ class MusicPlayer:
                 logger.info(f"✅ mpv进程已启动 (PID: {process.pid})")
             except Exception as e2:
                 logger.error(f"❌ 启动 MPV 失败: {e2}")
-                logger.error(f"请检查 MPV 路径配置: {self.mpv_cmd}")
+                logger.error(f"请检查 MPV 路径配置: {mpv_launch_cmd}")
                 raise
         except Exception as e:
             logger.error(f"启动 mpv 进程失败: {e}")
@@ -1714,14 +1728,7 @@ class MusicPlayer:
                     
                     # 显示当前 MPV 完整配置信息（包含运行时参数）
                     if self.mpv_cmd and not hasattr(self, '_room_id'):  # PipePlayer/RoomPlayer 跳过此诊断块
-                        runtime_audio_device = os.environ.get("MPV_AUDIO_DEVICE", "")
-                        mpv_display_cmd = self.mpv_cmd
-
-                        if runtime_audio_device:
-                            # 如果有运行时音频设备，显示完整命令
-                            import re
-                            mpv_display_cmd = re.sub(r'\s*--audio-device=[^\s]+', '', mpv_display_cmd)
-                            mpv_display_cmd = mpv_display_cmd.strip() + f" --audio-device={runtime_audio_device}"
+                        mpv_display_cmd, _runtime_audio_device = self._build_effective_mpv_launch_cmd()
 
                         logger.info(f"   🎵 MPV 完整命令: {mpv_display_cmd}")
                     
