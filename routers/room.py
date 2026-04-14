@@ -14,7 +14,6 @@ import time
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from models import MusicPlayer, PlayHistory
 from models.api_contracts import (
     RoomErrorResponse,
     RoomDestroyResponse,
@@ -23,6 +22,8 @@ from models.api_contracts import (
     RoomListResponse,
     RoomStatusResponse,
 )
+from models.player import MusicPlayer
+from models.playlist import PlayHistory
 from routers.state import (
     ROOM_PLAYERS, _room_players_lock, _creating_rooms,
     PLAYLISTS_MANAGER,

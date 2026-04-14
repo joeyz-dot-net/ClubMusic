@@ -14,7 +14,6 @@ import logging
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
-from models import MusicPlayer
 from models.api_contracts import (
     ErrorResponse,
     DirectorySongsRequest,
@@ -25,8 +24,10 @@ from models.api_contracts import (
     SearchYoutubeResponse,
     YouTubeSearchConfigResponse,
 )
+from models.player import MusicPlayer
+from models.song import StreamSong
 from routers.dependencies import get_player_for_request
-from routers.state import StreamSong, error_response
+from routers.state import error_response
 
 logger = logging.getLogger(__name__)
 

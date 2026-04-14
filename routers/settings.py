@@ -35,9 +35,9 @@ from models.api_contracts import (
     UserSettingsUpdateRequest,
     VersionResponse,
 )
+from models.player import MusicPlayer
 from routers.state import error_response
 from routers.dependencies import get_player
-from models import MusicPlayer
 from startup_cleanup import get_service_instance_status
 
 logger = logging.getLogger(__name__)

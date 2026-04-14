@@ -19,16 +19,9 @@ from fastapi.responses import JSONResponse
 logger = logging.getLogger(__name__)
 
 # ==================== 模型导入 ====================
-from models import (
-    Song,
-    LocalSong,
-    StreamSong,
-    Playlist,
-    LocalPlaylist,
-    MusicPlayer,
-    Playlists,
-)
-
+from models.player import MusicPlayer
+from models.playlist import PlayHistory
+from models.playlists import Playlists
 from models.settings import initialize_settings
 
 # ==================== 获取资源路径函数 ====================
@@ -283,7 +276,6 @@ ROOM_PLAYERS: Dict[str, MusicPlayer] = {}
 _room_players_lock = threading.Lock()
 
 # 房间独立播放历史（room_id → PlayHistory）
-from models import PlayHistory
 ROOM_HISTORIES: Dict[str, PlayHistory] = {}
 
 # 房间最后活跃时间（room_id → timestamp），用于空闲清理

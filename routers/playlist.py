@@ -32,7 +32,6 @@ import logging
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse, HTMLResponse
 
-from models import MusicPlayer, Playlists, PlayHistory
 from models.api_contracts import (
     ErrorResponse,
     FileTreeResponse,
@@ -52,7 +51,11 @@ from models.api_contracts import (
     PlaySuccessResponse,
     StatusMessageResponse,
 )
+from models.player import MusicPlayer
+from models.playlist import PlayHistory
 from models.playlists import sanitize_playlist_name
+from models.playlists import Playlists
+from models.song import Song, LocalSong, StreamSong
 from routers.dependencies import get_player_for_request, get_playlists, get_playback_history, get_player_lock
 from routers.state import (
     DEFAULT_PLAYLIST_ID,
@@ -61,7 +64,6 @@ from routers.state import (
     is_runtime_playlist_id,
     resolve_playlist_for_request,
     _broadcast_state, _get_resource_path,
-    Song, LocalSong, StreamSong,
     error_response,
 )
 

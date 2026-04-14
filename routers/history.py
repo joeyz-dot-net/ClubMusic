@@ -13,7 +13,6 @@ import logging
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
-from models import MusicPlayer
 from models.api_contracts import (
     ErrorResponse,
     HistoryAddRequest,
@@ -22,6 +21,7 @@ from models.api_contracts import (
     PlaybackHistoryResponse,
     StatusMessageResponse,
 )
+from models.player import MusicPlayer
 from routers.dependencies import get_player_for_request
 from routers.state import error_response
 

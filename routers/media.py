@@ -18,7 +18,6 @@ import logging
 from fastapi import APIRouter, Request, HTTPException, Depends
 from fastapi.responses import JSONResponse, FileResponse, Response
 
-from models import MusicPlayer
 from models.api_contracts import (
     ErrorResponse,
     RefreshVideoUrlResponse,
@@ -26,6 +25,7 @@ from models.api_contracts import (
     VolumeRequestForm,
     VolumeResponse,
 )
+from models.player import MusicPlayer
 from routers.dependencies import get_player_for_request
 from routers.state import _get_resource_path, error_response
 

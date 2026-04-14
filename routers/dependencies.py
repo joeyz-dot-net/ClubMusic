@@ -31,7 +31,9 @@ from routers.state import (
     ROOM_HISTORIES,
     touch_room_activity,
 )
-from models import MusicPlayer, Playlists, PlayHistory
+from models.player import MusicPlayer
+from models.playlist import PlayHistory
+from models.playlists import Playlists
 
 
 logger = logging.getLogger(__name__)

@@ -1,5 +1,11 @@
 import main as clubmusic_main
 import run as clubmusic_run
+from pathlib import Path
+import subprocess
+import sys
+
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class _FakeStdin:
@@ -8,6 +14,16 @@ class _FakeStdin:
 
     def isatty(self):
         return self._interactive
+
+
+def _run_inline_python(code: str):
+    return subprocess.run(
+        [sys.executable, '-c', code],
+        cwd=_REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
 
 def _active_instance_status():
@@ -128,3 +144,57 @@ def test_run_cli_returns_one_for_unexpected_error(monkeypatch):
     monkeypatch.setattr(clubmusic_run.traceback, 'print_exc', lambda: None)
 
     assert clubmusic_run.run_cli() == 1
+
+
+def test_import_models_package_is_silent():
+    result = _run_inline_python("import models; print('MODELS_IMPORTED')")
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == 'MODELS_IMPORTED'
+    assert result.stderr.strip() == ''
+
+
+def test_import_main_is_silent():
+    result = _run_inline_python("import main; print('MAIN_IMPORTED')")
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == 'MAIN_IMPORTED'
+    assert result.stderr.strip() == ''
+
+
+def test_import_run_is_silent():
+    result = _run_inline_python("import run; print('RUN_IMPORTED')")
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == 'RUN_IMPORTED'
+    assert result.stderr.strip() == ''
+
+
+def test_models_public_exports_match_lazy_export_map():
+    import models as clubmusic_models
+
+    assert sorted(clubmusic_models.__all__) == sorted(clubmusic_models._LAZY_EXPORTS)
+
+
+def test_models_player_uses_relative_imports_for_internal_model_dependencies():
+    source = (_REPO_ROOT / 'models' / 'player.py').read_text(encoding='utf-8')
+
+    assert 'from models import Song, LocalSong, StreamSong, Playlist, PlayHistory' not in source
+    assert 'from models import CurrentPlaylist' not in source
+    assert 'from models.song import StreamSong' not in source
+    assert 'from models.song import LocalSong' not in source
+
+
+def test_router_modules_use_direct_model_module_imports():
+    for path in (_REPO_ROOT / 'routers').rglob('*.py'):
+        source = path.read_text(encoding='utf-8')
+
+        assert 'from models import ' not in source, path.as_posix()
+
+
+def test_app_defers_stale_mpv_cleanup_until_direct_startup_path():
+    source = (_REPO_ROOT / 'app.py').read_text(encoding='utf-8')
+    pre_main_source, main_block = source.split('if __name__ == "__main__":', 1)
+
+    assert 'cleanup_stale_mpv_processes(logger=logger)' not in pre_main_source
+    assert 'cleanup_stale_mpv_processes(logger=logger)' in main_block

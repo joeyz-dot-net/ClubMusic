@@ -21,7 +21,9 @@ import configparser
 import subprocess
 import re
 import logging
-from models import Song, LocalSong, StreamSong, Playlist, PlayHistory
+from .playlist import CurrentPlaylist, PlayHistory
+from .playlists import Playlist
+from .song import LocalSong, Song, StreamSong
 
 logger = logging.getLogger(__name__)
 
@@ -300,7 +302,6 @@ class MusicPlayer:
         )
 
         # 播放队列
-        from models import CurrentPlaylist
         self.current_playlist = CurrentPlaylist()
         self.current_playlist_file = os.path.join(self.data_dir, "playlist.json")
         self._runtime_queue_id = "default"
@@ -1051,15 +1052,12 @@ class MusicPlayer:
                         self.current_playlist.from_dict(data)
                         logger.info(f"已加载播放列表: {self.current_playlist.size()} 首歌曲")
                     else:
-                        from models import CurrentPlaylist
                         self.current_playlist = CurrentPlaylist()
             else:
-                from models import CurrentPlaylist
                 self.current_playlist = CurrentPlaylist()
         except Exception as e:
             logger.error(f"加载播放列表失败: {e}")
             traceback.print_exc()
-            from models import CurrentPlaylist
             self.current_playlist = CurrentPlaylist()
 
     def save_current_playlist(self):
@@ -1267,10 +1265,8 @@ class MusicPlayer:
                         return
 
                     if song_type == "youtube" or (url and str(url).startswith("http")):
-                        from models.song import StreamSong
                         song = StreamSong(stream_url=url, title=title, duration=duration)
                     else:
-                        from models.song import LocalSong
                         song = LocalSong(file_path=url, title=title)
 
                     add_history_func = ext_history.add_to_history if ext_history else self.add_to_playback_history
@@ -1368,10 +1364,8 @@ class MusicPlayer:
                         logger.info(f"[自动播放] ▶️ 尝试播放下一首 ({attempt+1}/{MAX_SKIP}): {title}")
 
                         if song_type == "youtube" or (url and str(url).startswith("http")):
-                            from models.song import StreamSong
                             song = StreamSong(stream_url=url, title=title, duration=duration)
                         else:
-                            from models.song import LocalSong
                             song = LocalSong(file_path=url, title=title)
 
                         add_history_func = ext_history.add_to_history if ext_history else self.add_to_playback_history
@@ -2722,8 +2716,7 @@ class MusicPlayer:
                 if not url or (song_type == "local" and not url.startswith("http")):
                     return
 
-                from models.song import StreamSong
-                from models.url_cache import url_cache
+                from .url_cache import url_cache
 
                 tmp = StreamSong(stream_url=url, title="prefetch")
                 if not tmp.video_id:

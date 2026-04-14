@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
+import importlib
 import sys
-import os
 
 # 确保 stdout 使用 UTF-8 编码（Windows 兼容性）
 if sys.stdout and sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
@@ -10,39 +10,37 @@ if sys.stdout and sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8"
     except Exception:
         pass
 
-"""
-音乐播放器数据模型模块
-"""
-print("\n" + "="*50)
-print("初始化 播放器模块...")
-print("="*50 + "\n")
-print("[Models] 加载 Logger 模块...", end=" ", flush=True)
-from .logger import logger, setup_logging, get_logger
-print("✓")
+_LAZY_EXPORTS = {
+    "logger": (".logger", "logger"),
+    "setup_logging": (".logger", "setup_logging"),
+    "get_logger": (".logger", "get_logger"),
+    "Song": (".song", "Song"),
+    "LocalSong": (".song", "LocalSong"),
+    "StreamSong": (".song", "StreamSong"),
+    "BasePlaylist": (".playlist", "BasePlaylist"),
+    "PlayHistory": (".playlist", "PlayHistory"),
+    "CurrentPlaylist": (".playlist", "CurrentPlaylist"),
+    "LocalPlaylist": (".local_playlist", "LocalPlaylist"),
+    "Playlist": (".playlists", "Playlist"),
+    "Playlists": (".playlists", "Playlists"),
+    "MusicPlayer": (".player", "MusicPlayer"),
+}
 
-print("[Models] 正在加载数据模型模块...")
 
-print("[Models] 加载 Song 模块...", end=" ", flush=True)
-from .song import Song, LocalSong, StreamSong
-print("✓")
+def __getattr__(name):
+    try:
+        module_name, attr_name = _LAZY_EXPORTS[name]
+    except KeyError as exc:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from exc
 
-print("[Models] 加载 Playlist 模块...", end=" ", flush=True)
-from .playlist import BasePlaylist, PlayHistory, CurrentPlaylist
-print("✓")
+    module = importlib.import_module(module_name, __name__)
+    value = getattr(module, attr_name)
+    globals()[name] = value
+    return value
 
-print("[Models] 加载 LocalPlaylist 模块...", end=" ", flush=True)
-from .local_playlist import LocalPlaylist
-print("✓")
 
-print("[Models] 加载 Playlists 模块...", end=" ", flush=True)
-from .playlists import Playlist, Playlists
-print("✓")
-
-print("[Models] 加载 Player 模块...", end=" ", flush=True)
-from .player import MusicPlayer
-print("✓")
-
-print("[Models] 所有数据模型已加载完毕！")
+def __dir__():
+    return sorted(set(globals()) | set(__all__))
 
 __all__ = [
     "Song",
@@ -50,6 +48,7 @@ __all__ = [
     "StreamSong",
     "BasePlaylist",
     "PlayHistory",
+    "CurrentPlaylist",
     "LocalPlaylist",
     "Playlist",
     "Playlists",

@@ -15,8 +15,6 @@ logger = logging.getLogger(__name__)
 
 from startup_cleanup import cleanup_stale_mpv_processes, ensure_single_service_instance
 
-cleanup_stale_mpv_processes(logger=logger)
-
 # 确保 stdout 使用 UTF-8 编码（Windows 兼容性）
 if sys.stdout.encoding != "utf-8":
     import io
@@ -26,6 +24,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
+from models.song import StreamSong, LocalSong
 
 # ============================================
 # 导入路由模块（同时触发 state.py 中的单例初始化）
@@ -36,7 +35,6 @@ from routers.state import (
     PLAYER, PLAYLISTS_MANAGER, PLAYBACK_HISTORY,
     DEFAULT_PLAYLIST_ID,
     get_runtime_playlist,
-    StreamSong, LocalSong,
     _get_resource_path,
 )
 
@@ -656,6 +654,8 @@ if __name__ == "__main__":
     except RuntimeError as e:
         logger.error(f"[Startup] {e}")
         raise SystemExit(1) from e
+
+    cleanup_stale_mpv_processes(logger=logger)
 
     # 过滤 /status 和 /volume 的访问日志，防止刷屏
     class EndpointFilter(logging.Filter):

@@ -25,7 +25,6 @@ from urllib.parse import quote, unquote
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
-from models import MusicPlayer, Playlists, PlayHistory
 from models.api_contracts import (
     DebugPipeCheckResponse,
     ErrorResponse,
@@ -45,6 +44,10 @@ from models.api_contracts import (
     ShuffleModeResponse,
     YoutubeExtractPlaylistResponse,
 )
+from models.player import MusicPlayer
+from models.playlist import PlayHistory
+from models.playlists import Playlists
+from models.song import LocalSong, StreamSong
 from routers.dependencies import get_player_for_request, get_playlists, get_playback_history, get_player_lock
 from routers.state import (
     DEFAULT_PLAYLIST_ID,
@@ -52,7 +55,6 @@ from routers.state import (
     get_runtime_playlist,
     _broadcast_state,
     mpv_get, mpv_command,
-    LocalSong, StreamSong,
     error_response,
 )
 
