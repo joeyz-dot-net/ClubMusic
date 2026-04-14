@@ -13,7 +13,9 @@ from routers import settings as settings_router
 from routers import websocket as websocket_router
 
 
-_API_JS_PATH = Path(__file__).resolve().parents[1] / "static" / "js" / "api.js"
+_STATIC_JS_DIR = Path(__file__).resolve().parents[1] / "static" / "js"
+_API_JS_PATH = _STATIC_JS_DIR / "api.js"
+_PLAYER_JS_PATH = _STATIC_JS_DIR / "player.js"
 _FRONTEND_DIRECT_API_CALL_PATTERN = re.compile(
     r"this\.(get|post|postForm|put|delete)\(\s*([`'\"])(/.*?)(?<!\\)\2",
     re.DOTALL,
@@ -21,6 +23,8 @@ _FRONTEND_DIRECT_API_CALL_PATTERN = re.compile(
 _FRONTEND_PLAYLIST_ROUTE_PATTERN = re.compile(
     r"playlistId\s*\?\s*`/playlist\?playlist_id=\$\{[^}]+}`\s*:\s*['\"]/playlist['\"]"
 )
+_FRONTEND_FETCH_PATTERN = re.compile(r"\bfetch\s*\(")
+_FRONTEND_WEBSOCKET_PATTERN = re.compile(r"\bnew\s+WebSocket\s*\(|\bWebSocket\.[A-Z_]+\b")
 _FORM_CONTENT_TYPES = {"multipart/form-data", "application/x-www-form-urlencoded"}
 
 
@@ -74,6 +78,17 @@ def _extract_js_method_body(source: str, method_name: str, next_marker: str) -> 
     body_start = source.index("{", start) + 1
     end = source.index(next_marker, body_start)
     return source[body_start:end]
+
+
+def _find_frontend_modules_with_pattern(pattern: re.Pattern[str]) -> list[str]:
+    matching_modules: list[str] = []
+
+    for file_path in sorted(_STATIC_JS_DIR.rglob("*.js")):
+        source = file_path.read_text(encoding="utf-8")
+        if pattern.search(source):
+            matching_modules.append(file_path.relative_to(_STATIC_JS_DIR).as_posix())
+
+    return matching_modules
 
 
 def build_openapi_schema():
@@ -344,3 +359,14 @@ def test_frontend_transport_helpers_preserve_room_context_and_trace_headers():
         assert "headers: this._buildHeaders(endpoint" in body, helper_name
 
     assert source.count("const url = this._appendPipe(`${this.baseURL}${endpoint}`);") == 5
+
+
+def test_frontend_network_transports_stay_within_canonical_modules():
+    assert _find_frontend_modules_with_pattern(_FRONTEND_FETCH_PATTERN) == ["api.js"]
+    assert _find_frontend_modules_with_pattern(_FRONTEND_WEBSOCKET_PATTERN) == ["player.js"]
+
+    player_source = _PLAYER_JS_PATH.read_text(encoding="utf-8")
+
+    assert "let wsUrl = `${protocol}//${location.host}/ws`;" in player_source
+    assert "if (api.roomId) {" in player_source
+    assert "wsUrl += `?room_id=${encodeURIComponent(api.roomId)}`;" in player_source
