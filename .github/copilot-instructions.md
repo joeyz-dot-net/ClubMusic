@@ -268,8 +268,9 @@ python app.py
 | **Run App** | `py run.py` | 🎵 Starts the local app with interactive audio device selection |
 | **Build** | `.\build_exe.bat` | 📦 Creates `dist/ClubMusic.exe` (local build only) |
 | **Deploy Remote** | `.\.vscode\deploy.ps1` | 🚀 Deploys exe to `\\B560\code\ClubMusic` (with backup) |
-| **Browser Control Regression** | `py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --output logs/browser-control-regression.json` | 🧪 Playwright regression for trusted next/prev and trusted resume flows |
-| **Browser Control Regression (Room)** | `py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --include-room-suite --output logs/browser-control-regression-room.json` | 🧪 Full regression including room-scoped player binding, recovery, and parallel isolation |
+| **Browser Control Regression** | `py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --include-queue-suite --output logs/browser-control-regression.json` | 🧪 Playwright regression for trusted next/prev, trusted resume, and queue delete/reorder flows |
+| **Browser Control Regression (Local)** | `py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --include-local-suite --output logs/browser-control-regression-local.json` | 🧪 Deterministic local-search regression for search-modal local results, directory navigation, and breadcrumb return |
+| **Browser Control Regression (Room)** | `py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --include-queue-suite --include-room-suite --output logs/browser-control-regression-room.json` | 🧪 Full regression including queue coverage, room-scoped player binding, recovery, and parallel isolation |
 | **Build & Deploy** | Sequential combo | 🔨➡️🚀 Builds then deploys (default task: `Ctrl+Shift+B`) |
 
 **Access**: `Ctrl+Shift+P` → "Run Task" → Select task name
@@ -277,17 +278,23 @@ python app.py
 ### Browser Control Regression
 ```powershell
 # Manual
-py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/
+py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --include-queue-suite
 
 # Auto-start local server if needed
-py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --output logs/browser-control-regression.json
+py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --include-queue-suite --output logs/browser-control-regression.json
 ```
 
-Use this before and after changing trusted browser controls, KTV resume behavior, request tracing, or frontend/backend pause-state synchronization.
+Use this before and after changing trusted browser controls, KTV resume behavior, queue delete/reorder behavior, request tracing, or frontend/backend pause-state synchronization.
+
+**Local suite** (opt-in with `--include-local-suite`):
+```powershell
+py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --include-local-suite --output logs/browser-control-regression-local.json
+```
+Also run when changing search-modal local results, local directory navigation, breadcrumb return behavior, or the shared local tree data path used by `local.js` and `search.js`. Validates: deterministic local results rendering, directory entry, nested directory rendering, and breadcrumb return to the result list.
 
 **Room suite** (opt-in with `--include-room-suite`):
 ```powershell
-py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --include-room-suite --output logs/browser-control-regression-room.json
+py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --include-queue-suite --include-room-suite --output logs/browser-control-regression-room.json
 ```
 Also run when changing room routing, `get_player_for_request()`, WebSocket room validation, or `roomBot.js` bootstrap. Validates: room context propagation, playlist binding, WS scoping, room delete + auto-recovery, and **parallel isolation** (default page state is unaffected by room page).
 Use `--room-id` when reproducing a specific room issue. The harness waits for app initialization before evaluating room state, normalizes expected room playlist IDs the same way as `RoomPlayer`, and treats an unready default page as an explicit isolation failure instead of silently skipping those checks.
@@ -296,6 +303,8 @@ Use `--room-id` when reproducing a specific room issue. The harness waits for ap
 - Top-level `summary.passed = true`
 - `checks.controlSuite = true`
 - `checks.trustedResumeSuite = true`
+- `checks.queueSuite = true`
+- `checks.localSuite = true` (only when `--include-local-suite`)
 - `checks.roomSuite = true` (only when `--include-room-suite`)
 
 **When it fails**:

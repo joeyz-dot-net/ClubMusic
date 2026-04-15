@@ -189,6 +189,16 @@ def parse_args():
         help="Also validate room-scoped player binding and room auto-recovery.",
     )
     parser.add_argument(
+        "--include-queue-suite",
+        action="store_true",
+        help="Also validate queue delete and reorder rendering flows.",
+    )
+    parser.add_argument(
+        "--include-local-suite",
+        action="store_true",
+        help="Also validate local tree search, breadcrumb navigation, and search reset with a deterministic fixture.",
+    )
+    parser.add_argument(
         "--room-id",
         help="Optional fixed room_id for the room suite. Defaults to a generated regression room id.",
     )
@@ -354,6 +364,46 @@ def wait_for_app_context(page, *, timeout_ms=30000):
     page.wait_for_function(APP_CONTEXT_READY_JS, timeout=timeout_ms)
 
 
+def wait_for_local_state(
+    page,
+    *,
+    expected_query=None,
+    expected_dir_view=None,
+    expected_breadcrumb_length=None,
+    expected_last_breadcrumb=None,
+    timeout_ms=5000,
+):
+    page.wait_for_function(
+        """
+        ({ expectedQuery, expectedDirView, expectedBreadcrumbLength, expectedLastBreadcrumb }) => {
+            const searchBody = document.getElementById('searchModalBody');
+            const searchInput = document.getElementById('searchModalInput');
+            if (!searchBody || !searchInput) {
+                return false;
+            }
+
+            const breadcrumbLabels = Array.from(searchBody.querySelectorAll('.search-breadcrumb-item'))
+                .map((node) => node.textContent?.trim() || '')
+                .filter(Boolean);
+            const dirViewActive = !!searchBody.querySelector('.search-dir-view');
+            const searchValue = searchInput.value || '';
+            const matchesQuery = expectedQuery === null || searchValue === expectedQuery;
+            const matchesDirView = expectedDirView === null || dirViewActive === expectedDirView;
+            const matchesBreadcrumbLength = expectedBreadcrumbLength === null || breadcrumbLabels.length === expectedBreadcrumbLength;
+            const matchesLastBreadcrumb = expectedLastBreadcrumb === null || breadcrumbLabels[breadcrumbLabels.length - 1] === expectedLastBreadcrumb;
+            return matchesQuery && matchesDirView && matchesBreadcrumbLength && matchesLastBreadcrumb;
+        }
+        """,
+        arg={
+            "expectedQuery": expected_query,
+            "expectedDirView": expected_dir_view,
+            "expectedBreadcrumbLength": expected_breadcrumb_length,
+            "expectedLastBreadcrumb": expected_last_breadcrumb,
+        },
+        timeout=timeout_ms,
+    )
+
+
 def get_room_context_snapshot(page, room_id):
     return capture_snapshot(
         page,
@@ -422,6 +472,128 @@ def run_trusted_playpause_resume_stale_local_state(page, *, quiet=False):
         page,
         "async () => await window.app.diagnose.evaluateTrustedPlayPauseResumeStaleLocalStateFlow()",
     )
+
+
+def run_queue_delete(page, *, quiet=False):
+    log("[browser-regression] preparing queue delete flow", quiet=quiet)
+    prepared = evaluate(
+        page,
+        "async () => await window.app.regression.prepareQueueDeleteFlow()",
+    )
+    page.click(prepared["deleteSelector"])
+    page.wait_for_selector(prepared["confirmSelector"], state="visible")
+    page.click(prepared["confirmSelector"])
+    return evaluate(
+        page,
+        "async ({ probeId }) => await window.app.regression.evaluateQueueDeleteFlow({ probeId })",
+        {"probeId": prepared["probeId"]},
+    )
+
+
+def run_queue_reorder(page, *, quiet=False):
+    log("[browser-regression] preparing queue reorder flow", quiet=quiet)
+    prepared = evaluate(
+        page,
+        "async () => await window.app.regression.prepareQueueReorderFlow()",
+    )
+    return evaluate(
+        page,
+        "async ({ probeId }) => await window.app.regression.evaluateQueueReorderFlow({ probeId })",
+        {"probeId": prepared["probeId"]},
+    )
+
+
+def run_queue_suite(page, base_url, *, quiet=False, timeout_ms=30000):
+    log("[browser-regression] opening queue regression page", quiet=quiet)
+    page.goto(base_url, wait_until="domcontentloaded")
+    wait_for_app_context(page, timeout_ms=timeout_ms)
+
+    queue_delete = run_queue_delete(page, quiet=quiet)
+    queue_reorder = run_queue_reorder(page, quiet=quiet)
+
+    result = {
+        "queueDelete": queue_delete,
+        "queueReorder": queue_reorder,
+    }
+    result["summary"] = summarize_checks({
+        "queueDeleteFlow": queue_delete.get("summary", {}).get("passed") is True,
+        "queueReorderFlow": queue_reorder.get("summary", {}).get("passed") is True,
+    })
+    return result
+
+
+def capture_local_search_step(page, probe_id, label):
+    return evaluate(
+        page,
+        "({ probeId, label }) => window.app.regression.captureLocalSearchProbeStep({ probeId, label })",
+        {"probeId": probe_id, "label": label},
+    )
+
+
+def run_local_suite(page, base_url, *, quiet=False, timeout_ms=30000):
+    log("[browser-regression] opening local search regression page", quiet=quiet)
+    page.goto(base_url, wait_until="domcontentloaded")
+    wait_for_app_context(page, timeout_ms=timeout_ms)
+
+    prepared = evaluate(
+        page,
+        "async () => await window.app.regression.prepareLocalSearchFlow()",
+    )
+
+    page.wait_for_selector(prepared["searchInputSelector"], state="visible")
+    page.fill(prepared["searchInputSelector"], prepared["searchQuery"])
+    evaluate(
+        page,
+        "async ({ probeId }) => await window.app.regression.renderLocalSearchFixtureResults({ probeId })",
+        {"probeId": prepared["probeId"]},
+    )
+    page.wait_for_selector(prepared["firstSearchResultSelector"], state="visible")
+
+    page.click(prepared["firstSearchResultSelector"])
+    wait_for_local_state(
+        page,
+        expected_query=prepared["searchQuery"],
+        expected_dir_view=True,
+        expected_breadcrumb_length=2,
+        expected_last_breadcrumb="Acoustic Set",
+        timeout_ms=timeout_ms,
+    )
+    capture_local_search_step(page, prepared["probeId"], "afterFirstDirectory")
+
+    page.click(prepared["firstDirCardSelector"])
+    wait_for_local_state(
+        page,
+        expected_query=prepared["searchQuery"],
+        expected_dir_view=True,
+        expected_breadcrumb_length=3,
+        expected_last_breadcrumb="Ballads",
+        timeout_ms=timeout_ms,
+    )
+    capture_local_search_step(page, prepared["probeId"], "afterSecondDirectory")
+
+    page.click(prepared["breadcrumbResultsSelector"])
+    wait_for_local_state(
+        page,
+        expected_query=prepared["searchQuery"],
+        expected_dir_view=False,
+        expected_breadcrumb_length=0,
+        timeout_ms=timeout_ms,
+    )
+    capture_local_search_step(page, prepared["probeId"], "afterBreadcrumbReturn")
+
+    local_search = evaluate(
+        page,
+        "async ({ probeId }) => await window.app.regression.evaluateLocalSearchFlow({ probeId })",
+        {"probeId": prepared["probeId"]},
+    )
+
+    result = {
+        "localSearch": local_search,
+    }
+    result["summary"] = summarize_checks({
+        "localSearchFlow": local_search.get("summary", {}).get("passed") is True,
+    })
+    return result
 
 
 def wait_for_room_context(page, room_id, *, timeout_ms=30000):
@@ -587,6 +759,8 @@ def build_suite_result(
     trusted_playpause_resume,
     trusted_playpause_resume_stale_local_state,
     room_suite=None,
+    queue_suite=None,
+    local_suite=None,
 ):
     control_suite = {
         "trustedNext": trusted_next,
@@ -633,6 +807,12 @@ def build_suite_result(
     if room_suite is not None:
         result["roomSuite"] = room_suite
         summary_checks["roomSuite"] = room_suite.get("summary", {}).get("passed") is True
+    if queue_suite is not None:
+        result["queueSuite"] = queue_suite
+        summary_checks["queueSuite"] = queue_suite.get("summary", {}).get("passed") is True
+    if local_suite is not None:
+        result["localSuite"] = local_suite
+        summary_checks["localSuite"] = local_suite.get("summary", {}).get("passed") is True
     result["summary"] = summarize_checks(summary_checks)
     return result
 
@@ -672,6 +852,8 @@ def main():
             trusted_playpause_resume = run_trusted_playpause_resume(page, quiet=args.quiet)
             trusted_playpause_resume_stale_local_state = run_trusted_playpause_resume_stale_local_state(page, quiet=args.quiet)
             room_suite = None
+            queue_suite = None
+            local_suite = None
             if args.include_room_suite:
                 room_page = context.new_page()
                 try:
@@ -688,12 +870,40 @@ def main():
                 finally:
                     if not is_page_closed(room_page):
                         room_page.close()
+            if args.include_queue_suite:
+                queue_page = context.new_page()
+                try:
+                    queue_page.set_default_timeout(args.timeout_ms)
+                    queue_suite = run_queue_suite(
+                        queue_page,
+                        args.base_url,
+                        quiet=args.quiet,
+                        timeout_ms=args.timeout_ms,
+                    )
+                finally:
+                    if not is_page_closed(queue_page):
+                        queue_page.close()
+            if args.include_local_suite:
+                local_page = context.new_page()
+                try:
+                    local_page.set_default_timeout(args.timeout_ms)
+                    local_suite = run_local_suite(
+                        local_page,
+                        args.base_url,
+                        quiet=args.quiet,
+                        timeout_ms=args.timeout_ms,
+                    )
+                finally:
+                    if not is_page_closed(local_page):
+                        local_page.close()
             result = build_suite_result(
                 trusted_next,
                 trusted_prev,
                 trusted_playpause_resume,
                 trusted_playpause_resume_stale_local_state,
                 room_suite=room_suite,
+                queue_suite=queue_suite,
+                local_suite=local_suite,
             )
             result["baseUrl"] = args.base_url
             result["browser"] = args.browser

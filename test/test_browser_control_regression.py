@@ -75,3 +75,71 @@ def test_build_room_suite_checks_fail_isolation_when_default_snapshot_is_not_rea
     assert checks["defaultPageNotInRoom"] is False
     assert checks["defaultPagePlaylistNotLeaked"] is False
     assert checks["defaultPageWsNotScopedToRoom"] is False
+
+
+def test_build_suite_result_includes_optional_queue_suite_in_summary():
+    passed_flow = {"summary": {"passed": True}}
+    queue_suite = {"summary": {"passed": True}}
+
+    result = browser_control_regression.build_suite_result(
+        passed_flow,
+        passed_flow,
+        {"summary": {"passed": True}, "syncSummary": {"passed": True}, "diagnostics": {"failureMode": None}},
+        {"summary": {"passed": True}, "syncSummary": {"passed": True}, "diagnostics": {"failureMode": None}},
+        queue_suite=queue_suite,
+    )
+
+    assert result["queueSuite"] is queue_suite
+    assert result["summary"]["passed"] is True
+    assert result["summary"]["checks"]["queueSuite"] is True
+
+
+def test_build_suite_result_fails_when_optional_queue_suite_fails():
+    passed_flow = {"summary": {"passed": True}}
+    failing_queue_suite = {"summary": {"passed": False}}
+
+    result = browser_control_regression.build_suite_result(
+        passed_flow,
+        passed_flow,
+        {"summary": {"passed": True}, "syncSummary": {"passed": True}, "diagnostics": {"failureMode": None}},
+        {"summary": {"passed": True}, "syncSummary": {"passed": True}, "diagnostics": {"failureMode": None}},
+        queue_suite=failing_queue_suite,
+    )
+
+    assert result["summary"]["passed"] is False
+    assert result["summary"]["checks"]["queueSuite"] is False
+    assert "queueSuite" in result["summary"]["failedChecks"]
+
+
+def test_build_suite_result_includes_optional_local_suite_in_summary():
+    passed_flow = {"summary": {"passed": True}}
+    local_suite = {"summary": {"passed": True}}
+
+    result = browser_control_regression.build_suite_result(
+        passed_flow,
+        passed_flow,
+        {"summary": {"passed": True}, "syncSummary": {"passed": True}, "diagnostics": {"failureMode": None}},
+        {"summary": {"passed": True}, "syncSummary": {"passed": True}, "diagnostics": {"failureMode": None}},
+        local_suite=local_suite,
+    )
+
+    assert result["localSuite"] is local_suite
+    assert result["summary"]["passed"] is True
+    assert result["summary"]["checks"]["localSuite"] is True
+
+
+def test_build_suite_result_fails_when_optional_local_suite_fails():
+    passed_flow = {"summary": {"passed": True}}
+    failing_local_suite = {"summary": {"passed": False}}
+
+    result = browser_control_regression.build_suite_result(
+        passed_flow,
+        passed_flow,
+        {"summary": {"passed": True}, "syncSummary": {"passed": True}, "diagnostics": {"failureMode": None}},
+        {"summary": {"passed": True}, "syncSummary": {"passed": True}, "diagnostics": {"failureMode": None}},
+        local_suite=failing_local_suite,
+    )
+
+    assert result["summary"]["passed"] is False
+    assert result["summary"]["checks"]["localSuite"] is False
+    assert "localSuite" in result["summary"]["failedChecks"]

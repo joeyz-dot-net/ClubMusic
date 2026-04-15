@@ -1,5 +1,5 @@
 // 歌单管理模块
-import { playlistManager } from './playlist.js?v=34';
+import { playlistManager } from './playlist.js?v=35';
 import { Toast, ConfirmModal, InputModal } from './ui.js';
 import { operationLock } from './operationLock.js';
 import { i18n } from './i18n.js';
@@ -169,6 +169,7 @@ export class PlaylistsManagement {
         this.onPlaylistSwitchCallback = null;
         this.onDismissCallback = null;
         this.modalActionInFlight = false;
+        this.modalActionRefs = { items: [], buttons: [] };
     }
 
     notifyMutationResult(successMessage, refreshError) {
@@ -192,6 +193,26 @@ export class PlaylistsManagement {
         return (playlistManager.playlists || []).filter((playlist) => playlist.id !== playlistManager.getActiveDefaultId());
     }
 
+    refreshModalActionRefs() {
+        if (!this.modalBody) {
+            this.modalActionRefs = { items: [], buttons: [] };
+            return this.modalActionRefs;
+        }
+
+        const refs = { items: [], buttons: [] };
+        this.modalBody.querySelectorAll('.playlist-item, .playlist-action-btn').forEach((element) => {
+            if (element.classList.contains('playlist-item')) {
+                refs.items.push(element);
+            }
+            if (element.classList.contains('playlist-action-btn')) {
+                refs.buttons.push(element);
+            }
+        });
+
+        this.modalActionRefs = refs;
+        return refs;
+    }
+
     setModalActionState(disabled) {
         if (this.modal) {
             this.modal.setAttribute('aria-busy', String(disabled));
@@ -206,12 +227,18 @@ export class PlaylistsManagement {
             return;
         }
 
-        this.modalBody.querySelectorAll('.playlist-item').forEach((item) => {
+        const hasDisconnectedRefs = this.modalActionRefs.items.some((item) => !item.isConnected)
+            || this.modalActionRefs.buttons.some((button) => !button.isConnected);
+        const { items, buttons } = hasDisconnectedRefs
+            ? this.refreshModalActionRefs()
+            : this.modalActionRefs;
+
+        items.forEach((item) => {
             item.style.pointerEvents = disabled ? 'none' : '';
             item.setAttribute('aria-disabled', String(disabled));
         });
 
-        this.modalBody.querySelectorAll('.playlist-action-btn').forEach((button) => {
+        buttons.forEach((button) => {
             button.disabled = disabled;
         });
     }
@@ -530,9 +557,11 @@ export class PlaylistsManagement {
         console.log('📋 渲染歌单列表，共', playlists.length, '个歌单');
 
         this.modalBody.replaceChildren();
+        this.modalActionRefs = { items: [], buttons: [] };
 
         if (playlists.length === 0) {
             this.modalBody.appendChild(createPlaylistsEmptyState());
+            this.refreshModalActionRefs();
             return;
         }
 
@@ -540,6 +569,8 @@ export class PlaylistsManagement {
             const item = createPlaylistItemElement(playlist, index, playlistManager.selectedPlaylistId);
             this.modalBody.appendChild(item);
         });
+
+        this.refreshModalActionRefs();
     }
 }
 

@@ -1,5 +1,5 @@
 import { api } from './api.js?v=4';
-import { playlistManager } from './playlist.js?v=34';
+import { playlistManager } from './playlist.js?v=35';
 import { Toast } from './ui.js';
 import { i18n } from './i18n.js';
 
@@ -257,6 +257,8 @@ export const localFiles = {
     getPlaylistId: () => window.app?.modules?.playlistManager?.getActiveDefaultId?.() || 'default',
     fullTree: null,
     searchQuery: '',
+    searchDebounceTimer: null,
+    filterCache: new WeakMap(),
     onSongAdded: null,
     hasBoundContentEvents: false,
 
@@ -273,8 +275,12 @@ export const localFiles = {
         // 绑定搜索输入事件
         if (this.searchInput) {
             this.searchInput.addEventListener('input', (e) => {
-                this.searchQuery = e.target.value.trim();
-                this.renderCurrentLevel();
+                const nextQuery = e.target.value.trim();
+                clearTimeout(this.searchDebounceTimer);
+                this.searchDebounceTimer = setTimeout(() => {
+                    this.searchQuery = nextQuery;
+                    this.renderCurrentLevel();
+                }, 120);
             });
         }
 
@@ -293,6 +299,7 @@ export const localFiles = {
             }
             if (data.status === 'OK' && data.tree) {
                 this.fullTree = data.tree;
+                this.filterCache = new WeakMap();
                 currentNavPath = [];
                 this.renderCurrentLevel();
             } else {
@@ -307,12 +314,14 @@ export const localFiles = {
         return getNodeByPath(this.fullTree, currentNavPath);
     },
 
-    filterNode(node, query) {
-        if (!node || !query) {
+    getCurrentPath() {
+        return currentNavPath.slice();
+    },
+
+    filterNode(node, normalizedQuery) {
+        if (!node || !normalizedQuery) {
             return node;
         }
-
-        const normalizedQuery = query.toLowerCase();
         const nodeName = typeof node.name === 'string' ? node.name.toLowerCase() : '';
 
         if (nodeName.includes(normalizedQuery)) {
@@ -334,11 +343,32 @@ export const localFiles = {
         };
     },
 
+    getFilteredNode(node, query) {
+        if (!node || !query) {
+            return node;
+        }
+
+        const normalizedQuery = query.toLowerCase();
+        let nodeCache = this.filterCache.get(node);
+        if (!nodeCache) {
+            nodeCache = new Map();
+            this.filterCache.set(node, nodeCache);
+        }
+
+        if (nodeCache.has(normalizedQuery)) {
+            return nodeCache.get(normalizedQuery);
+        }
+
+        const filteredNode = this.filterNode(node, normalizedQuery);
+        nodeCache.set(normalizedQuery, filteredNode);
+        return filteredNode;
+    },
+
     renderCurrentLevel() {
         if (!this.contentEl) return;
         const currentNode = this.getCurrentNode();
         
-        const displayNode = this.searchQuery ? this.filterNode(currentNode, this.searchQuery) : currentNode;
+        const displayNode = this.searchQuery ? this.getFilteredNode(currentNode, this.searchQuery) : currentNode;
 
         this.contentEl.replaceChildren(createCurrentDirContent(displayNode, currentNavPath));
     },
@@ -352,6 +382,7 @@ export const localFiles = {
     // 重置到根目录
     resetToRoot() {
         currentNavPath = [];
+        clearTimeout(this.searchDebounceTimer);
         this.searchQuery = '';
         if (this.searchInput) {
             this.searchInput.value = '';

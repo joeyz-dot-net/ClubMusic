@@ -1367,12 +1367,13 @@ function bindPlaylistItemDelegates(container) {
     }
 
     container._playlistItemClickHandler = async (event) => {
-        const item = event.target.closest('.playlist-track-item');
+        const target = event.target instanceof Element ? event.target : null;
+        const item = target?.closest('.playlist-track-item');
         if (!item || !container.contains(item)) {
             return;
         }
 
-        if (event.target.closest('.drag-handle')) {
+        if (target?.closest('.drag-handle')) {
             return;
         }
 
@@ -1392,7 +1393,7 @@ function bindPlaylistItemDelegates(container) {
             return;
         }
 
-        const deleteBtn = event.target.closest('.track-menu-btn');
+        const deleteBtn = target?.closest('.track-menu-btn');
         if (deleteBtn) {
             event.stopPropagation();
 
@@ -1451,6 +1452,147 @@ function bindPlaylistItemDelegates(container) {
     container.addEventListener('click', container._playlistItemClickHandler);
 }
 
+function getPlaylistTrackBaseKey(song) {
+    return [song?.type || '', song?.url || '', song?.title || ''].join('::');
+}
+
+function getPlaylistTrackRenderKey(song, occurrenceCounts) {
+    const baseKey = getPlaylistTrackBaseKey(song);
+    const occurrence = occurrenceCounts.get(baseKey) || 0;
+    occurrenceCounts.set(baseKey, occurrence + 1);
+    return `${baseKey}::${occurrence}`;
+}
+
+function getPlaylistTrackRenderSignature({ song, isCurrentPlaying, isUnavailable, playlistName, playlistLength }) {
+    return JSON.stringify({
+        title: song?.title || '',
+        url: song?.url || '',
+        type: song?.type || '',
+        thumbnailUrl: song?.thumbnail_url || '',
+        current: isCurrentPlaying,
+        unavailable: isUnavailable,
+        playlistName: isCurrentPlaying ? playlistName || '' : '',
+        playlistLength: isCurrentPlaying ? playlistLength : 0,
+    });
+}
+
+function createPlaylistTrackItem({ song, index, playlistLength, playlistName, isCurrentPlaying, isUnavailable }) {
+    const item = document.createElement('div');
+    item.className = 'playlist-track-item';
+
+    if (isCurrentPlaying) {
+        item.classList.add('current-playing');
+    }
+
+    item.dataset.index = index;
+
+    let coverUrl = '';
+    if (song.type !== 'youtube' && song.url) {
+        coverUrl = `/cover/${song.url.split('/').map(encodeURIComponent).join('/')}`;
+    } else {
+        coverUrl = song.thumbnail_url || '';
+    }
+
+    const cover = document.createElement('div');
+    cover.className = 'track-cover';
+    const imgEl = document.createElement('img');
+    imgEl.alt = '';
+    const coverPlaceholder = document.createElement('div');
+    coverPlaceholder.className = 'track-cover-placeholder';
+    coverPlaceholder.textContent = '🎵';
+    cover.appendChild(imgEl);
+    cover.appendChild(coverPlaceholder);
+    if (coverUrl) {
+        thumbnailManager.setupFallback(imgEl, coverUrl);
+    } else {
+        imgEl.style.display = 'none';
+        coverPlaceholder.style.display = 'flex';
+    }
+
+    const leftContainer = document.createElement('div');
+    leftContainer.className = 'track-left';
+
+    const typeEl = document.createElement('div');
+    typeEl.className = 'track-type';
+    typeEl.textContent = song.type === 'youtube' ? 'YouTube' : i18n.t('local.musicType');
+
+    leftContainer.appendChild(cover);
+    leftContainer.appendChild(typeEl);
+
+    const info = document.createElement('div');
+    info.className = 'track-info';
+
+    const songTitleEl = document.createElement('div');
+    songTitleEl.className = 'track-title';
+    songTitleEl.textContent = song.title || i18n.t('track.unknown');
+
+    const metaEl = document.createElement('div');
+    metaEl.className = 'track-meta';
+    const playlistNameEl = document.createElement('div');
+    playlistNameEl.className = 'track-playlist-name';
+    playlistNameEl.textContent = isCurrentPlaying ? playlistName : '';
+    metaEl.appendChild(playlistNameEl);
+
+    info.appendChild(songTitleEl);
+    info.appendChild(metaEl);
+
+    if (isCurrentPlaying) {
+        item.appendChild(leftContainer);
+        item.appendChild(info);
+
+        const seqEl = document.createElement('div');
+        seqEl.className = 'track-seq';
+        seqEl.textContent = `${index + 1}/${playlistLength}`;
+        item.appendChild(seqEl);
+    } else {
+        const dragHandle = document.createElement('div');
+        dragHandle.className = 'drag-handle';
+        dragHandle.appendChild(createTrackControlIcon({
+            width: 16,
+            height: 16,
+            viewBox: '0 0 24 24',
+            circles: [
+                { cx: 9, cy: 5, r: 2 },
+                { cx: 15, cy: 5, r: 2 },
+                { cx: 9, cy: 12, r: 2 },
+                { cx: 15, cy: 12, r: 2 },
+                { cx: 9, cy: 19, r: 2 },
+                { cx: 15, cy: 19, r: 2 }
+            ]
+        }));
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'track-menu-btn';
+        deleteBtn.type = 'button';
+        deleteBtn.appendChild(createTrackControlIcon({
+            width: 20,
+            height: 20,
+            viewBox: '0 0 24 24',
+            circles: [
+                { cx: 12, cy: 5, r: 2 },
+                { cx: 12, cy: 12, r: 2 },
+                { cx: 12, cy: 19, r: 2 }
+            ]
+        }));
+
+        item.appendChild(deleteBtn);
+        item.appendChild(leftContainer);
+        item.appendChild(info);
+        item.appendChild(dragHandle);
+    }
+
+    if (isUnavailable) {
+        item.classList.add('song-unavailable');
+        const warnIcon = document.createElement('div');
+        warnIcon.className = 'track-unavailable-badge';
+        warnIcon.title = i18n.t('playlist.songUnavailable');
+        warnIcon.textContent = '\u26A0';
+        item.appendChild(warnIcon);
+    }
+
+    return item;
+}
+
 // UI 渲染：当前播放列表
 export function renderPlaylistUI({ container, onPlay, currentMeta }) {
     if (!container) return;
@@ -1458,11 +1600,11 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
     const { selectedPlaylistId, playlist, playlistName } = getRenderedPlaylistState();
     container._playlistRenderContext = { container, onPlay, currentMeta };
     bindPlaylistItemDelegates(container);
-
-    container.replaceChildren();
     renderPlaylistToolbar({ toolbarContainer: document.getElementById('playlistToolbar'), playlist, playlistName, selectedPlaylistId, container, onPlay, currentMeta });
 
     if (!playlist || playlist.length === 0) {
+        container._playlistItemNodes = new Map();
+        container._playlistEmptyStateVisible = true;
         // 播放列表为空时，显示空状态提示和历史按钮
         const emptyContainer = document.createElement('div');
         emptyContainer.className = 'playlist-empty-state';
@@ -1604,9 +1746,20 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
 
         emptyContainer.appendChild(emptyText);
         emptyContainer.appendChild(historyBtn);
-        container.appendChild(emptyContainer);
+        container.replaceChildren(emptyContainer);
         return;
     }
+
+    if (container._playlistEmptyStateVisible) {
+        container.replaceChildren();
+        container._playlistEmptyStateVisible = false;
+    }
+
+    const previousItemNodes = container._playlistItemNodes instanceof Map
+        ? container._playlistItemNodes
+        : new Map();
+    const nextItemNodes = new Map();
+    const occurrenceCounts = new Map();
 
     // 获取当前播放歌曲的URL（用于匹配）
     // 对于本地文件使用 rel，对于 YouTube 使用 raw_url
@@ -1614,148 +1767,56 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
 
     // 播放队列列表 - 统一样式
     playlist.forEach((song, index) => {
-        const item = document.createElement('div');
-        item.className = 'playlist-track-item';
-        
-        // 根据URL匹配当前播放的歌曲，而不是简单地标记第一首
         const isCurrentPlaying = currentPlayingUrl && song.url === currentPlayingUrl;
-        
-        if (isCurrentPlaying) {
-            item.classList.add('current-playing');
-            
-            // 添加垂直进度条
-            const progressBar = document.createElement('div');
-            //progressBar.className = 'track-progress-bar';
-            //progressBar.innerHTML = '<div class="track-progress-fill" id="currentTrackProgress"></div>';
-            //item.appendChild(progressBar);
+        const isUnavailable = unavailableSongs.has(song.url);
+        const renderKey = getPlaylistTrackRenderKey(song, occurrenceCounts);
+        const renderSignature = getPlaylistTrackRenderSignature({
+            song,
+            isCurrentPlaying,
+            isUnavailable,
+            playlistName,
+            playlistLength: playlist.length,
+        });
+
+        let item = previousItemNodes.get(renderKey) || null;
+        if (!item || item._playlistRenderSignature !== renderSignature) {
+            const nextItem = createPlaylistTrackItem({
+                song,
+                index,
+                playlistLength: playlist.length,
+                playlistName,
+                isCurrentPlaying,
+                isUnavailable,
+            });
+            nextItem._playlistRenderSignature = renderSignature;
+
+            if (item?.parentNode === container) {
+                container.replaceChild(nextItem, item);
+            }
+
+            item = nextItem;
         }
-        
+
         item.dataset.index = index;
+        item.dataset.renderKey = renderKey;
 
-        // 为本地歌曲生成封面URL
-        let coverUrl = '';
-        if (song.type !== 'youtube' && song.url) {
-            // 本地歌曲：始终使用 /cover/ 接口（支持内嵌封面、目录封面、占位图回退）
-            coverUrl = `/cover/${song.url.split('/').map(encodeURIComponent).join('/')}`;
-        } else {
-            coverUrl = song.thumbnail_url || '';
+        const currentChild = container.children[index];
+        if (currentChild !== item) {
+            container.insertBefore(item, currentChild || null);
         }
 
-        const cover = document.createElement('div');
-        cover.className = 'track-cover';
-        const imgEl = document.createElement('img');
-        imgEl.alt = '';
-        const coverPlaceholder = document.createElement('div');
-        coverPlaceholder.className = 'track-cover-placeholder';
-        coverPlaceholder.textContent = '🎵';
-        cover.appendChild(imgEl);
-        cover.appendChild(coverPlaceholder);
-        if (coverUrl) {
-            thumbnailManager.setupFallback(imgEl, coverUrl);
-        } else {
-            imgEl.style.display = 'none';
-            coverPlaceholder.style.display = 'flex';
-        }
-
-        // 左侧：cover + type
-        const leftContainer = document.createElement('div');
-        leftContainer.className = 'track-left';
-        
-        const typeEl = document.createElement('div');
-        typeEl.className = 'track-type';
-        const songType = song.type === 'youtube' ? 'YouTube' : i18n.t('local.musicType');
-        typeEl.textContent = songType;
-        
-        leftContainer.appendChild(cover);
-        leftContainer.appendChild(typeEl);
-
-        // 中间：title + meta
-        const info = document.createElement('div');
-        info.className = 'track-info';
-        
-        const songTitleEl = document.createElement('div');
-        songTitleEl.className = 'track-title';
-        songTitleEl.textContent = song.title || i18n.t('track.unknown');
-        
-        const metaEl = document.createElement('div');
-        metaEl.className = 'track-meta';
-        
-        if (isCurrentPlaying) {
-            const playlistNameEl = document.createElement('div');
-            playlistNameEl.className = 'track-playlist-name';
-            playlistNameEl.textContent = playlistName;
-            metaEl.appendChild(playlistNameEl);
-        } else {
-            const playlistNameEl = document.createElement('div');
-            playlistNameEl.className = 'track-playlist-name';
-            //playlistNameEl.textContent = playlistName;
-            metaEl.appendChild(playlistNameEl);
-        }
-        
-        info.appendChild(songTitleEl);
-        info.appendChild(metaEl);
-
-        // 右侧：删除按钮或序列号
-        if (isCurrentPlaying) {
-            item.appendChild(leftContainer);
-            item.appendChild(info);
-
-            // 序列号放在右下角，与类型垂直对齐
-            const seqEl = document.createElement('div');
-            seqEl.className = 'track-seq';
-            seqEl.textContent = `${index + 1}/${playlist.length}`;
-            item.appendChild(seqEl);
-        } else {
-            // 添加拖拽手柄（移动端触摸拖拽）
-            const dragHandle = document.createElement('div');
-            dragHandle.className = 'drag-handle';
-            dragHandle.appendChild(createTrackControlIcon({
-                width: 16,
-                height: 16,
-                viewBox: '0 0 24 24',
-                circles: [
-                    { cx: 9, cy: 5, r: 2 },
-                    { cx: 15, cy: 5, r: 2 },
-                    { cx: 9, cy: 12, r: 2 },
-                    { cx: 15, cy: 12, r: 2 },
-                    { cx: 9, cy: 19, r: 2 },
-                    { cx: 15, cy: 19, r: 2 }
-                ]
-            }));
-            
-            const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'track-menu-btn';
-            deleteBtn.type = 'button';
-            deleteBtn.appendChild(createTrackControlIcon({
-                width: 20,
-                height: 20,
-                viewBox: '0 0 24 24',
-                circles: [
-                    { cx: 12, cy: 5, r: 2 },
-                    { cx: 12, cy: 12, r: 2 },
-                    { cx: 12, cy: 19, r: 2 }
-                ]
-            }));
-            
-            // 左侧：删除按钮，右侧：拖拽手柄
-            item.appendChild(deleteBtn);
-            item.appendChild(leftContainer);
-            item.appendChild(info);
-            item.appendChild(dragHandle);
-        }
-
-        // 标记不可用歌曲（播放失败被跳过的歌曲）
-        if (unavailableSongs.has(song.url)) {
-            item.classList.add('song-unavailable');
-            const warnIcon = document.createElement('div');
-            warnIcon.className = 'track-unavailable-badge';
-            warnIcon.title = i18n.t('playlist.songUnavailable');
-            warnIcon.textContent = '\u26A0';
-            item.appendChild(warnIcon);
-        }
-
-        container.appendChild(item);
+        nextItemNodes.set(renderKey, item);
     });
+
+    previousItemNodes.forEach((item, renderKey) => {
+        if (nextItemNodes.has(renderKey)) {
+            return;
+        }
+
+        item.remove();
+    });
+
+    container._playlistItemNodes = nextItemNodes;
 
     // 初始化触摸拖拽排序
     initTouchDragSort(container, renderPlaylistUI, { container, onPlay, currentMeta });
@@ -1782,6 +1843,11 @@ function initTouchDragSort(container, rerenderFn, rerenderArgs) {
 
     // 获取拖拽手柄
     container.querySelectorAll('.drag-handle').forEach((handle, idx) => {
+        if (handle.dataset.touchDragBound === 'true') {
+            return;
+        }
+
+        handle.dataset.touchDragBound = 'true';
         const item = handle.closest('.playlist-track-item');
         if (!item) return;
 

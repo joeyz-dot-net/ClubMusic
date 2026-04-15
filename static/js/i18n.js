@@ -820,17 +820,19 @@ export const i18n = {
      * 更新页面元素文本 - 支持 4 种 data-i18n* 属性
      */
     updatePageText() {
-        document.querySelectorAll('[data-i18n]').forEach(el => {
-            el.textContent = this.t(el.getAttribute('data-i18n'));
-        });
-        document.querySelectorAll('[data-i18n-title]').forEach(el => {
-            el.title = this.t(el.getAttribute('data-i18n-title'));
-        });
-        document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
-            el.placeholder = this.t(el.getAttribute('data-i18n-placeholder'));
-        });
-        document.querySelectorAll('[data-i18n-aria]').forEach(el => {
-            el.setAttribute('aria-label', this.t(el.getAttribute('data-i18n-aria')));
+        document.querySelectorAll('[data-i18n], [data-i18n-title], [data-i18n-placeholder], [data-i18n-aria]').forEach(el => {
+            if (el.hasAttribute('data-i18n')) {
+                el.textContent = this.t(el.getAttribute('data-i18n'));
+            }
+            if (el.hasAttribute('data-i18n-title')) {
+                el.title = this.t(el.getAttribute('data-i18n-title'));
+            }
+            if (el.hasAttribute('data-i18n-placeholder')) {
+                el.placeholder = this.t(el.getAttribute('data-i18n-placeholder'));
+            }
+            if (el.hasAttribute('data-i18n-aria')) {
+                el.setAttribute('aria-label', this.t(el.getAttribute('data-i18n-aria')));
+            }
         });
         document.title = this.t('page.title');
     }

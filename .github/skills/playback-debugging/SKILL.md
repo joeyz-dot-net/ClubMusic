@@ -59,16 +59,17 @@ Use this skill when the problem involves one or more of these symptoms:
    - Compare WebSocket `state_update` payloads with poll-based `/status` results.
 
 4. Run regression when applicable.
-   - If the issue touches trusted controls, resume flow, stale local paused state, KTV coordination, or request tracing, run:
+   - If the issue touches trusted controls, resume flow, stale local paused state, KTV coordination, request tracing, or queue rendering/removal/reorder, run:
 
 ```powershell
-py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --output logs/browser-control-regression.json
+py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --include-queue-suite --output logs/browser-control-regression.json
 ```
 
    - Passing baseline:
      - `summary.passed = true`
      - `checks.controlSuite = true`
      - `checks.trustedResumeSuite = true`
+     - `checks.queueSuite = true`
 
 5. Narrow the fault domain.
    - If browser intent is correct but backend control logs differ, inspect router or request-tracing logic.

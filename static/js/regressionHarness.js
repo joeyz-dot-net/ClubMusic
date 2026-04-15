@@ -4,15 +4,19 @@ const DEFAULT_WAIT_MS = 2600;
 const PROBE_AUTO_CLEANUP_MS = 20000;
 
 export class RegressionHarness {
-    constructor({ app, api, player, ktvSync, playlistManager }) {
+    constructor({ app, api, player, ktvSync, playlistManager, localFiles }) {
         this.app = app;
         this.api = api;
         this.player = player;
         this.ktvSync = ktvSync;
         this.playlistManager = playlistManager;
+        this.localFiles = localFiles;
         this.nextClickProbe = null;
         this.prevClickProbe = null;
         this.playPauseResumeProbe = null;
+        this.queueDeleteProbe = null;
+        this.queueReorderProbe = null;
+        this.localSearchProbe = null;
         this.songs = {
             embeddable: {
                 url: 'https://www.youtube.com/watch?v=FQyEkN_9CXU',
@@ -31,6 +35,15 @@ export class RegressionHarness {
                 type: 'youtube',
                 duration: 256,
                 video_id: 'i-jL1RgojQU'
+            },
+            queueAuxiliary: {
+                url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+                title: 'Never Gonna Give You Up',
+                name: 'Never Gonna Give You Up',
+                artist: 'Rick Astley',
+                type: 'youtube',
+                duration: 213,
+                video_id: 'dQw4w9WgXcQ'
             }
         };
     }
@@ -127,6 +140,16 @@ export class RegressionHarness {
 
     getSong(key) {
         return this.songs[key] || null;
+    }
+
+    getSongs(songKeys = []) {
+        return songKeys.map((key) => {
+            const song = this.getSong(key);
+            if (!song) {
+                throw new Error(`Unknown regression song key: ${key}`);
+            }
+            return song;
+        });
     }
 
     getSongId(song) {
@@ -315,11 +338,12 @@ export class RegressionHarness {
 
     async rebuildQueue(songList = []) {
         const playlistId = this.playlistManager?.getSelectedPlaylistId?.() || 'default';
-        if (playlistId === 'default') {
+        const activeDefaultId = this.playlistManager?.getActiveDefaultId?.() || 'default';
+        if (playlistId === activeDefaultId) {
             const playlist = await this.api.getPlaylist(playlistId);
             const songs = Array.isArray(playlist?.playlist) ? playlist.playlist : [];
             for (let index = songs.length - 1; index >= 0; index -= 1) {
-                await this.api.removeFromSpecificPlaylist(playlistId, index);
+                await this.api.removeFromPlaylist(index);
             }
         } else {
             await this.api.clearPlaylist(playlistId);
@@ -340,6 +364,414 @@ export class RegressionHarness {
         }
 
         await this.playlistManager?.loadCurrent?.();
+    }
+
+    async ensureDefaultQueueSelected() {
+        const activeDefaultId = this.playlistManager?.getActiveDefaultId?.() || 'default';
+        this.playlistManager?.setSelectedPlaylist?.(activeDefaultId);
+        if (this.app) {
+            this.app.currentPlaylistId = activeDefaultId;
+        }
+        await this.playlistManager?.loadCurrent?.();
+        this.app?.renderPlaylist?.();
+        await this.sleep(60);
+        return activeDefaultId;
+    }
+
+    moveListItem(list, fromIndex, toIndex) {
+        const nextList = list.slice();
+        const [moved] = nextList.splice(fromIndex, 1);
+        nextList.splice(toIndex, 0, moved);
+        return nextList;
+    }
+
+    getQueueDomSnapshot(label = 'queue-dom-snapshot') {
+        const container = document.getElementById('playListContainer');
+        const playlist = this.playlistManager?.getCurrent?.() || [];
+        const items = Array.from(container?.querySelectorAll?.('.playlist-track-item') || []).map((item, domIndex) => {
+            const dataIndex = Number.parseInt(item.dataset.index || '-1', 10);
+            const song = Number.isInteger(dataIndex) && dataIndex >= 0 ? playlist[dataIndex] || null : null;
+            return {
+                domIndex,
+                dataIndex,
+                title: item.querySelector('.track-title')?.textContent?.trim() || null,
+                url: song?.url || null,
+                current: item.classList.contains('current-playing'),
+                unavailable: item.classList.contains('song-unavailable'),
+                hasDeleteButton: !!item.querySelector('.track-menu-btn'),
+                hasDragHandle: !!item.querySelector('.drag-handle'),
+                seqText: item.querySelector('.track-seq')?.textContent?.trim() || null,
+            };
+        });
+
+        return {
+            label,
+            currentMeta: this.player.getStatus?.()?.current_meta || null,
+            selectedPlaylistId: this.playlistManager?.getSelectedPlaylistId?.() || null,
+            activeDefaultId: this.playlistManager?.getActiveDefaultId?.() || null,
+            playlistLength: playlist.length,
+            playlistUrls: playlist.map((song) => song?.url || null),
+            playlistTitles: playlist.map((song) => song?.title || song?.name || null),
+            items,
+            currentCardCount: items.filter((item) => item.current).length,
+            emptyStateVisible: !!container?.querySelector('.playlist-empty-state'),
+        };
+    }
+
+    async waitForQueueLength(expectedLength, { timeoutMs = 8000, intervalMs = 120 } = {}) {
+        const startedAt = Date.now();
+        while ((Date.now() - startedAt) <= timeoutMs) {
+            const playlist = this.playlistManager?.getCurrent?.() || [];
+            const renderedCount = document.querySelectorAll('#playListContainer .playlist-track-item').length;
+            if (playlist.length === expectedLength && renderedCount === expectedLength) {
+                return true;
+            }
+            await this.sleep(intervalMs);
+        }
+        return false;
+    }
+
+    async waitForQueueUrls(expectedUrls, { timeoutMs = 8000, intervalMs = 120 } = {}) {
+        const expectedSerialized = JSON.stringify(expectedUrls);
+        const startedAt = Date.now();
+        while ((Date.now() - startedAt) <= timeoutMs) {
+            const snapshot = this.getQueueDomSnapshot('queue-wait');
+            const playlistUrls = snapshot.playlistUrls;
+            const renderedUrls = snapshot.items.map((item) => item.url);
+            if (
+                JSON.stringify(playlistUrls) === expectedSerialized
+                && JSON.stringify(renderedUrls) === expectedSerialized
+            ) {
+                return true;
+            }
+            await this.sleep(intervalMs);
+        }
+        return false;
+    }
+
+    buildLocalSearchFixture() {
+        return {
+            name: 'root',
+            dirs: [
+                {
+                    name: 'Acoustic Set',
+                    rel: 'Acoustic Set',
+                    dirs: [
+                        {
+                            name: 'Ballads',
+                            rel: 'Acoustic Set/Ballads',
+                            dirs: [],
+                            files: [
+                                {
+                                    name: 'Ocean Eyes.mp3',
+                                    rel: 'fixtures/acoustic-set/ballads/ocean-eyes.mp3',
+                                },
+                            ],
+                        },
+                    ],
+                    files: [
+                        {
+                            name: 'Sunrise Session.flac',
+                            rel: 'fixtures/acoustic-set/sunrise-session.flac',
+                        },
+                    ],
+                },
+                {
+                    name: 'Rock Arena',
+                    rel: 'Rock Arena',
+                    dirs: [],
+                    files: [
+                        {
+                            name: 'Thunder Road.mp3',
+                            rel: 'fixtures/rock-arena/thunder-road.mp3',
+                        },
+                    ],
+                },
+            ],
+            files: [
+                {
+                    name: 'Root Anthem.wav',
+                    rel: 'fixtures/root-anthem.wav',
+                },
+            ],
+        };
+    }
+
+    buildLocalSearchResults() {
+        return [
+            {
+                url: 'Acoustic Set',
+                title: 'Acoustic Set',
+                name: 'Acoustic Set',
+                type: 'directory',
+                is_directory: true,
+            },
+            {
+                url: 'fixtures/acoustic-set/ballads/ocean-eyes.mp3',
+                title: 'Ocean Eyes.mp3',
+                name: 'Ocean Eyes.mp3',
+                type: 'local',
+            },
+        ];
+    }
+
+    async ensureLocalSearchModalReady() {
+        const searchModal = document.getElementById('searchModal');
+        const searchButton = document.querySelector('.nav-item[data-tab="search"]');
+        if (!searchModal) {
+            throw new Error('Search modal not ready');
+        }
+
+        const isVisible = getComputedStyle(searchModal).display !== 'none' && searchModal.classList.contains('modal-visible');
+        if (!isVisible) {
+            if (!searchButton) {
+                throw new Error('Search modal trigger not ready');
+            }
+            searchButton.click();
+            await this.sleep(120);
+        }
+
+        const searchInput = document.getElementById('searchModalInput');
+        const searchBody = document.getElementById('searchModalBody');
+        if (!searchInput || !searchBody) {
+            throw new Error('Search modal controls not ready');
+        }
+
+        return {
+            searchModal,
+            searchInput,
+            searchBody,
+        };
+    }
+
+    getLocalSearchSnapshot(label = 'local-search-snapshot') {
+        const searchModal = document.getElementById('searchModal');
+        const searchBody = document.getElementById('searchModalBody');
+        const searchInput = document.getElementById('searchModalInput');
+        const searchResults = Array.from(searchBody?.querySelectorAll('.search-results-panel[data-panel="local"] .search-result-item') || []).map((item) => ({
+            title: item.dataset.title || null,
+            url: item.dataset.url || '',
+            type: item.dataset.type || null,
+            isDirectory: item.dataset.directory === 'true' || item.dataset.type === 'directory',
+        }));
+        const dirCards = Array.from(searchBody?.querySelectorAll('.search-dir-card') || []).map((card) => ({
+            name: card.getAttribute('data-dir-name') || null,
+            url: card.getAttribute('data-dir-url') || '',
+        }));
+        const dirSongs = Array.from(searchBody?.querySelectorAll('.search-dir-songs .search-result-item') || []).map((item) => ({
+            title: item.dataset.title || null,
+            url: item.dataset.url || '',
+        }));
+
+        return {
+            label,
+            modalVisible: searchModal ? getComputedStyle(searchModal).display !== 'none' : false,
+            searchValue: searchInput?.value || '',
+            activeTab: document.querySelector('.search-tab.active')?.getAttribute('data-tab') || null,
+            searchResults,
+            searchResultTitles: searchResults.map((item) => item.title),
+            directoryResultTitles: searchResults.filter((item) => item.isDirectory).map((item) => item.title),
+            dirViewActive: !!searchBody?.querySelector('.search-dir-view'),
+            breadcrumbLabels: Array.from(searchBody?.querySelectorAll('.search-breadcrumb-item') || [])
+                .map((node) => node.textContent?.trim() || null)
+                .filter(Boolean),
+            dirCards,
+            dirNames: dirCards.map((card) => card.name),
+            dirSongs,
+            dirSongTitles: dirSongs.map((item) => item.title),
+            emptyStateText: searchBody?.querySelector('.search-empty, .search-dir-empty')?.textContent?.trim() || null,
+        };
+    }
+
+    captureLocalSearchProbeStep({ probeId = null, label = 'local-search-step' } = {}) {
+        const probe = this.localSearchProbe;
+        if (!probe) {
+            throw new Error('No prepared local-search probe');
+        }
+        if (probeId && probe.probeId !== probeId) {
+            throw new Error(`Probe mismatch: expected ${probe.probeId}, got ${probeId}`);
+        }
+
+        const snapshot = this.getLocalSearchSnapshot(label);
+        probe.snapshots[label] = snapshot;
+        return snapshot;
+    }
+
+    async prepareLocalSearchFlow({ searchQuery = 'ocean' } = {}) {
+        const searchManager = this.app?.modules?.searchManager;
+        if (!searchManager?.renderSearchResults || !searchManager?.restoreSearchResults) {
+            throw new Error('Search manager not ready');
+        }
+
+        const { searchInput, searchBody } = await this.ensureLocalSearchModalReady();
+
+        const fixtureTree = this.buildLocalSearchFixture();
+        const fixtureResults = this.buildLocalSearchResults();
+        this.localFiles.fullTree = fixtureTree;
+        this.localFiles.filterCache = new WeakMap();
+        searchManager.dirNavState = { isActive: false, breadcrumb: [] };
+        searchManager.currentSearchResults = { local: [], youtube: [] };
+        searchManager.totalSearchResults = { local: [], youtube: [] };
+        searchInput.value = '';
+        searchBody.replaceChildren();
+        await this.sleep(40);
+
+        const beforeSnapshot = this.getLocalSearchSnapshot('before');
+        const probeId = `local_search_${Date.now().toString(36)}`;
+        this.localSearchProbe = {
+            probeId,
+            searchQuery,
+            fixtureResults,
+            expected: {
+                searchResultTitles: fixtureResults.map((item) => item.title),
+                directoryResultTitles: ['Acoustic Set'],
+                firstDirectoryTitle: 'Acoustic Set',
+                firstDirectoryCardNames: ['Ballads'],
+                firstDirectorySongTitles: ['Sunrise Session.flac'],
+                secondDirectoryTitle: 'Ballads',
+                secondDirectorySongTitles: ['Ocean Eyes.mp3'],
+            },
+            snapshots: {
+                before: beforeSnapshot,
+            },
+        };
+
+        return {
+            probeId,
+            searchQuery,
+            searchInputSelector: '#searchModalInput',
+            firstSearchResultSelector: '#searchModalBody .search-results-panel[data-panel="local"] .search-result-item[data-url="Acoustic Set"]',
+            firstDirCardSelector: '#searchModalBody .search-dir-card[data-dir-url="Acoustic Set/Ballads"]',
+            breadcrumbResultsSelector: '#searchModalBody .search-breadcrumb-item[data-breadcrumb-index="0"]',
+            beforeSnapshot,
+        };
+    }
+
+    async renderLocalSearchFixtureResults({ probeId = null } = {}) {
+        const probe = this.localSearchProbe;
+        if (!probe) {
+            throw new Error('No prepared local-search probe');
+        }
+        if (probeId && probe.probeId !== probeId) {
+            throw new Error(`Probe mismatch: expected ${probe.probeId}, got ${probeId}`);
+        }
+
+        const searchManager = this.app?.modules?.searchManager;
+        const searchInput = document.getElementById('searchModalInput');
+        const query = searchInput?.value?.trim() || '';
+        if (query !== probe.searchQuery) {
+            throw new Error(`Expected search query ${probe.searchQuery}, got ${query}`);
+        }
+
+        searchManager.renderSearchResults(probe.fixtureResults, [], query, { preferredTab: 'local' });
+        await this.sleep(20);
+        const snapshot = this.getLocalSearchSnapshot('afterSearchResults');
+        probe.snapshots.afterSearchResults = snapshot;
+        return snapshot;
+    }
+
+    async evaluateLocalSearchFlow({ probeId = null } = {}) {
+        const probe = this.localSearchProbe;
+        if (!probe) {
+            throw new Error('No prepared local-search probe');
+        }
+        if (probeId && probe.probeId !== probeId) {
+            throw new Error(`Probe mismatch: expected ${probe.probeId}, got ${probeId}`);
+        }
+
+        const beforeSnapshot = probe.snapshots.before || this.getLocalSearchSnapshot('before');
+        const afterSearchResults = probe.snapshots.afterSearchResults || null;
+        const afterFirstDirectory = probe.snapshots.afterFirstDirectory || null;
+        const afterSecondDirectory = probe.snapshots.afterSecondDirectory || null;
+        const afterBreadcrumbReturn = probe.snapshots.afterBreadcrumbReturn || null;
+        const summary = this.summarizeChecks({
+            searchModalVisible: beforeSnapshot.modalVisible === true,
+            localSearchResultsRendered: afterSearchResults?.searchValue === probe.searchQuery
+                && afterSearchResults?.activeTab === 'local'
+                && JSON.stringify(afterSearchResults?.searchResultTitles || []) === JSON.stringify(probe.expected.searchResultTitles)
+                && JSON.stringify(afterSearchResults?.directoryResultTitles || []) === JSON.stringify(probe.expected.directoryResultTitles),
+            firstDirectoryOpened: afterFirstDirectory?.dirViewActive === true
+                && afterFirstDirectory?.breadcrumbLabels?.length === 2
+                && afterFirstDirectory?.breadcrumbLabels?.[afterFirstDirectory.breadcrumbLabels.length - 1] === probe.expected.firstDirectoryTitle
+                && JSON.stringify(afterFirstDirectory?.dirNames || []) === JSON.stringify(probe.expected.firstDirectoryCardNames)
+                && JSON.stringify(afterFirstDirectory?.dirSongTitles || []) === JSON.stringify(probe.expected.firstDirectorySongTitles),
+            secondDirectoryOpened: afterSecondDirectory?.dirViewActive === true
+                && afterSecondDirectory?.breadcrumbLabels?.length === 3
+                && afterSecondDirectory?.breadcrumbLabels?.[afterSecondDirectory.breadcrumbLabels.length - 1] === probe.expected.secondDirectoryTitle
+                && JSON.stringify(afterSecondDirectory?.dirNames || []) === JSON.stringify([])
+                && JSON.stringify(afterSecondDirectory?.dirSongTitles || []) === JSON.stringify(probe.expected.secondDirectorySongTitles),
+            breadcrumbReturnsSearchResults: afterBreadcrumbReturn?.dirViewActive === false
+                && afterBreadcrumbReturn?.activeTab === 'local'
+                && JSON.stringify(afterBreadcrumbReturn?.searchResultTitles || []) === JSON.stringify(probe.expected.searchResultTitles)
+                && JSON.stringify(afterBreadcrumbReturn?.directoryResultTitles || []) === JSON.stringify(probe.expected.directoryResultTitles),
+        });
+
+        const result = {
+            probeId: probe.probeId,
+            searchQuery: probe.searchQuery,
+            beforeSnapshot,
+            afterSearchResults,
+            afterFirstDirectory,
+            afterSecondDirectory,
+            afterBreadcrumbReturn,
+            summary,
+        };
+
+        this.localSearchProbe = null;
+        return result;
+    }
+
+    dispatchSyntheticTouchEvent(target, type, clientY) {
+        if (!(target instanceof EventTarget)) {
+            throw new Error(`Cannot dispatch ${type}: target missing`);
+        }
+
+        const event = new Event(type, { bubbles: true, cancelable: true });
+        const touchPoint = { clientY };
+        const touches = type === 'touchend' || type === 'touchcancel' ? [] : [touchPoint];
+        Object.defineProperty(event, 'touches', {
+            configurable: true,
+            enumerable: true,
+            value: touches,
+        });
+        Object.defineProperty(event, 'changedTouches', {
+            configurable: true,
+            enumerable: true,
+            value: [touchPoint],
+        });
+        Object.defineProperty(event, 'targetTouches', {
+            configurable: true,
+            enumerable: true,
+            value: touches,
+        });
+        target.dispatchEvent(event);
+    }
+
+    async simulateQueueTouchReorder({ fromIndex, toIndex } = {}) {
+        const sourceHandle = document.querySelector(`#playListContainer .playlist-track-item[data-index="${fromIndex}"] .drag-handle`);
+        const targetItem = document.querySelector(`#playListContainer .playlist-track-item[data-index="${toIndex}"]`);
+        if (!sourceHandle || !targetItem) {
+            throw new Error(`Queue reorder elements missing: fromIndex=${fromIndex}, toIndex=${toIndex}`);
+        }
+
+        const sourceRect = sourceHandle.getBoundingClientRect();
+        const targetRect = targetItem.getBoundingClientRect();
+        const startY = sourceRect.top + Math.min(12, sourceRect.height / 2 || 12);
+        const dragStartY = startY + 24;
+        const movingUp = fromIndex > toIndex;
+        const targetY = movingUp
+            ? targetRect.top + Math.max(6, targetRect.height * 0.2)
+            : targetRect.bottom - Math.max(6, targetRect.height * 0.2);
+
+        this.dispatchSyntheticTouchEvent(sourceHandle, 'touchstart', startY);
+        await this.sleep(20);
+        this.dispatchSyntheticTouchEvent(sourceHandle, 'touchmove', dragStartY);
+        await this.sleep(20);
+        this.dispatchSyntheticTouchEvent(sourceHandle, 'touchmove', targetY);
+        await this.sleep(20);
+        this.dispatchSyntheticTouchEvent(sourceHandle, 'touchmove', targetY);
+        await this.sleep(20);
+        this.dispatchSyntheticTouchEvent(sourceHandle, 'touchend', targetY);
     }
 
     resetKtvRegressionState() {
@@ -518,6 +950,161 @@ export class RegressionHarness {
         await this.app.playSong(song);
         await this.sleep(waitMs);
         return this.snapshot('after-play');
+    }
+
+    async prepareQueueDeleteFlow({
+        songKeys = ['embeddable', 'restricted'],
+        playIndex = 0,
+        deleteIndex = 1,
+        waitMs = DEFAULT_WAIT_MS,
+    } = {}) {
+        const songs = this.getSongs(songKeys);
+        if (deleteIndex === playIndex) {
+            throw new Error('Queue delete probe cannot target the current playing index');
+        }
+
+        await this.ensureDefaultQueueSelected();
+        await this.rebuildQueue(songs);
+        await this.playQueueIndex(playIndex, waitMs);
+        this.app?.renderPlaylist?.();
+        await this.sleep(300);
+
+        const beforeSnapshot = this.getQueueDomSnapshot('queue-delete-before');
+        const probeId = `queue_delete_${Date.now().toString(36)}`;
+        const targetSong = songs[deleteIndex];
+        this.queueDeleteProbe = {
+            probeId,
+            songKeys,
+            playIndex,
+            deleteIndex,
+            targetSong,
+            expectedRemainingUrls: songs
+                .filter((_, index) => index !== deleteIndex)
+                .map((song) => song.url),
+            beforeSnapshot,
+        };
+
+        return {
+            probeId,
+            deleteSelector: `#playListContainer .playlist-track-item[data-index="${deleteIndex}"] .track-menu-btn`,
+            confirmSelector: '.custom-modal-btn-confirm',
+            beforeSnapshot,
+            deletedUrl: targetSong?.url || null,
+        };
+    }
+
+    async evaluateQueueDeleteFlow({ probeId = null, settleMs = 800 } = {}) {
+        const probe = this.queueDeleteProbe;
+        if (!probe) {
+            throw new Error('No prepared queue delete probe');
+        }
+        if (probeId && probe.probeId !== probeId) {
+            throw new Error(`Probe mismatch: expected ${probe.probeId}, got ${probeId}`);
+        }
+
+        await this.waitForQueueLength(probe.beforeSnapshot.items.length - 1);
+        await this.sleep(settleMs);
+        const afterSnapshot = this.getQueueDomSnapshot('queue-delete-after');
+        const currentTrackId = this.getSongMatchId(afterSnapshot.currentMeta);
+        const summary = this.summarizeChecks({
+            itemCountDecreased: afterSnapshot.items.length === probe.beforeSnapshot.items.length - 1,
+            removedUrlAbsent: !afterSnapshot.items.some((item) => item.url === probe.targetSong?.url),
+            renderedOrderMatchesExpected: JSON.stringify(afterSnapshot.items.map((item) => item.url)) === JSON.stringify(probe.expectedRemainingUrls),
+            renderedOrderMatchesPlaylistData: JSON.stringify(afterSnapshot.items.map((item) => item.url)) === JSON.stringify(afterSnapshot.playlistUrls),
+            currentTrackUnchanged: currentTrackId === this.getSongId(this.getSong(probe.songKeys[probe.playIndex])),
+            singleCurrentCard: afterSnapshot.currentCardCount === 1,
+            emptyStateHidden: afterSnapshot.emptyStateVisible === false,
+        });
+
+        const result = {
+            probeId: probe.probeId,
+            beforeSnapshot: probe.beforeSnapshot,
+            afterSnapshot,
+            deletedUrl: probe.targetSong?.url || null,
+            summary,
+        };
+
+        this.queueDeleteProbe = null;
+        return result;
+    }
+
+    async prepareQueueReorderFlow({
+        songKeys = ['embeddable', 'restricted', 'queueAuxiliary'],
+        playIndex = 0,
+        fromIndex = 2,
+        toIndex = 1,
+        waitMs = DEFAULT_WAIT_MS,
+    } = {}) {
+        const songs = this.getSongs(songKeys);
+        if (fromIndex === playIndex || toIndex === playIndex) {
+            throw new Error('Queue reorder probe must not move the current playing entry');
+        }
+
+        await this.ensureDefaultQueueSelected();
+        await this.rebuildQueue(songs);
+        await this.playQueueIndex(playIndex, waitMs);
+        this.app?.renderPlaylist?.();
+        await this.sleep(300);
+
+        const beforeSnapshot = this.getQueueDomSnapshot('queue-reorder-before');
+        const expectedUrls = this.moveListItem(songs.map((song) => song.url), fromIndex, toIndex);
+        const probeId = `queue_reorder_${Date.now().toString(36)}`;
+        this.queueReorderProbe = {
+            probeId,
+            songKeys,
+            playIndex,
+            fromIndex,
+            toIndex,
+            expectedUrls,
+            beforeSnapshot,
+        };
+
+        return {
+            probeId,
+            beforeSnapshot,
+            fromIndex,
+            toIndex,
+            expectedUrls,
+        };
+    }
+
+    async evaluateQueueReorderFlow({ probeId = null, settleMs = 800 } = {}) {
+        const probe = this.queueReorderProbe;
+        if (!probe) {
+            throw new Error('No prepared queue reorder probe');
+        }
+        if (probeId && probe.probeId !== probeId) {
+            throw new Error(`Probe mismatch: expected ${probe.probeId}, got ${probeId}`);
+        }
+
+        await this.simulateQueueTouchReorder({
+            fromIndex: probe.fromIndex,
+            toIndex: probe.toIndex,
+        });
+        await this.waitForQueueUrls(probe.expectedUrls);
+        await this.sleep(settleMs);
+        const afterSnapshot = this.getQueueDomSnapshot('queue-reorder-after');
+        const currentTrackId = this.getSongMatchId(afterSnapshot.currentMeta);
+        const summary = this.summarizeChecks({
+            itemCountPreserved: afterSnapshot.items.length === probe.beforeSnapshot.items.length,
+            renderedOrderMatchesExpected: JSON.stringify(afterSnapshot.items.map((item) => item.url)) === JSON.stringify(probe.expectedUrls),
+            renderedOrderMatchesPlaylistData: JSON.stringify(afterSnapshot.items.map((item) => item.url)) === JSON.stringify(afterSnapshot.playlistUrls),
+            currentTrackUnchanged: currentTrackId === this.getSongId(this.getSong(probe.songKeys[probe.playIndex])),
+            singleCurrentCard: afterSnapshot.currentCardCount === 1,
+            currentSequenceUpdated: afterSnapshot.items.find((item) => item.current)?.seqText === `1/${afterSnapshot.items.length}`,
+            dragHandlesPresentForNonCurrent: afterSnapshot.items.filter((item) => !item.current).every((item) => item.hasDragHandle === true),
+        });
+
+        const result = {
+            probeId: probe.probeId,
+            beforeSnapshot: probe.beforeSnapshot,
+            afterSnapshot,
+            expectedUrls: probe.expectedUrls,
+            summary,
+        };
+
+        this.queueReorderProbe = null;
+        return result;
     }
 
     async playQueueIndex(index, waitMs = DEFAULT_WAIT_MS) {
@@ -1124,6 +1711,14 @@ export class RegressionHarness {
         console.log('  await app.regression.evaluateTrustedNextClickFlow()');
         console.log('  await app.regression.prepareTrustedPrevClickFlow()');
         console.log('  await app.regression.evaluateTrustedPrevClickFlow()');
+        console.log('  await app.regression.prepareQueueDeleteFlow()');
+        console.log('  await app.regression.evaluateQueueDeleteFlow()');
+        console.log('  await app.regression.prepareQueueReorderFlow()');
+        console.log('  await app.regression.evaluateQueueReorderFlow()');
+        console.log('  await app.regression.prepareLocalSearchFlow()');
+        console.log('  await app.regression.renderLocalSearchFixtureResults()');
+        console.log('  app.regression.captureLocalSearchProbeStep({ label })');
+        console.log('  await app.regression.evaluateLocalSearchFlow()');
         console.log('  app.regression.buildControlSuiteResult({ trustedNext, trustedPrev })');
         console.log('  app.regression.summarizeControlSuite(result)');
         console.log('  app.regression.printControlSuiteSummary(result)');

@@ -118,19 +118,25 @@ playwright install chromium
 基础回归：
 
 ```bash
-py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --output logs/browser-control-regression.json
+py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --include-queue-suite --output logs/browser-control-regression.json
 ```
 
 如需验证 room 路由、roomBot 自动恢复、WebSocket room 校验或默认页隔离，运行 room suite：
 
 ```bash
-py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --include-room-suite --output logs/browser-control-regression-room.json
+py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --include-queue-suite --include-room-suite --output logs/browser-control-regression-room.json
+```
+
+如需验证搜索弹窗中的本地结果、目录导航和面包屑返回，运行 local suite：
+
+```bash
+py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --include-local-suite --output logs/browser-control-regression-local.json
 ```
 
 如需复现特定房间问题，可固定 room ID：
 
 ```bash
-py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --include-room-suite --room-id regression_room_debug --output logs/browser-control-regression-room.json
+py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --include-queue-suite --include-room-suite --room-id regression_room_debug --output logs/browser-control-regression-room.json
 ```
 
 room suite 会先等待页面 app context 初始化，再开始断言房间状态；默认页如果始终未 ready，会按 isolation failure 处理，而不是静默跳过检查。
@@ -139,6 +145,7 @@ VS Code 里可直接运行任务：
 
 ```text
 Run Task -> Browser Control Regression
+Run Task -> Browser Control Regression (Local)
 Run Task -> Browser Control Regression (Room)
 ```
 
@@ -147,6 +154,8 @@ Run Task -> Browser Control Regression (Room)
 - 顶层 `summary.passed = true`
 - `checks.controlSuite = true`
 - `checks.trustedResumeSuite = true`
+- `checks.queueSuite = true`
+- 使用 `--include-local-suite` 时，`checks.localSuite = true`
 - 使用 `--include-room-suite` 时，`checks.roomSuite = true`
 
 查看当前主服务单实例状态：

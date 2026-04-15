@@ -25,35 +25,59 @@ export const settingsManager = {
     // 用于存储 player 实例引用
     player: null,
     schema: {},
+    buttonGroupCache: new Map(),
 
     renderDiagnosticsStatus(container, lines, fallbackText) {
         if (!container) return;
         container.textContent = lines && lines.length > 0 ? lines.join('\n') : fallbackText;
     },
 
-    setButtonGroupValue(groupId, value) {
-        const group = document.getElementById(groupId);
-        if (!group) return;
+    getButtonGroupRefs(groupId) {
+        const cached = this.buttonGroupCache.get(groupId);
+        if (cached?.group?.isConnected) {
+            return cached;
+        }
 
-        group.querySelectorAll('.settings-btn').forEach((btn) => {
+        const group = document.getElementById(groupId);
+        if (!group) {
+            this.buttonGroupCache.delete(groupId);
+            return null;
+        }
+
+        const buttons = Array.from(group.querySelectorAll('.settings-btn'));
+        const buttonByValue = new Map(
+            buttons
+                .map((button) => [button.dataset.value, button])
+                .filter(([value]) => Boolean(value))
+        );
+        const refs = { group, buttons, buttonByValue };
+        this.buttonGroupCache.set(groupId, refs);
+        return refs;
+    },
+
+    setButtonGroupValue(groupId, value) {
+        const refs = this.getButtonGroupRefs(groupId);
+        if (!refs) return;
+
+        refs.buttons.forEach((btn) => {
             btn.classList.toggle('active', btn.dataset.value === value);
         });
     },
 
     getButtonGroupValue(groupId, fallback = null) {
-        const group = document.getElementById(groupId);
-        if (!group) return fallback;
+        const refs = this.getButtonGroupRefs(groupId);
+        if (!refs) return fallback;
 
-        const activeButton = group.querySelector('.settings-btn.active');
+        const activeButton = refs.buttons.find((button) => button.classList.contains('active')) || null;
         return activeButton?.dataset.value || fallback;
     },
 
     updateSettingsButtonTexts(groupId, translations) {
-        const group = document.getElementById(groupId);
-        if (!group) return;
+        const refs = this.getButtonGroupRefs(groupId);
+        if (!refs) return;
 
         Object.entries(translations).forEach(([value, copy]) => {
-            const button = group.querySelector(`.settings-btn[data-value="${value}"]`);
+            const button = refs.buttonByValue.get(value) || null;
             if (!button) return;
 
             const label = button.querySelector('.btn-label');
@@ -327,13 +351,13 @@ export const settingsManager = {
      */
     bindEvents() {
         // 主题按钮组
-        const themeGroup = document.getElementById('themeSetting');
-        if (themeGroup) {
-            themeGroup.querySelectorAll('.settings-btn').forEach(btn => {
+        const themeGroupRefs = this.getButtonGroupRefs('themeSetting');
+        if (themeGroupRefs) {
+            themeGroupRefs.buttons.forEach(btn => {
                 btn.addEventListener('click', () => {
                     const value = btn.dataset.value;
                     // 更新按钮状态
-                    themeGroup.querySelectorAll('.settings-btn').forEach(b => b.classList.remove('active'));
+                    themeGroupRefs.buttons.forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
                     // 保存并应用
                     this.setSetting('theme', value);
@@ -343,13 +367,13 @@ export const settingsManager = {
         }
         
         // 语言按钮组
-        const langGroup = document.getElementById('languageSetting');
-        if (langGroup) {
-            langGroup.querySelectorAll('.settings-btn').forEach(btn => {
+        const langGroupRefs = this.getButtonGroupRefs('languageSetting');
+        if (langGroupRefs) {
+            langGroupRefs.buttons.forEach(btn => {
                 btn.addEventListener('click', () => {
                     const value = btn.dataset.value;
                     // 更新按钮状态
-                    langGroup.querySelectorAll('.settings-btn').forEach(b => b.classList.remove('active'));
+                    langGroupRefs.buttons.forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
                     // 保存并应用
                     this.setSetting('language', value);

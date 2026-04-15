@@ -3,23 +3,23 @@
 
 import { api } from './api.js?v=4';
 import { player } from './player.js?v=21';
-import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=34';
-import { playlistsManagement } from './playlists-management.js?v=23';
+import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=35';
+import { playlistsManagement } from './playlists-management.js?v=24';
 import { volumeControl } from './volume.js?v=14';
-import { searchManager } from './search.js?v=36';
+import { searchManager } from './search.js?v=37';
 import { themeManager } from './themeManager.js';
 import { debug } from './debug.js';
 import { Toast, formatTime } from './ui.js';
 import { focusFirstFocusable, isMobile, isIPad, restoreFocus, ThumbnailManager, trapFocusInContainer } from './utils.js?v=2';
-import { localFiles } from './local.js?v=20';
-import { settingsManager } from './settingsManager.js?v=6';
+import { localFiles } from './local.js?v=21';
+import { settingsManager } from './settingsManager.js?v=7';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
 import { ktvSync } from './ktv.js?v=41';
 import { playLock } from './playLock.js';
 import { unavailableSongs } from './unavailable.js';
 import { recordTrace } from './requestTrace.js?v=2';
-import { createRegressionHarness } from './regressionHarness.js?v=18';
+import { createRegressionHarness } from './regressionHarness.js?v=19';
 import { roomBotManager } from './roomBot.js?v=1';
 
 // ==========================================
@@ -116,8 +116,7 @@ class MusicPlayerApp {
                     await this.switchSelectedPlaylist(playlistId);
                 },
                 () => {
-                    const navItems = document.querySelectorAll('#bottomNav .nav-item');
-                    navItems.forEach(item => item.classList.remove('active'));
+                    this.setActiveBottomNavTab('playlists');
 
                     if (this.elements.playlist) {
                         this.elements.playlist.style.display = 'block';
@@ -129,11 +128,6 @@ class MusicPlayerApp {
                     if (this.elements.tree) {
                         this.elements.tree.classList.remove('tab-visible');
                         this.elements.tree.style.display = 'none';
-                    }
-
-                    const playlistNavItem = document.querySelector('#bottomNav .nav-item[data-tab="playlists"]');
-                    if (playlistNavItem) {
-                        playlistNavItem.classList.add('active');
                     }
                 }
             );
@@ -281,6 +275,39 @@ class MusicPlayerApp {
             nppArtworkSection: document.getElementById('nppArtworkSection'),
             nppProgressBar: document.getElementById('nppProgressBar')
         };
+
+        this.refreshBottomNavCache();
+    }
+
+    refreshBottomNavCache() {
+        const navItems = this.elements?.bottomNav
+            ? Array.from(this.elements.bottomNav.querySelectorAll('.nav-item'))
+            : [];
+
+        this.elements.navItems = navItems;
+        this.elements.navItemByTab = new Map(
+            navItems
+                .map((item) => [item.getAttribute('data-tab'), item])
+                .filter(([tabName]) => Boolean(tabName))
+        );
+    }
+
+    getBottomNavItems() {
+        if (!Array.isArray(this.elements?.navItems)) {
+            this.refreshBottomNavCache();
+        }
+
+        return this.elements?.navItems || [];
+    }
+
+    setActiveBottomNavTab(tabName) {
+        const navItems = this.getBottomNavItems();
+        navItems.forEach((item) => item.classList.remove('active'));
+
+        const targetItem = this.elements?.navItemByTab?.get(tabName) || null;
+        if (targetItem) {
+            targetItem.classList.add('active');
+        }
     }
 
     // 初始化播放器
@@ -831,13 +858,7 @@ class MusicPlayerApp {
             this.renderPlaylist();
             this._hasInitialPlaylistRender = true;
 
-            // 激活队列导航按钮
-            const navItems = document.querySelectorAll('.nav-item');
-            navItems.forEach(item => {
-                if (item.getAttribute('data-tab') === 'playlists') {
-                    item.classList.add('active');
-                }
-            });
+            this.setActiveBottomNavTab('playlists');
             
             console.log('✅ 播放列表初始化完成');
         } catch (error) {
@@ -855,8 +876,7 @@ class MusicPlayerApp {
             });
         }
 
-        // Mini 播放器已移除
-
+                    this.setActiveBottomNavTab('playlists');
         // 全屏播放器返回按钮 + 向下拖拽返回
         if (this.elements.fullPlayer) {
             // 返回上一导航栏的方法
@@ -1570,11 +1590,7 @@ class MusicPlayerApp {
             // 刷新播放列表 UI
             this.renderPlaylist();
 
-            // 更新底部导航栏active状态为播放列表
-            const navItems = document.querySelectorAll('#bottomNav .nav-item');
-            navItems.forEach(item => item.classList.remove('active'));
-            const playlistNavItem = document.querySelector('#bottomNav .nav-item[data-tab="playlists"]');
-            if (playlistNavItem) playlistNavItem.classList.add('active');
+            this.setActiveBottomNavTab('playlists');
 
             console.log('[应用] ✓ 已切换到歌单:', this.currentPlaylistId);
             
@@ -1991,7 +2007,7 @@ class MusicPlayerApp {
         }
 
         console.log('✅ 初始化标签页切换');
-        const navItems = this.elements.bottomNav.querySelectorAll('.nav-item');
+        const navItems = this.getBottomNavItems();
         console.log('🔍 找到', navItems.length, '个导航项');
         
         // 标签页内容映射
@@ -2555,7 +2571,7 @@ app.renderPlaylist = app.renderPlaylist.bind(app);
 app.player = player;
 app.settingsManager = settingsManager;
 app.ktvSync = ktvSync;
-app.regression = createRegressionHarness({ app, api, player, ktvSync, playlistManager });
+app.regression = createRegressionHarness({ app, api, player, ktvSync, playlistManager, localFiles });
 app.diagnose = {
     printHelp() {
         console.log('Diagnose commands:');
@@ -2654,6 +2670,7 @@ app.modules = {
     api,
     player,
     playlistManager,
+    localFiles,
     playlistsManagement,
     volumeControl,
     searchManager,

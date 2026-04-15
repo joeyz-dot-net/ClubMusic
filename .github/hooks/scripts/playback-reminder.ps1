@@ -113,7 +113,7 @@ function Get-ToolReminder {
         $messages.Add('Router or frontend API files changed. Keep backend routes and static/js/api.js in sync, including FormData versus JSON payload expectations.')
     }
     if ($playbackMatch) {
-        $messages.Add('Playback-related files changed. If behavior touches trusted controls, pause/resume, KTV, request tracing, or queue refresh flow, run py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --output logs/browser-control-regression.json and expect summary.passed=true, checks.controlSuite=true, and checks.trustedResumeSuite=true.')
+        $messages.Add('Playback-related files changed. If behavior touches trusted controls, pause/resume, KTV, request tracing, or queue refresh flow, run py tools/browser_control_regression.py --base-url http://127.0.0.1:9000/ --ensure-server --include-queue-suite --output logs/browser-control-regression.json and expect summary.passed=true, checks.controlSuite=true, checks.trustedResumeSuite=true, and checks.queueSuite=true.')
     }
 
     return ($messages -join ' ')
