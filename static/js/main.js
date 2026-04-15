@@ -15,7 +15,7 @@ import { localFiles } from './local.js?v=21';
 import { settingsManager } from './settingsManager.js?v=7';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
-import { ktvSync } from './ktv.js?v=41';
+import { ktvSync } from './ktv.js?v=42';
 import { playLock } from './playLock.js';
 import { unavailableSongs } from './unavailable.js';
 import { recordTrace } from './requestTrace.js?v=2';

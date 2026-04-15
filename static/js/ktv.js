@@ -52,6 +52,9 @@ export class KTVSync {
         this.lastPendingRecoveryAt = 0;
         this.trustedResumeTraceToken = null;
         this.trustedResumeTraceTimers = [];
+        this.controlsRestoreWaitInterval = null;
+        this.controlsRestoreWaitTimeout = null;
+        this.controlsRestoreWaitToken = null;
 
         // 性能监控指标
         this.metrics = {
@@ -119,6 +122,71 @@ export class KTVSync {
     clearTrustedResumeTraceTimers() {
         this.trustedResumeTraceTimers.forEach((timerId) => clearTimeout(timerId));
         this.trustedResumeTraceTimers = [];
+    }
+
+    clearControlsRestoreWait() {
+        if (this.controlsRestoreWaitInterval !== null) {
+            clearInterval(this.controlsRestoreWaitInterval);
+            this.controlsRestoreWaitInterval = null;
+        }
+
+        if (this.controlsRestoreWaitTimeout !== null) {
+            clearTimeout(this.controlsRestoreWaitTimeout);
+            this.controlsRestoreWaitTimeout = null;
+        }
+
+        this.controlsRestoreWaitToken = null;
+    }
+
+    scheduleControlsRestoreWait(videoId, currentTime, wasPaused) {
+        if (!videoId) {
+            return;
+        }
+
+        this.clearControlsRestoreWait();
+
+        const restoreToken = `controls_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+        this.controlsRestoreWaitToken = restoreToken;
+
+        this.controlsRestoreWaitInterval = setInterval(() => {
+            if (this.controlsRestoreWaitToken !== restoreToken) {
+                return;
+            }
+
+            if (!this.playerReady || !this.player) {
+                return;
+            }
+
+            this.clearControlsRestoreWait();
+
+            try {
+                this.currentVideoId = videoId;
+                if (wasPaused) {
+                    this.player.cueVideoById({
+                        videoId,
+                        startSeconds: currentTime
+                    });
+                } else {
+                    this.player.loadVideoById({
+                        videoId,
+                        startSeconds: currentTime
+                    });
+                }
+
+                console.log('[KTV] 视频已恢复');
+            } catch (error) {
+                console.error('[KTV] 恢复视频失败:', error);
+            }
+        }, 100);
+
+        this.controlsRestoreWaitTimeout = setTimeout(() => {
+            if (this.controlsRestoreWaitToken !== restoreToken) {
+                return;
+            }
+
+            console.warn(`[KTV] 等待播放器就绪恢复视频超时: ${videoId}`);
+            this.clearControlsRestoreWait();
+        }, 10000);
     }
 
     cancelTrustedResumePlayback() {
@@ -233,6 +301,8 @@ export class KTVSync {
     }
 
     resetPlayerInstance() {
+        this.clearControlsRestoreWait();
+
         if (this.player && typeof this.player.destroy === 'function') {
             try {
                 this.player.destroy();
@@ -604,36 +674,7 @@ export class KTVSync {
             // 如果之前在播放视频，等待播放器就绪后恢复
             if (wasPlaying && currentVideoId) {
                 console.log(`[KTV] 等待播放器就绪后恢复视频: ${currentVideoId}, 时间: ${currentTime.toFixed(2)}s`);
-
-                // 等待播放器就绪
-                const waitForReady = setInterval(() => {
-                    if (this.playerReady) {
-                        clearInterval(waitForReady);
-
-                        // 恢复视频
-                        try {
-                            this.currentVideoId = currentVideoId;
-                            if (wasPaused) {
-                                this.player.cueVideoById({
-                                    videoId: currentVideoId,
-                                    startSeconds: currentTime
-                                });
-                            } else {
-                                this.player.loadVideoById({
-                                    videoId: currentVideoId,
-                                    startSeconds: currentTime
-                                });
-                            }
-
-                            console.log('[KTV] 视频已恢复');
-                        } catch (e) {
-                            console.error('[KTV] 恢复视频失败:', e);
-                        }
-                    }
-                }, 100);
-
-                // 10秒超时
-                setTimeout(() => clearInterval(waitForReady), 10000);
+                this.scheduleControlsRestoreWait(currentVideoId, currentTime, wasPaused);
             }
 
             console.log(`[KTV] YouTube控件已${enabled ? '启用' : '禁用'}`);
@@ -703,6 +744,8 @@ export class KTVSync {
      */
     disableVideoMode() {
         const wasVideoMode = this.isVideoMode;
+
+        this.clearControlsRestoreWait();
 
         if (wasVideoMode && this.player && this.playerReady) {
             try {
