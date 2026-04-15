@@ -134,6 +134,10 @@ class OperationLock {
      */
     startTimeoutCheck() {
         this.checkInterval = setInterval(() => {
+            if (this.locks.size === 0) {
+                return;
+            }
+
             const now = Date.now();
             const expiredLocks = [];
             
