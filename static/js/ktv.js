@@ -4,8 +4,8 @@
  */
 
 import { api } from './api.js?v=4';
-import { player } from './player.js?v=22';
-import { Toast } from './ui.js';
+import { player } from './player.js?v=23';
+import { Toast } from './ui.js?v=2';
 import { i18n } from './i18n.js';
 import { unavailableSongs } from './unavailable.js';
 import { recordTrace } from './requestTrace.js?v=2';

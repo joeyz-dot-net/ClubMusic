@@ -1,13 +1,13 @@
 // 播放列表管理模块
 import { api } from './api.js?v=4';
-import { Toast, loading, ConfirmModal } from './ui.js';
+import { Toast, loading, ConfirmModal } from './ui.js?v=2';
 import { operationLock } from './operationLock.js?v=2';
 import { thumbnailManager, escapeHTML, focusFirstFocusable, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js?v=2';
 import { i18n } from './i18n.js';
-import { player } from './player.js?v=22';
+import { player } from './player.js?v=23';
 import { unavailableSongs } from './unavailable.js';
-import { executePlayNow, rerenderQueueWithCurrentMeta } from './playNow.js?v=19';
-import { getCurrentPlaybackStatus } from './playbackState.js?v=17';
+import { executePlayNow, rerenderQueueWithCurrentMeta } from './playNow.js?v=20';
+import { getCurrentPlaybackStatus } from './playbackState.js?v=18';
 
 export class PlaylistManager {
     constructor() {
@@ -16,10 +16,14 @@ export class PlaylistManager {
         this.urlSet = new Set();
         this.currentPlaylistName = i18n.t('playlist.current'); // 添加歌单名称
         this.roomPlaylist = null;
+        this._storageKeyCache = '';
+        this._storageKeyContext = null;
         // ✅ 从 localStorage 恢复当前选择的歌单ID，默认为 'default'
-        this.selectedPlaylistId = this._loadSelectedPlaylistFromStorage();
+        const storageKey = this._getStorageKey();
+        const storedSelectedPlaylistId = this._readStoredSelectedPlaylistId(storageKey);
+        this.selectedPlaylistId = this._loadSelectedPlaylistFromStorage(storageKey, storedSelectedPlaylistId);
         console.log('[PlaylistManager] ✓ 初始化完成，selectedPlaylistId:', this.selectedPlaylistId);
-        console.log('[PlaylistManager] ℹ localStorage 中的完整值:', localStorage.getItem(this._getStorageKey()));
+        console.log('[PlaylistManager] ℹ localStorage 中的完整值:', storedSelectedPlaylistId);
     }
 
     _getApiErrorMessage(result, fallbackMessage) {
@@ -54,29 +58,43 @@ export class PlaylistManager {
         return api.roomId ? `room_${api.roomId}` : 'default';
     }
 
+    _getStorageContextKey() {
+        return api.roomId || '';
+    }
+
     _getStorageKey() {
-        if (this._hasRoomContext()) {
-            return `selectedPlaylistId:${api.roomId}`;
+        const storageContextKey = this._getStorageContextKey();
+        if (this._storageKeyContext !== storageContextKey) {
+            this._storageKeyContext = storageContextKey;
+            this._storageKeyCache = storageContextKey
+                ? `selectedPlaylistId:${storageContextKey}`
+                : 'selectedPlaylistId';
         }
-        return 'selectedPlaylistId';
+
+        return this._storageKeyCache;
     }
 
     _getDefaultSelectedPlaylistId() {
         return this._hasRoomContext() ? this._getRoomRuntimePlaylistId() : 'default';
     }
 
-    // ✅ 新增：从 localStorage 读取保存的歌单ID
-    _loadSelectedPlaylistFromStorage() {
+    _readStoredSelectedPlaylistId(storageKey = this._getStorageKey()) {
         try {
-            const saved = localStorage.getItem(this._getStorageKey());
-            console.log('[PlaylistManager] localStorage中的值:', saved);
-            if (saved && saved !== 'undefined' && saved !== '') {
-                console.log('[歌单管理] 从本地存储恢复选择歌单:', saved);
-                return saved;
-            }
+            return localStorage.getItem(storageKey);
         } catch (e) {
             console.warn('[歌单管理] 读取 localStorage 失败:', e);
+            return null;
         }
+    }
+
+    // ✅ 新增：从 localStorage 读取保存的歌单ID
+    _loadSelectedPlaylistFromStorage(storageKey = this._getStorageKey(), saved = this._readStoredSelectedPlaylistId(storageKey)) {
+        console.log('[PlaylistManager] localStorage中的值:', saved);
+        if (saved && saved !== 'undefined' && saved !== '') {
+            console.log('[歌单管理] 从本地存储恢复选择歌单:', saved);
+            return saved;
+        }
+
         const defaultPlaylistId = this._getDefaultSelectedPlaylistId();
         console.log('[歌单管理] 使用默认歌单:', defaultPlaylistId);
         return defaultPlaylistId;

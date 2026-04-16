@@ -20,7 +20,22 @@ export function formatTime(seconds) {
 
 // 显示通知/Toast - 现代化毛玻璃设计
 export class Toast {
+    static maxConcurrent = 3;
+
+    static trimVisibleToasts(limit = this.maxConcurrent - 1) {
+        const toasts = Array.from(document.querySelectorAll('.toast'));
+        const overflow = toasts.length - limit;
+
+        if (overflow <= 0) {
+            return;
+        }
+
+        toasts.slice(0, overflow).forEach((toast) => toast.remove());
+    }
+
     static show(message, type = 'info', duration = 3000) {
+        this.trimVisibleToasts();
+
         const toast = createElement('div', `toast toast-${type}`);
         toast.setAttribute('role', 'alert');
         toast.setAttribute('aria-live', 'polite');

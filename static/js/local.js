@@ -1,6 +1,6 @@
 import { api } from './api.js?v=4';
-import { playlistManager } from './playlist.js?v=37';
-import { Toast } from './ui.js';
+import { playlistManager } from './playlist.js?v=39';
+import { Toast } from './ui.js?v=2';
 import { i18n } from './i18n.js';
 
 // 当前导航路径
