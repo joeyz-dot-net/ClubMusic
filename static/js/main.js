@@ -5,7 +5,7 @@ import { api } from './api.js?v=5';
 import { player } from './player.js?v=24';
 import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=40';
 import { playlistsManagement } from './playlists-management.js?v=30';
-import { volumeControl } from './volume.js?v=18';
+import { volumeControl } from './volume.js?v=19';
 import { searchManager } from './search.js?v=42';
 import { themeManager } from './themeManager.js';
 import { debug } from './debug.js';

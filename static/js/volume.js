@@ -17,6 +17,80 @@ export class VolumeControl {
         this.fullPlayerVolumeValue = null;
     }
 
+    _setTextContent(element, value) {
+        if (!element || element.textContent === value) {
+            return false;
+        }
+
+        element.textContent = value;
+        return true;
+    }
+
+    _setStyleValue(styleTarget, property, value) {
+        if (!styleTarget || styleTarget[property] === value) {
+            return false;
+        }
+
+        styleTarget[property] = value;
+        return true;
+    }
+
+    _setSliderValue(valueText) {
+        if (!this.slider) {
+            return;
+        }
+
+        if (this.slider.value !== valueText) {
+            this.slider.value = valueText;
+        }
+
+        if (this.slider.style.getPropertyValue('--vol-fill') !== `${valueText}%`) {
+            this.slider.style.setProperty('--vol-fill', `${valueText}%`);
+        }
+    }
+
+    _setFullPlayerDisplayVisible(isVisible) {
+        const fullPlayerDisplay = this.fullPlayerDisplay;
+        if (!fullPlayerDisplay) {
+            return;
+        }
+
+        this._setStyleValue(fullPlayerDisplay.style, 'display', isVisible ? 'block' : 'none');
+        this._setStyleValue(fullPlayerDisplay.style, 'opacity', isVisible ? '1' : '0');
+    }
+
+    _restartFullPlayerDisplayAnimation() {
+        const fullPlayerDisplay = this.fullPlayerDisplay;
+        if (!fullPlayerDisplay) {
+            return;
+        }
+
+        fullPlayerDisplay.classList.remove('show');
+        void fullPlayerDisplay.offsetWidth;
+        fullPlayerDisplay.classList.add('show');
+    }
+
+    _scheduleFullPlayerDisplayHide() {
+        if (this.hideDisplayTimer) {
+            clearTimeout(this.hideDisplayTimer);
+        }
+
+        this.hideDisplayTimer = setTimeout(() => {
+            const fullPlayerDisplay = this.fullPlayerDisplay;
+            if (!fullPlayerDisplay) {
+                return;
+            }
+
+            this._setStyleValue(fullPlayerDisplay.style, 'opacity', '0');
+            setTimeout(() => {
+                const latestFullPlayerDisplay = this.fullPlayerDisplay;
+                if (latestFullPlayerDisplay) {
+                    this._setStyleValue(latestFullPlayerDisplay.style, 'display', 'none');
+                }
+            }, 200);
+        }, 3000);
+    }
+
     _ensureFullPlayerDisplayRefs() {
         const displayConnected = this.fullPlayerDisplay?.isConnected;
         const valueConnected = !this.fullPlayerVolumeValue || this.fullPlayerVolumeValue.isConnected;
@@ -122,26 +196,28 @@ export class VolumeControl {
 
     // 更新显示
     updateDisplay(value) {
-        this.currentVolume = parseInt(value);
+        const normalizedValue = parseInt(value);
+        const valueText = `${normalizedValue}`;
+        const roundedValueText = `${Math.round(normalizedValue)}`;
+
+        this.currentVolume = normalizedValue;
         
         if (this.display) {
-            if (this.display.textContent !== undefined) {
-                this.display.textContent = value;
-            }
+            this._setTextContent(this.display, valueText);
         }
         
-        if (this.slider && this.slider.value !== undefined) {
-            this.slider.value = value;
-            this.slider.style.setProperty('--vol-fill', value + '%');
-        }
+        this._setSliderValue(valueText);
         
         // 同时更新完整播放器的音量显示
         this._ensureFullPlayerDisplayRefs();
         const fullPlayerDisplay = this.fullPlayerDisplay;
         if (fullPlayerDisplay) {
             const volumeValue = this.fullPlayerVolumeValue;
+            const wasVisible = fullPlayerDisplay.style.display === 'block' && fullPlayerDisplay.style.opacity === '1';
+            const bubbleValueChanged = this._setTextContent(volumeValue, roundedValueText);
+
             if (volumeValue) {
-                volumeValue.textContent = `${Math.round(value)}`;
+                this._setTextContent(volumeValue, roundedValueText);
             }
 
             // 气泡跟随滑块拇指位置
@@ -150,36 +226,19 @@ export class VolumeControl {
                 const max = parseInt(this.slider.max) || 100;
                 const thumbWidth = 14;
                 const sliderWidth = this.slider.offsetWidth;
-                const ratio = (Math.round(value) - min) / (max - min);
+                const ratio = (Math.round(normalizedValue) - min) / (max - min);
                 const thumbCenter = ratio * (sliderWidth - thumbWidth) + thumbWidth / 2;
-                fullPlayerDisplay.style.left = thumbCenter + 'px';
+                this._setStyleValue(fullPlayerDisplay.style, 'left', `${thumbCenter}px`);
             }
 
             // 显示音量气泡
-            fullPlayerDisplay.style.display = 'block';
-            fullPlayerDisplay.style.opacity = '1';
+            this._setFullPlayerDisplayVisible(true);
 
-            // 触发动画
-            fullPlayerDisplay.classList.remove('show');
-            void fullPlayerDisplay.offsetWidth; // 强制浏览器重排
-            fullPlayerDisplay.classList.add('show');
-
-            // 清除之前的隐藏定时器
-            if (this.hideDisplayTimer) {
-                clearTimeout(this.hideDisplayTimer);
+            if (!wasVisible || bubbleValueChanged) {
+                this._restartFullPlayerDisplayAnimation();
             }
 
-            // 3秒后自动隐藏
-            this.hideDisplayTimer = setTimeout(() => {
-                if (fullPlayerDisplay) {
-                    fullPlayerDisplay.style.opacity = '0';
-                    setTimeout(() => {
-                        if (fullPlayerDisplay) {
-                            fullPlayerDisplay.style.display = 'none';
-                        }
-                    }, 200);
-                }
-            }, 3000);
+            this._scheduleFullPlayerDisplayHide();
         }
         
         // 不输出 updateDisplay 日志，太频繁
