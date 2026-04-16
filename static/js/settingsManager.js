@@ -750,22 +750,35 @@ export const settingsManager = {
             console.log('[设置] 打开设置面板');
         }
     },
+
+    hidePanel({ shouldRestoreFocus = false, log = false } = {}) {
+        const panel = document.getElementById('settingsPanel');
+        if (!panel) {
+            return;
+        }
+
+        if (panel._keydownHandler) {
+            document.removeEventListener('keydown', panel._keydownHandler);
+        }
+
+        panel.style.display = 'none';
+        panel.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+
+        if (shouldRestoreFocus) {
+            restoreFocus(panel._previousActiveElement);
+        }
+
+        if (log) {
+            console.log('[设置] 关闭设置面板');
+        }
+    },
     
     /**
      * 关闭设置面板
      */
     closePanel() {
-        const panel = document.getElementById('settingsPanel');
-        if (panel) {
-            if (panel._keydownHandler) {
-                document.removeEventListener('keydown', panel._keydownHandler);
-            }
-            panel.style.display = 'none';
-            panel.setAttribute('aria-hidden', 'true');
-            document.body.style.overflow = '';
-            restoreFocus(panel._previousActiveElement);
-            console.log('[设置] 关闭设置面板');
-        }
+        this.hidePanel({ shouldRestoreFocus: true, log: true });
     },
     
     /**

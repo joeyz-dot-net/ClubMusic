@@ -12,7 +12,7 @@ import { debug } from './debug.js';
 import { Toast, formatTime } from './ui.js?v=2';
 import { focusFirstFocusable, isMobile, isIPad, restoreFocus, ThumbnailManager, trapFocusInContainer } from './utils.js?v=2';
 import { localFiles } from './local.js?v=25';
-import { settingsManager } from './settingsManager.js?v=10';
+import { settingsManager } from './settingsManager.js?v=11';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
 import { ktvSync } from './ktv.js?v=45';
@@ -2204,9 +2204,7 @@ class MusicPlayerApp {
             // 关闭设置面板（直接隐藏DOM，不触发closePanel的恢复逻辑）
             const settingsPanel = document.getElementById('settingsPanel');
             if (settingsPanel && settingsPanel.style.display !== 'none') {
-                settingsPanel.style.display = 'none';
-                settingsPanel.setAttribute('aria-hidden', 'true');
-                document.body.style.overflow = '';
+                settingsManager.hidePanel();
             }
 
             // 移除所有导航按钮的active状态
