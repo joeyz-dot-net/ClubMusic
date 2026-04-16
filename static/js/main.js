@@ -342,6 +342,129 @@ class MusicPlayerApp {
         section.style.display = 'none';
     }
 
+    showModalElement(modal, { display = 'block', visibleDelay = 0, onVisible = null } = {}) {
+        if (!modal) {
+            return;
+        }
+
+        if (modal._modalVisibilityTimer) {
+            clearTimeout(modal._modalVisibilityTimer);
+            modal._modalVisibilityTimer = null;
+        }
+
+        modal.setAttribute('aria-hidden', 'false');
+        modal.style.display = display;
+
+        const applyVisible = () => {
+            if (modal?.isConnected) {
+                modal.classList.add('modal-visible');
+            }
+
+            modal._modalVisibilityTimer = null;
+            if (typeof onVisible === 'function') {
+                onVisible();
+            }
+        };
+
+        if (visibleDelay > 0) {
+            modal._modalVisibilityTimer = setTimeout(applyVisible, visibleDelay);
+            return;
+        }
+
+        applyVisible();
+    }
+
+    hideModalElement(modal, { hideDelay = 0 } = {}) {
+        if (!modal) {
+            return;
+        }
+
+        if (modal._modalVisibilityTimer) {
+            clearTimeout(modal._modalVisibilityTimer);
+            modal._modalVisibilityTimer = null;
+        }
+
+        modal.classList.remove('modal-visible');
+        modal.setAttribute('aria-hidden', 'true');
+
+        const applyHidden = () => {
+            if (modal?.isConnected) {
+                modal.style.display = 'none';
+            }
+
+            modal._modalVisibilityTimer = null;
+        };
+
+        if (hideDelay > 0) {
+            modal._modalVisibilityTimer = setTimeout(applyHidden, hideDelay);
+            return;
+        }
+
+        applyHidden();
+    }
+
+    showFullPlayer({ hideMiniPlayer = false } = {}) {
+        const fullPlayer = this.elements?.fullPlayer;
+        if (!fullPlayer) {
+            return;
+        }
+
+        if (fullPlayer._visibilityTimer) {
+            clearTimeout(fullPlayer._visibilityTimer);
+            fullPlayer._visibilityTimer = null;
+        }
+
+        if (hideMiniPlayer && this.elements?.miniPlayer) {
+            this.elements.miniPlayer.style.display = 'none';
+        }
+
+        fullPlayer.style.display = 'flex';
+        fullPlayer._visibilityTimer = setTimeout(() => {
+            if (fullPlayer?.isConnected) {
+                fullPlayer.classList.add('show');
+                const status = player.getStatus();
+                if (status) {
+                    ktvSync.updateStatus(status);
+                }
+            }
+
+            fullPlayer._visibilityTimer = null;
+        }, 10);
+    }
+
+    hideFullPlayer({ showMiniPlayer = false, hideDelay = 300 } = {}) {
+        const fullPlayer = this.elements?.fullPlayer;
+        if (!fullPlayer) {
+            return;
+        }
+
+        if (fullPlayer._visibilityTimer) {
+            clearTimeout(fullPlayer._visibilityTimer);
+            fullPlayer._visibilityTimer = null;
+        }
+
+        fullPlayer.classList.remove('show');
+
+        const applyHidden = () => {
+            if (fullPlayer?.isConnected) {
+                fullPlayer.style.display = 'none';
+            }
+
+            if (showMiniPlayer && this.elements?.miniPlayer) {
+                this.elements.miniPlayer.style.display = 'block';
+            }
+
+            fullPlayer._visibilityTimer = null;
+        };
+
+        if (hideDelay > 0) {
+            fullPlayer._visibilityTimer = setTimeout(applyHidden, hideDelay);
+            return;
+        }
+
+        applyHidden();
+    }
+
     showPlaylistContent() {
         this.showTabSection(this.elements?.playlist);
         this.hideTabSection(this.elements?.tree);
@@ -923,10 +1046,7 @@ class MusicPlayerApp {
         if (this.elements.fullPlayer) {
             // 返回上一导航栏的方法
             const goBackToNav = () => {
-                this.elements.fullPlayer.classList.remove('show');
-                setTimeout(() => {
-                    this.elements.fullPlayer.style.display = 'none';
-                }, 300);
+                this.hideFullPlayer();
             };
 
             // 点击返回按钮
@@ -1390,16 +1510,7 @@ class MusicPlayerApp {
         // 点击封面打开全屏播放器
         if (this.elements.nppArtworkSection) {
             this.elements.nppArtworkSection.addEventListener('click', () => {
-                if (this.elements.fullPlayer) {
-                    this.elements.fullPlayer.style.display = 'flex';
-                    setTimeout(() => {
-                        this.elements.fullPlayer.classList.add('show');
-                        const status = player.getStatus();
-                        if (status) {
-                            ktvSync.updateStatus(status);
-                        }
-                    }, 10);
-                }
+                this.showFullPlayer();
             });
         }
 
@@ -1650,18 +1761,7 @@ class MusicPlayerApp {
             // 检查是否是当前正在播放的歌曲
             if (currentMeta && currentMeta.url === song.url && !status?.paused) {
                 // 如果是当前正在播放的歌曲，则显示完整播放器（像点击mini播放器一样）
-                if (this.elements.miniPlayer && this.elements.fullPlayer) {
-                    this.elements.miniPlayer.style.display = 'none';
-                    this.elements.fullPlayer.style.display = 'flex';
-                    // 触发动画：先设置 display，然后添加 show 类
-                    setTimeout(() => {
-                        this.elements.fullPlayer.classList.add('show');
-                        const nextStatus = player.getStatus();
-                        if (nextStatus) {
-                            ktvSync.updateStatus(nextStatus);
-                        }
-                    }, 10);
-                }
+                this.showFullPlayer({ hideMiniPlayer: true });
                 return;
             }
             
@@ -2086,25 +2186,19 @@ class MusicPlayerApp {
             // 隐藏所有模态框
             Object.values(modals).forEach(modal => {
                 if (modal) {
-                    modal.classList.remove('modal-visible');
-                    modal.style.display = 'none';
-                    modal.setAttribute('aria-hidden', 'true');
+                    this.hideModalElement(modal);
                 }
             });
 
             // 隐藏歌单管理模态框
             if (playlistsModal) {
-                playlistsModal.classList.remove('modal-visible');
-                playlistsModal.style.display = 'none';
-                playlistsModal.setAttribute('aria-hidden', 'true');
+                this.hideModalElement(playlistsModal);
             }
 
             // 隐藏历史模态框
             const historyModal = document.getElementById('historyModal');
             if (historyModal) {
-                historyModal.classList.remove('modal-visible');
-                historyModal.style.display = 'none';
-                historyModal.setAttribute('aria-hidden', 'true');
+                this.hideModalElement(historyModal);
             }
 
             // 关闭设置面板（直接隐藏DOM，不触发closePanel的恢复逻辑）
@@ -2126,10 +2220,7 @@ class MusicPlayerApp {
             
             // 关闭全屏播放器
             if (this.elements.fullPlayer && this.elements.fullPlayer.style.display !== 'none') {
-                this.elements.fullPlayer.style.display = 'none';
-                if (this.elements.miniPlayer) {
-                    this.elements.miniPlayer.style.display = 'block';
-                }
+                this.hideFullPlayer({ showMiniPlayer: true, hideDelay: 0 });
             }
             
             // 隐藏所有内容
@@ -2156,24 +2247,22 @@ class MusicPlayerApp {
                 const modal = modals.search;
                 if (modal) {
                     modal._previousActiveElement = document.activeElement;
-                    modal.setAttribute('aria-hidden', 'false');
-                    modal.style.display = 'block';
                     currentModal = modal;
-                    setTimeout(() => {
-                        modal.classList.add('modal-visible');
-                        updateModalZIndex();
-                        focusFirstFocusable(modal, '#searchModalInput');
-                    }, 10);
+                    this.showModalElement(modal, {
+                        visibleDelay: 10,
+                        onVisible: () => {
+                            updateModalZIndex();
+                            focusFirstFocusable(modal, '#searchModalInput');
+                        }
+                    });
                 }
             } else if (tabName === 'debug') {
                 // 调试模态框
                 const modal = modals.debug;
                 if (modal) {
                     modal._previousActiveElement = document.activeElement;
-                    modal.setAttribute('aria-hidden', 'false');
-                    modal.style.display = 'flex';
-                    modal.classList.add('modal-visible');
                     currentModal = modal;
+                    this.showModalElement(modal, { display: 'flex' });
 
                     if (!modal._keydownHandler) {
                         modal._keydownHandler = (event) => {
@@ -2196,8 +2285,8 @@ class MusicPlayerApp {
 
                     document.addEventListener('keydown', modal._keydownHandler);
                     setTimeout(() => {
-                        debug.updateInfo();
                         updateModalZIndex();
+                        debug.updateInfo();
                         focusFirstFocusable(modal, '#debugModalClose');
                     }, 100);
                 }
@@ -2359,15 +2448,11 @@ class MusicPlayerApp {
             // 隐藏所有模态框
             Object.values(modals).forEach(modal => {
                 if (modal) {
-                    modal.classList.remove('modal-visible');
-                    modal.style.display = 'none';
-                    modal.setAttribute('aria-hidden', 'true');
+                    this.hideModalElement(modal);
                 }
             });
             if (playlistsModal) {
-                playlistsModal.classList.remove('modal-visible');
-                playlistsModal.style.display = 'none';
-                playlistsModal.setAttribute('aria-hidden', 'true');
+                this.hideModalElement(playlistsModal);
             }
             
             // 【用户隔离】不再强制切换到 default，保持 initPlaylist() 中从 localStorage 恢复的歌单选择
@@ -2430,8 +2515,7 @@ class MusicPlayerApp {
                     document.removeEventListener('keydown', debugModal._keydownHandler);
                 }
 
-                debugModal.classList.remove('modal-visible');
-                debugModal.setAttribute('aria-hidden', 'true');
+                this.hideModalElement(debugModal);
 
                 if (Array.isArray(this.navigationStack) && this.navigationStack[this.navigationStack.length - 1] === 'debug') {
                     navigateBack();
@@ -2439,7 +2523,6 @@ class MusicPlayerApp {
                     return;
                 }
 
-                debugModal.style.display = 'none';
                 restoreFocus(previousActiveElement);
                 updateModalZIndex();
             };
