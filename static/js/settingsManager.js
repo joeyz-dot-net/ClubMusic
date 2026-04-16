@@ -26,6 +26,7 @@ export const settingsManager = {
     player: null,
     schema: {},
     buttonGroupCache: new Map(),
+    _cachedSettings: null,
 
     renderDiagnosticsStatus(container, lines, fallbackText) {
         if (!container) return;
@@ -96,6 +97,10 @@ export const settingsManager = {
     get settings() {
         return this.loadSettingsFromStorage();
     },
+
+    set settings(value) {
+        this.saveSettingsToStorage(value);
+    },
     
     /**
      * 设置 player 实例
@@ -151,22 +156,37 @@ export const settingsManager = {
     /**
      * 从 localStorage 加载设置
      */
-    loadSettingsFromStorage() {
+    normalizeSettings(settings = {}) {
+        const nextSettings = (settings && typeof settings === 'object') ? settings : {};
+        return {
+            ...this.DEFAULT_SETTINGS,
+            ...nextSettings,
+        };
+    },
+
+    loadSettingsFromStorage(forceReload = false) {
+        if (!forceReload && this._cachedSettings) {
+            return this._cachedSettings;
+        }
+
         const stored = localStorage.getItem('musicPlayerSettings');
         
         if (stored) {
             try {
-                const settings = JSON.parse(stored);
+                const settings = this.normalizeSettings(JSON.parse(stored));
+                this._cachedSettings = settings;
                 console.log('[设置] 从 localStorage 加载设置:', settings);
                 return settings;
             } catch (e) {
                 console.error('[设置] 解析 localStorage 失败:', e);
-                return this.DEFAULT_SETTINGS;
+                this._cachedSettings = this.normalizeSettings();
+                return this._cachedSettings;
             }
         }
         
         console.log('[设置] localStorage 中无设置，使用默认值');
-        return this.DEFAULT_SETTINGS;
+        this._cachedSettings = this.normalizeSettings();
+        return this._cachedSettings;
     },
     
     /**
@@ -174,8 +194,10 @@ export const settingsManager = {
      */
     saveSettingsToStorage(settings) {
         try {
-            localStorage.setItem('musicPlayerSettings', JSON.stringify(settings));
-            console.log('[设置] 已保存到 localStorage:', settings);
+            const normalizedSettings = this.normalizeSettings(settings);
+            localStorage.setItem('musicPlayerSettings', JSON.stringify(normalizedSettings));
+            this._cachedSettings = normalizedSettings;
+            console.log('[设置] 已保存到 localStorage:', normalizedSettings);
             return true;
         } catch (e) {
             console.error('[设置] 保存到 localStorage 失败:', e);
@@ -187,7 +209,7 @@ export const settingsManager = {
      * 获取单个设置值
      */
     getSettings(key) {
-        const settings = this.loadSettingsFromStorage();
+        const settings = this.settings;
         return settings[key] !== undefined ? settings[key] : this.DEFAULT_SETTINGS[key];
     },
     
@@ -195,8 +217,10 @@ export const settingsManager = {
      * 设置单个值
      */
     setSetting(key, value) {
-        const settings = this.loadSettingsFromStorage();
-        settings[key] = value;
+        const settings = {
+            ...this.settings,
+            [key]: value,
+        };
         this.saveSettingsToStorage(settings);
         console.log(`[设置] ${key} = ${value}`);
         return true;
@@ -329,7 +353,7 @@ export const settingsManager = {
      * 更新UI - 将设置值同步到表单
      */
     updateUI() {
-        const settings = this.loadSettingsFromStorage();
+        const settings = this.settings;
         
         // 主题按钮组
         const themeGroup = document.getElementById('themeSetting');

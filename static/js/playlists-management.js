@@ -379,8 +379,9 @@ export class PlaylistsManagement {
 
         try {
             const newName = await InputModal.show({ title: i18n.t('playlists.renamePrompt'), defaultValue: playlist.name });
-            if (newName !== null && newName.trim() && newName.trim() !== playlist.name) {
-                const result = await playlistManager.update(playlist.id, { name: newName.trim() });
+            const trimmedName = newName?.trim() || '';
+            if (newName !== null && trimmedName && trimmedName !== playlist.name) {
+                const result = await playlistManager.update(playlist.id, { name: trimmedName });
                 this.notifyMutationResult(i18n.t('playlists.renameSuccess'), result.refreshError);
                 this.render();
             }
@@ -431,11 +432,12 @@ export class PlaylistsManagement {
 
                     try {
                         const name = await InputModal.show({ title: i18n.t('playlists.createPrompt') });
-                        if (!name || !name.trim()) {
+                        const trimmedName = name?.trim() || '';
+                        if (!trimmedName) {
                             return false;
                         }
 
-                        const result = await playlistManager.create(name.trim());
+                        const result = await playlistManager.create(trimmedName);
 
                         this.notifyMutationResult(i18n.t('playlists.createSuccess'), result.refreshError);
                         this.render();
