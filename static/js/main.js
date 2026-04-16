@@ -117,18 +117,7 @@ class MusicPlayerApp {
                 },
                 () => {
                     this.setActiveBottomNavTab('playlists');
-
-                    if (this.elements.playlist) {
-                        this.elements.playlist.style.display = 'block';
-                        setTimeout(() => {
-                            this.elements.playlist.classList.add('tab-visible');
-                        }, 10);
-                    }
-
-                    if (this.elements.tree) {
-                        this.elements.tree.classList.remove('tab-visible');
-                        this.elements.tree.style.display = 'none';
-                    }
+                    this.showPlaylistContent();
                 }
             );
             
@@ -308,6 +297,59 @@ class MusicPlayerApp {
         if (targetItem) {
             targetItem.classList.add('active');
         }
+    }
+
+    showTabSection(section, display = 'block') {
+        if (!section) {
+            return;
+        }
+
+        if (section._tabHideTimer) {
+            clearTimeout(section._tabHideTimer);
+            section._tabHideTimer = null;
+        }
+
+        section.style.display = display;
+        setTimeout(() => {
+            if (section?.isConnected) {
+                section.classList.add('tab-visible');
+            }
+        }, 10);
+    }
+
+    hideTabSection(section, hideDelay = 0) {
+        if (!section) {
+            return;
+        }
+
+        if (section._tabHideTimer) {
+            clearTimeout(section._tabHideTimer);
+            section._tabHideTimer = null;
+        }
+
+        section.classList.remove('tab-visible');
+
+        if (hideDelay > 0) {
+            section._tabHideTimer = setTimeout(() => {
+                if (section?.isConnected) {
+                    section.style.display = 'none';
+                }
+                section._tabHideTimer = null;
+            }, hideDelay);
+            return;
+        }
+
+        section.style.display = 'none';
+    }
+
+    showPlaylistContent() {
+        this.showTabSection(this.elements?.playlist);
+        this.hideTabSection(this.elements?.tree);
+    }
+
+    showLocalContent() {
+        this.hideTabSection(this.elements?.playlist);
+        this.showTabSection(this.elements?.tree);
     }
 
     // 初始化播放器
@@ -1573,19 +1615,7 @@ class MusicPlayerApp {
                 }, 300);
             }
             
-            // 显示播放列表容器
-            if (this.elements.playlist) {
-                this.elements.playlist.style.display = 'block';
-                setTimeout(() => {
-                    this.elements.playlist.classList.add('tab-visible');
-                }, 10);
-            }
-            
-            // 隐藏本地文件
-            if (this.elements.tree) {
-                this.elements.tree.classList.remove('tab-visible');
-                this.elements.tree.style.display = 'none';
-            }
+            this.showPlaylistContent();
             
             // 刷新播放列表 UI
             this.renderPlaylist();
@@ -2049,8 +2079,7 @@ class MusicPlayerApp {
             // 隐藏所有tab内容
             Object.values(tabContents).forEach(tab => {
                 if (tab) {
-                    tab.classList.remove('tab-visible');
-                    tab.style.display = 'none';
+                    this.hideTabSection(tab);
                 }
             });
 
@@ -2111,27 +2140,17 @@ class MusicPlayerApp {
                 item.getAttribute('data-tab') === tabName
             );
             if (targetNavItem) {
-                targetNavItem.classList.add('active');
+                this.setActiveBottomNavTab(tabName);
             }
             
             // 显示对应的内容
             if (tabName === 'playlists') {
                 // 显示当前播放队列
-                if (this.elements.playlist) {
-                    this.elements.playlist.style.display = 'block';
-                    setTimeout(() => {
-                        this.elements.playlist.classList.add('tab-visible');
-                    }, 10);
-                }
+                this.showPlaylistContent();
             } else if (tabName === 'local') {
                 // 本地歌曲
-                if (this.elements.tree) {
-                    this.elements.tree.style.display = 'block';
-                    setTimeout(() => {
-                        this.elements.tree.classList.add('tab-visible');
-                    }, 10);
-                    localFiles.resetToRoot();
-                }
+                this.showLocalContent();
+                localFiles.resetToRoot();
             } else if (tabName === 'search') {
                 // 搜索模态框
                 const modal = modals.search;
@@ -2332,22 +2351,10 @@ class MusicPlayerApp {
         // 初始化时显示"队列"模块
         const firstNavItem = navItems[0];
         if (firstNavItem) {
-            firstNavItem.classList.add('active');
+            this.setActiveBottomNavTab('playlists');
             
             // ✅ 【修复】初始化时只显示播放列表，不打开歌单管理模态框
-            // 显示播放列表容器
-            if (this.elements.playlist) {
-                this.elements.playlist.style.display = 'block';
-                setTimeout(() => {
-                    this.elements.playlist.classList.add('tab-visible');
-                }, 10);
-            }
-            
-            // 隐藏本地文件
-            if (this.elements.tree) {
-                this.elements.tree.classList.remove('tab-visible');
-                this.elements.tree.style.display = 'none';
-            }
+            this.showPlaylistContent();
             
             // 隐藏所有模态框
             Object.values(modals).forEach(modal => {
@@ -2389,14 +2396,7 @@ class MusicPlayerApp {
             console.log('🔙 关闭本地歌曲页面，返回上一个栏目');
             
             // 隐藏本地歌曲页面
-            if (this.elements.tree) {
-                this.elements.tree.classList.remove('tab-visible');
-                setTimeout(() => {
-                    if (this.elements.tree) {
-                        this.elements.tree.style.display = 'none';
-                    }
-                }, 300);
-            }
+            this.hideTabSection(this.elements.tree, 300);
             
             // 移除本地按钮的active状态
             navItems.forEach(item => {
@@ -2480,20 +2480,8 @@ class MusicPlayerApp {
                     this.navigationStack.pop();
                 }
 
-                if (this.elements.playlist) {
-                    this.elements.playlist.style.display = 'block';
-                    setTimeout(() => {
-                        this.elements.playlist.classList.add('tab-visible');
-                    }, 10);
-                }
-                if (this.elements.tree) {
-                    this.elements.tree.classList.remove('tab-visible');
-                    this.elements.tree.style.display = 'none';
-                }
-                const playlistsNavBtn = navItems[0];
-                if (playlistsNavBtn) {
-                    playlistsNavBtn.classList.add('active');
-                }
+                this.showPlaylistContent();
+                this.setActiveBottomNavTab('playlists');
             }
         );
     }
