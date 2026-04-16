@@ -25,8 +25,16 @@ export class Debug {
     constructor() {
         this.debugLogHistory = [];
         this.logEnabled = localStorage.getItem('debugLogEnabled') !== 'false'; // 默认启用
+        this.elements = {};
+        this.consoleCaptureSetup = false;
+        this.eventListenersBound = false;
+        this.refreshElements();
+        this.themeManager = themeManager;
+    }
+
+    refreshElements() {
         this.elements = {
-            debugBtn: document.getElementById('debugBtn'),
+            debugBtn: document.getElementById('playlistsDebugBtn') || document.getElementById('debugBtn'),
             debugModal: document.getElementById('debugModal'),
             debugModalClose: document.getElementById('debugModalClose'),
             debugRefresh: document.getElementById('debugRefresh'),
@@ -38,14 +46,20 @@ export class Debug {
             debugLogs: document.getElementById('debugLogs'),
             themeDarkBtn: document.getElementById('themeDarkBtn'),
             themeLightBtn: document.getElementById('themeLightBtn'),
-            logToggle: document.getElementById('logToggle')
+            logToggle: document.getElementById('debugLogToggle') || document.getElementById('logToggle')
         };
-        this.themeManager = themeManager;
+
+        return this.elements;
+    }
+
+    hasDebugPanel() {
+        return Boolean(this.elements.debugModal);
     }
 
     // 初始化调试面板
     init(player, playlistManager, api) {
         this.player = player;
+        this.refreshElements();
         this.updateThemeButtons();
         this.playlistManager = playlistManager;
         this.api = api;
@@ -56,6 +70,10 @@ export class Debug {
 
     // 捕获console日志
     setupConsoleCapture() {
+        if (this.consoleCaptureSetup) {
+            return;
+        }
+
         const originalLog = console.log;
         const originalError = console.error;
         const originalWarn = console.warn;
@@ -92,13 +110,19 @@ export class Debug {
             originalWarn.apply(console, args);
             addLog('WARN', args);
         };
+
+        this.consoleCaptureSetup = true;
     }
 
     // 设置事件监听器
     setupEventListeners() {
+        if (this.eventListenersBound) {
+            return;
+        }
+
         // 调试按钮点击 - 使用事件委托，因为按钮现在在设置面板内
         document.addEventListener('click', (e) => {
-            if (e.target.id === 'debugBtn' || e.target.closest('#debugBtn')) {
+            if (e.target.closest('#playlistsDebugBtn, #debugBtn')) {
                 this.show();
             }
         });
@@ -157,26 +181,39 @@ export class Debug {
             });
         }
 
-
+        this.eventListenersBound = true;
     }
 
     // 显示调试面板
     show() {
-        if (this.elements.debugModal) {
-            this.elements.debugModal.style.display = 'block';
-            void this.updateInfo();
+        this.refreshElements();
+        if (!this.hasDebugPanel()) {
+            return;
         }
+
+        this.elements.debugModal.style.display = 'block';
+        this.elements.debugModal.setAttribute('aria-hidden', 'false');
+        void this.updateInfo();
     }
 
     // 隐藏调试面板
     hide() {
-        if (this.elements.debugModal) {
-            this.elements.debugModal.style.display = 'none';
+        this.refreshElements();
+        if (!this.hasDebugPanel()) {
+            return;
         }
+
+        this.elements.debugModal.style.display = 'none';
+        this.elements.debugModal.setAttribute('aria-hidden', 'true');
     }
 
     // 更新调试信息
     async updateInfo() {
+        this.refreshElements();
+        if (!this.hasDebugPanel()) {
+            return;
+        }
+
         this.updatePlayerInfo();
         await this.updateInstanceInfo();
         this.updatePlaylistInfo();
@@ -334,6 +371,7 @@ export class Debug {
 
     // 更新主题按钮状态
     updateThemeButtons() {
+        this.refreshElements();
         const currentTheme = this.themeManager.getCurrentTheme();
         if (this.elements.themeDarkBtn && this.elements.themeLightBtn) {
             if (currentTheme === 'dark') {

@@ -63,24 +63,38 @@ const createInteractiveElement = ({ tag = 'div', className, dataset = {}, label 
     return element;
 };
 
+const setElementDisplay = (element, display) => {
+    if (!element || element.style.display === display) {
+        return;
+    }
+
+    element.style.display = display;
+};
+
+const setCoverVisibility = ({ image = null, placeholder, showImage, placeholderDisplay = 'flex' }) => {
+    setElementDisplay(image, showImage ? '' : 'none');
+    setElementDisplay(placeholder, showImage ? 'none' : placeholderDisplay);
+};
+
 const createCoverImage = ({ src, placeholderText, placeholderClass }) => {
     const fragment = document.createDocumentFragment();
     const placeholder = document.createElement('div');
     placeholder.className = placeholderClass;
     placeholder.textContent = placeholderText;
-    placeholder.style.display = src ? 'none' : 'flex';
+    let image = null;
 
     if (src) {
-        const image = document.createElement('img');
+        image = document.createElement('img');
         image.src = src;
         image.alt = '';
         image.loading = 'lazy';
         image.addEventListener('error', () => {
-            image.style.display = 'none';
-            placeholder.style.display = 'flex';
+            setCoverVisibility({ image, placeholder, showImage: false });
         });
         fragment.appendChild(image);
     }
+
+    setCoverVisibility({ image, placeholder, showImage: Boolean(src) });
 
     fragment.appendChild(placeholder);
     return fragment;

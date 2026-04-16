@@ -2,7 +2,7 @@
 import { api } from './api.js?v=5';
 import { Toast, formatTime, searchLoading } from './ui.js?v=2';
 import { buildTrackItemElement } from './templates.js';
-import { localFiles, getNodeByPath, getDirCoverUrl, countFiles } from './local.js?v=25';
+import { localFiles, getNodeByPath, getDirCoverUrl, countFiles } from './local.js?v=26';
 import { playlistManager, renderPlaylistUI } from './playlist.js?v=40';
 import { i18n } from './i18n.js';
 import { escapeHTML, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js?v=2';
@@ -436,13 +436,41 @@ function formatSearchCount(count, limit) {
     return String(count);
 }
 
-function updateSearchTabCounts({ localCount = 0, youtubeCount = 0, localLimit = 0, youtubeLimit = 0 } = {}) {
-    const localTab = document.querySelector('.search-tab[data-tab="local"]');
+function getSearchTabRefs(container, forceRefresh = false) {
+    if (!container) {
+        return {};
+    }
+
+    const cachedRefs = container._searchTabRefs;
+    const refsAreConnected = cachedRefs
+        && cachedRefs.localTab?.isConnected
+        && cachedRefs.youtubeTab?.isConnected
+        && cachedRefs.localPanel?.isConnected
+        && cachedRefs.youtubePanel?.isConnected;
+
+    if (!forceRefresh && refsAreConnected) {
+        return cachedRefs;
+    }
+
+    const nextRefs = {
+        localTab: container.querySelector('.search-tab[data-tab="local"]'),
+        youtubeTab: container.querySelector('.search-tab[data-tab="youtube"]'),
+        localPanel: container.querySelector('.search-results-panel[data-panel="local"]'),
+        youtubePanel: container.querySelector('.search-results-panel[data-panel="youtube"]')
+    };
+
+    container._searchTabRefs = nextRefs;
+    return nextRefs;
+}
+
+function updateSearchTabCounts({ localCount = 0, youtubeCount = 0, localLimit = 0, youtubeLimit = 0, container = null, refs = null } = {}) {
+    const searchTabRefs = refs || getSearchTabRefs(container || document.getElementById('searchModalBody'));
+    const { localTab, youtubeTab } = searchTabRefs;
+
     if (localTab) {
         localTab.textContent = i18n.t('search.localTab', { count: formatSearchCount(localCount, localLimit) });
     }
 
-    const youtubeTab = document.querySelector('.search-tab[data-tab="youtube"]');
     if (youtubeTab) {
         youtubeTab.textContent = i18n.t('search.networkTab', { count: formatSearchCount(youtubeCount, youtubeLimit) });
     }
@@ -678,14 +706,12 @@ export class SearchManager {
     setActiveSearchTab(container, tabName) {
         if (!container) return;
 
-        container.querySelectorAll('.search-tab, .search-results-panel').forEach((element) => {
-            if (element.classList.contains('search-tab')) {
-                element.classList.toggle('active', element.dataset.tab === tabName);
-                return;
-            }
+        const { localTab, youtubeTab, localPanel, youtubePanel } = getSearchTabRefs(container);
 
-            element.classList.toggle('active', element.dataset.panel === tabName);
-        });
+        localTab?.classList.toggle('active', tabName === 'local');
+        youtubeTab?.classList.toggle('active', tabName === 'youtube');
+        localPanel?.classList.toggle('active', tabName === 'local');
+        youtubePanel?.classList.toggle('active', tabName === 'youtube');
 
         resetScrollPosition(container);
     }
@@ -1107,8 +1133,10 @@ export class SearchManager {
 
         const tabs = document.createElement('div');
         tabs.className = 'search-tabs';
-        tabs.appendChild(createSearchTabButton('local', i18n.t('search.localTab', { count: fullLocalResults.length }), defaultTab === 'local'));
-        tabs.appendChild(createSearchTabButton('youtube', i18n.t('search.networkTab', { count: fullYoutubeResults.length }), defaultTab === 'youtube'));
+        const localTab = createSearchTabButton('local', i18n.t('search.localTab', { count: fullLocalResults.length }), defaultTab === 'local');
+        const youtubeTab = createSearchTabButton('youtube', i18n.t('search.networkTab', { count: fullYoutubeResults.length }), defaultTab === 'youtube');
+        tabs.appendChild(localTab);
+        tabs.appendChild(youtubeTab);
 
         const panels = document.createElement('div');
         panels.className = 'search-tab-panels';
@@ -1123,13 +1151,15 @@ export class SearchManager {
         panels.appendChild(localPanel);
         panels.appendChild(youtubePanel);
         searchModalBody.replaceChildren(tabs, panels);
+        searchModalBody._searchTabRefs = { localTab, youtubeTab, localPanel, youtubePanel };
         resetScrollPosition(searchModalBody);
 
         updateSearchTabCounts({
             localCount: this.totalSearchResults.local.length,
             youtubeCount: this.totalSearchResults.youtube.length,
             localLimit: this.localResultsLimit,
-            youtubeLimit: this.youtubeLoadState.maxResultsLimit
+            youtubeLimit: this.youtubeLoadState.maxResultsLimit,
+            refs: searchModalBody._searchTabRefs
         });
 
         // 初始化YouTube加载状态，确保 load more 延续当前实际查询词
@@ -1705,7 +1735,8 @@ export class SearchManager {
                     localCount: this.totalSearchResults.local.length,
                     youtubeCount: this.totalSearchResults.youtube.length,
                     localLimit: this.localResultsLimit,
-                    youtubeLimit: this.youtubeLoadState.maxResultsLimit
+                    youtubeLimit: this.youtubeLoadState.maxResultsLimit,
+                    container: document.getElementById('searchModalBody')
                 });
                 Toast.success(i18n.t('search.loadedMore', { count: freshResults.length }));
             }
