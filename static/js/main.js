@@ -465,6 +465,39 @@ class MusicPlayerApp {
         applyHidden();
     }
 
+    setNowPlayingPanelVisible(isVisible) {
+        const panel = this.elements?.nppPanel;
+        if (!panel) {
+            return;
+        }
+
+        panel.hidden = !isVisible;
+
+        if (isVisible) {
+            panel.style.removeProperty('display');
+        } else {
+            panel.style.setProperty('display', 'none', 'important');
+        }
+
+        document.body.classList.toggle('npp-visible', isVisible);
+    }
+
+    updateArtworkElement({ imageElement, thumbnailUrl, placeholderElement = null, placeholderDisplay = 'flex' } = {}) {
+        const canShowImage = Boolean(thumbnailUrl && imageElement);
+
+        if (imageElement) {
+            imageElement.style.display = canShowImage ? 'block' : 'none';
+        }
+
+        if (placeholderElement) {
+            placeholderElement.style.display = canShowImage ? 'none' : placeholderDisplay;
+        }
+
+        if (canShowImage) {
+            this.thumbnailManager.setupFallback(imageElement, thumbnailUrl, '🎵');
+        }
+    }
+
     showPlaylistContent() {
         this.showTabSection(this.elements?.playlist);
         this.hideTabSection(this.elements?.tree);
@@ -848,13 +881,11 @@ class MusicPlayerApp {
         const hasSong = !!(status?.current_meta?.title || status?.current_title);
 
         if (!isLandscapeTablet || !hasSong) {
-            panel.style.display = 'none';
-            document.body.classList.remove('npp-visible');
+            this.setNowPlayingPanelVisible(false);
             return;
         }
 
-        panel.style.display = '';
-        document.body.classList.add('npp-visible');
+        this.setNowPlayingPanelVisible(true);
 
         // 标题 / 艺术家
         const title = status.current_title || status.title || status.current_meta?.title || '';
@@ -865,14 +896,12 @@ class MusicPlayerApp {
 
         // 封面 (复用 ThumbnailManager)
         const thumbnailUrl = status.thumbnail_url || status.current_meta?.thumbnail_url || '';
-        if (thumbnailUrl && this.elements.nppCover) {
-            this.elements.nppCover.style.display = 'block';
-            if (this.elements.nppPlaceholder) this.elements.nppPlaceholder.style.display = 'none';
-            this.thumbnailManager.setupFallback(this.elements.nppCover, thumbnailUrl, '🎵');
-        } else {
-            if (this.elements.nppCover) this.elements.nppCover.style.display = 'none';
-            if (this.elements.nppPlaceholder) this.elements.nppPlaceholder.style.display = 'flex';
-        }
+        this.updateArtworkElement({
+            imageElement: this.elements.nppCover,
+            thumbnailUrl,
+            placeholderElement: this.elements.nppPlaceholder,
+            placeholderDisplay: 'flex'
+        });
 
         // 播放/暂停按钮 SVG
         const mpvData = this.getMpvData(status);
@@ -1644,32 +1673,20 @@ class MusicPlayerApp {
                 this.lastThumbnailUrl = thumbnailUrl;
 
                 // 使用ThumbnailManager处理缩略图降级
-                if (this.elements.miniPlayerCover) {
-                    this.elements.miniPlayerCover.style.display = 'block';
-                    this.thumbnailManager.setupFallback(
-                        this.elements.miniPlayerCover,
-                        thumbnailUrl,
-                        '🎵'
-                    );
-                }
+                this.updateArtworkElement({
+                    imageElement: this.elements.miniPlayerCover,
+                    thumbnailUrl,
+                });
 
-                if (this.elements.fullPlayerCover) {
-                    this.elements.fullPlayerCover.style.display = 'block';
-                    this.thumbnailManager.setupFallback(
-                        this.elements.fullPlayerCover,
-                        thumbnailUrl,
-                        '🎵'
-                    );
-                }
+                this.updateArtworkElement({
+                    imageElement: this.elements.fullPlayerCover,
+                    thumbnailUrl,
+                });
             }
         } else {
             // 如果没有封面，隐藏img并显示占位符
-            if (this.elements.miniPlayerCover) {
-                this.elements.miniPlayerCover.style.display = 'none';
-            }
-            if (this.elements.fullPlayerCover) {
-                this.elements.fullPlayerCover.style.display = 'none';
-            }
+            this.updateArtworkElement({ imageElement: this.elements.miniPlayerCover, thumbnailUrl: '' });
+            this.updateArtworkElement({ imageElement: this.elements.fullPlayerCover, thumbnailUrl: '' });
             this.lastThumbnailUrl = null;  // 重置缩略图追踪
         }
 

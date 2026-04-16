@@ -955,6 +955,10 @@
         transform: translateZ(0);
     }
 
+    .now-playing-panel[hidden] {
+        display: none !important;
+    }
+
     .now-playing-panel-inner {
         display: flex;
         flex-direction: column;
