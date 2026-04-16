@@ -13,6 +13,20 @@ export class VolumeControl {
         this.throttleTimer = null;
         this.hideDisplayTimer = null;  // 添加隐藏显示的定时器
         this.silent = false;  // 静默模式标志
+        this.fullPlayerDisplay = null;
+        this.fullPlayerVolumeValue = null;
+    }
+
+    _ensureFullPlayerDisplayRefs() {
+        const displayConnected = this.fullPlayerDisplay?.isConnected;
+        const valueConnected = !this.fullPlayerVolumeValue || this.fullPlayerVolumeValue.isConnected;
+
+        if (displayConnected && valueConnected) {
+            return;
+        }
+
+        this.fullPlayerDisplay = document.getElementById('fullPlayerVolumeDisplay');
+        this.fullPlayerVolumeValue = this.fullPlayerDisplay?.querySelector('.volume-value') || null;
     }
 
     _ensureSuccess(result, fallbackMessage) {
@@ -27,6 +41,7 @@ export class VolumeControl {
         this.slider = sliderElement;
         this.display = displayElement;
         this.silent = options.silent || false;
+        this._ensureFullPlayerDisplayRefs();
         
         if (!this.slider) {
             console.error('[音量] 滑块元素不存在');
@@ -121,9 +136,10 @@ export class VolumeControl {
         }
         
         // 同时更新完整播放器的音量显示
-        const fullPlayerDisplay = document.getElementById('fullPlayerVolumeDisplay');
+        this._ensureFullPlayerDisplayRefs();
+        const fullPlayerDisplay = this.fullPlayerDisplay;
         if (fullPlayerDisplay) {
-            const volumeValue = fullPlayerDisplay.querySelector('.volume-value');
+            const volumeValue = this.fullPlayerVolumeValue;
             if (volumeValue) {
                 volumeValue.textContent = `${Math.round(value)}`;
             }
