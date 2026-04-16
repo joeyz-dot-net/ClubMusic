@@ -289,14 +289,21 @@ class MusicPlayerApp {
         return this.elements?.navItems || [];
     }
 
-    setActiveBottomNavTab(tabName) {
+    clearActiveBottomNavState() {
         const navItems = this.getBottomNavItems();
         navItems.forEach((item) => item.classList.remove('active'));
+    }
 
-        const targetItem = this.elements?.navItemByTab?.get(tabName) || null;
-        if (targetItem) {
-            targetItem.classList.add('active');
+    setActiveBottomNavElement(targetElement) {
+        this.clearActiveBottomNavState();
+        if (targetElement) {
+            targetElement.classList.add('active');
         }
+    }
+
+    setActiveBottomNavTab(tabName) {
+        const targetItem = this.elements?.navItemByTab?.get(tabName) || null;
+        this.setActiveBottomNavElement(targetItem);
     }
 
     showTabSection(section, display = 'block') {
@@ -443,6 +450,7 @@ class MusicPlayerApp {
             fullPlayer._visibilityTimer = null;
         }
 
+        this.setArtworkExpanded(false);
         fullPlayer.classList.remove('show');
 
         const applyHidden = () => {
@@ -1070,7 +1078,6 @@ class MusicPlayerApp {
             });
         }
 
-                    this.setActiveBottomNavTab('playlists');
         // 全屏播放器返回按钮 + 向下拖拽返回
         if (this.elements.fullPlayer) {
             // 返回上一导航栏的方法
@@ -1284,7 +1291,7 @@ class MusicPlayerApp {
                     // 延迟等待浏览器完成 reflow
                     setTimeout(() => {
                         if (this.isArtworkExpanded) {
-                            this.toggleArtworkExpand();
+                            this.setArtworkExpanded(false);
                         }
                         // 同时更新 NPP 面板可见性
                         const status = player.getStatus();
@@ -1737,10 +1744,7 @@ class MusicPlayerApp {
             // 确保隐藏模态框，显示播放列表容器
             const playlistsModal = document.getElementById('playlistsModal');
             if (playlistsModal) {
-                playlistsModal.classList.remove('modal-visible');
-                setTimeout(() => {
-                    playlistsModal.style.display = 'none';
-                }, 300);
+                this.hideModalElement(playlistsModal, { hideDelay: 300 });
             }
             
             this.showPlaylistContent();
@@ -2225,7 +2229,7 @@ class MusicPlayerApp {
             }
 
             // 移除所有导航按钮的active状态
-            navItems.forEach(item => item.classList.remove('active'));
+            this.clearActiveBottomNavState();
             currentModal = null;
         };
         
@@ -2387,7 +2391,7 @@ class MusicPlayerApp {
                 console.log('⚙️ 点击设置按钮');
                 navigateTo('settings');
                 hideAllContent();
-                settingsBtn.classList.add('active');
+                this.setActiveBottomNavElement(settingsBtn);
                 settingsManager.openPanel();
             });
         }
@@ -2398,7 +2402,7 @@ class MusicPlayerApp {
             historyNavBtn.addEventListener('click', async () => {
                 console.log('🕐 点击播放历史按钮');
                 hideAllContent();
-                historyNavBtn.classList.add('active');
+                this.setActiveBottomNavElement(historyNavBtn);
                 await showPlaybackHistory();
             });
         }
@@ -2409,7 +2413,7 @@ class MusicPlayerApp {
             playlistSelectBtn.addEventListener('click', () => {
                 console.log('📋 点击歌单选择按钮');
                 hideAllContent();
-                playlistSelectBtn.classList.add('active');
+                this.setActiveBottomNavElement(playlistSelectBtn);
                 playlistsManagement.show();
             });
         }
@@ -2431,7 +2435,7 @@ class MusicPlayerApp {
             console.log('⚙️ 设置关闭，恢复到上一个栏目');
             
             // 移除设置按钮的active状态
-            if (settingsBtn) settingsBtn.classList.remove('active');
+            window.app?.clearActiveBottomNavState?.();
             
             setTimeout(() => {
                 try {
@@ -2445,10 +2449,6 @@ class MusicPlayerApp {
                 }
 
                 showTab('playlists');
-                const playlistsNavBtn = navItems[0];
-                if (playlistsNavBtn) {
-                    playlistsNavBtn.classList.add('active');
-                }
             }, 300);
         };
         
@@ -2499,11 +2499,7 @@ class MusicPlayerApp {
             this.hideTabSection(this.elements.tree, 300);
             
             // 移除本地按钮的active状态
-            navItems.forEach(item => {
-                if (item.getAttribute('data-tab') === 'local') {
-                    item.classList.remove('active');
-                }
-            });
+            this.clearActiveBottomNavState();
             
             // 返回上一个栏目
             setTimeout(() => {
@@ -2568,12 +2564,6 @@ class MusicPlayerApp {
 
                 updateModalZIndex();
 
-                navItems.forEach(item => {
-                    if (item.getAttribute('data-tab') === 'search') {
-                        item.classList.remove('active');
-                    }
-                });
-
                 if (Array.isArray(this.navigationStack) && this.navigationStack[this.navigationStack.length - 1] === 'search') {
                     this.navigationStack.pop();
                 }
@@ -2585,45 +2575,44 @@ class MusicPlayerApp {
     }
 
     /**
-     * 切换视频容器展开/收缩状态
+     * 设置视频容器展开/收缩状态
      */
-    toggleArtworkExpand() {
-        this.isArtworkExpanded = !this.isArtworkExpanded;
+    setArtworkExpanded(isExpanded) {
+        const nextExpanded = Boolean(isExpanded);
+        if (this.isArtworkExpanded === nextExpanded) {
+            return;
+        }
+
+        this.isArtworkExpanded = nextExpanded;
 
         const artworkContainer = this.elements.fullPlayerCover?.parentElement;
         const expandBtn = this.elements.fullPlayerExpand;
         const fullPlayer = this.elements.fullPlayer;
 
-        if (this.isArtworkExpanded) {
-            // 启用展开模式
-            if (artworkContainer) {
-                artworkContainer.classList.add('expanded');
-            }
-            if (expandBtn) {
-                expandBtn.classList.add('active');
-                expandBtn.title = '恢复原始大小';
-            }
-            if (fullPlayer) {
-                fullPlayer.classList.add('artwork-expanded');
+        if (artworkContainer) {
+            artworkContainer.classList.toggle('expanded', nextExpanded);
+        }
+        if (expandBtn) {
+            expandBtn.classList.toggle('active', nextExpanded);
+            expandBtn.title = nextExpanded ? '恢复原始大小' : '放大视图';
+        }
+        if (fullPlayer) {
+            fullPlayer.classList.toggle('artwork-expanded', nextExpanded);
+            if (nextExpanded) {
                 fullPlayer.scrollTop = 0;
             }
-
-            console.log('[UI] 视频容器已展开到全屏');
-        } else {
-            // 恢复原始大小
-            if (artworkContainer) {
-                artworkContainer.classList.remove('expanded');
-            }
-            if (expandBtn) {
-                expandBtn.classList.remove('active');
-                expandBtn.title = '放大视图';
-            }
-            if (fullPlayer) {
-                fullPlayer.classList.remove('artwork-expanded');
-            }
-
-            console.log('[UI] 视频容器已恢复原始大小');
         }
+
+        console.log(nextExpanded
+            ? '[UI] 视频容器已展开到全屏'
+            : '[UI] 视频容器已恢复原始大小');
+    }
+
+    /**
+     * 切换视频容器展开/收缩状态
+     */
+    toggleArtworkExpand() {
+        this.setArtworkExpanded(!this.isArtworkExpanded);
     }
 
     // 更新推流状态
