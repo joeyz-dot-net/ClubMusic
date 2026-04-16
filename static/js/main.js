@@ -63,6 +63,36 @@ class MusicPlayerApp {
         return status?.mpv_state || status?.mpv || {};
     }
 
+    setElementText(element, value) {
+        if (!element) {
+            return;
+        }
+
+        const nextValue = value == null ? '' : String(value);
+        if (element.textContent !== nextValue) {
+            element.textContent = nextValue;
+        }
+    }
+
+    setStyleValue(styleTarget, property, value) {
+        if (!styleTarget || styleTarget[property] === value) {
+            return;
+        }
+
+        styleTarget[property] = value;
+    }
+
+    setAttributeValue(element, name, value) {
+        if (!element) {
+            return;
+        }
+
+        const nextValue = String(value);
+        if (element.getAttribute(name) !== nextValue) {
+            element.setAttribute(name, nextValue);
+        }
+    }
+
     isIPhoneSafari() {
         const ua = navigator.userAgent || '';
         const isIPhone = /iPhone|iPod/i.test(ua);
@@ -491,17 +521,25 @@ class MusicPlayerApp {
     }
 
     updateArtworkElement({ imageElement, thumbnailUrl, placeholderElement = null, placeholderDisplay = 'flex' } = {}) {
-        const canShowImage = Boolean(thumbnailUrl && imageElement);
+        const isKnownFailedThumbnail = Boolean(
+            thumbnailUrl && imageElement && this.thumbnailManager.isKnownFailed(thumbnailUrl)
+        );
+        const canShowImage = Boolean(thumbnailUrl && imageElement && !isKnownFailedThumbnail);
 
         if (imageElement) {
-            imageElement.style.display = canShowImage ? 'block' : 'none';
+            this.setStyleValue(imageElement.style, 'display', canShowImage ? 'block' : 'none');
         }
 
         if (placeholderElement) {
-            placeholderElement.style.display = canShowImage ? 'none' : placeholderDisplay;
+            this.setStyleValue(placeholderElement.style, 'display', canShowImage ? 'none' : placeholderDisplay);
         }
 
-        if (canShowImage) {
+        if (imageElement && !canShowImage) {
+            imageElement.dataset.thumbnailUrl = '';
+        }
+
+        if (canShowImage && imageElement?.dataset.thumbnailUrl !== thumbnailUrl) {
+            imageElement.dataset.thumbnailUrl = thumbnailUrl;
             this.thumbnailManager.setupFallback(imageElement, thumbnailUrl, '🎵');
         }
     }
@@ -789,31 +827,32 @@ class MusicPlayerApp {
             this.lastUILoopMode = loopMode;
         }
 
+        const isLoopActive = loopMode !== 0;
+        const nextOpacity = isLoopActive ? '1' : '0.6';
+
         buttons.forEach(btn => {
             if (btn) {
                 // 更新文本内容和样式
                 const emoji = loopModeEmoji[loopMode] || '↻';
 
                 // 处理文本按钮（底部loopBtn）
-                if (btn.id === 'loopBtn') {
+                if (btn.id === 'loopBtn' && btn.textContent !== emoji) {
                     btn.textContent = emoji;
                 } else {
                     // 处理SVG按钮，需要添加active类来改变颜色
-                    const title = loopModeText[loopMode];
                     btn.setAttribute('data-mode', loopMode);
                 }
 
-                // 添加/移除active类以显示视觉反馈
-                if (loopMode === 0) {
-                    btn.classList.remove('loop-active');
-                    btn.style.opacity = '0.6';
-                } else {
-                    btn.classList.add('loop-active');
-                    btn.style.opacity = '1';
+                btn.classList.toggle('loop-active', isLoopActive);
+                if (btn.style.opacity !== nextOpacity) {
+                    btn.style.opacity = nextOpacity;
                 }
 
                 // 更新title属性
-                btn.title = i18n.t('player.loop.title', { mode: loopModeText[loopMode] });
+                const nextTitle = i18n.t('player.loop.title', { mode: loopModeText[loopMode] });
+                if (btn.title !== nextTitle) {
+                    btn.title = nextTitle;
+                }
 
                 // 全屏循环按钮：单曲循环时显示 "1" 徽章
                 if (btn.id === 'fullPlayerLoop') {
@@ -838,14 +877,16 @@ class MusicPlayerApp {
         const btn = this.elements.fullPlayerShuffle;
         if (!btn) return;
 
-        if (shuffleMode) {
-            btn.classList.add('shuffle-active');
-            btn.style.opacity = '1';
-            btn.title = i18n.t('player.shuffle.on');
-        } else {
-            btn.classList.remove('shuffle-active');
-            btn.style.opacity = '0.5';
-            btn.title = i18n.t('player.shuffle.off');
+        btn.classList.toggle('shuffle-active', Boolean(shuffleMode));
+
+        const nextOpacity = shuffleMode ? '1' : '0.5';
+        if (btn.style.opacity !== nextOpacity) {
+            btn.style.opacity = nextOpacity;
+        }
+
+        const nextTitle = i18n.t(shuffleMode ? 'player.shuffle.on' : 'player.shuffle.off');
+        if (btn.title !== nextTitle) {
+            btn.title = nextTitle;
         }
     }
 
@@ -853,13 +894,14 @@ class MusicPlayerApp {
     updatePitchUI(pitchShift) {
         const display = this.elements.fullPlayerPitchDisplay;
         if (!display) return;
-        if (pitchShift === 0) {
-            display.textContent = '0';
-            display.classList.remove('pitch-active');
-        } else {
-            display.textContent = pitchShift > 0 ? `+${pitchShift}` : `${pitchShift}`;
-            display.classList.add('pitch-active');
+
+        const nextText = pitchShift === 0 ? '0' : (pitchShift > 0 ? `+${pitchShift}` : `${pitchShift}`);
+        if (display.textContent !== nextText) {
+            display.textContent = nextText;
         }
+
+        display.classList.toggle('pitch-active', pitchShift !== 0);
+
         if (this.elements.fullPlayerPitchUp) {
             this.elements.fullPlayerPitchUp.disabled = pitchShift >= 6;
         }
@@ -899,8 +941,8 @@ class MusicPlayerApp {
         const title = status.current_title || status.title || status.current_meta?.title || '';
         const artist = status.current_meta?.artist || status.artist || '--';
 
-        if (this.elements.nppTitle) this.elements.nppTitle.textContent = title;
-        if (this.elements.nppArtist) this.elements.nppArtist.textContent = artist;
+        this.setElementText(this.elements.nppTitle, title);
+        this.setElementText(this.elements.nppArtist, artist);
 
         // 封面 (复用 ThumbnailManager)
         const thumbnailUrl = status.thumbnail_url || status.current_meta?.thumbnail_url || '';
@@ -917,7 +959,7 @@ class MusicPlayerApp {
         if (this.elements.nppPlayPause) {
             const path = this.elements.nppPlayPause.querySelector('svg path');
             if (path) {
-                path.setAttribute('d', isPlaying ?
+                this.setAttributeValue(path, 'd', isPlaying ?
                     'M6 4h4v16H6V4zm8 0h4v16h-4V4z' :
                     'M8 5v14l11-7z'
                 );
@@ -927,7 +969,7 @@ class MusicPlayerApp {
         // 时长
         const duration = mpvData.duration || 0;
         if (this.elements.nppDuration) {
-            this.elements.nppDuration.textContent = formatTime(duration);
+            this.setElementText(this.elements.nppDuration, formatTime(duration));
         }
     }
 
@@ -1574,26 +1616,14 @@ class MusicPlayerApp {
         const playlistName = status.current_playlist_name || '默认';
         
         // 更新迷你播放器标题和信息
-        if (this.elements.miniPlayerTitle) {
-            this.elements.miniPlayerTitle.textContent = title;
-        }
-        if (this.elements.miniPlayerArtist) {
-            this.elements.miniPlayerArtist.textContent = artist;
-        }
-        if (this.elements.miniPlayerPlaylist) {
-            this.elements.miniPlayerPlaylist.textContent = playlistName;
-        }
+        this.setElementText(this.elements.miniPlayerTitle, title);
+        this.setElementText(this.elements.miniPlayerArtist, artist);
+        this.setElementText(this.elements.miniPlayerPlaylist, playlistName);
         
         // 更新全屏播放器标题和艺术家
-        if (this.elements.fullPlayerTitle) {
-            this.elements.fullPlayerTitle.textContent = title;
-        }
-        if (this.elements.fullPlayerArtist) {
-            this.elements.fullPlayerArtist.textContent = artist;
-        }
-        if (this.elements.fullPlayerPlaylist) {
-            this.elements.fullPlayerPlaylist.textContent = playlistName;
-        }
+        this.setElementText(this.elements.fullPlayerTitle, title);
+        this.setElementText(this.elements.fullPlayerArtist, artist);
+        this.setElementText(this.elements.fullPlayerPlaylist, playlistName);
 
         // 更新进度信息（支持两种字段名）
         const mpvData = this.getMpvData(status);
@@ -1604,7 +1634,7 @@ class MusicPlayerApp {
             // 注：currentTime 和全屏进度条由 RAF 循环（_updateProgressBar）实时更新
 
             if (this.elements.fullPlayerDuration) {
-                this.elements.fullPlayerDuration.textContent = formatTime(duration);
+                this.setElementText(this.elements.fullPlayerDuration, formatTime(duration));
             }
 
             // 更新播放进度条（迷你播放器）
@@ -1652,11 +1682,11 @@ class MusicPlayerApp {
         
         // 更新按钮文本/图标
         if (this.elements.playPauseBtn) {
-            this.elements.playPauseBtn.textContent = isPlaying ? '⏸' : '▶';
-            this.elements.playPauseBtn.title = isPlaying ? i18n.t('player.pause') : i18n.t('player.play');
+            this.setElementText(this.elements.playPauseBtn, isPlaying ? '⏸' : '▶');
+            this.setAttributeValue(this.elements.playPauseBtn, 'title', isPlaying ? i18n.t('player.pause') : i18n.t('player.play'));
         }
         if (this.elements.miniPlayPauseBtn) {
-            this.elements.miniPlayPauseBtn.textContent = isPlaying ? '⏸' : '▶';
+            this.setElementText(this.elements.miniPlayPauseBtn, isPlaying ? '⏸' : '▶');
         }
         if (this.elements.fullPlayerPlayPause) {
             // 更新SVG path的d属性以显示正确的图标
@@ -1664,7 +1694,7 @@ class MusicPlayerApp {
             const path = this.elements.fullPlayerPlayPause.querySelector('svg path');
             if (path && svg) {
                 // 暂停: 两个竖条 | |  播放: 三角形 ▶
-                path.setAttribute('d', isPlaying ? 
+                this.setAttributeValue(path, 'd', isPlaying ? 
                     'M6 4h4v16H6V4zm8 0h4v16h-4V4z' :  // 暂停按钮
                     'M8 5v14l11-7z'  // 播放按钮
                 );
