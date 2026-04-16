@@ -1,9 +1,9 @@
 // 播放器控制模块
-import { api } from './api.js?v=4';
-import { settingsManager } from './settingsManager.js?v=8';
+import { api } from './api.js?v=5';
+import { settingsManager } from './settingsManager.js?v=9';
 import { operationLock } from './operationLock.js?v=2';
 import { recordTrace } from './requestTrace.js?v=2';
-import { roomBotManager } from './roomBot.js?v=1';
+import { roomBotManager } from './roomBot.js?v=2';
 
 const STATUS_TIME_EPSILON = 0.001;
 

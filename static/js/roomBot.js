@@ -1,4 +1,4 @@
-import { api } from './api.js?v=4';
+import { api } from './api.js?v=5';
 
 function delay(ms) {
     return new Promise((resolve) => {

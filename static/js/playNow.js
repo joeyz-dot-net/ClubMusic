@@ -1,6 +1,6 @@
-import { player } from './player.js?v=23';
+import { player } from './player.js?v=24';
 import { playLock } from './playLock.js?v=2';
-import { getCurrentPlaybackMeta } from './playbackState.js?v=18';
+import { getCurrentPlaybackMeta } from './playbackState.js?v=19';
 
 function createPlayNowError(result, fallbackMessage) {
     const message = result?.error || result?.message || fallbackMessage;

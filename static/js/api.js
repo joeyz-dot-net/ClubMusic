@@ -78,6 +78,8 @@ export class MusicAPI {
         const urlParams = new URLSearchParams(window.location.search);
         this.roomId = urlParams.get('room_id') || '';
         this.pipeParam = urlParams.get('pipe') || '';
+        this._traceHeaderCacheKey = null;
+        this._cachedStaticTraceHeaders = null;
 
         // 防抖包装（先到先得 Leading Debounce）
         // next/prev/play: 1000ms — 切歌操作耗时较长，1 秒窗口防止堆叠
@@ -88,13 +90,43 @@ export class MusicAPI {
         this._debouncedPause = makeLeadingDebounce(this._rawPause.bind(this), 500);
     }
 
+    _getPageTraceValue() {
+        return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    }
+
+    _getRoomTraceValue() {
+        return this.roomId || this.pipeParam || 'default';
+    }
+
+    _getStaticTraceHeaders() {
+        const pageValue = this._getPageTraceValue();
+        const roomValue = this._getRoomTraceValue();
+        const cacheKey = [
+            this.clientUserId || '',
+            this.clientTabId,
+            pageValue,
+            roomValue,
+        ].join('|');
+
+        if (this._traceHeaderCacheKey === cacheKey && this._cachedStaticTraceHeaders) {
+            return this._cachedStaticTraceHeaders;
+        }
+
+        this._traceHeaderCacheKey = cacheKey;
+        this._cachedStaticTraceHeaders = {
+            'X-ClubMusic-User': normalizeHeaderValue(this.clientUserId || ''),
+            'X-ClubMusic-Tab': normalizeHeaderValue(this.clientTabId),
+            'X-ClubMusic-Page': normalizeHeaderValue(pageValue),
+            'X-ClubMusic-Room': normalizeHeaderValue(roomValue),
+        };
+
+        return this._cachedStaticTraceHeaders;
+    }
+
     _buildTraceHeaders(endpoint) {
         const requestId = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
         return {
-            'X-ClubMusic-User': normalizeHeaderValue(this.clientUserId || ''),
-            'X-ClubMusic-Tab': normalizeHeaderValue(this.clientTabId),
-            'X-ClubMusic-Page': normalizeHeaderValue(`${window.location.pathname}${window.location.search}${window.location.hash}`),
-            'X-ClubMusic-Room': normalizeHeaderValue(this.roomId || this.pipeParam || 'default'),
+            ...this._getStaticTraceHeaders(),
             'X-ClubMusic-Request': normalizeHeaderValue(`${endpoint}:${requestId}`),
         };
     }

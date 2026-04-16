@@ -1,12 +1,12 @@
 // 搜索功能模块
-import { api } from './api.js?v=4';
+import { api } from './api.js?v=5';
 import { Toast, formatTime, searchLoading } from './ui.js?v=2';
 import { buildTrackItemElement } from './templates.js';
-import { localFiles, getNodeByPath, getDirCoverUrl, countFiles } from './local.js?v=24';
-import { playlistManager, renderPlaylistUI } from './playlist.js?v=39';
+import { localFiles, getNodeByPath, getDirCoverUrl, countFiles } from './local.js?v=25';
+import { playlistManager, renderPlaylistUI } from './playlist.js?v=40';
 import { i18n } from './i18n.js';
 import { escapeHTML, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js?v=2';
-import { executePlayNow } from './playNow.js?v=20';
+import { executePlayNow } from './playNow.js?v=21';
 import { getCurrentPlaybackMeta } from './playbackState.js?v=17';
 
 const SEARCH_SUCCESS_ICON_MARKUP = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
@@ -1240,7 +1240,7 @@ export class SearchManager {
                                 Toast.error(i18n.t('search.addFailed') + ': ' + err.message);
                             }
                         } else {
-                            const { showSelectPlaylistModal } = await import('./playlist.js?v=39');
+                            const { showSelectPlaylistModal } = await import('./playlist.js?v=40');
                             await showSelectPlaylistModal(songData, null);
                         }
                     } else if (action === 'add-all-to-playlist') {
