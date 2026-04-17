@@ -24,7 +24,21 @@ function restoreElementChildren(element, snapshot) {
 }
 
 function setElementText(element, text) {
-    element.replaceChildren(document.createTextNode(text));
+    const nextText = String(text ?? '');
+    if (element.textContent !== nextText) {
+        element.replaceChildren(document.createTextNode(nextText));
+    }
+}
+
+function setStyleValue(styleTarget, property, value) {
+    if (!styleTarget) {
+        return;
+    }
+
+    const nextValue = value ?? '';
+    if (styleTarget[property] !== nextValue) {
+        styleTarget[property] = nextValue;
+    }
 }
 
 function setElementMarkup(element, markup) {
@@ -460,6 +474,35 @@ function getSearchTabRefs(container, forceRefresh = false) {
     };
 
     container._searchTabRefs = nextRefs;
+    return nextRefs;
+}
+
+function getYoutubeLoadRefs(container, forceRefresh = false) {
+    if (!container) {
+        return {};
+    }
+
+    const cachedRefs = container._youtubeLoadRefs;
+    const refsAreConnected = cachedRefs
+        && (!cachedRefs.container || cachedRefs.container.isConnected)
+        && (!cachedRefs.statusEl || cachedRefs.statusEl.isConnected)
+        && (!cachedRefs.noMoreEl || cachedRefs.noMoreEl.isConnected)
+        && (!cachedRefs.loadMoreBtn || cachedRefs.loadMoreBtn.isConnected)
+        && (!cachedRefs.loadMoreLabel || cachedRefs.loadMoreLabel.isConnected);
+
+    if (!forceRefresh && refsAreConnected) {
+        return cachedRefs;
+    }
+
+    const nextRefs = {
+        container: container.querySelector('#youtubeLoadMoreContainer'),
+        statusEl: container.querySelector('#youtubeLoadStatus'),
+        noMoreEl: container.querySelector('#youtubeNoMore'),
+        loadMoreBtn: container.querySelector('#youtubeLoadMoreBtn'),
+        loadMoreLabel: container.querySelector('#youtubeLoadMoreBtn .label')
+    };
+
+    container._youtubeLoadRefs = nextRefs;
     return nextRefs;
 }
 
@@ -1152,6 +1195,7 @@ export class SearchManager {
         panels.appendChild(youtubePanel);
         searchModalBody.replaceChildren(tabs, panels);
         searchModalBody._searchTabRefs = { localTab, youtubeTab, localPanel, youtubePanel };
+        searchModalBody._youtubeLoadRefs = getYoutubeLoadRefs(searchModalBody, true);
         resetScrollPosition(searchModalBody);
 
         updateSearchTabCounts({
@@ -1754,11 +1798,11 @@ export class SearchManager {
      * 追加YouTube搜索结果到列表
      */
     appendYoutubeResults(newResults) {
-        const youtubePanel = document.querySelector('[data-panel="youtube"]');
+        const scrollContainer = document.getElementById('searchModalBody');
+        const { youtubePanel } = getSearchTabRefs(scrollContainer);
         if (!youtubePanel) return;
 
-        const loadMoreContainer = youtubePanel.querySelector('.search-load-more-container');
-        const scrollContainer = document.getElementById('searchModalBody');
+        const { container: loadMoreContainer } = getYoutubeLoadRefs(scrollContainer);
         const previousTop = loadMoreContainer ? loadMoreContainer.getBoundingClientRect().top : null;
 
         const fragment = document.createDocumentFragment();
@@ -1789,32 +1833,27 @@ export class SearchManager {
      */
     updateYoutubeLoadUI() {
         const state = this.youtubeLoadState;
-        const container = document.getElementById('youtubeLoadMoreContainer');
-        const statusEl = document.getElementById('youtubeLoadStatus');
-        const noMoreEl = document.getElementById('youtubeNoMore');
+        const searchModalBody = document.getElementById('searchModalBody');
+        const { container, statusEl, noMoreEl, loadMoreLabel } = getYoutubeLoadRefs(searchModalBody);
 
         if (!container) return;
 
         if (state.isLoading) {
-            container.style.display = 'none';
-            if (statusEl) statusEl.style.display = 'flex';
-            if (noMoreEl) noMoreEl.style.display = 'none';
+            setStyleValue(container.style, 'display', 'none');
+            if (statusEl) setStyleValue(statusEl.style, 'display', 'flex');
+            if (noMoreEl) setStyleValue(noMoreEl.style, 'display', 'none');
         } else if (!state.hasMore) {
-            container.style.display = 'none';
-            if (statusEl) statusEl.style.display = 'none';
-            if (noMoreEl) noMoreEl.style.display = 'flex';
+            setStyleValue(container.style, 'display', 'none');
+            if (statusEl) setStyleValue(statusEl.style, 'display', 'none');
+            if (noMoreEl) setStyleValue(noMoreEl.style, 'display', 'flex');
         } else {
-            container.style.display = 'flex';
-            if (statusEl) statusEl.style.display = 'none';
-            if (noMoreEl) noMoreEl.style.display = 'none';
+            setStyleValue(container.style, 'display', 'flex');
+            if (statusEl) setStyleValue(statusEl.style, 'display', 'none');
+            if (noMoreEl) setStyleValue(noMoreEl.style, 'display', 'none');
 
             // 动态更新"加载更多"按钮的文本，显示实际的page_size值
-            const loadMoreBtn = document.getElementById('youtubeLoadMoreBtn');
-            if (loadMoreBtn) {
-                const label = loadMoreBtn.querySelector('.label');
-                if (label) {
-                    label.textContent = i18n.t('search.loadMore', { count: state.maxResultsStep });
-                }
+            if (loadMoreLabel) {
+                setElementText(loadMoreLabel, i18n.t('search.loadMore', { count: state.maxResultsStep }));
             }
         }
     }

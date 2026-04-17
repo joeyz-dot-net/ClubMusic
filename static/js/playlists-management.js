@@ -166,10 +166,77 @@ export class PlaylistsManagement {
     constructor() {
         this.modalBody = null;
         this.modal = null;
+        this.playlistsAddBtn = null;
         this.onPlaylistSwitchCallback = null;
         this.onDismissCallback = null;
         this.modalActionInFlight = false;
+        this.modalActionDisabled = false;
         this.modalActionRefs = { items: [], buttons: [] };
+    }
+
+    getPlaylistsAddButton() {
+        if (this.playlistsAddBtn?.isConnected) {
+            return this.playlistsAddBtn;
+        }
+
+        this.playlistsAddBtn = document.getElementById('playlistsAddBtn');
+        return this.playlistsAddBtn;
+    }
+
+    setElementAttribute(element, name, value) {
+        if (!element) {
+            return;
+        }
+
+        const nextValue = String(value);
+        if (element.getAttribute(name) !== nextValue) {
+            element.setAttribute(name, nextValue);
+        }
+    }
+
+    setStyleValue(styleTarget, property, value) {
+        if (!styleTarget) {
+            return;
+        }
+
+        const nextValue = value ?? '';
+        if (styleTarget[property] !== nextValue) {
+            styleTarget[property] = nextValue;
+        }
+    }
+
+    setDisabledState(element, disabled) {
+        if (element && element.disabled !== disabled) {
+            element.disabled = disabled;
+        }
+    }
+
+    setClassState(element, className, enabled) {
+        if (!element) {
+            return;
+        }
+
+        if (enabled) {
+            if (!element.classList.contains(className)) {
+                element.classList.add(className);
+            }
+            return;
+        }
+
+        if (element.classList.contains(className)) {
+            element.classList.remove(className);
+        }
+    }
+
+    applyModalActionStateToRefs(refs, disabled) {
+        refs.items.forEach((item) => {
+            this.setStyleValue(item.style, 'pointerEvents', disabled ? 'none' : '');
+            this.setElementAttribute(item, 'aria-disabled', String(disabled));
+        });
+
+        refs.buttons.forEach((button) => {
+            this.setDisabledState(button, disabled);
+        });
     }
 
     notifyMutationResult(successMessage, refreshError) {
@@ -184,6 +251,7 @@ export class PlaylistsManagement {
     init(onPlaylistSwitch = null, onDismiss = null) {
         this.modalBody = document.getElementById('playlistsModalBody');
         this.modal = document.getElementById('playlistsModal');
+        this.playlistsAddBtn = document.getElementById('playlistsAddBtn');
         this.onPlaylistSwitchCallback = onPlaylistSwitch;
         this.onDismissCallback = onDismiss;
         this.bindEvents();
@@ -210,37 +278,33 @@ export class PlaylistsManagement {
         });
 
         this.modalActionRefs = refs;
+        if (this.modalActionDisabled) {
+            this.applyModalActionStateToRefs(refs, true);
+        }
         return refs;
     }
 
     setModalActionState(disabled) {
+        this.modalActionDisabled = disabled;
+
         if (this.modal) {
-            this.modal.setAttribute('aria-busy', String(disabled));
+            this.setElementAttribute(this.modal, 'aria-busy', String(disabled));
         }
 
-        const playlistsAddBtn = document.getElementById('playlistsAddBtn');
+        const playlistsAddBtn = this.getPlaylistsAddButton();
         if (playlistsAddBtn) {
-            playlistsAddBtn.disabled = disabled;
+            this.setDisabledState(playlistsAddBtn, disabled);
         }
 
         if (!this.modalBody) {
             return;
         }
 
-        const hasDisconnectedRefs = this.modalActionRefs.items.some((item) => !item.isConnected)
-            || this.modalActionRefs.buttons.some((button) => !button.isConnected);
-        const { items, buttons } = hasDisconnectedRefs
-            ? this.refreshModalActionRefs()
-            : this.modalActionRefs;
+        const refs = (this.modalActionRefs.items.length > 0 || this.modalActionRefs.buttons.length > 0)
+            ? this.modalActionRefs
+            : this.refreshModalActionRefs();
 
-        items.forEach((item) => {
-            item.style.pointerEvents = disabled ? 'none' : '';
-            item.setAttribute('aria-disabled', String(disabled));
-        });
-
-        buttons.forEach((button) => {
-            button.disabled = disabled;
-        });
+        this.applyModalActionStateToRefs(refs, disabled);
     }
 
     async runExclusiveModalAction(actionName, action) {
@@ -479,10 +543,25 @@ export class PlaylistsManagement {
     // 显示歌单管理模态框
     async show() {
         if (this.modal) {
+            if (this.modal._modalVisibilityTimer) {
+                clearTimeout(this.modal._modalVisibilityTimer);
+                this.modal._modalVisibilityTimer = null;
+            }
+
+            const isAlreadyVisible = !this.modal._modalVisibilityTimer
+                && this.modal.classList.contains('modal-visible')
+                && this.modal.getAttribute('aria-hidden') === 'false'
+                && this.modal.style.display === 'flex';
+
+            if (isAlreadyVisible) {
+                focusFirstFocusable(this.modal, '#playlistsAddBtn');
+                return;
+            }
+
             this.modal._previousActiveElement = document.activeElement;
-            this.modal.setAttribute('aria-hidden', 'false');
-            this.modal.setAttribute('aria-busy', 'true');
-            this.modal.style.display = 'flex';
+            this.setElementAttribute(this.modal, 'aria-hidden', 'false');
+            this.setElementAttribute(this.modal, 'aria-busy', 'true');
+            this.setStyleValue(this.modal.style, 'display', 'flex');
 
             if (!this._handleModalKeydown) {
                 this._handleModalKeydown = (event) => {
@@ -503,8 +582,9 @@ export class PlaylistsManagement {
             }
 
             document.addEventListener('keydown', this._handleModalKeydown);
-            setTimeout(() => {
-                this.modal.classList.add('modal-visible');
+            this.modal._modalVisibilityTimer = setTimeout(() => {
+                this.setClassState(this.modal, 'modal-visible', true);
+                this.modal._modalVisibilityTimer = null;
                 focusFirstFocusable(this.modal, '#playlistsAddBtn');
             }, 10);
 
@@ -514,7 +594,9 @@ export class PlaylistsManagement {
                 console.error('[歌单管理] 加载歌单列表失败:', error);
                 Toast.error(i18n.t('playlists.loadFailed', { error: error.message }));
             } finally {
-                this.modal.removeAttribute('aria-busy');
+                if (this.modal?.isConnected && this.modal.hasAttribute('aria-busy')) {
+                    this.modal.removeAttribute('aria-busy');
+                }
             }
 
             this.render();
@@ -524,15 +606,30 @@ export class PlaylistsManagement {
     // 隐藏模态框
     hide(reason = 'dismiss') {
         if (this.modal) {
+            if (this.modal._modalVisibilityTimer) {
+                clearTimeout(this.modal._modalVisibilityTimer);
+                this.modal._modalVisibilityTimer = null;
+            }
+
+            const isAlreadyHidden = !this.modal._modalVisibilityTimer
+                && !this.modal.classList.contains('modal-visible')
+                && this.modal.getAttribute('aria-hidden') === 'true'
+                && this.modal.style.display === 'none';
+
+            if (isAlreadyHidden) {
+                return;
+            }
+
             console.log('[歌单管理] 隐藏模态框');
-            this.modal.classList.remove('modal-visible');
+            this.setClassState(this.modal, 'modal-visible', false);
+            this.setElementAttribute(this.modal, 'aria-hidden', 'true');
             if (this._handleModalKeydown) {
                 document.removeEventListener('keydown', this._handleModalKeydown);
             }
             // 缩短延迟，确保回调执行后模态框已隐藏
-            setTimeout(() => {
-                this.modal.style.display = 'none';
-                this.modal.setAttribute('aria-hidden', 'true');
+            this.modal._modalVisibilityTimer = setTimeout(() => {
+                this.setStyleValue(this.modal.style, 'display', 'none');
+                this.modal._modalVisibilityTimer = null;
                 restoreFocus(this.modal._previousActiveElement);
                 if (reason === 'dismiss' && typeof this.onDismissCallback === 'function') {
                     this.onDismissCallback(reason);
