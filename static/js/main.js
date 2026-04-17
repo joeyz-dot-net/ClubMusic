@@ -93,6 +93,14 @@ class MusicPlayerApp {
         }
     }
 
+    setDisabledState(element, disabled) {
+        if (!element || element.disabled === disabled) {
+            return;
+        }
+
+        element.disabled = disabled;
+    }
+
     setPercentStyle(element, property, percent) {
         if (!element) {
             return;
@@ -144,6 +152,23 @@ class MusicPlayerApp {
 
         this.elements.currentTrackProgressFill = progressFill;
         return progressFill;
+    }
+
+    ensureFullPlayerLoopBadge() {
+        const loopButton = this.elements?.fullPlayerLoop;
+        if (!loopButton) {
+            return null;
+        }
+
+        if (this.elements?.fullPlayerLoopBadge?.isConnected) {
+            return this.elements.fullPlayerLoopBadge;
+        }
+
+        const badge = document.createElement('span');
+        badge.className = 'loop-badge';
+        loopButton.appendChild(badge);
+        this.elements.fullPlayerLoopBadge = badge;
+        return badge;
     }
 
     isIPhoneSafari() {
@@ -292,6 +317,7 @@ class MusicPlayerApp {
             fullPlayerExpand: document.getElementById('fullPlayerExpand'),
             fullPlayerShuffle: document.getElementById('fullPlayerShuffle'),
             fullPlayerLoop: document.getElementById('fullPlayerLoop'),
+            fullPlayerLoopBadge: document.querySelector('#fullPlayerLoop .loop-badge'),
             fullPlayerPitchDown: document.getElementById('fullPlayerPitchDown'),
             fullPlayerPitchDisplay: document.getElementById('fullPlayerPitchDisplay'),
             fullPlayerPitchUp: document.getElementById('fullPlayerPitchUp'),
@@ -895,17 +921,15 @@ class MusicPlayerApp {
                 const emoji = loopModeEmoji[loopMode] || '↻';
 
                 // 处理文本按钮（底部loopBtn）
-                if (btn.id === 'loopBtn' && btn.textContent !== emoji) {
-                    btn.textContent = emoji;
+                if (btn.id === 'loopBtn') {
+                    this.setElementText(btn, emoji);
                 } else {
                     // 处理SVG按钮，需要添加active类来改变颜色
-                    btn.setAttribute('data-mode', loopMode);
+                    this.setAttributeValue(btn, 'data-mode', loopMode);
                 }
 
                 btn.classList.toggle('loop-active', isLoopActive);
-                if (btn.style.opacity !== nextOpacity) {
-                    btn.style.opacity = nextOpacity;
-                }
+                this.setStyleValue(btn.style, 'opacity', nextOpacity);
 
                 // 更新title属性
                 const nextTitle = i18n.t('player.loop.title', { mode: loopModeText[loopMode] });
@@ -915,16 +939,12 @@ class MusicPlayerApp {
 
                 // 全屏循环按钮：单曲循环时显示 "1" 徽章
                 if (btn.id === 'fullPlayerLoop') {
-                    let badge = btn.querySelector('.loop-badge');
+                    const badge = this.ensureFullPlayerLoopBadge();
                     if (loopMode === 1) {
-                        if (!badge) {
-                            badge = document.createElement('span');
-                            badge.className = 'loop-badge';
-                            btn.appendChild(badge);
-                        }
-                        badge.textContent = '1';
-                    } else if (badge) {
-                        badge.remove();
+                        this.setElementText(badge, '1');
+                        this.setStyleValue(badge?.style, 'display', 'block');
+                    } else {
+                        this.setStyleValue(badge?.style, 'display', 'none');
                     }
                 }
             }
@@ -939,14 +959,10 @@ class MusicPlayerApp {
         btn.classList.toggle('shuffle-active', Boolean(shuffleMode));
 
         const nextOpacity = shuffleMode ? '1' : '0.5';
-        if (btn.style.opacity !== nextOpacity) {
-            btn.style.opacity = nextOpacity;
-        }
+        this.setStyleValue(btn.style, 'opacity', nextOpacity);
 
         const nextTitle = i18n.t(shuffleMode ? 'player.shuffle.on' : 'player.shuffle.off');
-        if (btn.title !== nextTitle) {
-            btn.title = nextTitle;
-        }
+        this.setAttributeValue(btn, 'title', nextTitle);
     }
 
     // 更新升降调控件的视觉状态
@@ -955,17 +971,15 @@ class MusicPlayerApp {
         if (!display) return;
 
         const nextText = pitchShift === 0 ? '0' : (pitchShift > 0 ? `+${pitchShift}` : `${pitchShift}`);
-        if (display.textContent !== nextText) {
-            display.textContent = nextText;
-        }
+        this.setElementText(display, nextText);
 
         display.classList.toggle('pitch-active', pitchShift !== 0);
 
         if (this.elements.fullPlayerPitchUp) {
-            this.elements.fullPlayerPitchUp.disabled = pitchShift >= 6;
+            this.setDisabledState(this.elements.fullPlayerPitchUp, pitchShift >= 6);
         }
         if (this.elements.fullPlayerPitchDown) {
-            this.elements.fullPlayerPitchDown.disabled = pitchShift <= -6;
+            this.setDisabledState(this.elements.fullPlayerPitchDown, pitchShift <= -6);
         }
     }
 
@@ -974,8 +988,9 @@ class MusicPlayerApp {
         const display = this.elements.fullPlayerOffsetDisplay;
         if (!display) return;
         const rounded = Math.round(offset * 10) / 10;
-        display.textContent = rounded === 0 ? '0.0s'
+        const nextText = rounded === 0 ? '0.0s'
             : (rounded > 0 ? `+${rounded.toFixed(1)}s` : `${rounded.toFixed(1)}s`);
+        this.setElementText(display, nextText);
         display.classList.toggle('offset-active', rounded !== 0);
     }
 
