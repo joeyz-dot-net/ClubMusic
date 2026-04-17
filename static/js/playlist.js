@@ -1057,6 +1057,84 @@ function getRenderedPlaylistState() {
     return { selectedPlaylistId, playlist, playlistName };
 }
 
+function getPlaylistToolbarContainer(container) {
+    const cachedToolbar = container?._playlistToolbarContainer;
+    if (cachedToolbar?.isConnected) {
+        return cachedToolbar;
+    }
+
+    const toolbarContainer = document.getElementById('playlistToolbar');
+    if (container) {
+        container._playlistToolbarContainer = toolbarContainer || null;
+    }
+
+    return toolbarContainer;
+}
+
+const playlistDomCache = {
+    playListContainer: null,
+    historyModal: null,
+    historyList: null,
+    historyContent: null,
+    historyCloseBtn: null,
+    selectPlaylistModal: null,
+    selectPlaylistModalBody: null,
+    selectPlaylistCloseBtn: null,
+    selectPlaylistCancelBtn: null,
+};
+
+function getCachedPlaylistElement(cacheKey, resolver) {
+    const cachedElement = playlistDomCache[cacheKey];
+    if (cachedElement?.isConnected) {
+        return cachedElement;
+    }
+
+    const element = resolver();
+    playlistDomCache[cacheKey] = element || null;
+    return playlistDomCache[cacheKey];
+}
+
+function getPlaylistContainerElement() {
+    return getCachedPlaylistElement('playListContainer', () => document.getElementById('playListContainer'));
+}
+
+function getHistoryModalRefs() {
+    const historyModal = getCachedPlaylistElement('historyModal', () => document.getElementById('historyModal'));
+    const historyList = getCachedPlaylistElement('historyList', () => document.getElementById('historyList'));
+    const historyContent = historyModal
+        ? getCachedPlaylistElement('historyContent', () => historyModal.querySelector('.history-modal-content'))
+        : null;
+    const historyCloseBtn = historyModal
+        ? getCachedPlaylistElement('historyCloseBtn', () => (
+            historyModal.querySelector('.history-modal-close')
+            || historyModal.querySelector('.modal-close-btn')
+            || historyModal.querySelector('[data-close]')
+            || historyModal.querySelector('[data-icon]')
+        ))
+        : null;
+
+    return {
+        historyModal,
+        historyList,
+        historyContent,
+        historyCloseBtn,
+    };
+}
+
+function getSelectPlaylistModalRefs() {
+    const selectPlaylistModal = getCachedPlaylistElement('selectPlaylistModal', () => document.getElementById('selectPlaylistModal'));
+    const selectPlaylistModalBody = getCachedPlaylistElement('selectPlaylistModalBody', () => document.getElementById('selectPlaylistModalBody'));
+    const selectPlaylistCloseBtn = getCachedPlaylistElement('selectPlaylistCloseBtn', () => document.getElementById('selectPlaylistCloseBtn'));
+    const selectPlaylistCancelBtn = getCachedPlaylistElement('selectPlaylistCancelBtn', () => document.getElementById('selectPlaylistCancelBtn'));
+
+    return {
+        selectPlaylistModal,
+        selectPlaylistModalBody,
+        selectPlaylistCloseBtn,
+        selectPlaylistCancelBtn,
+    };
+}
+
 function applyToolbarButtonSkin(button, {
     background,
     border,
@@ -1618,7 +1696,7 @@ export function renderPlaylistUI({ container, onPlay, currentMeta }) {
     const { selectedPlaylistId, playlist, playlistName } = getRenderedPlaylistState();
     container._playlistRenderContext = { container, onPlay, currentMeta };
     bindPlaylistItemDelegates(container);
-    renderPlaylistToolbar({ toolbarContainer: document.getElementById('playlistToolbar'), playlist, playlistName, selectedPlaylistId, container, onPlay, currentMeta });
+    renderPlaylistToolbar({ toolbarContainer: getPlaylistToolbarContainer(container), playlist, playlistName, selectedPlaylistId, container, onPlay, currentMeta });
 
     if (!playlist || playlist.length === 0) {
         container._playlistItemNodes = new Map();
@@ -2104,7 +2182,7 @@ export async function showPlaybackHistory() {
         loading.hide();
         
         // 获取历史模态框元素
-        const historyModal = document.getElementById('historyModal');
+        const { historyModal, historyList, historyContent, historyCloseBtn } = getHistoryModalRefs();
         if (!historyModal) {
             console.error('[历史] 找不到 historyModal 元素');
             Toast.error('历史模态框未找到');
@@ -2112,7 +2190,6 @@ export async function showPlaybackHistory() {
         }
         
         // 填充历史列表
-        const historyList = document.getElementById('historyList');
         if (!historyList) {
             console.error('[历史] 找不到 historyList 元素');
             Toast.error('历史列表未找到');
@@ -2135,8 +2212,7 @@ export async function showPlaybackHistory() {
         const searchInput = createHistorySearchInput({ appTheme, colors });
         searchContainer.appendChild(searchInput);
 
-        const historyContent = historyModal.querySelector('.history-modal-content');
-        historyContent.insertBefore(searchContainer, historyList);
+        historyContent?.insertBefore(searchContainer, historyList);
 
         // 历史数据（可变，用于删除后更新）
         let allHistory = [...history];
@@ -2249,10 +2325,6 @@ export async function showPlaybackHistory() {
         };
         
         // 为历史模态框内的关闭按钮添加事件处理
-        const historyCloseBtn = historyModal.querySelector('.history-modal-close') || 
-                               historyModal.querySelector('.modal-close-btn') || 
-                               historyModal.querySelector('[data-close]') ||
-                               historyModal.querySelector('[data-icon]');
         if (historyCloseBtn) {
             historyCloseBtn.onclick = (e) => {
                 e.stopPropagation();
@@ -2395,8 +2467,12 @@ async function showSelectPlaylistModal(song, historyModal) {
     try {
         console.log('[歌单选择] 显示歌单选择模态框，歌曲:', song.title);
         
-        const selectPlaylistModal = document.getElementById('selectPlaylistModal');
-        const selectPlaylistModalBody = document.getElementById('selectPlaylistModalBody');
+        const {
+            selectPlaylistModal,
+            selectPlaylistModalBody,
+            selectPlaylistCloseBtn,
+            selectPlaylistCancelBtn,
+        } = getSelectPlaylistModalRefs();
         
         if (!selectPlaylistModal || !selectPlaylistModalBody) {
             console.error('[歌单选择] 模态框元素未找到');
@@ -2505,19 +2581,16 @@ async function showSelectPlaylistModal(song, historyModal) {
         installModalKeyHandler(selectPlaylistModal, closeSelectPlaylistModal);
         
         // 绑定关闭按钮事件
-        const closeBtn = document.getElementById('selectPlaylistCloseBtn');
-        const cancelBtn = document.getElementById('selectPlaylistCancelBtn');
-        
-        if (closeBtn) {
-            closeBtn.onclick = (e) => {
+        if (selectPlaylistCloseBtn) {
+            selectPlaylistCloseBtn.onclick = (e) => {
                 e.stopPropagation();
                 console.log('[歌单选择] 用户点击关闭按钮，取消选择');
                 closeSelectPlaylistModal();
             };
         }
         
-        if (cancelBtn) {
-            cancelBtn.onclick = (e) => {
+        if (selectPlaylistCancelBtn) {
+            selectPlaylistCancelBtn.onclick = (e) => {
                 e.stopPropagation();
                 console.log('[歌单选择] 用户点击取消按钮，取消选择');
                 closeSelectPlaylistModal();
@@ -2544,7 +2617,7 @@ async function showSelectPlaylistModal(song, historyModal) {
 async function closeHistoryModal(historyModal) {
     await closeManagedModal(historyModal, {
         afterClose: async () => {
-            const container = document.getElementById('playListContainer');
+            const container = getPlaylistContainerElement();
             const currentStatus = getCurrentPlaybackStatus();
 
             if (container) {

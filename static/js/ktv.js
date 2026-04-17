@@ -25,6 +25,7 @@ function dismissSuccessToastsForTitle(title) {
 
 export class KTVSync {
     constructor() {
+        this.fullPlayerElement = document.getElementById('fullPlayer');
         this.videoContainer = document.getElementById('fullPlayerVideoContainer');
         this.playerHost = document.getElementById('fullPlayerYouTubeHost');
         this.coverElement = document.getElementById('fullPlayerCover');
@@ -33,6 +34,8 @@ export class KTVSync {
         this.audioOnlyTitleElement = this.audioOnlyNoticeElement?.querySelector('.full-player-audio-only-title') || null;
         this.audioOnlyBodyElement = this.audioOnlyNoticeElement?.querySelector('.full-player-audio-only-body') || null;
         this.artworkContainer = document.querySelector('.full-player-artwork-container');
+        this.playerMountElement = this.playerHost?.querySelector('#fullPlayerYouTube') || null;
+        this.playerIframeElement = null;
 
         this.player = null;
         this.playerCreationPromise = null;
@@ -290,11 +293,11 @@ export class KTVSync {
     }
 
     hasEmbeddedPlayer() {
-        return Boolean(this.player && this.playerHost?.querySelector('iframe'));
+        return Boolean(this.player && this.getEmbeddedPlayerIframe());
     }
 
     isVideoSurfaceVisible() {
-        const fullPlayer = document.getElementById('fullPlayer');
+        const fullPlayer = this.getFullPlayerElement();
         if (!fullPlayer || !this.artworkContainer) {
             return false;
         }
@@ -307,12 +310,47 @@ export class KTVSync {
         return artworkRect.width > 0 && artworkRect.height > 0;
     }
 
+    getFullPlayerElement() {
+        if (this.fullPlayerElement?.isConnected) {
+            return this.fullPlayerElement;
+        }
+
+        this.fullPlayerElement = document.getElementById('fullPlayer');
+        return this.fullPlayerElement;
+    }
+
+    getEmbeddedPlayerIframe() {
+        if (this.playerIframeElement?.isConnected) {
+            return this.playerIframeElement;
+        }
+
+        let iframe = null;
+        if (this.player && typeof this.player.getIframe === 'function') {
+            try {
+                iframe = this.player.getIframe();
+            } catch (error) {
+                iframe = null;
+            }
+        }
+
+        if (!iframe?.isConnected && this.playerHost) {
+            iframe = this.playerHost.querySelector('iframe');
+        }
+
+        this.playerIframeElement = iframe?.isConnected ? iframe : null;
+        return this.playerIframeElement;
+    }
+
     ensurePlayerMount() {
         if (!this.playerHost) {
             return null;
         }
 
-        let mount = this.playerHost.querySelector('#fullPlayerYouTube');
+        let mount = this.playerMountElement;
+        if (!mount?.isConnected || mount.parentElement !== this.playerHost) {
+            mount = this.playerHost.querySelector('#fullPlayerYouTube');
+        }
+
         if (mount && mount.tagName !== 'DIV') {
             mount = null;
         }
@@ -323,6 +361,7 @@ export class KTVSync {
             this.playerHost.replaceChildren(mount);
         }
 
+        this.playerMountElement = mount;
         return mount;
     }
 
@@ -342,8 +381,10 @@ export class KTVSync {
             const mount = document.createElement('div');
             mount.id = 'fullPlayerYouTube';
             this.playerHost.appendChild(mount);
+            this.playerMountElement = mount;
         }
 
+        this.playerIframeElement = null;
         this.player = null;
         this.playerReady = false;
         this.playerCreationPromise = null;
@@ -507,6 +548,7 @@ export class KTVSync {
     onPlayerReady(event) {
         console.log('[KTV] YouTube 播放器就绪');
         this.playerReady = true;
+        this.playerIframeElement = this.getEmbeddedPlayerIframe();
 
         const currentStatus = player.getStatus();
         if (currentStatus?.current_meta?.type === 'youtube') {
