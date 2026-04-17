@@ -31,7 +31,7 @@ export const settingsManager = {
 
     renderDiagnosticsStatus(container, lines, fallbackText) {
         if (!container) return;
-        container.textContent = lines && lines.length > 0 ? lines.join('\n') : fallbackText;
+        this.setElementText(container, lines && lines.length > 0 ? lines.join('\n') : fallbackText);
     },
 
     getButtonGroupRefs(groupId) {
@@ -52,25 +52,65 @@ export const settingsManager = {
                 .map((button) => [button.dataset.value, button])
                 .filter(([value]) => Boolean(value))
         );
-        const refs = { group, buttons, buttonByValue };
+        const labelByValue = new Map(
+            buttons
+                .map((button) => [button.dataset.value, button.querySelector('.btn-label') || null])
+                .filter(([value]) => Boolean(value))
+        );
+        const refs = { group, buttons, buttonByValue, labelByValue };
         this.buttonGroupCache.set(groupId, refs);
         return refs;
     },
 
-    getCachedElement(elementId) {
-        const cached = this.elementCache.get(elementId);
+    getCachedElement(cacheKey, resolver = null) {
+        const cached = this.elementCache.get(cacheKey);
         if (cached?.isConnected) {
             return cached;
         }
 
-        const element = document.getElementById(elementId);
+        const element = typeof resolver === 'function'
+            ? resolver()
+            : document.getElementById(cacheKey);
         if (!element) {
-            this.elementCache.delete(elementId);
+            this.elementCache.delete(cacheKey);
             return null;
         }
 
-        this.elementCache.set(elementId, element);
+        this.elementCache.set(cacheKey, element);
         return element;
+    },
+
+    setElementText(element, value) {
+        if (!element) {
+            return;
+        }
+
+        const nextValue = String(value ?? '');
+        if (element.textContent !== nextValue) {
+            element.textContent = nextValue;
+        }
+    },
+
+    setElementAttribute(element, name, value) {
+        if (!element) {
+            return;
+        }
+
+        const nextValue = String(value);
+        if (element.getAttribute(name) !== nextValue) {
+            element.setAttribute(name, nextValue);
+        }
+    },
+
+    setStyleValue(styleTarget, property, value) {
+        if (!styleTarget) {
+            return;
+        }
+
+        const nextValue = value ?? '';
+        if (styleTarget[property] !== nextValue) {
+            styleTarget[property] = nextValue;
+        }
     },
 
     applyThemeClass(element, themeClass) {
@@ -119,13 +159,15 @@ export const settingsManager = {
             const button = refs.buttonByValue.get(value) || null;
             if (!button) return;
 
-            const label = button.querySelector('.btn-label');
+            const label = refs.labelByValue.get(value) || null;
             if (label) {
-                label.textContent = copy.label;
+                this.setElementText(label, copy.label);
             }
 
-            button.title = copy.title;
-            button.setAttribute('aria-label', copy.title);
+            if (button.title !== copy.title) {
+                button.title = copy.title;
+            }
+            this.setElementAttribute(button, 'aria-label', copy.title);
         });
     },
     
@@ -597,28 +639,30 @@ export const settingsManager = {
         console.log(`[设置] 更新 UI 文本为语言: ${language}`);
         
         // 更新设置标题
-        const title = document.querySelector('.settings-title');
-        if (title) title.textContent = i18n.t('settings.title', language);
+        const title = this.getCachedElement('settingsTitle', () => document.querySelector('.settings-title'));
+        if (title) this.setElementText(title, i18n.t('settings.title', language));
 
-        const closeBtn = document.getElementById('settingsCloseBtn');
+        const closeBtn = this.getCachedElement('settingsCloseBtn');
         if (closeBtn) {
             const closeText = i18n.t('modal.close', language);
-            closeBtn.title = closeText;
-            closeBtn.setAttribute('aria-label', closeText);
+            if (closeBtn.title !== closeText) {
+                closeBtn.title = closeText;
+            }
+            this.setElementAttribute(closeBtn, 'aria-label', closeText);
         }
         
         // 更新外观设置章节
-        const appearanceSection = document.getElementById('appearanceSectionTitle');
-        if (appearanceSection) appearanceSection.textContent = i18n.t('settings.appearance', language);
+        const appearanceSection = this.getCachedElement('appearanceSectionTitle');
+        if (appearanceSection) this.setElementText(appearanceSection, i18n.t('settings.appearance', language));
 
-        const diagnosticsSection = document.getElementById('diagnosticsSectionTitle');
-        if (diagnosticsSection) diagnosticsSection.textContent = i18n.t('settings.diagnostics', language);
+        const diagnosticsSection = this.getCachedElement('diagnosticsSectionTitle');
+        if (diagnosticsSection) this.setElementText(diagnosticsSection, i18n.t('settings.diagnostics', language));
 
-        const instanceStatusLabel = document.getElementById('instanceStatusLabel');
-        if (instanceStatusLabel) instanceStatusLabel.textContent = i18n.t('settings.instanceStatus', language);
+        const instanceStatusLabel = this.getCachedElement('instanceStatusLabel');
+        if (instanceStatusLabel) this.setElementText(instanceStatusLabel, i18n.t('settings.instanceStatus', language));
 
-        const themeLabel = document.getElementById('themeLabel');
-        if (themeLabel) themeLabel.textContent = i18n.t('settings.theme', language);
+        const themeLabel = this.getCachedElement('themeLabel');
+        if (themeLabel) this.setElementText(themeLabel, i18n.t('settings.theme', language));
 
         this.updateSettingsButtonTexts('themeSetting', {
             auto: {
@@ -636,8 +680,8 @@ export const settingsManager = {
         });
         
         // 更新语言标签
-        const langLabel = document.getElementById('languageLabel');
-        if (langLabel) langLabel.textContent = i18n.t('settings.language', language);
+        const langLabel = this.getCachedElement('languageLabel');
+        if (langLabel) this.setElementText(langLabel, i18n.t('settings.language', language));
 
         this.updateSettingsButtonTexts('languageSetting', {
             auto: {
@@ -766,14 +810,20 @@ export const settingsManager = {
     openPanel() {
         const panel = this.getCachedElement('settingsPanel');
         if (panel) {
-            panel._previousActiveElement = document.activeElement;
-            panel.setAttribute('aria-modal', 'true');
-            panel.setAttribute('aria-hidden', 'false');
-            if (!panel.hasAttribute('tabindex')) {
-                panel.setAttribute('tabindex', '-1');
+            const isAlreadyVisible = panel.getAttribute('aria-hidden') === 'false'
+                && panel.style.display === 'block';
+
+            if (!isAlreadyVisible) {
+                panel._previousActiveElement = document.activeElement;
             }
-            panel.style.display = 'block';
-            document.body.style.overflow = 'hidden';
+
+            this.setElementAttribute(panel, 'aria-modal', 'true');
+            this.setElementAttribute(panel, 'aria-hidden', 'false');
+            if (!panel.hasAttribute('tabindex')) {
+                this.setElementAttribute(panel, 'tabindex', '-1');
+            }
+            this.setStyleValue(panel.style, 'display', 'block');
+            this.setStyleValue(document.body.style, 'overflow', 'hidden');
 
             if (!panel._keydownHandler) {
                 panel._keydownHandler = (event) => {
@@ -792,11 +842,15 @@ export const settingsManager = {
             }
 
             document.addEventListener('keydown', panel._keydownHandler);
-            void this.loadInstanceStatus();
+            if (!isAlreadyVisible) {
+                void this.loadInstanceStatus();
+            }
             setTimeout(() => {
                 focusFirstFocusable(panel, '#settingsCloseBtn');
             }, 10);
-            console.log('[设置] 打开设置面板');
+            if (!isAlreadyVisible) {
+                console.log('[设置] 打开设置面板');
+            }
         }
     },
 
@@ -806,19 +860,22 @@ export const settingsManager = {
             return;
         }
 
+        const isAlreadyHidden = panel.getAttribute('aria-hidden') === 'true'
+            && panel.style.display === 'none';
+
         if (panel._keydownHandler) {
             document.removeEventListener('keydown', panel._keydownHandler);
         }
 
-        panel.style.display = 'none';
-        panel.setAttribute('aria-hidden', 'true');
-        document.body.style.overflow = '';
+        this.setStyleValue(panel.style, 'display', 'none');
+        this.setElementAttribute(panel, 'aria-hidden', 'true');
+        this.setStyleValue(document.body.style, 'overflow', '');
 
         if (shouldRestoreFocus) {
             restoreFocus(panel._previousActiveElement);
         }
 
-        if (log) {
+        if (log && !isAlreadyHidden) {
             console.log('[设置] 关闭设置面板');
         }
     },

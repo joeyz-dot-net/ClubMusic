@@ -2,20 +2,20 @@
 // 这是一个使用新模块系统的示例文件
 
 import { api } from './api.js?v=5';
-import { player } from './player.js?v=24';
-import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=46';
-import { playlistsManagement } from './playlists-management.js?v=30';
-import { volumeControl } from './volume.js?v=19';
-import { searchManager } from './search.js?v=43';
+import { player } from './player.js?v=25';
+import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=47';
+import { playlistsManagement } from './playlists-management.js?v=31';
+import { volumeControl } from './volume.js?v=20';
+import { searchManager } from './search.js?v=46';
 import { themeManager } from './themeManager.js?v=2';
 import { debug } from './debug.js?v=4';
 import { Toast, formatTime } from './ui.js?v=2';
 import { focusFirstFocusable, isMobile, isIPad, restoreFocus, ThumbnailManager, trapFocusInContainer } from './utils.js?v=2';
-import { localFiles } from './local.js?v=26';
-import { settingsManager } from './settingsManager.js?v=14';
+import { localFiles } from './local.js?v=27';
+import { settingsManager } from './settingsManager.js?v=15';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
-import { ktvSync } from './ktv.js?v=47';
+import { ktvSync } from './ktv.js?v=48';
 import { playLock } from './playLock.js?v=2';
 import { unavailableSongs } from './unavailable.js';
 import { recordTrace } from './requestTrace.js?v=2';
