@@ -8,7 +8,7 @@ import { playlistsManagement } from './playlists-management.js?v=30';
 import { volumeControl } from './volume.js?v=19';
 import { searchManager } from './search.js?v=43';
 import { themeManager } from './themeManager.js';
-import { debug } from './debug.js?v=2';
+import { debug } from './debug.js?v=3';
 import { Toast, formatTime } from './ui.js?v=2';
 import { focusFirstFocusable, isMobile, isIPad, restoreFocus, ThumbnailManager, trapFocusInContainer } from './utils.js?v=2';
 import { localFiles } from './local.js?v=26';
@@ -91,6 +91,59 @@ class MusicPlayerApp {
         if (element.getAttribute(name) !== nextValue) {
             element.setAttribute(name, nextValue);
         }
+    }
+
+    setPercentStyle(element, property, percent) {
+        if (!element) {
+            return;
+        }
+
+        this.setStyleValue(element.style, property, `${percent}%`);
+    }
+
+    ensureMiniPlayerProgressFill() {
+        if (this.elements?.miniPlayerProgressFill?.isConnected) {
+            return this.elements.miniPlayerProgressFill;
+        }
+
+        this.elements.miniPlayerProgressFill = document.getElementById('miniPlayerProgressFill');
+        return this.elements.miniPlayerProgressFill;
+    }
+
+    ensureCurrentTrackProgressFill() {
+        if (this.elements?.currentTrackProgressFill?.isConnected) {
+            return this.elements.currentTrackProgressFill;
+        }
+
+        let progressFill = document.getElementById('currentTrackProgress');
+        if (progressFill?.isConnected) {
+            this.elements.currentTrackProgressFill = progressFill;
+            return progressFill;
+        }
+
+        const currentPlayingCard = document.querySelector('.playlist-track-item.current-playing');
+        if (!currentPlayingCard) {
+            this.elements.currentTrackProgressFill = null;
+            return null;
+        }
+
+        const existingProgressBar = currentPlayingCard.querySelector('.track-progress-bar');
+        if (existingProgressBar) {
+            progressFill = existingProgressBar.querySelector('#currentTrackProgress');
+            this.elements.currentTrackProgressFill = progressFill || null;
+            return this.elements.currentTrackProgressFill;
+        }
+
+        const progressBar = document.createElement('div');
+        progressBar.className = 'track-progress-bar';
+        progressFill = document.createElement('div');
+        progressFill.className = 'track-progress-fill';
+        progressFill.id = 'currentTrackProgress';
+        progressBar.appendChild(progressFill);
+        currentPlayingCard.appendChild(progressBar);
+
+        this.elements.currentTrackProgressFill = progressFill;
+        return progressFill;
     }
 
     isIPhoneSafari() {
@@ -224,6 +277,7 @@ class MusicPlayerApp {
             fullPlayer: document.getElementById('fullPlayer'),
             fullPlayerBack: document.getElementById('fullPlayerBack'),
             fullPlayerPlayPause: document.getElementById('fullPlayerPlayPause'),
+            fullPlayerPlayPausePath: document.querySelector('#fullPlayerPlayPause svg path'),
             fullPlayerPrev: document.getElementById('fullPlayerPrev'),
             fullPlayerNext: document.getElementById('fullPlayerNext'),
             fullPlayerTitle: document.getElementById('fullPlayerTitle'),
@@ -289,10 +343,15 @@ class MusicPlayerApp {
             nppCurrentTime: document.getElementById('nppCurrentTime'),
             nppDuration: document.getElementById('nppDuration'),
             nppPlayPause: document.getElementById('nppPlayPause'),
+            nppPlayPausePath: document.querySelector('#nppPlayPause svg path'),
             nppPrev: document.getElementById('nppPrev'),
             nppNext: document.getElementById('nppNext'),
             nppArtworkSection: document.getElementById('nppArtworkSection'),
-            nppProgressBar: document.getElementById('nppProgressBar')
+            nppProgressBar: document.getElementById('nppProgressBar'),
+
+            // 动态进度节点
+            miniPlayerProgressFill: document.getElementById('miniPlayerProgressFill'),
+            currentTrackProgressFill: document.getElementById('currentTrackProgress')
         };
 
         this.refreshBottomNavCache();
@@ -956,14 +1015,11 @@ class MusicPlayerApp {
         // 播放/暂停按钮 SVG
         const mpvData = this.getMpvData(status);
         const isPlaying = mpvData.paused === false;
-        if (this.elements.nppPlayPause) {
-            const path = this.elements.nppPlayPause.querySelector('svg path');
-            if (path) {
-                this.setAttributeValue(path, 'd', isPlaying ?
-                    'M6 4h4v16H6V4zm8 0h4v16h-4V4z' :
-                    'M8 5v14l11-7z'
-                );
-            }
+        if (this.elements.nppPlayPausePath) {
+            this.setAttributeValue(this.elements.nppPlayPausePath, 'd', isPlaying ?
+                'M6 4h4v16H6V4zm8 0h4v16h-4V4z' :
+                'M8 5v14l11-7z'
+            );
         }
 
         // 时长
@@ -998,19 +1054,15 @@ class MusicPlayerApp {
 
         const currentTime = player.getInterpolatedTime();
         const percent = (currentTime / duration) * 100;
+        const formattedCurrentTime = formatTime(currentTime);
 
-        if (this.elements.fullPlayerCurrentTime)
-            this.elements.fullPlayerCurrentTime.textContent = formatTime(currentTime);
-        if (this.elements.fullPlayerProgressFill)
-            this.elements.fullPlayerProgressFill.style.width = percent + '%';
-        if (this.elements.fullPlayerProgressThumb)
-            this.elements.fullPlayerProgressThumb.style.left = percent + '%';
+        this.setElementText(this.elements.fullPlayerCurrentTime, formattedCurrentTime);
+        this.setPercentStyle(this.elements.fullPlayerProgressFill, 'width', percent);
+        this.setPercentStyle(this.elements.fullPlayerProgressThumb, 'left', percent);
 
         // Now Playing Panel 进度
-        if (this.elements.nppProgressFill)
-            this.elements.nppProgressFill.style.width = percent + '%';
-        if (this.elements.nppCurrentTime)
-            this.elements.nppCurrentTime.textContent = formatTime(currentTime);
+        this.setPercentStyle(this.elements.nppProgressFill, 'width', percent);
+        this.setElementText(this.elements.nppCurrentTime, formattedCurrentTime);
     }
 
 
@@ -1484,19 +1536,15 @@ class MusicPlayerApp {
                 const percent = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
 
                 // 实时更新进度条显示
-                if (this.elements.fullPlayerProgressFill) {
-                    this.elements.fullPlayerProgressFill.style.width = percent + '%';
-                }
-                if (this.elements.fullPlayerProgressThumb) {
-                    this.elements.fullPlayerProgressThumb.style.left = percent + '%';
-                }
+                this.setPercentStyle(this.elements.fullPlayerProgressFill, 'width', percent);
+                this.setPercentStyle(this.elements.fullPlayerProgressThumb, 'left', percent);
 
                 // 更新时间显示
                 const status = player.getStatus();
                 const mpvData = this.getMpvData(status);
                 if (mpvData.duration && this.elements.fullPlayerCurrentTime) {
                     const currentTime = (percent / 100) * mpvData.duration;
-                    this.elements.fullPlayerCurrentTime.textContent = formatTime(currentTime);
+                    this.setElementText(this.elements.fullPlayerCurrentTime, formatTime(currentTime));
                 }
 
                 // 实时seek到拖拽位置（拖拽中实时播放）
@@ -1642,7 +1690,7 @@ class MusicPlayerApp {
                 const currentTime = mpvData.time_pos || mpvData.time || 0;
                 const percent = (currentTime / duration) * 100;
                 if (this.elements.playerProgress) {
-                    this.elements.playerProgressFill.style.width = percent + '%';
+                    this.setPercentStyle(this.elements.playerProgressFill, 'width', percent);
                 }
             }
 
@@ -1650,29 +1698,15 @@ class MusicPlayerApp {
             if (duration > 0) {
                 const currentTime = mpvData.time_pos || mpvData.time || 0;
                 const percent = (currentTime / duration) * 100;
-                // 查找迷你播放器进度条（如果没有缓存元素）
-                const miniProgressFill = document.getElementById('miniPlayerProgressFill');
+                const miniProgressFill = this.ensureMiniPlayerProgressFill();
                 if (miniProgressFill) {
-                    miniProgressFill.style.width = percent + '%';
+                    this.setPercentStyle(miniProgressFill, 'width', percent);
                 }
                 
                 // 更新当前播放歌曲卡片的进度条
-                const trackProgressFill = document.getElementById('currentTrackProgress');
+                const trackProgressFill = this.ensureCurrentTrackProgressFill();
                 if (trackProgressFill) {
-                    trackProgressFill.style.width = percent + '%';
-                } else {
-                    // 如果找不到进度条元素，尝试找到current-playing卡片并添加
-                    const currentPlayingCard = document.querySelector('.playlist-track-item.current-playing');
-                    if (currentPlayingCard && !currentPlayingCard.querySelector('.track-progress-bar')) {
-                        const progressBar = document.createElement('div');
-                        progressBar.className = 'track-progress-bar';
-                        const progressFill = document.createElement('div');
-                        progressFill.className = 'track-progress-fill';
-                        progressFill.id = 'currentTrackProgress';
-                        progressFill.style.width = percent + '%';
-                        progressBar.appendChild(progressFill);
-                        currentPlayingCard.appendChild(progressBar);
-                    }
+                    this.setPercentStyle(trackProgressFill, 'width', percent);
                 }
             }
         }
@@ -1690,11 +1724,8 @@ class MusicPlayerApp {
         }
         if (this.elements.fullPlayerPlayPause) {
             // 更新SVG path的d属性以显示正确的图标
-            const svg = this.elements.fullPlayerPlayPause.querySelector('svg');
-            const path = this.elements.fullPlayerPlayPause.querySelector('svg path');
-            if (path && svg) {
-                // 暂停: 两个竖条 | |  播放: 三角形 ▶
-                this.setAttributeValue(path, 'd', isPlaying ? 
+            if (this.elements.fullPlayerPlayPausePath) {
+                this.setAttributeValue(this.elements.fullPlayerPlayPausePath, 'd', isPlaying ? 
                     'M6 4h4v16H6V4zm8 0h4v16h-4V4z' :  // 暂停按钮
                     'M8 5v14l11-7z'  // 播放按钮
                 );

@@ -21,6 +21,10 @@ function createDebugTextLine(text, color) {
     return line;
 }
 
+function normalizeDebugEntryText(text) {
+    return String(text).replace(/^\[[^\]]+\]\s*/, '');
+}
+
 export class Debug {
     constructor() {
         this.debugLogHistory = [];
@@ -28,6 +32,7 @@ export class Debug {
         this.elements = {};
         this.consoleCaptureSetup = false;
         this.eventListenersBound = false;
+        this.renderSignatureCache = new WeakMap();
         this.refreshElements();
         this.themeManager = themeManager;
     }
@@ -229,7 +234,7 @@ export class Debug {
             this.renderDebugEntries(this.elements.debugPlayer, Object.entries(playerStatus || {}).map(([key, value]) => ({
                 text: `[${timestamp}] ${key}: ${stringifyDebugValue(value)}`,
                 color: '#51cf66'
-            })), i18n.t('debug.noData'));
+            })), i18n.t('debug.noData'), { ignoreTimestamp: true });
         }
     }
 
@@ -239,10 +244,12 @@ export class Debug {
         }
 
         const timestamp = new Date().toLocaleTimeString();
-        this.renderDebugEntries(this.elements.debugInstance, [{
-            text: `[${timestamp}] ${i18n.t('debug.loading')}`,
-            color: '#ffd93d'
-        }], i18n.t('debug.noData'));
+        if (!this.renderSignatureCache.has(this.elements.debugInstance)) {
+            this.renderDebugEntries(this.elements.debugInstance, [{
+                text: `[${timestamp}] ${i18n.t('debug.loading')}`,
+                color: '#ffd93d'
+            }], i18n.t('debug.noData'), { ignoreTimestamp: true });
+        }
 
         try {
             const result = await this.api?.getInstanceStatus();
@@ -251,7 +258,7 @@ export class Debug {
                 this.renderDebugEntries(this.elements.debugInstance, [{
                     text: `[${timestamp}] ${i18n.t('debug.loadFailed')}: ${errorMessage}`,
                     color: '#ff6b6b'
-                }], i18n.t('debug.noData'));
+                }], i18n.t('debug.noData'), { ignoreTimestamp: true });
                 return;
             }
 
@@ -260,12 +267,12 @@ export class Debug {
                 text: `[${timestamp}] ${key}: ${stringifyDebugValue(value)}`,
                 color: '#51cf66'
             }));
-            this.renderDebugEntries(this.elements.debugInstance, entries, i18n.t('debug.noData'));
+            this.renderDebugEntries(this.elements.debugInstance, entries, i18n.t('debug.noData'), { ignoreTimestamp: true });
         } catch (error) {
             this.renderDebugEntries(this.elements.debugInstance, [{
                 text: `[${timestamp}] ${i18n.t('debug.loadFailed')}: ${error.message}`,
                 color: '#ff6b6b'
-            }], i18n.t('debug.noData'));
+            }], i18n.t('debug.noData'), { ignoreTimestamp: true });
         }
     }
 
@@ -285,7 +292,7 @@ export class Debug {
             this.renderDebugEntries(this.elements.debugPlaylist, Object.entries(playlistInfo || {}).map(([key, value]) => ({
                 text: `[${timestamp}] ${key}: ${stringifyDebugValue(value)}`,
                 color: '#51cf66'
-            })), i18n.t('debug.noData'));
+            })), i18n.t('debug.noData'), { ignoreTimestamp: true });
         }
     }
 
@@ -306,7 +313,7 @@ export class Debug {
             this.renderDebugEntries(this.elements.debugStorage, Object.entries(storageInfo || {}).map(([key, value]) => ({
                 text: `[${timestamp}] ${key}: ${stringifyDebugValue(value)}`,
                 color: '#51cf66'
-            })), i18n.t('debug.noData'));
+            })), i18n.t('debug.noData'), { ignoreTimestamp: true });
         }
     }
 
@@ -322,9 +329,21 @@ export class Debug {
         }
     }
 
-    renderDebugEntries(container, entries, emptyMessage) {
+    renderDebugEntries(container, entries, emptyMessage, { ignoreTimestamp = false } = {}) {
         if (!container) {
-            return;
+            return false;
+        }
+
+        const normalizedEntries = (!entries || entries.length === 0)
+            ? [{ text: emptyMessage, color: '#888' }]
+            : entries.map((entry) => ({
+                text: ignoreTimestamp ? normalizeDebugEntryText(entry.text) : entry.text,
+                color: entry.color
+            }));
+
+        const signature = JSON.stringify(normalizedEntries);
+        if (this.renderSignatureCache.get(container) === signature) {
+            return false;
         }
 
         const fragment = document.createDocumentFragment();
@@ -337,6 +356,8 @@ export class Debug {
         }
 
         container.replaceChildren(fragment);
+        this.renderSignatureCache.set(container, signature);
+        return true;
     }
 
     // 获取日志颜色
