@@ -1268,6 +1268,13 @@ const PLAYLIST_OPTION_GRADIENTS = [
 ];
 
 const PLAYLIST_OPTION_ICONS = ['🎵', '🎧', '🎸', '🎹', '🎤', '🎼', '🎺', '🥁'];
+const HISTORY_DATE_FORMATTER = new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+});
 
 function createCenteredGlyph(glyph = '🎵') {
     const element = document.createElement('div');
@@ -1276,21 +1283,30 @@ function createCenteredGlyph(glyph = '🎵') {
     return element;
 }
 
-function createPrimarySecondaryInfo({ title, subtitle, colors, titleWeight = 600, titleSize = '14px', subtitleSize = '12px' }) {
+function formatHistoryTimestamp(timestamp) {
+    const adjustedTimestamp = (Number(timestamp) + player.clockOffset) * 1000;
+    return HISTORY_DATE_FORMATTER.format(new Date(adjustedTimestamp));
+}
+
+function createPrimarySecondaryInfo({ title, subtitle, colors, titleWeight = 600, titleSize = '14px', subtitleSize = '12px', applyThemeVars = true }) {
     const info = document.createElement('div');
     info.className = 'playlist-item-info';
 
     const titleEl = document.createElement('div');
     titleEl.className = 'playlist-item-title';
-    titleEl.style.setProperty('--playlist-item-title-color', colors.textColor);
-    titleEl.style.setProperty('--playlist-item-title-weight', titleWeight);
-    titleEl.style.setProperty('--playlist-item-title-size', titleSize);
+    if (applyThemeVars && colors) {
+        titleEl.style.setProperty('--playlist-item-title-color', colors.textColor);
+        titleEl.style.setProperty('--playlist-item-title-weight', titleWeight);
+        titleEl.style.setProperty('--playlist-item-title-size', titleSize);
+    }
     titleEl.textContent = title;
 
     const subtitleEl = document.createElement('div');
     subtitleEl.className = 'playlist-item-subtitle';
-    subtitleEl.style.setProperty('--playlist-item-subtitle-color', colors.secondaryText);
-    subtitleEl.style.setProperty('--playlist-item-subtitle-size', subtitleSize);
+    if (applyThemeVars && colors) {
+        subtitleEl.style.setProperty('--playlist-item-subtitle-color', colors.secondaryText);
+        subtitleEl.style.setProperty('--playlist-item-subtitle-size', subtitleSize);
+    }
     subtitleEl.textContent = subtitle;
 
     info.appendChild(titleEl);
@@ -1312,7 +1328,9 @@ function getThumbnailFallbacks(url) {
 function createHistoryCover(thumbnailUrl, colors) {
     const coverContainer = document.createElement('div');
     coverContainer.className = 'history-cover';
-    coverContainer.style.setProperty('--history-cover-bg', colors.buttonBg);
+    if (colors?.buttonBg) {
+        coverContainer.style.setProperty('--history-cover-bg', colors.buttonBg);
+    }
 
     const hasValidThumbnail = thumbnailUrl && thumbnailUrl !== 'null' && thumbnailUrl !== 'undefined' && thumbnailUrl.trim() !== '';
     if (!hasValidThumbnail) {
@@ -1344,35 +1362,46 @@ function createHistoryCover(thumbnailUrl, colors) {
 function createHistoryListItemElement(item, { appTheme, colors }) {
     const historyItem = document.createElement('div');
     historyItem.className = 'history-list-item';
-    historyItem.setAttribute('data-url', item.url);
-    historyItem.setAttribute('data-ts', item.ts ?? '');
-    historyItem.setAttribute('role', 'button');
-    historyItem.setAttribute('tabindex', '0');
-    historyItem.style.setProperty('--history-item-border', appTheme === 'light' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)');
-    historyItem.style.setProperty('--item-hover-bg', colors.buttonHover);
+    historyItem.dataset.url = item.url || '';
+    historyItem.dataset.ts = String(item.ts ?? '');
+    historyItem.role = 'button';
+    historyItem.tabIndex = 0;
 
     const info = createPrimarySecondaryInfo({
         title: item.title || i18n.t('track.unknown'),
         subtitle: item.type === 'youtube' ? i18n.t('history.typeYoutube') : i18n.t('history.typeLocal'),
         colors,
-        titleWeight: 500
+        titleWeight: 500,
+        applyThemeVars: false
     });
     const timeEl = document.createElement('div');
     timeEl.className = 'history-list-time';
-    timeEl.style.setProperty('--history-time-color', colors.secondaryText);
-    const date = new Date((item.ts + player.clockOffset) * 1000);
-    timeEl.textContent = date.toLocaleString('zh-CN', {
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-    });
+    timeEl.textContent = formatHistoryTimestamp(item.ts);
 
-    historyItem.appendChild(createHistoryCover(item.thumbnail_url, colors));
+    historyItem.appendChild(createHistoryCover(item.thumbnail_url));
     historyItem.appendChild(info);
     historyItem.appendChild(timeEl);
     return historyItem;
+}
+
+function applyHistoryThemeVars(target, { appTheme, colors }) {
+    if (!target) {
+        return;
+    }
+
+    const defaultBorder = appTheme === 'light' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)';
+    target.style.setProperty('--history-item-border', defaultBorder);
+    target.style.setProperty('--item-hover-bg', colors.buttonHover);
+    target.style.setProperty('--history-time-color', colors.secondaryText);
+    target.style.setProperty('--history-cover-bg', colors.buttonBg);
+    target.style.setProperty('--playlist-item-title-color', colors.textColor);
+    target.style.setProperty('--playlist-item-title-weight', '500');
+    target.style.setProperty('--playlist-item-title-size', '14px');
+    target.style.setProperty('--playlist-item-subtitle-color', colors.secondaryText);
+    target.style.setProperty('--playlist-item-subtitle-size', '12px');
+    target.style.setProperty('--history-search-border', appTheme === 'light' ? 'rgba(0, 0, 0, 0.15)' : 'rgba(255, 255, 255, 0.15)');
+    target.style.setProperty('--history-search-bg', appTheme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)');
+    target.style.setProperty('--history-search-color', colors.textColor);
 }
 
 function createSelectPlaylistItemElement(playlist, index, { appTheme, colors }) {
@@ -2235,11 +2264,10 @@ export async function showPlaybackHistory() {
             return;
         }
         
-        historyList.replaceChildren();
-
         // 获取应用主题
         const appTheme = getCurrentAppTheme();
         const colors = getThemeColors(appTheme);
+        applyHistoryThemeVars(historyModal, { appTheme, colors });
 
         // 插入搜索框
         const existingSearch = historyModal.querySelector('.history-search-container');
@@ -2269,21 +2297,51 @@ export async function showPlaybackHistory() {
 
         // 渲染过滤后的历史列表
         function renderFilteredHistory(filterText = currentHistoryFilter) {
-            historyList.replaceChildren();
             currentHistoryFilter = String(filterText || '');
             const query = currentHistoryFilter.trim().toLowerCase();
             const filtered = query
                 ? allHistory.filter(item => (item.title || '').toLowerCase().includes(query))
                 : allHistory;
 
+            historyList._historyRenderToken = (historyList._historyRenderToken || 0) + 1;
+            const renderToken = historyList._historyRenderToken;
+
+            if (historyList._historyRenderFrame) {
+                cancelAnimationFrame(historyList._historyRenderFrame);
+                historyList._historyRenderFrame = null;
+            }
+
             if (filtered.length === 0) {
-                historyList.appendChild(createCenteredEmptyMessage(
+                historyList.replaceChildren(createCenteredEmptyMessage(
                     query ? i18n.t('history.noResults') : i18n.t('history.empty')
                 ));
             } else {
-                filtered.forEach(item => {
-                    historyList.appendChild(renderHistoryItem(item));
-                });
+                historyList.replaceChildren();
+
+                let index = 0;
+                const chunkSize = 48;
+                const renderChunk = () => {
+                    if (historyList._historyRenderToken !== renderToken) {
+                        historyList._historyRenderFrame = null;
+                        return;
+                    }
+
+                    const fragment = document.createDocumentFragment();
+                    const end = Math.min(index + chunkSize, filtered.length);
+                    for (; index < end; index++) {
+                        fragment.appendChild(renderHistoryItem(filtered[index]));
+                    }
+
+                    historyList.appendChild(fragment);
+
+                    if (index < filtered.length) {
+                        historyList._historyRenderFrame = requestAnimationFrame(renderChunk);
+                    } else {
+                        historyList._historyRenderFrame = null;
+                    }
+                };
+
+                renderChunk();
             }
         }
 
@@ -2296,7 +2354,7 @@ export async function showPlaybackHistory() {
 
         if (!historyList._delegatedClickHandler) {
             historyList._delegatedClickHandler = async (event) => {
-                const historyItem = event.target.closest('[data-url]');
+                const historyItem = event.target.closest('.history-list-item');
                 if (!historyItem || !historyList.contains(historyItem)) {
                     return;
                 }
@@ -2307,7 +2365,7 @@ export async function showPlaybackHistory() {
                 }
 
                 const match = context.getHistory().find((entry) => {
-                    return entry.url === historyItem.getAttribute('data-url') && String(entry.ts ?? '') === historyItem.getAttribute('data-ts');
+                    return entry.url === (historyItem.dataset.url || '') && String(entry.ts ?? '') === (historyItem.dataset.ts || '');
                 });
                 if (!match) {
                     return;
@@ -2678,6 +2736,15 @@ async function showSelectPlaylistModal(song, historyModal) {
 
 // ✅ 新增：关闭历史模态框并返回默认歌单列表
 async function closeHistoryModal(historyModal) {
+    const { historyList } = getHistoryModalRefs();
+    if (historyList) {
+        historyList._historyRenderToken = (historyList._historyRenderToken || 0) + 1;
+        if (historyList._historyRenderFrame) {
+            cancelAnimationFrame(historyList._historyRenderFrame);
+            historyList._historyRenderFrame = null;
+        }
+    }
+
     await closeManagedModal(historyModal, {
         afterClose: async () => {
             const container = getPlaylistContainerElement();

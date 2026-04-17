@@ -3,15 +3,15 @@
 
 import { api } from './api.js?v=5';
 import { player } from './player.js?v=26';
-import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=48';
-import { playlistsManagement } from './playlists-management.js?v=33';
+import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=52';
+import { playlistsManagement } from './playlists-management.js?v=36';
 import { volumeControl } from './volume.js?v=20';
-import { searchManager } from './search.js?v=50';
+import { searchManager } from './search.js?v=53';
 import { themeManager } from './themeManager.js?v=2';
 import { debug } from './debug.js?v=5';
 import { Toast, formatTime } from './ui.js?v=3';
 import { focusFirstFocusable, isMobile, isIPad, restoreFocus, ThumbnailManager, trapFocusInContainer } from './utils.js?v=2';
-import { localFiles } from './local.js?v=27';
+import { localFiles } from './local.js?v=30';
 import { settingsManager } from './settingsManager.js?v=15';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
@@ -2440,13 +2440,13 @@ class MusicPlayerApp {
             }
 
             // 隐藏历史模态框
-            const historyModal = document.getElementById('historyModal');
+            const historyModal = this.elements?.historyModal || null;
             if (historyModal) {
                 this.hideModalElement(historyModal);
             }
 
             // 关闭设置面板（直接隐藏DOM，不触发closePanel的恢复逻辑）
-            const settingsPanel = document.getElementById('settingsPanel');
+            const settingsPanel = settingsManager.getCachedElement('settingsPanel');
             if (settingsPanel && settingsPanel.style.display !== 'none') {
                 settingsManager.hidePanel();
             }

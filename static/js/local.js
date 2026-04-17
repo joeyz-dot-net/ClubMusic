@@ -1,5 +1,5 @@
 import { api } from './api.js?v=5';
-import { playlistManager } from './playlist.js?v=48';
+import { playlistManager } from './playlist.js?v=52';
 import { Toast } from './ui.js?v=3';
 import { i18n } from './i18n.js';
 
