@@ -10,6 +10,7 @@ const STATUS_TIME_EPSILON = 0.001;
 export class Player {
     constructor() {
         this.status = null;
+        this._lastStatusUiSignature = '';
         this.pollInterval = null;
         this.listeners = new Map();
         this.currentPlayingUrl = null;  // 追踪当前播放的歌曲URL
@@ -810,8 +811,12 @@ export class Player {
         }
 
         const oldStatus = this.status;
-        const oldUiSignature = this._buildStatusUiSignature(oldStatus);
+        const oldUiSignature = oldStatus
+            ? (this._lastStatusUiSignature || this._buildStatusUiSignature(oldStatus))
+            : '';
+        const newUiSignature = this._buildStatusUiSignature(status);
         this.status = status;
+        this._lastStatusUiSignature = newUiSignature;
 
         if (status?.server_time && source !== 'local') {
             this._lastServerTime = Math.max(this._lastServerTime, status.server_time);
@@ -838,7 +843,6 @@ export class Player {
         // KTV 同步需要每次已接受的服务器时间戳，不能依赖 UI 去重后的 statusUpdate。
         this.emit('statusTick', { status, oldStatus, source });
 
-        const newUiSignature = this._buildStatusUiSignature(status);
         if (oldStatus && oldUiSignature === newUiSignature) {
             return status;
         }

@@ -1,6 +1,6 @@
 // 音量控制模块
 import { api } from './api.js?v=5';
-import { player } from './player.js?v=25';
+import { player } from './player.js?v=26';
 
 // 调试模式检查
 const isDebugMode = () => localStorage.getItem('DEBUG_MODE') === '1';

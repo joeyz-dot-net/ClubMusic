@@ -4,7 +4,7 @@
  */
 
 import { api } from './api.js?v=5';
-import { player } from './player.js?v=25';
+import { player } from './player.js?v=26';
 import { Toast } from './ui.js?v=3';
 import { i18n } from './i18n.js';
 import { unavailableSongs } from './unavailable.js';
@@ -15,10 +15,14 @@ function dismissSuccessToastsForTitle(title) {
         return;
     }
 
-    document.querySelectorAll('.toast.toast-success').forEach((toast) => {
+    Array.from(Toast.activeToasts).forEach((toast) => {
+        if (!toast.classList.contains('toast-success')) {
+            return;
+        }
+
         const message = toast.querySelector('.toast-message')?.textContent || '';
         if (message.includes(title)) {
-            toast.remove();
+            Toast.removeToast(toast);
         }
     });
 }

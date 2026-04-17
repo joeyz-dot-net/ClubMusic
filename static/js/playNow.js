@@ -1,4 +1,4 @@
-import { player } from './player.js?v=25';
+import { player } from './player.js?v=26';
 import { playLock } from './playLock.js?v=2';
 import { getCurrentPlaybackMeta } from './playbackState.js?v=20';
 

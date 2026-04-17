@@ -2,7 +2,7 @@
 // 这是一个使用新模块系统的示例文件
 
 import { api } from './api.js?v=5';
-import { player } from './player.js?v=25';
+import { player } from './player.js?v=26';
 import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=48';
 import { playlistsManagement } from './playlists-management.js?v=33';
 import { volumeControl } from './volume.js?v=20';
@@ -15,7 +15,7 @@ import { localFiles } from './local.js?v=27';
 import { settingsManager } from './settingsManager.js?v=15';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
-import { ktvSync } from './ktv.js?v=48';
+import { ktvSync } from './ktv.js?v=49';
 import { playLock } from './playLock.js?v=2';
 import { unavailableSongs } from './unavailable.js';
 import { recordTrace } from './requestTrace.js?v=2';
@@ -49,6 +49,8 @@ class MusicPlayerApp {
         this._pendingManualQueueMutationRefresh = false;
         this._manualQueueRefreshInFlight = null;
         this._nextControlIntent = null;
+        this._lastFormattedProgressSecond = null;
+        this._lastFormattedProgressText = '00:00';
 
         // 初始化缩略图管理器 - 用于处理YouTube缩略图降级
         this.thumbnailManager = new ThumbnailManager();
@@ -124,6 +126,19 @@ class MusicPlayerApp {
         }
 
         this.setStyleValue(element.style, property, `${percent}%`);
+    }
+
+    getFormattedProgressTime(currentTime) {
+        const wholeSeconds = Number.isFinite(currentTime)
+            ? Math.max(0, Math.floor(currentTime))
+            : 0;
+
+        if (this._lastFormattedProgressSecond !== wholeSeconds) {
+            this._lastFormattedProgressSecond = wholeSeconds;
+            this._lastFormattedProgressText = formatTime(wholeSeconds);
+        }
+
+        return this._lastFormattedProgressText;
     }
 
     ensureMiniPlayerProgressFill() {
@@ -731,6 +746,7 @@ class MusicPlayerApp {
             thumbnailUrl && imageElement && this.thumbnailManager.isKnownFailed(thumbnailUrl)
         );
         const canShowImage = Boolean(thumbnailUrl && imageElement && !isKnownFailedThumbnail);
+        const currentThumbnailUrl = imageElement?.dataset.thumbnailUrl || '';
 
         if (imageElement) {
             this.setStyleValue(imageElement.style, 'display', canShowImage ? 'block' : 'none');
@@ -740,11 +756,11 @@ class MusicPlayerApp {
             this.setStyleValue(placeholderElement.style, 'display', canShowImage ? 'none' : placeholderDisplay);
         }
 
-        if (imageElement && !canShowImage) {
+        if (imageElement && !canShowImage && currentThumbnailUrl) {
             imageElement.dataset.thumbnailUrl = '';
         }
 
-        if (canShowImage && imageElement?.dataset.thumbnailUrl !== thumbnailUrl) {
+        if (canShowImage && currentThumbnailUrl !== thumbnailUrl) {
             imageElement.dataset.thumbnailUrl = thumbnailUrl;
             this.thumbnailManager.setupFallback(imageElement, thumbnailUrl, '🎵');
         }
@@ -1190,7 +1206,7 @@ class MusicPlayerApp {
 
         const currentTime = player.getInterpolatedTime();
         const percent = (currentTime / duration) * 100;
-        const formattedCurrentTime = formatTime(currentTime);
+        const formattedCurrentTime = this.getFormattedProgressTime(currentTime);
 
         this.setElementText(this.elements.fullPlayerCurrentTime, formattedCurrentTime);
         this.setPercentStyle(this.elements.fullPlayerProgressFill, 'width', percent);
