@@ -30,6 +30,8 @@ export class KTVSync {
         this.coverElement = document.getElementById('fullPlayerCover');
         this.placeholderElement = document.getElementById('fullPlayerPlaceholder');
         this.audioOnlyNoticeElement = document.getElementById('fullPlayerAudioOnlyNotice');
+        this.audioOnlyTitleElement = this.audioOnlyNoticeElement?.querySelector('.full-player-audio-only-title') || null;
+        this.audioOnlyBodyElement = this.audioOnlyNoticeElement?.querySelector('.full-player-audio-only-body') || null;
         this.artworkContainer = document.querySelector('.full-player-artwork-container');
 
         this.player = null;
@@ -66,6 +68,30 @@ export class KTVSync {
 
         // 等待 YouTube API 加载完成
         this.initYouTubeAPI();
+    }
+
+    setElementText(element, value) {
+        if (!element) {
+            return;
+        }
+
+        const nextValue = value == null ? '' : String(value);
+        if (element.textContent !== nextValue) {
+            element.textContent = nextValue;
+        }
+    }
+
+    setClassState(element, className, enabled) {
+        if (!element) {
+            return;
+        }
+
+        const hasClass = element.classList.contains(className);
+        if (enabled && !hasClass) {
+            element.classList.add(className);
+        } else if (!enabled && hasClass) {
+            element.classList.remove(className);
+        }
     }
 
     getMpvState(status) {
@@ -368,15 +394,9 @@ export class KTVSync {
             return;
         }
 
-        const titleElement = this.audioOnlyNoticeElement.querySelector('.full-player-audio-only-title');
-        const bodyElement = this.audioOnlyNoticeElement.querySelector('.full-player-audio-only-body');
-        if (titleElement) {
-            titleElement.textContent = i18n.t('player.youtubeAudioOnlyTitle');
-        }
-        if (bodyElement) {
-            bodyElement.textContent = i18n.t('player.youtubeAudioOnlyBody');
-        }
-        this.audioOnlyNoticeElement.classList.add('visible');
+        this.setElementText(this.audioOnlyTitleElement, i18n.t('player.youtubeAudioOnlyTitle'));
+        this.setElementText(this.audioOnlyBodyElement, i18n.t('player.youtubeAudioOnlyBody'));
+        this.setClassState(this.audioOnlyNoticeElement, 'visible', true);
     }
 
     hideAudioOnlyNotice() {
@@ -384,15 +404,9 @@ export class KTVSync {
             return;
         }
 
-        const titleElement = this.audioOnlyNoticeElement.querySelector('.full-player-audio-only-title');
-        const bodyElement = this.audioOnlyNoticeElement.querySelector('.full-player-audio-only-body');
-        if (titleElement) {
-            titleElement.textContent = '';
-        }
-        if (bodyElement) {
-            bodyElement.textContent = '';
-        }
-        this.audioOnlyNoticeElement.classList.remove('visible');
+        this.setElementText(this.audioOnlyTitleElement, '');
+        this.setElementText(this.audioOnlyBodyElement, '');
+        this.setClassState(this.audioOnlyNoticeElement, 'visible', false);
     }
 
     /**

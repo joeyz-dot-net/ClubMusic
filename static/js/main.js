@@ -15,7 +15,7 @@ import { localFiles } from './local.js?v=26';
 import { settingsManager } from './settingsManager.js?v=11';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
-import { ktvSync } from './ktv.js?v=45';
+import { ktvSync } from './ktv.js?v=46';
 import { playLock } from './playLock.js?v=2';
 import { unavailableSongs } from './unavailable.js';
 import { recordTrace } from './requestTrace.js?v=2';
@@ -389,6 +389,7 @@ class MusicPlayerApp {
             : [];
 
         this.elements.navItems = navItems;
+        this.elements.activeBottomNavItem = navItems.find((item) => item.classList.contains('active')) || null;
         this.elements.navItemByTab = new Map(
             navItems
                 .map((item) => [item.getAttribute('data-tab'), item])
@@ -406,14 +407,39 @@ class MusicPlayerApp {
 
     clearActiveBottomNavState() {
         const navItems = this.getBottomNavItems();
-        navItems.forEach((item) => item.classList.remove('active'));
+        navItems.forEach((item) => {
+            if (item.classList.contains('active')) {
+                item.classList.remove('active');
+            }
+        });
+        if (this.elements) {
+            this.elements.activeBottomNavItem = null;
+        }
     }
 
     setActiveBottomNavElement(targetElement) {
-        this.clearActiveBottomNavState();
-        if (targetElement) {
+        const navItems = this.getBottomNavItems();
+        const activeItems = navItems.filter((item) => item.classList.contains('active'));
+        const isTargetAlreadyOnlyActive = Boolean(
+            targetElement && activeItems.length === 1 && activeItems[0] === targetElement
+        );
+
+        if (isTargetAlreadyOnlyActive) {
+            this.elements.activeBottomNavItem = targetElement;
+            return;
+        }
+
+        activeItems.forEach((item) => {
+            if (item !== targetElement) {
+                item.classList.remove('active');
+            }
+        });
+
+        if (targetElement && !targetElement.classList.contains('active')) {
             targetElement.classList.add('active');
         }
+
+        this.elements.activeBottomNavItem = targetElement || null;
     }
 
     setActiveBottomNavTab(tabName) {
@@ -2321,11 +2347,11 @@ class MusicPlayerApp {
         const updateModalZIndex = () => {
             Object.values(modals).forEach(modal => {
                 if (modal) {
-                    modal.style.zIndex = '100';
+                    this.setStyleValue(modal.style, 'zIndex', '100');
                 }
             });
             if (currentModal) {
-                currentModal.style.zIndex = '110';
+                this.setStyleValue(currentModal.style, 'zIndex', '110');
             }
         };
         
