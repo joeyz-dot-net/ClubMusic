@@ -3,7 +3,7 @@ import { api } from './api.js?v=5';
 import { Toast, formatTime, searchLoading } from './ui.js?v=3';
 import { buildTrackItemElement } from './templates.js';
 import { localFiles, getNodeByPath, getDirCoverUrl, countFiles } from './local.js?v=27';
-import { playlistManager, renderPlaylistUI } from './playlist.js?v=47';
+import { playlistManager, renderPlaylistUI } from './playlist.js?v=48';
 import { i18n } from './i18n.js';
 import { escapeHTML, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js?v=2';
 import { executePlayNow } from './playNow.js?v=22';
@@ -1397,7 +1397,7 @@ export class SearchManager {
                                 Toast.error(i18n.t('search.addFailed') + ': ' + err.message);
                             }
                         } else {
-                            const { showSelectPlaylistModal } = await import('./playlist.js?v=47');
+                            const { showSelectPlaylistModal } = await import('./playlist.js?v=48');
                             await showSelectPlaylistModal(songData, null);
                         }
                     } else if (action === 'add-all-to-playlist') {

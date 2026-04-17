@@ -3,7 +3,7 @@
 
 import { api } from './api.js?v=5';
 import { player } from './player.js?v=25';
-import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=47';
+import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=48';
 import { playlistsManagement } from './playlists-management.js?v=33';
 import { volumeControl } from './volume.js?v=20';
 import { searchManager } from './search.js?v=50';
@@ -474,11 +474,23 @@ class MusicPlayerApp {
             section._tabHideTimer = null;
         }
 
+        if (section._tabShowTimer) {
+            clearTimeout(section._tabShowTimer);
+            section._tabShowTimer = null;
+        }
+
+        const isAlreadyVisible = section.style.display === display
+            && section.classList.contains('tab-visible');
+        if (isAlreadyVisible) {
+            return;
+        }
+
         this.setStyleValue(section.style, 'display', display);
-        setTimeout(() => {
-            if (section?.isConnected && !section.classList.contains('tab-visible')) {
-                section.classList.add('tab-visible');
+        section._tabShowTimer = setTimeout(() => {
+            if (section?.isConnected) {
+                this.setClassState(section, 'tab-visible', true);
             }
+            section._tabShowTimer = null;
         }, 10);
     }
 
@@ -492,9 +504,18 @@ class MusicPlayerApp {
             section._tabHideTimer = null;
         }
 
-        if (section.classList.contains('tab-visible')) {
-            section.classList.remove('tab-visible');
+        if (section._tabShowTimer) {
+            clearTimeout(section._tabShowTimer);
+            section._tabShowTimer = null;
         }
+
+        const isAlreadyHidden = section.style.display === 'none'
+            && !section.classList.contains('tab-visible');
+        if (isAlreadyHidden) {
+            return;
+        }
+
+        this.setClassState(section, 'tab-visible', false);
 
         if (hideDelay > 0) {
             section._tabHideTimer = setTimeout(() => {

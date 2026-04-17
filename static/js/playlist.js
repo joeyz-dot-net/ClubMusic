@@ -1959,6 +1959,7 @@ function initTouchDragSort(container, rerenderFn, rerenderArgs) {
     let draggedItem = null;
     let draggedIndex = -1;
     let placeholder = null;
+    let dragSiblingItems = [];
     let touchStartY = 0;
     let touchStartTime = 0;
     let isDragging = false;
@@ -2050,6 +2051,7 @@ function initTouchDragSort(container, rerenderFn, rerenderArgs) {
         placeholder = createPlaceholder();
         placeholder.style.height = draggedItem.offsetHeight + 'px';
         draggedItem.parentNode.insertBefore(placeholder, draggedItem);
+        dragSiblingItems = Array.from(container.querySelectorAll('.playlist-track-item:not(.dragging)'));
 
         // 设置拖拽元素样式
         const rect = draggedItem.getBoundingClientRect();
@@ -2079,10 +2081,9 @@ function initTouchDragSort(container, rerenderFn, rerenderArgs) {
         draggedItem.style.top = (parseFloat(draggedItem.dataset.originalTop) + deltaY) + 'px';
 
         // 检测放置位置
-        const items = Array.from(container.querySelectorAll('.playlist-track-item:not(.dragging)'));
         let insertBefore = null;
         
-        for (const item of items) {
+        for (const item of dragSiblingItems) {
             const rect = item.getBoundingClientRect();
             const midY = rect.top + rect.height / 2;
             
@@ -2172,6 +2173,7 @@ function initTouchDragSort(container, rerenderFn, rerenderArgs) {
         if (placeholder) {
             placeholder.remove();
         }
+        dragSiblingItems = [];
         if (draggedItem) {
             draggedItem.classList.remove('dragging');
             draggedItem.style.position = '';
@@ -2186,6 +2188,7 @@ function initTouchDragSort(container, rerenderFn, rerenderArgs) {
     }
 
     function resetDragState() {
+        dragSiblingItems = [];
         draggedItem = null;
         draggedIndex = -1;
         placeholder = null;
