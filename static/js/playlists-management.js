@@ -1,6 +1,6 @@
 // 歌单管理模块
 import { playlistManager } from './playlist.js?v=47';
-import { Toast, ConfirmModal, InputModal } from './ui.js?v=2';
+import { Toast, ConfirmModal, InputModal } from './ui.js?v=3';
 import { operationLock } from './operationLock.js?v=2';
 import { i18n } from './i18n.js';
 import { focusFirstFocusable, restoreFocus, trapFocusInContainer } from './utils.js?v=2';

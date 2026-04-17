@@ -3,7 +3,7 @@
  * 注意：用户设置存储在浏览器 localStorage 中，不依赖服务器存储
  */
 
-import { Toast } from './ui.js?v=2';
+import { Toast } from './ui.js?v=3';
 import { themeManager } from './themeManager.js?v=2';
 import { i18n } from './i18n.js';
 import { api } from './api.js?v=5';

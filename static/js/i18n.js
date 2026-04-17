@@ -822,18 +822,34 @@ export const i18n = {
     updatePageText() {
         document.querySelectorAll('[data-i18n], [data-i18n-title], [data-i18n-placeholder], [data-i18n-aria]').forEach(el => {
             if (el.hasAttribute('data-i18n')) {
-                el.textContent = this.t(el.getAttribute('data-i18n'));
+                const nextText = this.t(el.getAttribute('data-i18n'));
+                if (el.textContent !== nextText) {
+                    el.textContent = nextText;
+                }
             }
             if (el.hasAttribute('data-i18n-title')) {
-                el.title = this.t(el.getAttribute('data-i18n-title'));
+                const nextTitle = this.t(el.getAttribute('data-i18n-title'));
+                if (el.title !== nextTitle) {
+                    el.title = nextTitle;
+                }
             }
             if (el.hasAttribute('data-i18n-placeholder')) {
-                el.placeholder = this.t(el.getAttribute('data-i18n-placeholder'));
+                const nextPlaceholder = this.t(el.getAttribute('data-i18n-placeholder'));
+                if (el.placeholder !== nextPlaceholder) {
+                    el.placeholder = nextPlaceholder;
+                }
             }
             if (el.hasAttribute('data-i18n-aria')) {
-                el.setAttribute('aria-label', this.t(el.getAttribute('data-i18n-aria')));
+                const nextAria = this.t(el.getAttribute('data-i18n-aria'));
+                if (el.getAttribute('aria-label') !== nextAria) {
+                    el.setAttribute('aria-label', nextAria);
+                }
             }
         });
-        document.title = this.t('page.title');
+
+        const nextPageTitle = this.t('page.title');
+        if (document.title !== nextPageTitle) {
+            document.title = nextPageTitle;
+        }
     }
 };

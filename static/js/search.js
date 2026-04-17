@@ -1,6 +1,6 @@
 // 搜索功能模块
 import { api } from './api.js?v=5';
-import { Toast, formatTime, searchLoading } from './ui.js?v=2';
+import { Toast, formatTime, searchLoading } from './ui.js?v=3';
 import { buildTrackItemElement } from './templates.js';
 import { localFiles, getNodeByPath, getDirCoverUrl, countFiles } from './local.js?v=27';
 import { playlistManager, renderPlaylistUI } from './playlist.js?v=47';
@@ -38,6 +38,34 @@ function setStyleValue(styleTarget, property, value) {
     const nextValue = value ?? '';
     if (styleTarget[property] !== nextValue) {
         styleTarget[property] = nextValue;
+    }
+}
+
+function setAttributeValue(element, name, value) {
+    if (!element) {
+        return;
+    }
+
+    const nextValue = String(value);
+    if (element.getAttribute(name) !== nextValue) {
+        element.setAttribute(name, nextValue);
+    }
+}
+
+function setClassState(element, className, enabled) {
+    if (!element) {
+        return;
+    }
+
+    if (enabled) {
+        if (!element.classList.contains(className)) {
+            element.classList.add(className);
+        }
+        return;
+    }
+
+    if (element.classList.contains(className)) {
+        element.classList.remove(className);
     }
 }
 
@@ -511,11 +539,11 @@ function updateSearchTabCounts({ localCount = 0, youtubeCount = 0, localLimit = 
     const { localTab, youtubeTab } = searchTabRefs;
 
     if (localTab) {
-        localTab.textContent = i18n.t('search.localTab', { count: formatSearchCount(localCount, localLimit) });
+        setElementText(localTab, i18n.t('search.localTab', { count: formatSearchCount(localCount, localLimit) }));
     }
 
     if (youtubeTab) {
-        youtubeTab.textContent = i18n.t('search.networkTab', { count: formatSearchCount(youtubeCount, youtubeLimit) });
+        setElementText(youtubeTab, i18n.t('search.networkTab', { count: formatSearchCount(youtubeCount, youtubeLimit) }));
     }
 }
 
@@ -553,6 +581,7 @@ export class SearchManager {
         };
         this.localResultsLimit = 20;
         this.karaokeMode = false;  // 伴奏模式开关
+        this.currentSearchTab = 'local';
         // 目录导航状态（在搜索弹窗内浏览目录时使用）
         this.dirNavState = {
             isActive: false,
@@ -562,6 +591,7 @@ export class SearchManager {
         };
         this.bulkPlaylistActionInFlight = false;
         this.playlistViewFreshWhileModalOpen = false;
+        this.searchModalRefs = null;
         this.loadHistory();
 
         // 异步加载搜索配置，供首次搜索前等待
@@ -751,12 +781,20 @@ export class SearchManager {
 
         const { localTab, youtubeTab, localPanel, youtubePanel } = getSearchTabRefs(container);
 
-        localTab?.classList.toggle('active', tabName === 'local');
-        youtubeTab?.classList.toggle('active', tabName === 'youtube');
-        localPanel?.classList.toggle('active', tabName === 'local');
-        youtubePanel?.classList.toggle('active', tabName === 'youtube');
+        this.currentSearchTab = tabName;
+        container._activeSearchTab = tabName;
+
+        setClassState(localTab, 'active', tabName === 'local');
+        setClassState(youtubeTab, 'active', tabName === 'youtube');
+        setClassState(localPanel, 'active', tabName === 'local');
+        setClassState(youtubePanel, 'active', tabName === 'youtube');
 
         resetScrollPosition(container);
+    }
+
+    getCurrentSearchTab(container = null) {
+        const searchModalBody = container || this.getSearchModalRefs().searchModalBody;
+        return searchModalBody?._activeSearchTab || this.currentSearchTab || 'local';
     }
 
     // 加载YouTube搜索配置
@@ -775,19 +813,61 @@ export class SearchManager {
         }
     }
 
+    getSearchModalRefs(forceRefresh = false) {
+        const cachedRefs = this.searchModalRefs;
+        const refsAreConnected = cachedRefs
+            && cachedRefs.searchModal?.isConnected
+            && cachedRefs.searchModalBack?.isConnected
+            && cachedRefs.searchModalInput?.isConnected
+            && cachedRefs.searchModalBody?.isConnected
+            && cachedRefs.searchModalHistory?.isConnected
+            && cachedRefs.searchModalHistoryList?.isConnected
+            && cachedRefs.searchModalHistoryClear?.isConnected;
+
+        if (!forceRefresh && refsAreConnected) {
+            return cachedRefs;
+        }
+
+        const searchModal = document.getElementById('searchModal');
+        const nextRefs = {
+            searchModalBack: document.getElementById('searchModalBack'),
+            searchModal,
+            searchModalInput: document.getElementById('searchModalInput'),
+            searchModalBody: document.getElementById('searchModalBody'),
+            searchModalHistory: document.getElementById('searchModalHistory'),
+            searchModalHistoryList: document.getElementById('searchModalHistoryList'),
+            searchModalHistoryClear: document.getElementById('searchModalHistoryClear'),
+            karaokeModeToggle: document.getElementById('karaokeModeToggle'),
+            searchModalOverlay: searchModal?.querySelector('.search-modal-overlay') || null,
+            searchNavItem: document.querySelector('.nav-item[data-tab="search"]'),
+            playlistsNavItem: document.querySelector('.nav-item[data-tab="playlists"]'),
+            playlistEl: document.getElementById('playlist')
+        };
+
+        this.searchModalRefs = nextRefs;
+        return nextRefs;
+    }
+
     // 初始化搜索UI
     initUI(currentPlaylistIdGetter, refreshPlaylistCallback, closeModalCallback = null) {
         this.getCurrentPlaylistId = currentPlaylistIdGetter;
         this.refreshPlaylist = refreshPlaylistCallback;
         this.closeModalCallback = closeModalCallback;
         
-        const searchModalBack = document.getElementById('searchModalBack');
-        const searchModal = document.getElementById('searchModal');
-        const searchModalInput = document.getElementById('searchModalInput');
-        const searchModalBody = document.getElementById('searchModalBody');
-        const searchModalHistory = document.getElementById('searchModalHistory');
-        const searchModalHistoryList = document.getElementById('searchModalHistoryList');
-        const searchModalHistoryClear = document.getElementById('searchModalHistoryClear');
+        const {
+            searchModalBack,
+            searchModal,
+            searchModalInput,
+            searchModalBody,
+            searchModalHistory,
+            searchModalHistoryList,
+            searchModalHistoryClear,
+            karaokeModeToggle,
+            searchModalOverlay,
+            searchNavItem,
+            playlistsNavItem,
+            playlistEl,
+        } = this.getSearchModalRefs(true);
 
         if (searchModalBody && !searchModalBody._delegatedClickHandler) {
             searchModalBody._delegatedClickHandler = async (event) => {
@@ -875,9 +955,8 @@ export class SearchManager {
                 }
 
                 const query = historyText.getAttribute('data-query');
-                const input = document.getElementById('searchModalInput');
-                if (input) {
-                    input.value = query;
+                if (searchModalInput) {
+                    searchModalInput.value = query;
                 }
                 await this.performSearch(query);
             };
@@ -886,14 +965,12 @@ export class SearchManager {
         }
 
         // 伴奏模式开关
-        const karaokeModeToggle = document.getElementById('karaokeModeToggle');
         if (karaokeModeToggle) {
             karaokeModeToggle.addEventListener('change', () => {
                 this.karaokeMode = karaokeModeToggle.checked;
-                const input = document.getElementById('searchModalInput');
-                if (input && input.value.trim()) {
+                if (searchModalInput && searchModalInput.value.trim()) {
                     this.lastQuery = '';  // 绕过重复搜索检查，强制重新搜索
-                    this.performSearch(input.value.trim());
+                    this.performSearch(searchModalInput.value.trim());
                 }
             });
         }
@@ -903,19 +980,30 @@ export class SearchManager {
                 console.log('🔍 搜索关闭');
 
                 const previousActiveElement = searchModal._previousActiveElement;
+                if (searchModal._modalVisibilityTimer) {
+                    clearTimeout(searchModal._modalVisibilityTimer);
+                    searchModal._modalVisibilityTimer = null;
+                }
+
+                const isAlreadyHidden = !searchModal.classList.contains('modal-visible')
+                    && searchModal.getAttribute('aria-hidden') === 'true'
+                    && searchModal.style.display === 'none';
+
+                if (isAlreadyHidden) {
+                    return;
+                }
                 
                 // 移除搜索栏目的active状态和样式
-                searchModal.classList.remove('modal-visible');
-                searchModal.setAttribute('aria-hidden', 'true');
-                setTimeout(() => {
-                    searchModal.style.display = 'none';
+                setClassState(searchModal, 'modal-visible', false);
+                setAttributeValue(searchModal, 'aria-hidden', 'true');
+                searchModal._modalVisibilityTimer = setTimeout(() => {
+                    setStyleValue(searchModal.style, 'display', 'none');
+                    searchModal._modalVisibilityTimer = null;
                     restoreFocus(previousActiveElement);
                 }, 300);
-                
-                const navItems = document.querySelectorAll('.nav-item');
-                const searchNavItem = Array.from(navItems).find(item => item.getAttribute('data-tab') === 'search');
+
                 if (searchNavItem) {
-                    searchNavItem.classList.remove('active');
+                    setClassState(searchNavItem, 'active', false);
                 }
                 
                 // 延迟后返回到当前选择的歌单（只刷新显示，不改变选择）
@@ -936,14 +1024,12 @@ export class SearchManager {
                     }
                     
                     // ✅ 显示歌单区域（不点击队列按钮，这样能保持当前选择的歌单）
-                    const playlistsNavItem = Array.from(navItems).find(item => item.getAttribute('data-tab') === 'playlists');
                     if (playlistsNavItem && !playlistsNavItem.classList.contains('active')) {
-                        playlistsNavItem.classList.add('active');
+                        setClassState(playlistsNavItem, 'active', true);
                     }
                     // 显示歌单容器
-                    const playlistEl = document.getElementById('playlist');
                     if (playlistEl) {
-                        playlistEl.style.display = 'flex';
+                        setStyleValue(playlistEl.style, 'display', 'flex');
                     }
                 }, 300);
             };
@@ -966,7 +1052,6 @@ export class SearchManager {
             }
             
             // 点击背景关闭
-            const searchModalOverlay = searchModal.querySelector('.search-modal-overlay');
             if (searchModalOverlay) {
                 searchModalOverlay.addEventListener('click', closeAndRefresh);
             }
@@ -1027,22 +1112,20 @@ export class SearchManager {
 
     // 显示搜索历史
     showSearchHistory() {
-        const searchModalHistory = document.getElementById('searchModalHistory');
-        const searchModalHistoryList = document.getElementById('searchModalHistoryList');
-        const searchModalBody = document.getElementById('searchModalBody');
+        const { searchModalHistory, searchModalHistoryList, searchModalBody } = this.getSearchModalRefs();
         
         if (!searchModalHistory || !searchModalHistoryList || !searchModalBody) return;
         
         const history = this.getHistory();
         
         if (history.length === 0) {
-            searchModalHistory.style.display = 'none';
+            setStyleValue(searchModalHistory.style, 'display', 'none');
             searchModalBody.replaceChildren(createSearchEmptyState(i18n.t('search.inputPrompt')));
             resetScrollPosition(searchModalBody);
             return;
         }
         
-        searchModalHistory.style.display = 'block';
+        setStyleValue(searchModalHistory.style, 'display', 'block');
         searchModalBody.replaceChildren();
 
         const fragment = document.createDocumentFragment();
@@ -1057,8 +1140,7 @@ export class SearchManager {
 
     // 执行搜索
     async performSearch(query) {
-        const searchModalBody = document.getElementById('searchModalBody');
-        const searchModalHistory = document.getElementById('searchModalHistory');
+        const { searchModalBody, searchModalHistory } = this.getSearchModalRefs();
         
         if (!searchModalBody) return;
 
@@ -1080,7 +1162,7 @@ export class SearchManager {
         try {
             // 隐藏搜索历史
             if (searchModalHistory) {
-                searchModalHistory.style.display = 'none';
+                setStyleValue(searchModalHistory.style, 'display', 'none');
             }
             
             // 显示全屏加载动画
@@ -1120,7 +1202,7 @@ export class SearchManager {
 
     // 渲染搜索结果
     renderSearchResults(localResults, youtubeResults, searchQuery = this.lastQuery, options = {}) {
-        const searchModalBody = document.getElementById('searchModalBody');
+        const { searchModalBody } = this.getSearchModalRefs();
         if (!searchModalBody) return;
 
         const fullLocalResults = localResults || [];
@@ -1195,7 +1277,9 @@ export class SearchManager {
         panels.appendChild(youtubePanel);
         searchModalBody.replaceChildren(tabs, panels);
         searchModalBody._searchTabRefs = { localTab, youtubeTab, localPanel, youtubePanel };
+        searchModalBody._activeSearchTab = defaultTab;
         searchModalBody._youtubeLoadRefs = getYoutubeLoadRefs(searchModalBody, true);
+        this.currentSearchTab = defaultTab;
         resetScrollPosition(searchModalBody);
 
         updateSearchTabCounts({
@@ -1228,8 +1312,7 @@ export class SearchManager {
         };
 
         // 获取当前激活的标签页
-        const activeTab = document.querySelector('.search-tab.active');
-        const currentTab = activeTab ? activeTab.getAttribute('data-tab') : 'local';
+        const currentTab = this.getCurrentSearchTab();
         const resultCount = this.getAddableSearchSongs(currentTab).length;
 
         // 获取当前歌单信息用于显示
@@ -1780,7 +1863,7 @@ export class SearchManager {
                     youtubeCount: this.totalSearchResults.youtube.length,
                     localLimit: this.localResultsLimit,
                     youtubeLimit: this.youtubeLoadState.maxResultsLimit,
-                    container: document.getElementById('searchModalBody')
+                    container: this.getSearchModalRefs().searchModalBody
                 });
                 Toast.success(i18n.t('search.loadedMore', { count: freshResults.length }));
             }
@@ -1798,7 +1881,7 @@ export class SearchManager {
      * 追加YouTube搜索结果到列表
      */
     appendYoutubeResults(newResults) {
-        const scrollContainer = document.getElementById('searchModalBody');
+        const { searchModalBody: scrollContainer } = this.getSearchModalRefs();
         const { youtubePanel } = getSearchTabRefs(scrollContainer);
         if (!youtubePanel) return;
 
@@ -1833,7 +1916,7 @@ export class SearchManager {
      */
     updateYoutubeLoadUI() {
         const state = this.youtubeLoadState;
-        const searchModalBody = document.getElementById('searchModalBody');
+        const { searchModalBody } = this.getSearchModalRefs();
         const { container, statusEl, noMoreEl, loadMoreLabel } = getYoutubeLoadRefs(searchModalBody);
 
         if (!container) return;
@@ -1903,7 +1986,7 @@ export class SearchManager {
 
     // 将 searchModalBody 替换为目录视图
     renderDirView(node) {
-        const searchModalBody = document.getElementById('searchModalBody');
+        const { searchModalBody } = this.getSearchModalRefs();
         if (!searchModalBody) return;
 
         const dirView = document.createElement('div');
@@ -1935,8 +2018,7 @@ export class SearchManager {
 
     // 退出目录视图，恢复搜索结果
     restoreSearchResults() {
-        const activeTab = document.querySelector('.search-tab.active');
-        const preferredTab = activeTab?.getAttribute('data-tab') || 'local';
+        const preferredTab = this.getCurrentSearchTab();
         this.dirNavState = { isActive: false, breadcrumb: [] };
         this.renderSearchResults(
             this.totalSearchResults.local,

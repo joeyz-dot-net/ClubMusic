@@ -21,16 +21,66 @@ export function formatTime(seconds) {
 // 显示通知/Toast - 现代化毛玻璃设计
 export class Toast {
     static maxConcurrent = 3;
+    static activeToasts = new Set();
+
+    static clearTimer(toast, key) {
+        if (!toast?.[key]) {
+            return;
+        }
+
+        clearTimeout(toast[key]);
+        toast[key] = null;
+    }
+
+    static removeToast(toast) {
+        if (!toast) {
+            return;
+        }
+
+        this.clearTimer(toast, '_showTimer');
+        this.clearTimer(toast, '_hideTimer');
+        this.clearTimer(toast, '_removeTimer');
+        this.activeToasts.delete(toast);
+
+        if (toast.parentNode) {
+            toast.parentNode.removeChild(toast);
+        }
+    }
+
+    static dismissToast(toast, removeDelay = 400) {
+        if (!toast) {
+            return;
+        }
+
+        this.clearTimer(toast, '_showTimer');
+        this.clearTimer(toast, '_hideTimer');
+        this.clearTimer(toast, '_removeTimer');
+
+        if (removeDelay <= 0) {
+            this.removeToast(toast);
+            return;
+        }
+
+        if (toast.classList.contains('toast-visible')) {
+            toast.classList.remove('toast-visible');
+        }
+
+        toast._removeTimer = setTimeout(() => {
+            toast._removeTimer = null;
+            this.removeToast(toast);
+        }, removeDelay);
+    }
 
     static trimVisibleToasts(limit = this.maxConcurrent - 1) {
-        const toasts = Array.from(document.querySelectorAll('.toast'));
-        const overflow = toasts.length - limit;
+        const overflow = this.activeToasts.size - limit;
 
         if (overflow <= 0) {
             return;
         }
 
-        toasts.slice(0, overflow).forEach((toast) => toast.remove());
+        Array.from(this.activeToasts).slice(0, overflow).forEach((toast) => {
+            this.dismissToast(toast, 0);
+        });
     }
 
     static show(message, type = 'info', duration = 3000) {
@@ -56,21 +106,21 @@ export class Toast {
         toast.appendChild(iconElement);
         toast.appendChild(messageElement);
         
+        this.activeToasts.add(toast);
         document.body.appendChild(toast);
         
         // 滑入并淡入
-        setTimeout(() => {
-            toast.classList.add('toast-visible');
+        toast._showTimer = setTimeout(() => {
+            toast._showTimer = null;
+            if (toast.isConnected && !toast.classList.contains('toast-visible')) {
+                toast.classList.add('toast-visible');
+            }
         }, 10);
         
         // 自动移除（滑出并淡出）
-        setTimeout(() => {
-            toast.classList.remove('toast-visible');
-            setTimeout(() => {
-                if (toast.parentNode) {
-                    document.body.removeChild(toast);
-                }
-            }, 400);
+        toast._hideTimer = setTimeout(() => {
+            toast._hideTimer = null;
+            this.dismissToast(toast);
         }, duration);
     }
 

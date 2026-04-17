@@ -6,10 +6,10 @@ import { player } from './player.js?v=25';
 import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=47';
 import { playlistsManagement } from './playlists-management.js?v=33';
 import { volumeControl } from './volume.js?v=20';
-import { searchManager } from './search.js?v=47';
+import { searchManager } from './search.js?v=50';
 import { themeManager } from './themeManager.js?v=2';
-import { debug } from './debug.js?v=4';
-import { Toast, formatTime } from './ui.js?v=2';
+import { debug } from './debug.js?v=5';
+import { Toast, formatTime } from './ui.js?v=3';
 import { focusFirstFocusable, isMobile, isIPad, restoreFocus, ThumbnailManager, trapFocusInContainer } from './utils.js?v=2';
 import { localFiles } from './local.js?v=27';
 import { settingsManager } from './settingsManager.js?v=15';
@@ -90,6 +90,23 @@ class MusicPlayerApp {
         const nextValue = String(value);
         if (element.getAttribute(name) !== nextValue) {
             element.setAttribute(name, nextValue);
+        }
+    }
+
+    setClassState(element, className, enabled) {
+        if (!element) {
+            return;
+        }
+
+        if (enabled) {
+            if (!element.classList.contains(className)) {
+                element.classList.add(className);
+            }
+            return;
+        }
+
+        if (element.classList.contains(className)) {
+            element.classList.remove(className);
         }
     }
 
@@ -668,15 +685,24 @@ class MusicPlayerApp {
             return;
         }
 
-        panel.hidden = !isVisible;
-
-        if (isVisible) {
-            panel.style.removeProperty('display');
-        } else {
-            panel.style.setProperty('display', 'none', 'important');
+        const nextHidden = !isVisible;
+        if (panel.hidden !== nextHidden) {
+            panel.hidden = nextHidden;
         }
 
-        document.body.classList.toggle('npp-visible', isVisible);
+        if (isVisible) {
+            if (panel.style.getPropertyValue('display')) {
+                panel.style.removeProperty('display');
+            }
+        } else {
+            const currentDisplay = panel.style.getPropertyValue('display');
+            const currentPriority = panel.style.getPropertyPriority('display');
+            if (currentDisplay !== 'none' || currentPriority !== 'important') {
+                panel.style.setProperty('display', 'none', 'important');
+            }
+        }
+
+        this.setClassState(document.body, 'npp-visible', isVisible);
     }
 
     updateArtworkElement({ imageElement, thumbnailUrl, placeholderElement = null, placeholderDisplay = 'flex' } = {}) {

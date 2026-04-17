@@ -5,7 +5,7 @@
  */
 
 import { i18n } from './i18n.js';
-import { Toast } from './ui.js?v=2';
+import { Toast } from './ui.js?v=3';
 
 class PlayPreparationLock {
     constructor() {

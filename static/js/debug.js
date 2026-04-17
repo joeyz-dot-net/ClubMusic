@@ -37,6 +37,28 @@ export class Debug {
         this.themeManager = themeManager;
     }
 
+    setStyleValue(styleTarget, property, value) {
+        if (!styleTarget) {
+            return;
+        }
+
+        const nextValue = value ?? '';
+        if (styleTarget[property] !== nextValue) {
+            styleTarget[property] = nextValue;
+        }
+    }
+
+    setAttributeValue(element, name, value) {
+        if (!element) {
+            return;
+        }
+
+        const nextValue = String(value);
+        if (element.getAttribute(name) !== nextValue) {
+            element.setAttribute(name, nextValue);
+        }
+    }
+
     refreshElements() {
         this.elements = {
             debugBtn: document.getElementById('playlistsDebugBtn') || document.getElementById('debugBtn'),
@@ -196,8 +218,14 @@ export class Debug {
             return;
         }
 
-        this.elements.debugModal.style.display = 'block';
-        this.elements.debugModal.setAttribute('aria-hidden', 'false');
+        const isAlreadyVisible = this.elements.debugModal.style.display === 'block'
+            && this.elements.debugModal.getAttribute('aria-hidden') === 'false';
+        if (isAlreadyVisible) {
+            return;
+        }
+
+        this.setStyleValue(this.elements.debugModal.style, 'display', 'block');
+        this.setAttributeValue(this.elements.debugModal, 'aria-hidden', 'false');
         void this.updateInfo();
     }
 
@@ -208,8 +236,14 @@ export class Debug {
             return;
         }
 
-        this.elements.debugModal.style.display = 'none';
-        this.elements.debugModal.setAttribute('aria-hidden', 'true');
+        const isAlreadyHidden = this.elements.debugModal.style.display === 'none'
+            && this.elements.debugModal.getAttribute('aria-hidden') === 'true';
+        if (isAlreadyHidden) {
+            return;
+        }
+
+        this.setStyleValue(this.elements.debugModal.style, 'display', 'none');
+        this.setAttributeValue(this.elements.debugModal, 'aria-hidden', 'true');
     }
 
     // 更新调试信息
@@ -320,12 +354,13 @@ export class Debug {
     // 更新日志显示
     updateLogs() {
         if (this.elements.debugLogs) {
-            this.renderDebugEntries(this.elements.debugLogs, this.debugLogHistory.map((log) => ({
+            const changed = this.renderDebugEntries(this.elements.debugLogs, this.debugLogHistory.map((log) => ({
                 text: `[${log.timestamp}] ${log.type}: ${log.message}`,
                 color: this.getLogColor(log.type)
             })), i18n.t('debug.noLogs'));
-            // 自动滚到底部
-            this.elements.debugLogs.scrollTop = this.elements.debugLogs.scrollHeight;
+            if (changed) {
+                this.elements.debugLogs.scrollTop = this.elements.debugLogs.scrollHeight;
+            }
         }
     }
 
@@ -396,15 +431,15 @@ export class Debug {
         const currentTheme = this.themeManager.getCurrentTheme();
         if (this.elements.themeDarkBtn && this.elements.themeLightBtn) {
             if (currentTheme === 'dark') {
-                this.elements.themeDarkBtn.style.borderColor = '#667eea';
-                this.elements.themeDarkBtn.style.fontWeight = 'bold';
-                this.elements.themeLightBtn.style.borderColor = '#999';
-                this.elements.themeLightBtn.style.fontWeight = 'normal';
+                this.setStyleValue(this.elements.themeDarkBtn.style, 'borderColor', '#667eea');
+                this.setStyleValue(this.elements.themeDarkBtn.style, 'fontWeight', 'bold');
+                this.setStyleValue(this.elements.themeLightBtn.style, 'borderColor', '#999');
+                this.setStyleValue(this.elements.themeLightBtn.style, 'fontWeight', 'normal');
             } else {
-                this.elements.themeDarkBtn.style.borderColor = '#999';
-                this.elements.themeDarkBtn.style.fontWeight = 'normal';
-                this.elements.themeLightBtn.style.borderColor = '#667eea';
-                this.elements.themeLightBtn.style.fontWeight = 'bold';
+                this.setStyleValue(this.elements.themeDarkBtn.style, 'borderColor', '#999');
+                this.setStyleValue(this.elements.themeDarkBtn.style, 'fontWeight', 'normal');
+                this.setStyleValue(this.elements.themeLightBtn.style, 'borderColor', '#667eea');
+                this.setStyleValue(this.elements.themeLightBtn.style, 'fontWeight', 'bold');
             }
         }
     }
