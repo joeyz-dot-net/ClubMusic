@@ -431,9 +431,9 @@ class MusicPlayerApp {
             section._tabHideTimer = null;
         }
 
-        section.style.display = display;
+        this.setStyleValue(section.style, 'display', display);
         setTimeout(() => {
-            if (section?.isConnected) {
+            if (section?.isConnected && !section.classList.contains('tab-visible')) {
                 section.classList.add('tab-visible');
             }
         }, 10);
@@ -449,19 +449,21 @@ class MusicPlayerApp {
             section._tabHideTimer = null;
         }
 
-        section.classList.remove('tab-visible');
+        if (section.classList.contains('tab-visible')) {
+            section.classList.remove('tab-visible');
+        }
 
         if (hideDelay > 0) {
             section._tabHideTimer = setTimeout(() => {
                 if (section?.isConnected) {
-                    section.style.display = 'none';
+                    this.setStyleValue(section.style, 'display', 'none');
                 }
                 section._tabHideTimer = null;
             }, hideDelay);
             return;
         }
 
-        section.style.display = 'none';
+        this.setStyleValue(section.style, 'display', 'none');
     }
 
     showModalElement(modal, { display = 'block', visibleDelay = 0, onVisible = null } = {}) {
@@ -474,11 +476,23 @@ class MusicPlayerApp {
             modal._modalVisibilityTimer = null;
         }
 
-        modal.setAttribute('aria-hidden', 'false');
-        modal.style.display = display;
+        this.setAttributeValue(modal, 'aria-hidden', 'false');
+        this.setStyleValue(modal.style, 'display', display);
+
+        const isAlreadyVisible = !modal._modalVisibilityTimer
+            && modal.classList.contains('modal-visible')
+            && modal.getAttribute('aria-hidden') === 'false'
+            && modal.style.display === display;
+
+        if (isAlreadyVisible) {
+            if (typeof onVisible === 'function') {
+                onVisible();
+            }
+            return;
+        }
 
         const applyVisible = () => {
-            if (modal?.isConnected) {
+            if (modal?.isConnected && !modal.classList.contains('modal-visible')) {
                 modal.classList.add('modal-visible');
             }
 
@@ -506,12 +520,24 @@ class MusicPlayerApp {
             modal._modalVisibilityTimer = null;
         }
 
-        modal.classList.remove('modal-visible');
-        modal.setAttribute('aria-hidden', 'true');
+        this.setAttributeValue(modal, 'aria-hidden', 'true');
+
+        const isAlreadyHidden = !modal._modalVisibilityTimer
+            && !modal.classList.contains('modal-visible')
+            && modal.getAttribute('aria-hidden') === 'true'
+            && modal.style.display === 'none';
+
+        if (isAlreadyHidden) {
+            return;
+        }
+
+        if (modal.classList.contains('modal-visible')) {
+            modal.classList.remove('modal-visible');
+        }
 
         const applyHidden = () => {
             if (modal?.isConnected) {
-                modal.style.display = 'none';
+                this.setStyleValue(modal.style, 'display', 'none');
             }
 
             modal._modalVisibilityTimer = null;
@@ -537,12 +563,20 @@ class MusicPlayerApp {
         }
 
         if (hideMiniPlayer && this.elements?.miniPlayer) {
-            this.elements.miniPlayer.style.display = 'none';
+            this.setStyleValue(this.elements.miniPlayer.style, 'display', 'none');
         }
 
-        fullPlayer.style.display = 'flex';
+        const isAlreadyVisible = !fullPlayer._visibilityTimer
+            && fullPlayer.classList.contains('show')
+            && fullPlayer.style.display === 'flex';
+
+        if (isAlreadyVisible) {
+            return;
+        }
+
+        this.setStyleValue(fullPlayer.style, 'display', 'flex');
         fullPlayer._visibilityTimer = setTimeout(() => {
-            if (fullPlayer?.isConnected) {
+            if (fullPlayer?.isConnected && !fullPlayer.classList.contains('show')) {
                 fullPlayer.classList.add('show');
                 const status = player.getStatus();
                 if (status) {
@@ -566,15 +600,29 @@ class MusicPlayerApp {
         }
 
         this.setArtworkExpanded(false);
-        fullPlayer.classList.remove('show');
+
+        const isAlreadyHidden = !fullPlayer._visibilityTimer
+            && !fullPlayer.classList.contains('show')
+            && fullPlayer.style.display === 'none';
+
+        if (isAlreadyHidden) {
+            if (showMiniPlayer && this.elements?.miniPlayer) {
+                this.setStyleValue(this.elements.miniPlayer.style, 'display', 'block');
+            }
+            return;
+        }
+
+        if (fullPlayer.classList.contains('show')) {
+            fullPlayer.classList.remove('show');
+        }
 
         const applyHidden = () => {
             if (fullPlayer?.isConnected) {
-                fullPlayer.style.display = 'none';
+                this.setStyleValue(fullPlayer.style, 'display', 'none');
             }
 
             if (showMiniPlayer && this.elements?.miniPlayer) {
-                this.elements.miniPlayer.style.display = 'block';
+                this.setStyleValue(this.elements.miniPlayer.style, 'display', 'block');
             }
 
             fullPlayer._visibilityTimer = null;
@@ -1221,9 +1269,9 @@ class MusicPlayerApp {
             ].join(', ');
 
             const resetDragStyles = () => {
-                this.elements.fullPlayer.style.transition = '';
-                this.elements.fullPlayer.style.transform = '';
-                this.elements.fullPlayer.style.opacity = '';
+                this.setStyleValue(this.elements.fullPlayer.style, 'transition', '');
+                this.setStyleValue(this.elements.fullPlayer.style, 'transform', '');
+                this.setStyleValue(this.elements.fullPlayer.style, 'opacity', '');
             };
 
             const removeDragListeners = () => {
@@ -1264,26 +1312,36 @@ class MusicPlayerApp {
                     : Math.max(0, clientY - dragStart.y);
                 const opacity = Math.max(0.3, startOpacity - (delta / 300));
 
-                this.elements.fullPlayer.style.transform = isPhoneLandscape
-                    ? `translateX(${delta}px)`
-                    : `translateY(${delta}px)`;
-                this.elements.fullPlayer.style.opacity = opacity;
+                this.setStyleValue(
+                    this.elements.fullPlayer.style,
+                    'transform',
+                    isPhoneLandscape ? `translateX(${delta}px)` : `translateY(${delta}px)`
+                );
+                this.setStyleValue(this.elements.fullPlayer.style, 'opacity', String(opacity));
             };
 
             const animateDragReset = () => {
-                this.elements.fullPlayer.style.transition = 'all 0.3s ease-out';
-                this.elements.fullPlayer.style.transform = isPhoneLandscape ? 'translateX(0)' : 'translateY(0)';
-                this.elements.fullPlayer.style.opacity = '1';
+                this.setStyleValue(this.elements.fullPlayer.style, 'transition', 'all 0.3s ease-out');
+                this.setStyleValue(
+                    this.elements.fullPlayer.style,
+                    'transform',
+                    isPhoneLandscape ? 'translateX(0)' : 'translateY(0)'
+                );
+                this.setStyleValue(this.elements.fullPlayer.style, 'opacity', '1');
 
                 setTimeout(() => {
-                    this.elements.fullPlayer.style.transition = '';
+                    this.setStyleValue(this.elements.fullPlayer.style, 'transition', '');
                 }, 300);
             };
 
             const animateDragClose = () => {
-                this.elements.fullPlayer.style.transition = 'all 0.3s ease-out';
-                this.elements.fullPlayer.style.transform = isPhoneLandscape ? 'translateX(100%)' : 'translateY(100%)';
-                this.elements.fullPlayer.style.opacity = '0';
+                this.setStyleValue(this.elements.fullPlayer.style, 'transition', 'all 0.3s ease-out');
+                this.setStyleValue(
+                    this.elements.fullPlayer.style,
+                    'transform',
+                    isPhoneLandscape ? 'translateX(100%)' : 'translateY(100%)'
+                );
+                this.setStyleValue(this.elements.fullPlayer.style, 'opacity', '0');
 
                 setTimeout(() => {
                     resetDragStyles();
