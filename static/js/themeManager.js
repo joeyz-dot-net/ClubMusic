@@ -44,8 +44,14 @@ export class ThemeManager {
      * @param {function} callback - 加载完成时的回调函数
      */
     loadTheme(theme, callback) {
+        const activeLink = document.getElementById(this.themeCssId);
+        if (this.initialized && theme === this.currentTheme && activeLink) {
+            if (callback) callback();
+            return;
+        }
+
         // 移除旧的主题CSS
-        const oldLink = document.getElementById(this.themeCssId);
+        const oldLink = activeLink;
         if (oldLink) {
             oldLink.remove();
         }
@@ -90,15 +96,18 @@ export class ThemeManager {
      */
     applyThemeClass(theme) {
         const body = document.body;
+        const themeClass = theme === 'light' ? 'theme-light' : 'theme-dark';
         
         // 移除所有主题类
-        body.classList.remove('theme-dark', 'theme-light', 'theme-dark-class');
+        ['theme-dark', 'theme-light', 'theme-dark-class'].forEach((className) => {
+            if (className !== themeClass && body.classList.contains(className)) {
+                body.classList.remove(className);
+            }
+        });
         
         // 添加对应主题类
-        if (theme === 'light') {
-            body.classList.add('theme-light');
-        } else {
-            body.classList.add('theme-dark');
+        if (!body.classList.contains(themeClass)) {
+            body.classList.add(themeClass);
         }
     }
 

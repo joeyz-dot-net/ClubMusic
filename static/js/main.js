@@ -3,16 +3,16 @@
 
 import { api } from './api.js?v=5';
 import { player } from './player.js?v=24';
-import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=43';
+import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=46';
 import { playlistsManagement } from './playlists-management.js?v=30';
 import { volumeControl } from './volume.js?v=19';
 import { searchManager } from './search.js?v=43';
-import { themeManager } from './themeManager.js';
-import { debug } from './debug.js?v=3';
+import { themeManager } from './themeManager.js?v=2';
+import { debug } from './debug.js?v=4';
 import { Toast, formatTime } from './ui.js?v=2';
 import { focusFirstFocusable, isMobile, isIPad, restoreFocus, ThumbnailManager, trapFocusInContainer } from './utils.js?v=2';
 import { localFiles } from './local.js?v=26';
-import { settingsManager } from './settingsManager.js?v=11';
+import { settingsManager } from './settingsManager.js?v=14';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js';
 import { ktvSync } from './ktv.js?v=47';

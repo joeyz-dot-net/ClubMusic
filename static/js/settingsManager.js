@@ -4,7 +4,7 @@
  */
 
 import { Toast } from './ui.js?v=2';
-import { themeManager } from './themeManager.js';
+import { themeManager } from './themeManager.js?v=2';
 import { i18n } from './i18n.js';
 import { api } from './api.js?v=5';
 import { focusFirstFocusable, restoreFocus, trapFocusInContainer } from './utils.js?v=2';
@@ -26,6 +26,7 @@ export const settingsManager = {
     player: null,
     schema: {},
     buttonGroupCache: new Map(),
+    elementCache: new Map(),
     _cachedSettings: null,
 
     renderDiagnosticsStatus(container, lines, fallbackText) {
@@ -54,6 +55,43 @@ export const settingsManager = {
         const refs = { group, buttons, buttonByValue };
         this.buttonGroupCache.set(groupId, refs);
         return refs;
+    },
+
+    getCachedElement(elementId) {
+        const cached = this.elementCache.get(elementId);
+        if (cached?.isConnected) {
+            return cached;
+        }
+
+        const element = document.getElementById(elementId);
+        if (!element) {
+            this.elementCache.delete(elementId);
+            return null;
+        }
+
+        this.elementCache.set(elementId, element);
+        return element;
+    },
+
+    applyThemeClass(element, themeClass) {
+        if (!element) {
+            return false;
+        }
+
+        let changed = false;
+        ['theme-dark', 'theme-light', 'bright-theme', 'dark-theme'].forEach((className) => {
+            if (className !== themeClass && element.classList.contains(className)) {
+                element.classList.remove(className);
+                changed = true;
+            }
+        });
+
+        if (!element.classList.contains(themeClass)) {
+            element.classList.add(themeClass);
+            changed = true;
+        }
+
+        return changed;
     },
 
     setButtonGroupValue(groupId, value) {
@@ -441,6 +479,10 @@ export const settingsManager = {
         }
         
         console.log(`[设置] 准备应用主题: ${actualTheme}`);
+
+        const themeManagerWillReload = Boolean(themeManager)
+            && (!themeManager.initialized || themeManager.getCurrentTheme?.() !== actualTheme);
+        let shouldRerenderPlaylist = themeManagerWillReload;
         
         // 调用 themeManager 加载主题 CSS 和应用主题 class
         if (themeManager) {
@@ -450,44 +492,55 @@ export const settingsManager = {
         }
         
         // 应用 data-theme 属性
-        document.documentElement.setAttribute('data-theme', actualTheme);
+        if (document.documentElement.getAttribute('data-theme') !== actualTheme) {
+            document.documentElement.setAttribute('data-theme', actualTheme);
+            shouldRerenderPlaylist = true;
+        }
         
         // 统一的主题类名
         const themeClass = actualTheme === 'light' ? 'theme-light' : 'theme-dark';
         
         // 应用 body 类名
         const body = document.body;
-        body.classList.remove('theme-dark', 'theme-light');
-        body.classList.add(themeClass);
+        shouldRerenderPlaylist = this.applyThemeClass(body, themeClass) || shouldRerenderPlaylist;
         console.log(`[设置] body 类名已更新: ${body.className}`);
         
         // 应用歌单类名
-        const playlistEl = document.getElementById('playlist');
+        const applyThemeToPlaylist = () => {
+            const playlistEl = this.getCachedElement('playlist');
+            if (!playlistEl) {
+                return false;
+            }
+
+            this.applyThemeClass(playlistEl, themeClass);
+            return true;
+        };
+
+        const playlistEl = this.getCachedElement('playlist');
         if (playlistEl) {
-            playlistEl.classList.remove('theme-dark', 'theme-light', 'bright-theme', 'dark-theme');
-            playlistEl.classList.add(themeClass);
+            shouldRerenderPlaylist = this.applyThemeClass(playlistEl, themeClass) || shouldRerenderPlaylist;
             console.log(`[设置] playlist 类名已更新: ${playlistEl.className}`);
         } else {
+            shouldRerenderPlaylist = true;
             setTimeout(() => {
-                const playlistEl = document.getElementById('playlist');
-                if (playlistEl) {
-                    playlistEl.classList.remove('theme-dark', 'theme-light', 'bright-theme', 'dark-theme');
-                    playlistEl.classList.add(themeClass);
+                if (applyThemeToPlaylist()) {
+                    const playlistEl = this.getCachedElement('playlist');
                     console.log(`[设置] playlist 类名已更新（重试）: ${playlistEl.className}`);
                 }
             }, 100);
         }
         
-        // ✅ 【新增】主题改变时重新渲染播放列表抬头
-        // 延迟执行，确保DOM已更新
-        setTimeout(() => {
-            if (window.app && typeof window.app.renderPlaylist === 'function') {
-                console.log(`[设置] 重新渲染播放列表抬头（主题切换到 ${actualTheme}）`);
-                window.app.renderPlaylist();
-            } else {
-                console.log('[设置] 无法找到 window.app.renderPlaylist 方法');
-            }
-        }, 200);
+        // 仅在实际主题状态发生变化时重绘歌单抬头，避免同态调用造成无效刷新
+        if (shouldRerenderPlaylist) {
+            setTimeout(() => {
+                if (window.app && typeof window.app.renderPlaylist === 'function') {
+                    console.log(`[设置] 重新渲染播放列表抬头（主题切换到 ${actualTheme}）`);
+                    window.app.renderPlaylist();
+                } else {
+                    console.log('[设置] 无法找到 window.app.renderPlaylist 方法');
+                }
+            }, 200);
+        }
     },
     
     /**
@@ -529,13 +582,9 @@ export const settingsManager = {
         }
 
         // 更新放大按钮显示
-        const expandBtn = document.getElementById('fullPlayerExpand');
+        const expandBtn = this.getCachedElement('fullPlayerExpand');
         if (expandBtn) {
-            if (expandEnabled) {
-                expandBtn.classList.remove('hidden');
-            } else {
-                expandBtn.classList.add('hidden');
-            }
+            expandBtn.classList.toggle('hidden', !expandEnabled);
         }
 
         console.log(`[设置] 全屏控件已更新：YouTube=${youtubeEnabled}, 放大按钮=${expandEnabled}`);
@@ -715,7 +764,7 @@ export const settingsManager = {
      * 显示设置面板
      */
     openPanel() {
-        const panel = document.getElementById('settingsPanel');
+        const panel = this.getCachedElement('settingsPanel');
         if (panel) {
             panel._previousActiveElement = document.activeElement;
             panel.setAttribute('aria-modal', 'true');
@@ -752,7 +801,7 @@ export const settingsManager = {
     },
 
     hidePanel({ shouldRestoreFocus = false, log = false } = {}) {
-        const panel = document.getElementById('settingsPanel');
+        const panel = this.getCachedElement('settingsPanel');
         if (!panel) {
             return;
         }

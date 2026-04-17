@@ -1135,6 +1135,38 @@ function getSelectPlaylistModalRefs() {
     };
 }
 
+function setElementAttribute(element, name, value) {
+    if (!element) {
+        return;
+    }
+
+    const nextValue = String(value);
+    if (element.getAttribute(name) !== nextValue) {
+        element.setAttribute(name, nextValue);
+    }
+}
+
+function setElementStyle(styleTarget, property, value) {
+    if (!styleTarget || styleTarget[property] === value) {
+        return;
+    }
+
+    styleTarget[property] = value;
+}
+
+function setElementClassState(element, className, enabled) {
+    if (!element) {
+        return;
+    }
+
+    const hasClass = element.classList.contains(className);
+    if (enabled && !hasClass) {
+        element.classList.add(className);
+    } else if (!enabled && hasClass) {
+        element.classList.remove(className);
+    }
+}
+
 function applyToolbarButtonSkin(button, {
     background,
     border,
@@ -1523,16 +1555,20 @@ function bindPlaylistItemDelegates(container) {
         }
 
         if (item.classList.contains('current-playing')) {
-            const fullPlayer = document.getElementById('fullPlayer');
-            if (fullPlayer) {
-                fullPlayer.style.display = 'flex';
-                setTimeout(() => {
-                    fullPlayer.classList.add('show');
-                    const status = window.app?.player?.getStatus?.();
-                    if (status) {
-                        window.app?.ktvSync?.updateStatus?.(status);
-                    }
-                }, 10);
+            if (typeof window.app?.showFullPlayer === 'function') {
+                window.app.showFullPlayer();
+            } else {
+                const fullPlayer = document.getElementById('fullPlayer');
+                if (fullPlayer) {
+                    fullPlayer.style.display = 'flex';
+                    setTimeout(() => {
+                        fullPlayer.classList.add('show');
+                        const status = window.app?.player?.getStatus?.();
+                        if (status) {
+                            window.app?.ktvSync?.updateStatus?.(status);
+                        }
+                    }, 10);
+                }
             }
             return;
         }
@@ -2216,6 +2252,7 @@ export async function showPlaybackHistory() {
 
         // 历史数据（可变，用于删除后更新）
         let allHistory = [...history];
+        let currentHistoryFilter = '';
 
         // 从历史中移除指定URL的记录
         function removeFromHistory(url) {
@@ -2228,9 +2265,10 @@ export async function showPlaybackHistory() {
         }
 
         // 渲染过滤后的历史列表
-        function renderFilteredHistory(filterText) {
+        function renderFilteredHistory(filterText = currentHistoryFilter) {
             historyList.replaceChildren();
-            const query = (filterText || '').trim().toLowerCase();
+            currentHistoryFilter = String(filterText || '');
+            const query = currentHistoryFilter.trim().toLowerCase();
             const filtered = query
                 ? allHistory.filter(item => (item.title || '').toLowerCase().includes(query))
                 : allHistory;
@@ -2365,28 +2403,50 @@ function installModalKeyHandler(modal, onClose) {
 
 function showManagedModal(modal, { display = 'block', preferredSelector = null } = {}) {
     modal._previousActiveElement = document.activeElement;
-    modal.setAttribute('aria-modal', 'true');
-    modal.setAttribute('aria-hidden', 'false');
+    setElementAttribute(modal, 'aria-modal', 'true');
+    setElementAttribute(modal, 'aria-hidden', 'false');
     if (!modal.hasAttribute('tabindex')) {
-        modal.setAttribute('tabindex', '-1');
+        setElementAttribute(modal, 'tabindex', '-1');
     }
-    modal.style.display = display;
+
+    const isAlreadyVisible = modal.classList.contains('modal-visible')
+        && modal.getAttribute('aria-hidden') === 'false'
+        && modal.style.display === display;
+
+    setElementStyle(modal.style, 'display', display);
+    if (isAlreadyVisible) {
+        focusFirstFocusable(modal, preferredSelector);
+        return;
+    }
+
     setTimeout(() => {
-        modal.classList.add('modal-visible');
+        setElementClassState(modal, 'modal-visible', true);
         focusFirstFocusable(modal, preferredSelector);
     }, 10);
 }
 
 async function closeManagedModal(modal, { afterClose = null } = {}) {
-    modal.classList.remove('modal-visible');
+    const isAlreadyHidden = !modal.classList.contains('modal-visible')
+        && modal.getAttribute('aria-hidden') === 'true'
+        && modal.style.display === 'none';
+
+    if (isAlreadyHidden) {
+        if (typeof afterClose === 'function') {
+            await afterClose();
+        }
+        restoreFocus(modal._previousActiveElement);
+        return;
+    }
+
+    setElementClassState(modal, 'modal-visible', false);
     if (modal._keydownHandler) {
         document.removeEventListener('keydown', modal._keydownHandler);
         modal._keydownHandler = null;
     }
 
     await new Promise((resolve) => setTimeout(resolve, 300));
-    modal.style.display = 'none';
-    modal.setAttribute('aria-hidden', 'true');
+    setElementStyle(modal.style, 'display', 'none');
+    setElementAttribute(modal, 'aria-hidden', 'true');
 
     if (typeof afterClose === 'function') {
         await afterClose();
@@ -2736,9 +2796,7 @@ async function handleHistoryDeleteRecord(song, removeFromHistoryFn, rerenderCall
             try {
                 removeFromHistoryFn(song.url);
                 if (typeof rerenderCallback === 'function') {
-                    const searchInput = document.querySelector('.history-search-container input');
-                    const currentFilter = searchInput ? searchInput.value : '';
-                    rerenderCallback(currentFilter);
+                    rerenderCallback();
                 }
                 Toast.success(baseMessage);
             } catch (refreshError) {
