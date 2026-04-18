@@ -453,6 +453,28 @@ class MusicPlayerApp {
         return this.elements?.navItems || [];
     }
 
+    applySettingsNavVisibility() {
+        const settingsBtn = document.getElementById('settingsNavBtn');
+        if (!settingsBtn) {
+            return;
+        }
+
+        const shouldShow = settingsManager.uiConfig.settings_nav_visible !== false;
+        const nextHidden = !shouldShow;
+        const isActive = settingsBtn.classList.contains('active');
+
+        if (settingsBtn.hidden !== nextHidden) {
+            settingsBtn.hidden = nextHidden;
+        }
+        this.setAttributeValue(settingsBtn, 'aria-hidden', nextHidden ? 'true' : 'false');
+        this.setStyleValue(settingsBtn.style, 'display', nextHidden ? 'none' : '');
+
+        if (nextHidden && isActive) {
+            settingsBtn.classList.remove('active');
+            this.setActiveBottomNavTab('playlists');
+        }
+    }
+
     clearActiveBottomNavState() {
         const navItems = this.getBottomNavItems();
         navItems.forEach((item) => {
@@ -462,6 +484,7 @@ class MusicPlayerApp {
         });
         if (this.elements) {
             this.elements.activeBottomNavItem = null;
+            this.applySettingsNavVisibility();
         }
     }
 

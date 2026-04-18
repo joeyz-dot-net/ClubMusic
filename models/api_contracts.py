@@ -523,12 +523,14 @@ class SettingsSchemaResponse(BaseModel):
 class UIConfigData(BaseModel):
     youtube_controls: bool = True
     expand_button: bool = True
+    settings_nav_visible: bool = True
     url_cache_enabled: bool = True
 
 
 class UIConfigRequest(BaseModel):
     youtube_controls: bool = True
     expand_button: bool = True
+    settings_nav_visible: bool = True
     url_cache_enabled: bool = True
 
 

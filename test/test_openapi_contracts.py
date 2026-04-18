@@ -227,6 +227,7 @@ def test_openapi_request_bodies_cover_json_and_form_contracts():
 def test_openapi_settings_and_room_request_shapes_are_stable():
     schema = build_openapi_schema()
     paths = schema["paths"]
+    components = schema["components"]["schemas"]
 
     settings_request = paths["/settings"]["post"]["requestBody"]["content"]
     assert settings_request["application/json"]["schema"]["$ref"] == "#/components/schemas/UserSettingsUpdateRequest"
@@ -241,6 +242,10 @@ def test_openapi_settings_and_room_request_shapes_are_stable():
 
     ui_config_request = paths["/ui-config"]["post"]["requestBody"]["content"]
     assert ui_config_request["application/json"]["schema"]["$ref"] == "#/components/schemas/UIConfigRequest"
+    ui_config_properties = components["UIConfigData"]["properties"]
+    assert ui_config_properties["settings_nav_visible"]["type"] == "boolean"
+    ui_config_request_properties = components["UIConfigRequest"]["properties"]
+    assert ui_config_request_properties["settings_nav_visible"]["type"] == "boolean"
 
     room_init_request = paths["/room/init"]["post"]["requestBody"]["content"]
     assert room_init_request["application/json"]["schema"]["$ref"] == "#/components/schemas/RoomInitRequest"

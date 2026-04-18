@@ -19,7 +19,8 @@ export const settingsManager = {
     // UI 配置（从服务器读取）
     uiConfig: {
         youtube_controls: true,
-        expand_button: true
+        expand_button: true,
+        settings_nav_visible: true
     },
 
     // 用于存储 player 实例引用

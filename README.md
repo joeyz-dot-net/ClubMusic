@@ -236,6 +236,7 @@ py tools/instance_status.py --cleanup-stale-lock
 |--------|--------|------|
 | `youtube_controls` | `false` | 是否显示 YouTube 原生控件 |
 | `expand_button` | `true` | 是否显示自定义放大按钮 |
+| `settings_nav_visible` | `true` | 是否在底部导航栏显示 Settings 按钮 |
 
 ### `[cache]` 缓存配置
 

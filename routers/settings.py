@@ -207,6 +207,7 @@ async def get_ui_config():
         default_config = {
             "youtube_controls": True,
             "expand_button": True,
+            "settings_nav_visible": True,
             "url_cache_enabled": True,
         }
 
@@ -214,12 +215,14 @@ async def get_ui_config():
             config.read(config_file, encoding="utf-8")
             youtube_controls = config.getboolean('ui', 'youtube_controls', fallback=True)
             expand_button = config.getboolean('ui', 'expand_button', fallback=True)
+            settings_nav_visible = config.getboolean('ui', 'settings_nav_visible', fallback=True)
             url_cache_enabled = config.getboolean('cache', 'url_cache_enabled', fallback=True)
             return {
                 "status": "OK",
                 "data": {
                     "youtube_controls": youtube_controls,
                     "expand_button": expand_button,
+                    "settings_nav_visible": settings_nav_visible,
                     "url_cache_enabled": url_cache_enabled,
                 }
             }
@@ -246,6 +249,7 @@ async def update_ui_config(payload: UIConfigRequest):
 
         youtube_controls = payload.youtube_controls
         expand_button = payload.expand_button
+        settings_nav_visible = payload.settings_nav_visible
         url_cache_enabled = payload.url_cache_enabled
 
         config = configparser.ConfigParser()
@@ -261,6 +265,7 @@ async def update_ui_config(payload: UIConfigRequest):
 
         config.set('ui', 'youtube_controls', str(youtube_controls).lower())
         config.set('ui', 'expand_button', str(expand_button).lower())
+        config.set('ui', 'settings_nav_visible', str(settings_nav_visible).lower())
         config.set('cache', 'url_cache_enabled', str(url_cache_enabled).lower())
 
         with open(config_file, 'w', encoding='utf-8') as f:
@@ -272,13 +277,17 @@ async def update_ui_config(payload: UIConfigRequest):
         except Exception as e:
             logger.warning(f"[UI配置] 重载缓存配置失败（无害）: {e}")
 
-        logger.info(f"[UI配置] 已更新: YouTube控件={youtube_controls}, 放大按钮={expand_button}, URL缓存={url_cache_enabled}")
+        logger.info(
+            f"[UI配置] 已更新: YouTube控件={youtube_controls}, 放大按钮={expand_button}, "
+            f"设置导航={settings_nav_visible}, URL缓存={url_cache_enabled}"
+        )
         return {
             "status": "OK",
             "message": "UI配置已保存到 settings.ini",
             "data": {
                 "youtube_controls": youtube_controls,
                 "expand_button": expand_button,
+                "settings_nav_visible": settings_nav_visible,
                 "url_cache_enabled": url_cache_enabled,
             }
         }
