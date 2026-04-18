@@ -3,7 +3,7 @@ import { api } from './api.js?v=5';
 import { settingsManager } from './settingsManager.js?v=15';
 import { operationLock } from './operationLock.js?v=2';
 import { recordTrace } from './requestTrace.js?v=2';
-import { roomBotManager } from './roomBot.js?v=2';
+import { roomBotManager } from './roomBot.js?v=3';
 
 const STATUS_TIME_EPSILON = 0.001;
 
@@ -108,6 +108,20 @@ export class Player {
 
         return (status === 404 && message === 'room not found')
             || (status === 409 && message === 'room is being created');
+    }
+
+    _isRecoverableRoomOperationError(result) {
+        if (!api.roomId || !result) {
+            return false;
+        }
+
+        const status = Number(result.status || 0);
+        const detailMessage = typeof result?.detail === 'string' ? result.detail : '';
+        const message = result?.error || result?.message || detailMessage;
+
+        return (status === 404 && message === 'room not found')
+            || (status === 409 && message === 'room is being created')
+            || (status === 409 && message === '房间音频输出未就绪，请先连接 ClubVoice');
     }
 
     async _recoverRoomContext(reason, { source = 'status' } = {}) {
@@ -309,23 +323,13 @@ export class Player {
 
     // 播放控制
     async play(url, title, type = 'local', duration = 0) {
-        try {
-            recordTrace('player.play', {
-                url,
-                title,
-                type,
-                duration,
-                currentUrl: this.status?.current_meta?.url || null,
-            });
-            const result = this._ensureSuccess(
-                await api.play(url, title, type, duration),
-                '播放失败'
-            );
-
-            // 记录当前播放的URL
+        const executePlay = async () => this._ensureSuccess(
+            await api.play(url, title, type, duration),
+            '播放失败'
+        );
+        const applyPlayResult = (result) => {
             this.currentPlayingUrl = url;
 
-            // 立即更新状态缓存（与 next/prev 保持一致），无需等待下次轮询或 WebSocket
             if (result?.status === 'OK' && result?.current && this.status) {
                 const displayPatch = this._buildDisplayFieldPatchFromMeta(result.current, this.status);
                 this._markLocalStatusBarrier();
@@ -338,9 +342,29 @@ export class Player {
             }
 
             this.emit('play', { url, title, type });
-
             return result;
+        };
+
+        try {
+            recordTrace('player.play', {
+                url,
+                title,
+                type,
+                duration,
+                currentUrl: this.status?.current_meta?.url || null,
+            });
+            return applyPlayResult(await executePlay());
         } catch (error) {
+            if (this._isRecoverableRoomOperationError(error?.result)) {
+                const recovered = await this._recoverRoomContext(error.result, { source: 'play' });
+                if (recovered) {
+                    try {
+                        return applyPlayResult(await executePlay());
+                    } catch (retryError) {
+                        error = retryError;
+                    }
+                }
+            }
             console.error('[Player.play] 播放异常:', error);
             throw error;
         }

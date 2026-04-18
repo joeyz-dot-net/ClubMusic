@@ -75,7 +75,7 @@ export class RoomBotManager {
         return this.lastKnownStatus;
     }
 
-    async _waitForRoomReady(roomId, { attempts = 10, delayMs = 250 } = {}) {
+    async _waitForRoomReady(roomId, { attempts = 20, delayMs = 500 } = {}) {
         let lastResult = null;
 
         for (let index = 0; index < attempts; index += 1) {

@@ -2,7 +2,7 @@
 // 这是一个使用新模块系统的示例文件
 
 import { api } from './api.js?v=5';
-import { player } from './player.js?v=26';
+import { player } from './player.js?v=27';
 import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=52';
 import { playlistsManagement } from './playlists-management.js?v=36';
 import { volumeControl } from './volume.js?v=20';
@@ -20,7 +20,7 @@ import { playLock } from './playLock.js?v=2';
 import { unavailableSongs } from './unavailable.js';
 import { recordTrace } from './requestTrace.js?v=2';
 import { createRegressionHarness } from './regressionHarness.js?v=19';
-import { roomBotManager } from './roomBot.js?v=2';
+import { roomBotManager } from './roomBot.js?v=3';
 
 // ==========================================
 // 应用初始化
@@ -230,12 +230,19 @@ class MusicPlayerApp {
         console.log('🎵 初始化 ClubMusic...');
         
         try {
+            let roomBootstrapError = null;
+
             // 0.1 初始化多语言系统
             i18n.init();
             this.showMobileSafariAudioHint();
 
             // 0.2 房间页先确保对应 RoomPlayer 已经就绪，避免初始化窗口命中默认播放器
-            await this.ensureRoomBotReady();
+            try {
+                await this.ensureRoomBotReady();
+            } catch (error) {
+                roomBootstrapError = error;
+                console.warn('[RoomBot] 启动阶段未就绪，继续页面初始化:', error);
+            }
             
             // 1. 初始化 UI 元素
             this.initUIElements();
@@ -282,6 +289,10 @@ class MusicPlayerApp {
 
             // 9. 启动进度条 RAF 循环（~60fps 本地插值，与服务器轮询解耦）
             this._startProgressLoop();
+
+            if (roomBootstrapError) {
+                console.warn('[RoomBot] 页面已初始化，等待后续房间恢复:', roomBootstrapError.message);
+            }
             
             this.initialized = true;
             console.log('✅ ClubMusic 初始化完成');

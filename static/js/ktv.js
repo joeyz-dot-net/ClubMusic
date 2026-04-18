@@ -4,7 +4,7 @@
  */
 
 import { api } from './api.js?v=5';
-import { player } from './player.js?v=26';
+import { player } from './player.js?v=27';
 import { Toast } from './ui.js?v=3';
 import { i18n } from './i18n.js';
 import { unavailableSongs } from './unavailable.js';

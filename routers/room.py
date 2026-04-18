@@ -52,6 +52,7 @@ def _build_room_status_payload(room_id: str, player) -> dict:
     runtime_queue = player.get_runtime_queue() if player else None
     mpv_running = bool(player and player.mpv_process is not None and player.mpv_process.poll() is None)
     pipe_exists = bool(player and player.mpv_pipe_exists())
+    output_ready = bool(player and player.is_room_output_ready())
 
     return {
         "room_id": room_id,
@@ -60,7 +61,8 @@ def _build_room_status_payload(room_id: str, player) -> dict:
         "exists": player is not None,
         "mpv_running": mpv_running,
         "pipe_exists": pipe_exists,
-        "bot_ready": mpv_running and pipe_exists,
+        "output_ready": output_ready,
+        "bot_ready": mpv_running and pipe_exists and output_ready,
         "current_playlist_id": getattr(runtime_queue, 'id', ''),
         "current_index": getattr(player, 'current_index', -1) if player else -1,
         "queue_length": len(getattr(runtime_queue, 'songs', []) or []),
