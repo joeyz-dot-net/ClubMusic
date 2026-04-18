@@ -10,6 +10,7 @@ routers/room.py - 自定义房间 RoomPlayer 管理 API
 """
 
 import logging
+import re
 import time
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
@@ -87,6 +88,8 @@ async def init_room(payload: RoomInitRequest):
     room_id = payload.room_id.strip()
     if not room_id:
         return JSONResponse({"status": "error", "message": "missing room_id"}, 400)
+    if not re.match(r'^[a-zA-Z0-9_-]{1,64}$', room_id):
+        return JSONResponse({"status": "error", "message": "room_id must contain only ASCII letters, numbers, underscore, and hyphen"}, 400)
 
     default_volume = int(payload.default_volume)
     ipc_pipe = rf'\\.\pipe\mpv-ipc-{room_id}'
