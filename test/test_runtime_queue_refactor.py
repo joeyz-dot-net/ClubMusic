@@ -10,6 +10,7 @@ import pytest
 from fastapi import HTTPException
 
 from models.api_contracts import (
+    AlbumsResponse,
     DebugPipeCheckResponse,
     DiagnosticInstanceStatusResponse,
     ErrorResponse,
@@ -121,12 +122,14 @@ class DummyPlayer:
             "volume": 50,
         }
         self.local_file_tree = {"name": "root", "dirs": [], "files": []}
+        self.local_albums = []
         self.local_search_max_results = 5
         self.youtube_search_max_results = 8
         self.youtube_url_extra_max = 16
         self.music_dir = os.getcwd()
         self.allowed_extensions = {".mp3", ".flac"}
         self.config = {"LOCAL_VOLUME": "50"}
+        self.refresh_called = False
 
     def get_runtime_queue(self):
         self.runtime_queue.current_playing_index = self.current_index
@@ -170,6 +173,13 @@ class DummyPlayer:
 
     def get_current_meta_snapshot(self):
         return dict(self.current_meta)
+
+    def get_local_albums(self):
+        return list(self.local_albums)
+
+    def refresh_local_library_cache(self):
+        self.refresh_called = True
+        return list(self.local_albums)
 
 
 class DummyRoomPlayer(DummyPlayer):
@@ -1034,6 +1044,48 @@ def test_get_directory_songs_rejects_path_escape():
     assert response.status_code == 400
     assert validated.error == "无效的目录路径"
     assert payload == {"status": "ERROR", "error": "无效的目录路径"}
+
+
+def test_list_albums_returns_cached_album_payload():
+    player = DummyPlayer()
+    player.local_albums = [
+        {
+            "title": "Future Nostalgia",
+            "subtitle": "Dua Lipa",
+            "directory": "Pop/Future Nostalgia",
+            "track_count": 11,
+            "cover_path": "Pop/Future Nostalgia/01 - Future Nostalgia.mp3",
+            "modified_at": 1234.5,
+        }
+    ]
+
+    result = asyncio.run(search_router.list_albums(player=player))
+    validated = AlbumsResponse(**result)
+
+    assert validated.count == 1
+    assert validated.albums[0].title == "Future Nostalgia"
+    assert validated.albums[0].subtitle == "Dua Lipa"
+
+
+def test_refresh_albums_rebuilds_cached_payload():
+    player = DummyPlayer()
+    player.local_albums = [
+        {
+            "title": "1989",
+            "subtitle": "Taylor Swift",
+            "directory": "Taylor Swift/1989",
+            "track_count": 13,
+            "cover_path": "Taylor Swift/1989/01 - Welcome To New York.mp3",
+            "modified_at": 9999.0,
+        }
+    ]
+
+    result = asyncio.run(search_router.refresh_albums(player=player))
+    validated = AlbumsResponse(**result)
+
+    assert player.refresh_called is True
+    assert validated.count == 1
+    assert validated.albums[0].directory == "Taylor Swift/1989"
 
 
 def test_set_pitch_shift_rejects_invalid_semitones():

@@ -4,7 +4,7 @@
  * 显示全屏遮罩阻止一切用户交互
  */
 
-import { i18n } from './i18n.js';
+import { i18n } from './i18n.js?v=2';
 import { Toast } from './ui.js?v=3';
 
 class PlayPreparationLock {

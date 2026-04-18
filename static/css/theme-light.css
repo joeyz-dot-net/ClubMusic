@@ -311,6 +311,32 @@ body.theme-light {
     color: #3d5467;
 }
 
+body.theme-light .albums-hero,
+body.theme-light .album-detail-hero,
+body.theme-light .album-card,
+body.theme-light .album-detail-topbar {
+    background:
+        radial-gradient(circle at top right, rgba(255, 255, 255, 0.9), transparent 42%),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(244, 247, 252, 0.94) 100%);
+    border-color: rgba(203, 213, 225, 0.75);
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+}
+
+body.theme-light .albums-page-eyebrow,
+body.theme-light .album-card-subtitle,
+body.theme-light .album-card-meta,
+body.theme-light .albums-hero-subtitle,
+body.theme-light .albums-hero-meta,
+body.theme-light .album-detail-subtitle,
+body.theme-light .album-detail-meta,
+body.theme-light .albums-page-subtitle {
+    color: #64748b;
+}
+
+body.theme-light .albums-action-btn--ghost {
+    background: rgba(255, 255, 255, 0.72);
+}
+
 #playlistsModal.dark-theme .playlists-modal-body {
     background: linear-gradient(180deg, rgba(250, 251, 252, 0.9) 0%, rgba(245, 247, 250, 0.85) 100%);
 }

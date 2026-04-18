@@ -1,12 +1,13 @@
 // 模块化主入口示例
 // 这是一个使用新模块系统的示例文件
 
-import { api } from './api.js?v=5';
+import { api } from './api.js?v=6';
 import { player } from './player.js?v=27';
 import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=52';
 import { playlistsManagement } from './playlists-management.js?v=36';
 import { volumeControl } from './volume.js?v=20';
-import { searchManager } from './search.js?v=53';
+import { searchManager } from './search.js?v=54';
+import { albumsManager } from './albums.js?v=1';
 import { themeManager } from './themeManager.js?v=2';
 import { debug } from './debug.js?v=5';
 import { Toast, formatTime } from './ui.js?v=3';
@@ -14,7 +15,7 @@ import { focusFirstFocusable, isMobile, isIPad, restoreFocus, ThumbnailManager, 
 import { localFiles } from './local.js?v=30';
 import { settingsManager } from './settingsManager.js?v=15';
 import { navManager } from './navManager.js';
-import { i18n } from './i18n.js';
+import { i18n } from './i18n.js?v=2';
 import { ktvSync } from './ktv.js?v=49';
 import { playLock } from './playLock.js?v=2';
 import { unavailableSongs } from './unavailable.js';
@@ -271,6 +272,9 @@ class MusicPlayerApp {
             // 5.5 初始化设置管理器（绑定关闭按钮等事件）
             await settingsManager.init();
 
+            // 5.6 初始化专辑资料库页面
+            await albumsManager.init({ container: this.elements.albums });
+
             // 应用全屏控件设置
             await settingsManager.applyFullscreenControls();
 
@@ -400,6 +404,7 @@ class MusicPlayerApp {
             // 标签导航
             bottomNav: document.getElementById('bottomNav'),
             playlist: document.getElementById('playlist'),
+            albums: document.getElementById('albums'),
             tree: document.getElementById('tree'),
 
             // Now Playing Panel (iPad Landscape)
@@ -779,12 +784,20 @@ class MusicPlayerApp {
 
     showPlaylistContent() {
         this.showTabSection(this.elements?.playlist);
+        this.hideTabSection(this.elements?.albums);
         this.hideTabSection(this.elements?.tree);
     }
 
     showLocalContent() {
         this.hideTabSection(this.elements?.playlist);
+        this.hideTabSection(this.elements?.albums);
         this.showTabSection(this.elements?.tree);
+    }
+
+    showAlbumsContent() {
+        this.hideTabSection(this.elements?.playlist);
+        this.hideTabSection(this.elements?.tree);
+        this.showTabSection(this.elements?.albums);
     }
 
     // 初始化播放器
@@ -2398,6 +2411,7 @@ class MusicPlayerApp {
         // 标签页内容映射
         const tabContents = {
             'playlists': this.elements.playlist,
+            'albums': this.elements.albums,
             'local': this.elements.tree,
             'search': null    // 模态框
         };
@@ -2491,6 +2505,9 @@ class MusicPlayerApp {
             if (tabName === 'playlists') {
                 // 显示当前播放队列
                 this.showPlaylistContent();
+            } else if (tabName === 'albums') {
+                this.showAlbumsContent();
+                void albumsManager.enterLanding();
             } else if (tabName === 'local') {
                 // 本地歌曲
                 this.showLocalContent();
@@ -2980,6 +2997,7 @@ app.modules = {
     player,
     playlistManager,
     localFiles,
+    albumsManager,
     playlistsManagement,
     volumeControl,
     searchManager,

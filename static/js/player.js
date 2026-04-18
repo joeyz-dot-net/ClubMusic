@@ -1,5 +1,5 @@
 // 播放器控制模块
-import { api } from './api.js?v=5';
+import { api } from './api.js?v=6';
 import { settingsManager } from './settingsManager.js?v=15';
 import { operationLock } from './operationLock.js?v=2';
 import { recordTrace } from './requestTrace.js?v=2';

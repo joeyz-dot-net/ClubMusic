@@ -3,6 +3,8 @@
 routers/search.py - 搜索路由
 
 路由：
+    GET  /albums
+    POST /albums/refresh
   POST /search_song
   GET  /youtube_search_config
   POST /search_youtube
@@ -15,6 +17,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
 from models.api_contracts import (
+    AlbumsResponse,
     ErrorResponse,
     DirectorySongsRequest,
     DirectorySongsResponse,
@@ -42,6 +45,44 @@ _DIRECTORY_ERROR_RESPONSES = {
     404: {"model": ErrorResponse, "description": "Directory not found"},
     500: {"model": ErrorResponse, "description": "Unexpected search error"},
 }
+
+
+@router.get(
+    "/albums",
+    response_model=AlbumsResponse,
+    response_model_exclude_none=True,
+    responses=_SEARCH_ERROR_RESPONSES,
+)
+async def list_albums(player: MusicPlayer = Depends(get_player_for_request)):
+    """获取缓存的本地专辑列表。"""
+    try:
+        albums = player.get_local_albums()
+        return {
+            "status": "OK",
+            "albums": albums,
+            "count": len(albums),
+        }
+    except Exception as e:
+        return error_response("[/albums] 获取专辑列表失败", exc=e, _logger=logger)
+
+
+@router.post(
+    "/albums/refresh",
+    response_model=AlbumsResponse,
+    response_model_exclude_none=True,
+    responses=_SEARCH_ERROR_RESPONSES,
+)
+async def refresh_albums(player: MusicPlayer = Depends(get_player_for_request)):
+    """刷新本地媒体库缓存并返回专辑列表。"""
+    try:
+        albums = player.refresh_local_library_cache()
+        return {
+            "status": "OK",
+            "albums": albums,
+            "count": len(albums),
+        }
+    except Exception as e:
+        return error_response("[/albums/refresh] 刷新专辑列表失败", exc=e, _logger=logger)
 
 
 @router.post(

@@ -1,6 +1,6 @@
 // 调试面板模块
 import { themeManager } from './themeManager.js?v=2';
-import { i18n } from './i18n.js';
+import { i18n } from './i18n.js?v=2';
 
 function stringifyDebugValue(value) {
     if (typeof value !== 'object' || value === null) {

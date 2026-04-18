@@ -2,7 +2,7 @@
  * 导航栏管理模块 - 处理导航栏的多语言支持
  */
 
-import { i18n } from './i18n.js';
+import { i18n } from './i18n.js?v=2';
 
 export const navManager = {
     /**

@@ -5,8 +5,8 @@
 
 import { Toast } from './ui.js?v=3';
 import { themeManager } from './themeManager.js?v=2';
-import { i18n } from './i18n.js';
-import { api } from './api.js?v=5';
+import { i18n } from './i18n.js?v=2';
+import { api } from './api.js?v=6';
 import { focusFirstFocusable, restoreFocus, trapFocusInContainer } from './utils.js?v=2';
 
 export const settingsManager = {

@@ -1,10 +1,10 @@
 // 搜索功能模块
-import { api } from './api.js?v=5';
+import { api } from './api.js?v=6';
 import { Toast, formatTime, searchLoading } from './ui.js?v=3';
 import { buildTrackItemElement } from './templates.js';
-import { localFiles, getNodeByPath, getDirCoverUrl, countFiles } from './local.js?v=27';
+import { localFiles, getNodeByPath, getDirCoverUrl, countFiles } from './local.js?v=30';
 import { playlistManager, renderPlaylistUI } from './playlist.js?v=52';
-import { i18n } from './i18n.js';
+import { i18n } from './i18n.js?v=2';
 import { escapeHTML, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js?v=2';
 import { executePlayNow } from './playNow.js?v=22';
 import { getCurrentPlaybackMeta } from './playbackState.js?v=20';

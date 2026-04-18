@@ -323,10 +323,11 @@ class MusicPlayer:
 
         # 构建本地文件树
         try:
-            self.local_file_tree = self.build_tree()
+            self.refresh_local_library_cache()
         except Exception as e:
             logger.warning(f"构建文件树失败: {e}")
             self.local_file_tree = {"name": "根目录", "rel": "", "dirs": [], "files": []}
+            self.local_albums = []
 
         # 初始化 MPV IPC（只加载一次）
         self._init_mpv_ipc()
@@ -2051,37 +2052,96 @@ class MusicPlayer:
             logger.warning(f"遍历目录失败: {e}")
         return tracks
 
+    def _build_local_library_snapshot(self) -> tuple[dict, list[dict]]:
+        """一次遍历本地媒体库，生成目录树与专辑索引。"""
+        abs_root = os.path.abspath(self.music_dir)
+        albums = []
+
+        def walk(path: str) -> dict:
+            rel = os.path.relpath(path, abs_root).replace("\\", "/")
+            normalized_rel = "" if rel == "." else rel
+            node = {
+                "name": os.path.basename(path) or "根目录",
+                "rel": normalized_rel,
+                "dirs": [],
+                "files": [],
+            }
+
+            try:
+                entries = sorted(os.scandir(path), key=lambda entry: entry.name.lower())
+            except Exception:
+                return node
+
+            child_dirs = []
+            for entry in entries:
+                try:
+                    if entry.is_dir():
+                        child_dirs.append(entry.path)
+                        continue
+
+                    if not entry.is_file():
+                        continue
+                except OSError:
+                    continue
+
+                ext = os.path.splitext(entry.name)[1].lower()
+                if ext not in self.allowed_extensions:
+                    continue
+
+                rel_path = os.path.relpath(entry.path, abs_root).replace("\\", "/")
+                node["files"].append({"name": entry.name, "rel": rel_path})
+
+            for child_dir in child_dirs:
+                node["dirs"].append(walk(child_dir))
+
+            if node["files"] and normalized_rel:
+                parent_rel = os.path.dirname(normalized_rel).replace("\\", "/")
+                subtitle = os.path.basename(parent_rel) if parent_rel else None
+                try:
+                    modified_at = os.path.getmtime(path)
+                except OSError:
+                    modified_at = 0.0
+
+                albums.append({
+                    "title": node["name"],
+                    "subtitle": subtitle or None,
+                    "directory": normalized_rel,
+                    "track_count": len(node["files"]),
+                    "cover_path": node["files"][0]["rel"] if node["files"] else None,
+                    "modified_at": modified_at,
+                })
+
+            return node
+
+        if not os.path.isdir(abs_root):
+            return {"name": "根目录", "rel": "", "dirs": [], "files": []}, []
+
+        tree = walk(abs_root)
+        albums.sort(key=lambda item: ((item.get("modified_at") or 0.0) * -1, item.get("title") or ""))
+        return tree, albums
+
+    def refresh_local_library_cache(self) -> list[dict]:
+        """刷新本地媒体库缓存（目录树 + 专辑索引）。"""
+        tree, albums = self._build_local_library_snapshot()
+        self.local_file_tree = tree
+        self.local_albums = albums
+        return albums
+
+    def get_local_albums(self) -> list[dict]:
+        """获取缓存的本地专辑列表。"""
+        if not hasattr(self, "local_albums"):
+            self.local_albums = []
+        return self.local_albums
+
     def build_tree(self) -> dict:
         """构建音乐目录树结构
 
         返回:
           包含目录和文件信息的嵌套字典
         """
-        abs_root = os.path.abspath(self.music_dir)
-
-        def walk(path):
-            rel = os.path.relpath(path, abs_root).replace("\\", "/")
-            node = {
-                "name": os.path.basename(path) or "根目录",
-                "rel": "" if rel == "." else rel,
-                "dirs": [],
-                "files": [],
-            }
-            try:
-                for name in sorted(os.listdir(path), key=str.lower):
-                    full = os.path.join(path, name)
-                    if os.path.isdir(full):
-                        node["dirs"].append(walk(full))
-                    else:
-                        ext = os.path.splitext(name)[1].lower()
-                        if ext in self.allowed_extensions:
-                            rp = os.path.relpath(full, abs_root).replace("\\", "/")
-                            node["files"].append({"name": name, "rel": rp})
-            except Exception:
-                pass
-            return node
-
-        return walk(abs_root)
+        tree, albums = self._build_local_library_snapshot()
+        self.local_albums = albums
+        return tree
 
     def build_playlist(self) -> list:
         """构建播放列表（所有音乐文件的相对路径列表）

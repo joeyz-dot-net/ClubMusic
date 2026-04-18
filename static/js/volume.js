@@ -1,5 +1,5 @@
 // 音量控制模块
-import { api } from './api.js?v=5';
+import { api } from './api.js?v=6';
 import { player } from './player.js?v=27';
 
 // 调试模式检查

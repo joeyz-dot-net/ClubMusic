@@ -2,7 +2,7 @@
 import { playlistManager } from './playlist.js?v=52';
 import { Toast, ConfirmModal, InputModal } from './ui.js?v=3';
 import { operationLock } from './operationLock.js?v=2';
-import { i18n } from './i18n.js';
+import { i18n } from './i18n.js?v=2';
 import { focusFirstFocusable, restoreFocus, trapFocusInContainer } from './utils.js?v=2';
 
 const PLAYLIST_GRADIENTS = [

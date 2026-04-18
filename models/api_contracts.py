@@ -466,6 +466,21 @@ class DirectorySongsResponse(BaseModel):
     count: int
 
 
+class AlbumSnapshot(BaseModel):
+    title: str
+    subtitle: str | None = None
+    directory: str
+    track_count: int
+    cover_path: str | None = None
+    modified_at: float | None = None
+
+
+class AlbumsResponse(BaseModel):
+    status: Literal["OK"]
+    albums: list[AlbumSnapshot] = Field(default_factory=list)
+    count: int
+
+
 class VersionResponse(BaseModel):
     status: Literal["OK"]
     version: str

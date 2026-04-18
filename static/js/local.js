@@ -1,7 +1,7 @@
-import { api } from './api.js?v=5';
+import { api } from './api.js?v=6';
 import { playlistManager } from './playlist.js?v=52';
 import { Toast } from './ui.js?v=3';
-import { i18n } from './i18n.js';
+import { i18n } from './i18n.js?v=2';
 
 // 当前导航路径
 let currentNavPath = [];

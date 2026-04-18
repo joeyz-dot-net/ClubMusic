@@ -2,7 +2,7 @@
 // 用于在多处复用统一的歌曲列表项结构
 
 import { normalizeThumbnailUrl } from './utils.js';
-import { i18n } from './i18n.js';
+import { i18n } from './i18n.js?v=2';
 
 function createFragmentFromHTML(html) {
     return document.createRange().createContextualFragment(html);

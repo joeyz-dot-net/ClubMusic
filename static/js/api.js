@@ -117,7 +117,7 @@ export class MusicAPI {
             'X-ClubMusic-User': normalizeHeaderValue(this.clientUserId || ''),
             'X-ClubMusic-Tab': normalizeHeaderValue(this.clientTabId),
             'X-ClubMusic-Page': normalizeHeaderValue(pageValue),
-            'X-ClubMusic-Room': normalizeHeaderValue(roomValue),
+            'X-ClubMusic-Room': normalizeHeaderValue(this.roomId || this.pipeParam || 'default'),
         };
 
         return this._cachedStaticTraceHeaders;
@@ -518,6 +518,14 @@ export class MusicAPI {
 
     async getFileTree() {
         return this.get('/tree');
+    }
+
+    async getAlbums() {
+        return this.get('/albums');
+    }
+
+    async refreshAlbums() {
+        return this.post('/albums/refresh', {});
     }
 
     // 播放历史 API

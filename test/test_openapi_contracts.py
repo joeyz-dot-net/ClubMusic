@@ -125,6 +125,8 @@ def test_openapi_core_contract_refs_are_stable():
         "#/components/schemas/PlayerStatusErrorResponse",
     }
     assert paths["/playlists"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/PlaylistsListResponse"
+    assert paths["/albums"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/AlbumsResponse"
+    assert paths["/albums/refresh"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/AlbumsResponse"
     assert paths["/search_song"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/SearchSongResponse"
     assert paths["/playback_history"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/PlaybackHistoryResponse"
     assert paths["/volume"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/VolumeResponse"

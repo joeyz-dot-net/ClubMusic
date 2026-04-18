@@ -3,10 +3,10 @@
  * 负责在全屏播放器中显示YouTube视频，并与服务器音频同步
  */
 
-import { api } from './api.js?v=5';
+import { api } from './api.js?v=6';
 import { player } from './player.js?v=27';
 import { Toast } from './ui.js?v=3';
-import { i18n } from './i18n.js';
+import { i18n } from './i18n.js?v=2';
 import { unavailableSongs } from './unavailable.js';
 import { recordTrace } from './requestTrace.js?v=2';
 

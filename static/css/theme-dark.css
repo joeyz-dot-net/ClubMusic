@@ -240,6 +240,20 @@ button:hover { background: var(--button-hover-bg); border-color: var(--button-ho
     background: var(--bg-primary);
 }
 
+body.theme-dark .albums-hero,
+body.theme-dark .album-detail-hero,
+body.theme-dark .album-card,
+body.theme-dark .album-detail-topbar {
+    background:
+        radial-gradient(circle at top right, rgba(255, 255, 255, 0.08), transparent 42%),
+        linear-gradient(135deg, rgba(19, 19, 23, 0.96) 0%, rgba(10, 10, 10, 0.98) 100%);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+body.theme-dark .albums-action-btn--ghost {
+    background: rgba(255, 255, 255, 0.03);
+}
+
 .modal-header {
     background: var(--bg-primary);
     border-bottom-color: var(--border-color);

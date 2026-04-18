@@ -604,6 +604,10 @@
         grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     }
 
+    .albums-grid {
+        grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    }
+
     /* ---- 拖拽手柄: 恢复正常尺寸 ---- */
     .drag-handle {
         width: 32px;
@@ -634,6 +638,60 @@
 
     .playlist-count {
         font-size: 13px;
+    }
+}
+
+@media (max-width: 860px) {
+    .albums-hero,
+    .album-detail-hero {
+        grid-template-columns: 1fr;
+    }
+
+    .albums-hero-artwork,
+    .album-detail-artwork {
+        max-width: 360px;
+        margin: 0 auto;
+    }
+
+    .albums-page-header,
+    .album-detail-topbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+
+@media (max-width: 640px) {
+    .albums-tab {
+        padding: 16px 14px calc(var(--content-bottom-space) - 16px);
+    }
+
+    .albums-page,
+    .album-detail-page {
+        gap: 20px;
+    }
+
+    .albums-hero,
+    .album-detail-hero {
+        padding: 18px;
+        border-radius: 24px;
+    }
+
+    .albums-rail {
+        grid-auto-columns: minmax(154px, 180px);
+    }
+
+    .albums-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+    }
+
+    .albums-hero-actions {
+        flex-direction: column;
+    }
+
+    .albums-action-btn {
+        width: 100%;
+        justify-content: center;
     }
 }
 

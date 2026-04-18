@@ -1,5 +1,5 @@
 // UI 工具函数和组件模块
-import { i18n } from './i18n.js';
+import { i18n } from './i18n.js?v=2';
 import { focusFirstFocusable, restoreFocus, trapFocusInContainer } from './utils.js';
 
 // 创建 DOM 元素的辅助函数
