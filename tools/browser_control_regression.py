@@ -202,6 +202,11 @@ def parse_args():
         "--room-id",
         help="Optional fixed room_id for the room suite. Defaults to a generated regression room id.",
     )
+    parser.add_argument(
+        "--clubvoice-url",
+        default="http://127.0.0.1:5000/",
+        help="Optional ClubVoice base URL for bootstrapping room music runtime before the room suite. Use an empty string to disable. Default: %(default)s",
+    )
     return parser.parse_args()
 
 
@@ -216,6 +221,205 @@ def get_healthcheck_url(base_url):
     if parsed.path and parsed.path not in ("", "/"):
         path = f"{parsed.path.rstrip('/')}/status"
     return urlunparse((parsed.scheme, parsed.netloc, path, "", "", ""))
+
+
+def get_clubvoice_healthcheck_url(base_url):
+    parsed = urlparse(base_url)
+    return urlunparse((parsed.scheme, parsed.netloc, "/health", "", "", ""))
+
+
+def is_clubvoice_ready(base_url, timeout_seconds=2):
+    if not base_url:
+        return False
+
+    try:
+        with urlopen(get_clubvoice_healthcheck_url(base_url), timeout=timeout_seconds) as response:
+            if response.status != 200:
+                return False
+            payload = json.load(response)
+    except Exception:
+        return False
+
+    return payload == {"status": "ok"}
+
+
+def bootstrap_clubvoice_room_runtime(room_id, clubvoice_url, *, quiet=False, timeout_seconds=15):
+    result = {
+        "attempted": False,
+        "roomId": room_id,
+        "clubvoiceUrl": clubvoice_url,
+    }
+
+    if not clubvoice_url:
+        result["skipped"] = "clubvoice-disabled"
+        return result
+
+    if not is_clubvoice_ready(clubvoice_url, timeout_seconds=min(timeout_seconds, 3)):
+        result["skipped"] = "clubvoice-unreachable"
+        return result
+
+    try:
+        import socketio
+    except ImportError:
+        result["skipped"] = "python-socketio-missing"
+        return result
+
+    result["attempted"] = True
+    captured = {}
+    sio = socketio.Client(logger=False, engineio_logger=False, reconnection=False)
+
+    def remember(name):
+        def _handler(data=None):
+            captured[name] = data
+        return _handler
+
+    sio.on("connected", remember("connected"))
+    sio.on("room_created", remember("room_created"))
+    sio.on("room_create_error", remember("room_create_error"))
+
+    room_name = f"Regression Room {room_id[-12:]}"[:50]
+
+    try:
+        log(f"[browser-regression] bootstrapping ClubVoice room runtime for {room_id}", quiet=quiet)
+        sio.connect(clubvoice_url.rstrip("/"), wait_timeout=min(timeout_seconds, 10))
+        time.sleep(0.5)
+        sio.emit(
+            "create_room",
+            {
+                "name": room_name,
+                "room_id": room_id,
+                "enable_music": True,
+            },
+        )
+
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            if "room_created" in captured or "room_create_error" in captured:
+                break
+            time.sleep(0.1)
+    except Exception as error:
+        result["error"] = str(error)
+
+    result["connected"] = "connected" in captured
+
+    if "room_created" in captured:
+        result["roomCreated"] = True
+        result["payload"] = captured["room_created"]
+        return result, {"client": sio, "captured": captured}
+
+    if "room_create_error" in captured:
+        result["roomCreated"] = False
+        result["errorPayload"] = captured["room_create_error"]
+        try:
+            if sio.connected:
+                sio.disconnect()
+        except Exception:
+            pass
+        return result, None
+
+    result["roomCreated"] = False
+    if "error" not in result:
+        result["error"] = "timed out waiting for ClubVoice room bootstrap"
+    try:
+        if sio.connected:
+            sio.disconnect()
+    except Exception:
+        pass
+    return result, None
+
+
+def cleanup_clubvoice_room_runtime(room_id, bootstrap_session, *, quiet=False, timeout_seconds=15):
+    result = {
+        "attempted": False,
+        "roomId": room_id,
+    }
+
+    if not bootstrap_session:
+        result["skipped"] = "no-bootstrap-session"
+        return result
+
+    sio = bootstrap_session.get("client")
+    captured = bootstrap_session.get("captured") or {}
+
+    if sio is None:
+        result["skipped"] = "missing-bootstrap-client"
+        return result
+
+    result["attempted"] = True
+
+    def remember(name):
+        def _handler(data=None):
+            captured[name] = data
+        return _handler
+
+    def room_missing_from_list(payload):
+        rooms = payload.get("rooms") if isinstance(payload, dict) else None
+        if not isinstance(rooms, list):
+            return False
+
+        for room in rooms:
+            if isinstance(room, dict) and room.get("room_id") == room_id:
+                return False
+        return True
+
+    sio.on("room_ended", remember("room_ended"))
+    sio.on("end_room_error", remember("end_room_error"))
+    sio.on("room_list_updated", remember("room_list_updated"))
+    sio.on("rooms_list", remember("rooms_list"))
+    captured.pop("room_ended", None)
+    captured.pop("end_room_error", None)
+    captured.pop("room_list_updated", None)
+    captured.pop("rooms_list", None)
+
+    try:
+        if not sio.connected:
+            result["skipped"] = "bootstrap-session-disconnected"
+            return result
+
+        log(f"[browser-regression] cleaning up ClubVoice room runtime for {room_id}", quiet=quiet)
+        sio.emit("end_room", {"room_id": room_id})
+        deadline = time.monotonic() + timeout_seconds
+        next_rooms_poll = 0.0
+        while time.monotonic() < deadline:
+            if room_missing_from_list(captured.get("room_list_updated")) or room_missing_from_list(captured.get("rooms_list")):
+                captured["room_cleanup_confirmed"] = True
+                break
+            if "end_room_error" in captured:
+                break
+
+            now = time.monotonic()
+            if now >= next_rooms_poll:
+                sio.emit("get_rooms_list")
+                next_rooms_poll = now + 0.5
+            time.sleep(0.1)
+    except Exception as error:
+        result["error"] = str(error)
+    finally:
+        try:
+            if sio.connected:
+                sio.disconnect()
+        except Exception:
+            pass
+
+    if captured.get("room_cleanup_confirmed"):
+        result["roomEnded"] = True
+        result["payload"] = captured.get("room_list_updated") or captured.get("rooms_list")
+        return result
+
+    if "room_ended" in captured:
+        result["roomEnded"] = True
+        result["payload"] = captured["room_ended"]
+        return result
+
+    if "end_room_error" in captured:
+        result["roomEnded"] = False
+        result["errorPayload"] = captured["end_room_error"]
+        return result
+
+    result["roomEnded"] = False
+    if "error" not in result and "skipped" not in result:
+        result["error"] = "timed out waiting for ClubVoice room cleanup"
+    return result
 
 
 def build_expected_room_playlist_id(room_id):
@@ -852,50 +1056,69 @@ def main():
             trusted_playpause_resume = run_trusted_playpause_resume(page, quiet=args.quiet)
             trusted_playpause_resume_stale_local_state = run_trusted_playpause_resume_stale_local_state(page, quiet=args.quiet)
             room_suite = None
+            room_bootstrap = None
+            room_bootstrap_cleanup = None
+            room_bootstrap_session = None
             queue_suite = None
             local_suite = None
-            if args.include_room_suite:
-                room_page = context.new_page()
-                try:
-                    room_page.set_default_timeout(args.timeout_ms)
+            room_id = None
+            try:
+                if args.include_room_suite:
                     room_id = args.room_id or f"regression_room_{int(time.time())}"
-                    room_suite = run_room_suite(
-                        room_page,
-                        args.base_url,
+                    room_bootstrap, room_bootstrap_session = bootstrap_clubvoice_room_runtime(
                         room_id,
+                        args.clubvoice_url.strip(),
                         quiet=args.quiet,
-                        timeout_ms=args.timeout_ms,
-                        default_page=page,
+                        timeout_seconds=max(10, args.timeout_ms / 1000),
                     )
-                finally:
-                    if not is_page_closed(room_page):
-                        room_page.close()
-            if args.include_queue_suite:
-                queue_page = context.new_page()
-                try:
-                    queue_page.set_default_timeout(args.timeout_ms)
-                    queue_suite = run_queue_suite(
-                        queue_page,
-                        args.base_url,
+                    room_page = context.new_page()
+                    try:
+                        room_page.set_default_timeout(args.timeout_ms)
+                        room_suite = run_room_suite(
+                            room_page,
+                            args.base_url,
+                            room_id,
+                            quiet=args.quiet,
+                            timeout_ms=args.timeout_ms,
+                            default_page=page,
+                        )
+                    finally:
+                        if not is_page_closed(room_page):
+                            room_page.close()
+                if args.include_queue_suite:
+                    queue_page = context.new_page()
+                    try:
+                        queue_page.set_default_timeout(args.timeout_ms)
+                        queue_suite = run_queue_suite(
+                            queue_page,
+                            args.base_url,
+                            quiet=args.quiet,
+                            timeout_ms=args.timeout_ms,
+                        )
+                    finally:
+                        if not is_page_closed(queue_page):
+                            queue_page.close()
+                if args.include_local_suite:
+                    local_page = context.new_page()
+                    try:
+                        local_page.set_default_timeout(args.timeout_ms)
+                        local_suite = run_local_suite(
+                            local_page,
+                            args.base_url,
+                            quiet=args.quiet,
+                            timeout_ms=args.timeout_ms,
+                        )
+                    finally:
+                        if not is_page_closed(local_page):
+                            local_page.close()
+            finally:
+                if room_id and room_bootstrap_session is not None:
+                    room_bootstrap_cleanup = cleanup_clubvoice_room_runtime(
+                        room_id,
+                        room_bootstrap_session,
                         quiet=args.quiet,
-                        timeout_ms=args.timeout_ms,
+                        timeout_seconds=max(10, args.timeout_ms / 1000),
                     )
-                finally:
-                    if not is_page_closed(queue_page):
-                        queue_page.close()
-            if args.include_local_suite:
-                local_page = context.new_page()
-                try:
-                    local_page.set_default_timeout(args.timeout_ms)
-                    local_suite = run_local_suite(
-                        local_page,
-                        args.base_url,
-                        quiet=args.quiet,
-                        timeout_ms=args.timeout_ms,
-                    )
-                finally:
-                    if not is_page_closed(local_page):
-                        local_page.close()
             result = build_suite_result(
                 trusted_next,
                 trusted_prev,
@@ -905,6 +1128,10 @@ def main():
                 queue_suite=queue_suite,
                 local_suite=local_suite,
             )
+            if room_bootstrap is not None:
+                result["roomBootstrap"] = room_bootstrap
+            if room_bootstrap_cleanup is not None:
+                result["roomBootstrapCleanup"] = room_bootstrap_cleanup
             result["baseUrl"] = args.base_url
             result["browser"] = args.browser
             result["serverStartedByScript"] = bool(server_process)

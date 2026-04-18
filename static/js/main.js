@@ -20,7 +20,7 @@ import { ktvSync } from './ktv.js?v=49';
 import { playLock } from './playLock.js?v=2';
 import { unavailableSongs } from './unavailable.js';
 import { recordTrace } from './requestTrace.js?v=2';
-import { createRegressionHarness } from './regressionHarness.js?v=20';
+import { createRegressionHarness } from './regressionHarness.js?v=21';
 import { roomBotManager } from './roomBot.js?v=3';
 
 // ==========================================

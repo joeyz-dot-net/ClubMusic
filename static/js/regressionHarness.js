@@ -340,6 +340,7 @@ export class RegressionHarness {
         const playlistId = this.playlistManager?.getSelectedPlaylistId?.() || 'default';
         const activeDefaultId = this.playlistManager?.getActiveDefaultId?.() || 'default';
         if (playlistId === activeDefaultId) {
+            await this.api.clearQueue();
             const playlist = await this.api.getPlaylist(playlistId);
             const songs = Array.isArray(playlist?.playlist) ? playlist.playlist : [];
             for (let index = songs.length - 1; index >= 0; index -= 1) {
