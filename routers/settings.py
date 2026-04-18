@@ -36,6 +36,7 @@ from models.api_contracts import (
     VersionResponse,
 )
 from models.player import MusicPlayer
+from models.settings_ini import update_settings_values
 from routers.state import error_response
 from routers.dependencies import get_player
 from startup_cleanup import get_service_instance_status
@@ -244,32 +245,24 @@ async def get_ui_config():
 async def update_ui_config(payload: UIConfigRequest):
     """更新 UI 配置（写入 settings.ini）"""
     try:
-        import configparser
-        from pathlib import Path
-
         youtube_controls = payload.youtube_controls
         expand_button = payload.expand_button
         settings_nav_visible = payload.settings_nav_visible
         url_cache_enabled = payload.url_cache_enabled
 
-        config = configparser.ConfigParser()
-        config_file = Path("settings.ini")
-
-        if config_file.exists():
-            config.read(config_file, encoding="utf-8")
-
-        if not config.has_section('ui'):
-            config.add_section('ui')
-        if not config.has_section('cache'):
-            config.add_section('cache')
-
-        config.set('ui', 'youtube_controls', str(youtube_controls).lower())
-        config.set('ui', 'expand_button', str(expand_button).lower())
-        config.set('ui', 'settings_nav_visible', str(settings_nav_visible).lower())
-        config.set('cache', 'url_cache_enabled', str(url_cache_enabled).lower())
-
-        with open(config_file, 'w', encoding='utf-8') as f:
-            config.write(f)
+        update_settings_values(
+            "settings.ini",
+            {
+                'ui': {
+                    'youtube_controls': youtube_controls,
+                    'expand_button': expand_button,
+                    'settings_nav_visible': settings_nav_visible,
+                },
+                'cache': {
+                    'url_cache_enabled': url_cache_enabled,
+                },
+            },
+        )
 
         try:
             from models.url_cache import url_cache as _url_cache

@@ -24,6 +24,7 @@ import logging
 import errno
 from .playlist import CurrentPlaylist, PlayHistory
 from .playlists import Playlist
+from .settings_ini import replace_section_values
 from .song import LocalSong, Song, StreamSong
 
 logger = logging.getLogger(__name__)
@@ -214,10 +215,15 @@ class MusicPlayer:
                 logger.debug(f" {key}: {value}")
             else:
                 logger.debug(f" {key}: {value}")
-        parser = configparser.ConfigParser()
-        parser["app"] = default_cfg
-        with open(ini_path, "w", encoding="utf-8") as w:
-            parser.write(w)
+        replace_section_values(
+            ini_path,
+            {
+                "app": {
+                    key.lower(): value
+                    for key, value in default_cfg.items()
+                }
+            },
+        )
         logger.info(f"已生成默认配置文件: {ini_path}")
 
     def __init__(
@@ -1006,14 +1012,16 @@ class MusicPlayer:
           ini_path: 输出文件路径
           config: 配置字典
         """
-        parser = configparser.ConfigParser()
-        parser["app"] = {}
-        for key, value in config.items():
-            parser["app"][key] = str(value) if value is not None else ""
-
         try:
-            with open(ini_path, "w", encoding="utf-8") as f:
-                parser.write(f)
+            replace_section_values(
+                ini_path,
+                {
+                    "app": {
+                        str(key).lower(): value
+                        for key, value in config.items()
+                    }
+                },
+            )
             logger.info(f"配置已保存到 {ini_path}")
         except Exception as e:
             logger.error(f"保存配置文件失败: {e}")

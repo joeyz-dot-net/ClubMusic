@@ -24,6 +24,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
+from models.settings_ini import ensure_settings_defaults
 from models.song import StreamSong, LocalSong
 
 # ============================================
@@ -54,79 +55,38 @@ from routers import room as room_router
 
 def _init_default_settings_ini():
     """确保 settings.ini 包含所有需要的默认节，只补充缺失部分，不覆盖已有内容。"""
-    import configparser
-
     config_file = Path("settings.ini")
-    config = configparser.ConfigParser()
-
-    if config_file.exists():
-        config.read(config_file, encoding="utf-8")
-
-    changed = False
-
-    # 补充 [ui] 节
-    if not config.has_section('ui'):
-        config.add_section('ui')
-        config.set('ui', 'youtube_controls', 'true')
-        config.set('ui', 'expand_button', 'true')
-        changed = True
-
-    # 补充 [cache] 节或其中缺失的键
-    if not config.has_section('cache'):
-        config.add_section('cache')
-        config.set('cache', 'url_cache_enabled', 'true')
-        changed = True
-    elif not config.has_option('cache', 'url_cache_enabled'):
-        config.set('cache', 'url_cache_enabled', 'true')
-        changed = True
-
-    # 补充 [backup] 节或其中缺失的键
-    if not config.has_section('backup'):
-        config.add_section('backup')
-        changed = True
-    backup_defaults = {
-        'enabled':        'true',
-        'backup_dir':     'backups',
-        'interval_hours': '6',
-        'keep_days':      '7',
-    }
-    for key, val in backup_defaults.items():
-        if not config.has_option('backup', key):
-            config.set('backup', key, val)
-            changed = True
-
-    # 补充 [auto_fill] 节或其中缺失的键
-    if not config.has_section('auto_fill'):
-        config.add_section('auto_fill')
-        changed = True
-    auto_fill_defaults = {
-        'enabled':          'true',
-        'source_playlists': 'true',
-        'source_history':   'true',
-        'source_local':     'true',
-    }
-    for key, val in auto_fill_defaults.items():
-        if not config.has_option('auto_fill', key):
-            config.set('auto_fill', key, val)
-            changed = True
-
-    # 补充 [room] 节或其中缺失的键
-    if not config.has_section('room'):
-        config.add_section('room')
-        changed = True
-    room_defaults = {
-        'max_rooms':       '10',
-        'idle_timeout':    '3600',
-    }
-    for key, val in room_defaults.items():
-        if not config.has_option('room', key):
-            config.set('room', key, val)
-            changed = True
+    changed = ensure_settings_defaults(
+        config_file,
+        {
+            'ui': {
+                'youtube_controls': 'true',
+                'expand_button': 'true',
+            },
+            'cache': {
+                'url_cache_enabled': 'true',
+            },
+            'backup': {
+                'enabled': 'true',
+                'backup_dir': 'backups',
+                'interval_hours': '6',
+                'keep_days': '7',
+            },
+            'auto_fill': {
+                'enabled': 'true',
+                'source_playlists': 'true',
+                'source_history': 'true',
+                'source_local': 'true',
+            },
+            'room': {
+                'max_rooms': '10',
+                'idle_timeout': '3600',
+            },
+        },
+    )
 
     if changed:
         try:
-            with open(config_file, 'w', encoding='utf-8') as f:
-                config.write(f)
             logger.info("[配置] settings.ini 已补充默认配置节")
         except Exception as e:
             logger.warning(f"[配置] 更新 settings.ini 失败（无害）: {e}")

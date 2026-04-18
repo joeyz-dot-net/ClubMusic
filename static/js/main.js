@@ -271,6 +271,7 @@ class MusicPlayerApp {
             
             // 5.5 初始化设置管理器（绑定关闭按钮等事件）
             await settingsManager.init();
+            this.applySettingsNavVisibility();
 
             // 5.6 初始化专辑资料库页面
             await albumsManager.init({ container: this.elements.albums });
