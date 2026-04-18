@@ -21,6 +21,7 @@ import configparser
 import subprocess
 import re
 import logging
+import errno
 from .playlist import CurrentPlaylist, PlayHistory
 from .playlists import Playlist
 from .song import LocalSong, Song, StreamSong
@@ -1823,27 +1824,73 @@ class MusicPlayer:
 
     def mpv_request(self, payload: dict):
         """向 MPV 发送请求并等待响应"""
-        try:
-            with open(self.pipe_name, "r+b", 0) as f:
-                f.write((json.dumps(payload) + "\n").encode("utf-8"))
-                f.flush()
-                while True:
-                    line = f.readline()
-                    if not line:
-                        break
-                    try:
-                        obj = json.loads(line.decode("utf-8", "ignore"))
-                    except Exception:
-                        continue
-                    if obj.get("request_id") == payload.get("request_id"):
-                        return obj
-        except (OSError, IOError) as e:
-            if self.mpv_cmd is not None:
-                # 默认 PLAYER 管道错误应引起注意
-                logger.warning(f"[mpv_request] 管道错误 (pipe={self.pipe_name}): {e}")
+        if self._stop_flag:
+            return None
+
+        is_room_player = bool(getattr(self, '_room_id', ''))
+        max_attempts = 3 if is_room_player else 1
+        last_error = None
+
+        for attempt in range(max_attempts):
+            if self._stop_flag:
+                return None
+
+            try:
+                with open(self.pipe_name, "r+b", 0) as f:
+                    f.write((json.dumps(payload) + "\n").encode("utf-8"))
+                    f.flush()
+                    while True:
+                        line = f.readline()
+                        if not line:
+                            self._last_mpv_request_error_key = None
+                            self._last_mpv_request_error_at = 0.0
+                            return None
+                        try:
+                            obj = json.loads(line.decode("utf-8", "ignore"))
+                        except Exception:
+                            continue
+                        if obj.get("request_id") == payload.get("request_id"):
+                            self._last_mpv_request_error_key = None
+                            self._last_mpv_request_error_at = 0.0
+                            return obj
+            except (OSError, IOError) as e:
+                last_error = e
+                is_transient_room_pipe_error = (
+                    is_room_player
+                    and getattr(e, "errno", None) == errno.EINVAL
+                    and not self._stop_flag
+                )
+                if is_transient_room_pipe_error and attempt + 1 < max_attempts:
+                    time.sleep(0.12 * (attempt + 1))
+                    continue
+                break
+
+        if last_error is not None:
+            mpv_process = getattr(self, 'mpv_process', None)
+            mpv_alive = mpv_process is not None and mpv_process.poll() is None
+            suppress_warning = (
+                self.mpv_cmd is None
+                or self._stop_flag
+                or (is_room_player and not mpv_alive and not self.mpv_pipe_exists())
+            )
+            error_key = (
+                type(last_error).__name__,
+                getattr(last_error, "errno", None),
+                str(last_error),
+            )
+            now = time.time()
+            last_logged_key = getattr(self, '_last_mpv_request_error_key', None)
+            last_logged_at = getattr(self, '_last_mpv_request_error_at', 0.0)
+
+            if error_key == last_logged_key and (now - last_logged_at) < 5.0:
+                logger.debug(f"[mpv_request] 重复管道错误 (pipe={self.pipe_name}): {last_error}")
+            elif suppress_warning:
+                logger.debug(f"[mpv_request] 管道错误 (pipe={self.pipe_name}): {last_error}")
             else:
-                # PipePlayer 管道可能尚未就绪，降级为 debug
-                logger.debug(f"[mpv_request] PipePlayer 管道错误 (pipe={self.pipe_name}): {e}")
+                logger.warning(f"[mpv_request] 管道错误 (pipe={self.pipe_name}): {last_error}")
+
+            self._last_mpv_request_error_key = error_key
+            self._last_mpv_request_error_at = now
         return None
 
     def mpv_get(self, prop: str):
