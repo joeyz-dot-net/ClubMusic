@@ -1217,13 +1217,27 @@ export class RegressionHarness {
             throw new Error(`Probe mismatch: expected ${probe.probeId}, got ${probeId}`);
         }
 
-        await this.sleep(settleMs);
+        const expectedNextSong = this.getSong(probe.nextSongKey);
+        const waitBudgetMs = Math.max(settleMs, 8000);
+        await this.waitForTrackMatch(this.getSongId(expectedNextSong), { timeoutMs: waitBudgetMs });
+
+        const fallbackDeadline = Date.now() + waitBudgetMs;
+        while (Date.now() < fallbackDeadline) {
+            const snapshot = this.snapshot('trusted-next-click-wait');
+            const currentTrackId = this.getSongMatchId(snapshot.currentMeta);
+            const fallbackObserved = snapshot.failedVideoId === expectedNextSong.video_id && snapshot.isVideoMode === false;
+            if (currentTrackId === this.getSongId(expectedNextSong) && fallbackObserved) {
+                break;
+            }
+            await this.sleep(200);
+        }
+
+        await this.sleep(300);
         const snapshot = this.snapshot('trusted-next-click-after');
         const traceMetrics = this.buildTraceMetrics({
             controlId: probe.controlId,
             startIndex: probe.traceStartIndex,
         });
-        const expectedNextSong = this.getSong(probe.nextSongKey);
         const currentTrackId = this.getSongMatchId(snapshot.currentMeta);
         const summary = this.summarizeChecks({
             trustedClickSeen: traceMetrics.trustedClickSeen,
