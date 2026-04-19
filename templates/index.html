@@ -46,7 +46,7 @@
 </head>
 <body>
 
-	<div id="playlist" class="tab-content playlist-tab" aria-label="播放列表" data-i18n-aria="nav.queue">
+	<div id="playlist" class="tab-content playlist-tab" style="display:none;" aria-label="播放列表" data-i18n-aria="nav.queue">
 		
 		<div id="youtubeSearchResults" class="youtube-search-results" style="display:none;">
 			<h4 class="youtube-search-title" data-i18n="search.title">搜索结果</h4>
@@ -254,7 +254,7 @@
 
 	<!-- Bottom Navigation (队列、歌单、搜索、历史、设置) -->
 	<nav id="bottomNav" class="bottom-nav">
-		<button class="nav-item active" data-tab="playlists" aria-label="播放列表" data-i18n-aria="nav.queue">
+		<button class="nav-item" data-tab="playlists" aria-label="播放列表" data-i18n-aria="nav.queue">
 			<span class="nav-icon" aria-hidden="true">🎵</span>
 		</button>
 		<button class="nav-item" data-tab="albums" title="专辑" data-i18n-title="nav.albums" aria-label="专辑" data-i18n-aria="nav.albums">
@@ -431,7 +431,7 @@
 	<!-- YouTube IFrame Player API -->
 	<script src="https://www.youtube.com/iframe_api"></script>
 
-	<script type="module" src="/static/js/main.js?v=195"></script>
+	<script type="module" src="/static/js/main.js?v=196"></script>
 
 	<!-- 调试面板模块 HTML 模板（由 debug-panel.module.js 动态创建） -->
 	<template id="debugPanelTemplate">

@@ -244,8 +244,14 @@ def test_openapi_settings_and_room_request_shapes_are_stable():
     assert ui_config_request["application/json"]["schema"]["$ref"] == "#/components/schemas/UIConfigRequest"
     ui_config_properties = components["UIConfigData"]["properties"]
     assert ui_config_properties["settings_nav_visible"]["type"] == "boolean"
+    assert ui_config_properties["default_page"]["type"] == "string"
+    assert set(ui_config_properties["default_page"]["enum"]) == {"playlists", "albums"}
+    assert ui_config_properties["default_page"]["default"] == "albums"
     ui_config_request_properties = components["UIConfigRequest"]["properties"]
     assert ui_config_request_properties["settings_nav_visible"]["type"] == "boolean"
+    assert ui_config_request_properties["default_page"]["type"] == "string"
+    assert set(ui_config_request_properties["default_page"]["enum"]) == {"playlists", "albums"}
+    assert ui_config_request_properties["default_page"]["default"] == "albums"
 
     room_init_request = paths["/room/init"]["post"]["requestBody"]["content"]
     assert room_init_request["application/json"]["schema"]["$ref"] == "#/components/schemas/RoomInitRequest"

@@ -525,6 +525,7 @@ class UIConfigData(BaseModel):
     expand_button: bool = True
     settings_nav_visible: bool = True
     url_cache_enabled: bool = True
+    default_page: Literal["playlists", "albums"] = "albums"
 
 
 class UIConfigRequest(BaseModel):
@@ -532,6 +533,7 @@ class UIConfigRequest(BaseModel):
     expand_button: bool = True
     settings_nav_visible: bool = True
     url_cache_enabled: bool = True
+    default_page: Literal["playlists", "albums"] = "albums"
 
 
 class UIConfigResponse(BaseModel):

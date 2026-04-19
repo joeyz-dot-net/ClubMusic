@@ -16,11 +16,21 @@ export const settingsManager = {
         'language': 'auto'
     },
 
+    DEFAULT_UI_CONFIG: {
+        youtube_controls: true,
+        expand_button: true,
+        settings_nav_visible: true,
+        url_cache_enabled: true,
+        default_page: 'albums'
+    },
+
     // UI 配置（从服务器读取）
     uiConfig: {
         youtube_controls: true,
         expand_button: true,
-        settings_nav_visible: true
+        settings_nav_visible: true,
+        url_cache_enabled: true,
+        default_page: 'albums'
     },
 
     // 用于存储 player 实例引用
@@ -181,6 +191,24 @@ export const settingsManager = {
 
     set settings(value) {
         this.saveSettingsToStorage(value);
+    },
+
+    normalizeDefaultPage(value) {
+        return value === 'playlists' ? 'playlists' : 'albums';
+    },
+
+    normalizeUIConfig(config = {}) {
+        const nextConfig = (config && typeof config === 'object') ? config : {};
+        const currentConfig = (this.uiConfig && typeof this.uiConfig === 'object') ? this.uiConfig : {};
+        return {
+            youtube_controls: nextConfig.youtube_controls ?? currentConfig.youtube_controls ?? this.DEFAULT_UI_CONFIG.youtube_controls,
+            expand_button: nextConfig.expand_button ?? currentConfig.expand_button ?? this.DEFAULT_UI_CONFIG.expand_button,
+            settings_nav_visible: nextConfig.settings_nav_visible ?? currentConfig.settings_nav_visible ?? this.DEFAULT_UI_CONFIG.settings_nav_visible,
+            url_cache_enabled: nextConfig.url_cache_enabled ?? currentConfig.url_cache_enabled ?? this.DEFAULT_UI_CONFIG.url_cache_enabled,
+            default_page: this.normalizeDefaultPage(
+                nextConfig.default_page ?? currentConfig.default_page ?? this.DEFAULT_UI_CONFIG.default_page
+            )
+        };
     },
     
     /**
@@ -401,12 +429,13 @@ export const settingsManager = {
                 'UI配置加载失败'
             );
 
-            this.uiConfig = result.data;
+            this.uiConfig = this.normalizeUIConfig(result.data);
             console.log('[设置] UI配置已加载:', this.uiConfig);
             return this.uiConfig;
         } catch (error) {
             console.error('[设置] UI配置加载失败:', error);
             // 使用默认值
+            this.uiConfig = this.normalizeUIConfig(this.uiConfig);
             return this.uiConfig;
         }
     },
@@ -416,12 +445,13 @@ export const settingsManager = {
      */
     async saveUIConfig(config) {
         try {
+            const normalizedConfig = this.normalizeUIConfig(config);
             const result = this.assertApiSuccess(
-                await api.saveUIConfig(config),
+                await api.saveUIConfig(normalizedConfig),
                 'UI配置保存失败'
             );
 
-            this.uiConfig = result.data;
+            this.uiConfig = this.normalizeUIConfig(result.data);
             console.log('[设置] UI配置已保存:', this.uiConfig);
             return true;
         } catch (error) {

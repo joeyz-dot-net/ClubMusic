@@ -1,5 +1,5 @@
 import { api } from './api.js?v=6';
-import { player } from './player.js?v=27';
+import { player } from './player.js?v=28';
 import { playlistManager } from './playlist.js?v=52';
 import { buildTrackItemElement } from './templates.js';
 import { Toast, loading } from './ui.js?v=3';

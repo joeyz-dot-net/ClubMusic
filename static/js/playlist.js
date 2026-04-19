@@ -4,7 +4,7 @@ import { Toast, loading, ConfirmModal } from './ui.js?v=3';
 import { operationLock } from './operationLock.js?v=2';
 import { thumbnailManager, escapeHTML, focusFirstFocusable, openOverlayActionMenu, restoreFocus, trapFocusInContainer } from './utils.js?v=2';
 import { i18n } from './i18n.js?v=2';
-import { player } from './player.js?v=27';
+import { player } from './player.js?v=28';
 import { unavailableSongs } from './unavailable.js';
 import { executePlayNow, rerenderQueueWithCurrentMeta } from './playNow.js?v=22';
 import { getCurrentPlaybackStatus } from './playbackState.js?v=20';

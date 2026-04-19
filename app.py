@@ -62,6 +62,7 @@ def _init_default_settings_ini():
             'ui': {
                 'youtube_controls': 'true',
                 'expand_button': 'true',
+                'default_page': 'albums',
             },
             'cache': {
                 'url_cache_enabled': 'true',

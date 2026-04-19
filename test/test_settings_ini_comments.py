@@ -46,7 +46,8 @@ def test_update_ui_config_rewrites_with_managed_comments(tmp_path, monkeypatch):
         "[ui]\n"
         "youtube_controls = false\n"
         "expand_button = true\n"
-        "settings_nav_visible = false\n\n"
+        "settings_nav_visible = false\n"
+        "default_page = playlists\n\n"
         "[cache]\n"
         "url_cache_enabled = true\n",
         encoding="utf-8",
@@ -57,6 +58,7 @@ def test_update_ui_config_rewrites_with_managed_comments(tmp_path, monkeypatch):
         expand_button=False,
         settings_nav_visible=True,
         url_cache_enabled=False,
+        default_page="albums",
     )
     result = asyncio.run(settings_router.update_ui_config(payload))
     content = settings_path.read_text(encoding="utf-8")
@@ -67,6 +69,8 @@ def test_update_ui_config_rewrites_with_managed_comments(tmp_path, monkeypatch):
     assert "youtube_controls = true" in content
     assert "expand_button = false" in content
     assert "settings_nav_visible = true" in content
+    assert "# 默认启动显示的页面，可选 playlists 或 albums。" in content
+    assert "default_page = albums" in content
     assert "# 缓存配置。" in content
     assert "url_cache_enabled = false" in content
 

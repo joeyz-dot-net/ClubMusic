@@ -46,6 +46,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 APP_VERSION = "2.0.0"
+_VALID_DEFAULT_PAGES = {"playlists", "albums"}
 
 _SETTINGS_ERROR_RESPONSES = {
     500: {"model": ErrorResponse, "description": "Unexpected server error"},
@@ -54,6 +55,13 @@ _SETTINGS_KEY_ERROR_RESPONSES = {
     400: {"model": ErrorResponse, "description": "Unknown setting key"},
     500: {"model": ErrorResponse, "description": "Unexpected server error"},
 }
+
+
+def _normalize_default_page(value: str | None) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized in _VALID_DEFAULT_PAGES:
+        return normalized
+    return "albums"
 
 
 @router.get("/version", response_model=VersionResponse, response_model_exclude_none=True)
@@ -210,6 +218,7 @@ async def get_ui_config():
             "expand_button": True,
             "settings_nav_visible": True,
             "url_cache_enabled": True,
+            "default_page": "albums",
         }
 
         if config_file.exists():
@@ -218,6 +227,7 @@ async def get_ui_config():
             expand_button = config.getboolean('ui', 'expand_button', fallback=True)
             settings_nav_visible = config.getboolean('ui', 'settings_nav_visible', fallback=True)
             url_cache_enabled = config.getboolean('cache', 'url_cache_enabled', fallback=True)
+            default_page = _normalize_default_page(config.get('ui', 'default_page', fallback='albums'))
             return {
                 "status": "OK",
                 "data": {
@@ -225,6 +235,7 @@ async def get_ui_config():
                     "expand_button": expand_button,
                     "settings_nav_visible": settings_nav_visible,
                     "url_cache_enabled": url_cache_enabled,
+                    "default_page": default_page,
                 }
             }
 
@@ -249,6 +260,7 @@ async def update_ui_config(payload: UIConfigRequest):
         expand_button = payload.expand_button
         settings_nav_visible = payload.settings_nav_visible
         url_cache_enabled = payload.url_cache_enabled
+        default_page = _normalize_default_page(payload.default_page)
 
         update_settings_values(
             "settings.ini",
@@ -257,6 +269,7 @@ async def update_ui_config(payload: UIConfigRequest):
                     'youtube_controls': youtube_controls,
                     'expand_button': expand_button,
                     'settings_nav_visible': settings_nav_visible,
+                    'default_page': default_page,
                 },
                 'cache': {
                     'url_cache_enabled': url_cache_enabled,
@@ -272,7 +285,7 @@ async def update_ui_config(payload: UIConfigRequest):
 
         logger.info(
             f"[UI配置] 已更新: YouTube控件={youtube_controls}, 放大按钮={expand_button}, "
-            f"设置导航={settings_nav_visible}, URL缓存={url_cache_enabled}"
+            f"设置导航={settings_nav_visible}, 默认页面={default_page}, URL缓存={url_cache_enabled}"
         )
         return {
             "status": "OK",
@@ -282,6 +295,7 @@ async def update_ui_config(payload: UIConfigRequest):
                 "expand_button": expand_button,
                 "settings_nav_visible": settings_nav_visible,
                 "url_cache_enabled": url_cache_enabled,
+                "default_page": default_page,
             }
         }
     except Exception as e:

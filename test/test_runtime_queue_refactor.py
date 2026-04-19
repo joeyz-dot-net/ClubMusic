@@ -490,6 +490,7 @@ def test_ui_config_payload_includes_settings_nav_visible(tmp_path, monkeypatch):
         "youtube_controls = false\n"
         "expand_button = true\n"
         "settings_nav_visible = false\n\n"
+        "default_page = albums\n\n"
         "[cache]\n"
         "url_cache_enabled = true\n",
         encoding="utf-8",
@@ -500,6 +501,7 @@ def test_ui_config_payload_includes_settings_nav_visible(tmp_path, monkeypatch):
 
     assert validated.data.settings_nav_visible is False
     assert validated.data.youtube_controls is False
+    assert validated.data.default_page == "albums"
 
 
 def test_history_and_media_payloads_match_response_schema():

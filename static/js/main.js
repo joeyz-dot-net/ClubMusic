@@ -2,7 +2,7 @@
 // 这是一个使用新模块系统的示例文件
 
 import { api } from './api.js?v=6';
-import { player } from './player.js?v=27';
+import { player } from './player.js?v=28';
 import { playlistManager, renderPlaylistUI, showPlaybackHistory } from './playlist.js?v=52';
 import { playlistsManagement } from './playlists-management.js?v=36';
 import { volumeControl } from './volume.js?v=20';
@@ -13,7 +13,7 @@ import { debug } from './debug.js?v=5';
 import { Toast, formatTime } from './ui.js?v=3';
 import { focusFirstFocusable, isMobile, isIPad, restoreFocus, ThumbnailManager, trapFocusInContainer } from './utils.js?v=2';
 import { localFiles } from './local.js?v=30';
-import { settingsManager } from './settingsManager.js?v=15';
+import { settingsManager } from './settingsManager.js?v=16';
 import { navManager } from './navManager.js';
 import { i18n } from './i18n.js?v=2';
 import { ktvSync } from './ktv.js?v=49';
@@ -64,6 +64,55 @@ class MusicPlayerApp {
 
     getMpvData(status) {
         return status?.mpv_state || status?.mpv || {};
+    }
+
+    normalizeDefaultTab(tabName) {
+        return tabName === 'playlists' ? 'playlists' : 'albums';
+    }
+
+    getConfiguredDefaultTab() {
+        return this.normalizeDefaultTab(settingsManager.uiConfig?.default_page);
+    }
+
+    setNavigationRoot(tabName) {
+        const nextTab = this.normalizeDefaultTab(tabName);
+
+        if (Array.isArray(this.navigationStack)) {
+            this.navigationStack.splice(0, this.navigationStack.length, nextTab);
+        } else {
+            this.navigationStack = [nextTab];
+        }
+
+        return nextTab;
+    }
+
+    showQueueHome() {
+        this.setNavigationRoot('playlists');
+        this.setActiveBottomNavTab('playlists');
+        this.showPlaylistContent();
+    }
+
+    hidePrimaryContentSections() {
+        this.hideTabSection(this.elements?.playlist);
+        this.hideTabSection(this.elements?.albums);
+        this.hideTabSection(this.elements?.tree);
+    }
+
+    async applyStartupDefaultTab() {
+        const startupTab = this.setNavigationRoot(this.getConfiguredDefaultTab());
+
+        if (startupTab === 'albums') {
+            try {
+                this.setActiveBottomNavTab('albums');
+                this.showAlbumsContent();
+                await albumsManager.enterLanding();
+                return;
+            } catch (error) {
+                console.error('[初始化] 专辑默认页加载失败，回退到播放队列:', error);
+            }
+        }
+
+        this.showQueueHome();
     }
 
     setElementText(element, value) {
@@ -264,8 +313,7 @@ class MusicPlayerApp {
                     await this.switchSelectedPlaylist(playlistId);
                 },
                 () => {
-                    this.setActiveBottomNavTab('playlists');
-                    this.showPlaylistContent();
+                    this.showQueueHome();
                 }
             );
             
@@ -275,6 +323,9 @@ class MusicPlayerApp {
 
             // 5.6 初始化专辑资料库页面
             await albumsManager.init({ container: this.elements.albums });
+
+            // 5.7 根据配置应用启动默认栏目
+            await this.applyStartupDefaultTab();
 
             // 应用全屏控件设置
             await settingsManager.applyFullscreenControls();
@@ -1339,22 +1390,11 @@ class MusicPlayerApp {
             console.log('[初始化] this.currentPlaylistId:', this.currentPlaylistId);
             console.log('[初始化] 恢复选择歌单:', this.currentPlaylistId);
             
-            // 初始化时隐藏本地文件，点击本地标签时显示
-            if (this.elements.tree) {
-                this.elements.tree.classList.remove('tab-visible');
-                console.log('✅ 隐藏tree');
-            }
-            
-            // 显示playlist（添加tab-visible类以设置opacity=1）
-            if (this.elements.playlist) {
-                this.elements.playlist.classList.add('tab-visible');
-                console.log('✅ 显示playlist');
-            }
+            this.hidePrimaryContentSections();
+            console.log('✅ 重置主内容区初始可见性');
             
             this.renderPlaylist();
             this._hasInitialPlaylistRender = true;
-
-            this.setActiveBottomNavTab('playlists');
             
             console.log('✅ 播放列表初始化完成');
         } catch (error) {
@@ -2018,12 +2058,10 @@ class MusicPlayerApp {
                 this.hideModalElement(playlistsModal, { hideDelay: 300 });
             }
             
-            this.showPlaylistContent();
+            this.showQueueHome();
             
             // 刷新播放列表 UI
             this.renderPlaylist();
-
-            this.setActiveBottomNavTab('playlists');
 
             console.log('[应用] ✓ 已切换到歌单:', this.currentPlaylistId);
             
@@ -2448,7 +2486,9 @@ class MusicPlayerApp {
         const playlistsModal = document.getElementById('playlistsModal');
 
         // 保持导航栈为 app 实例属性，确保在外部回调也可访问
-        this.navigationStack = this.navigationStack || ['playlists'];
+        this.navigationStack = Array.isArray(this.navigationStack) && this.navigationStack.length > 0
+            ? this.navigationStack
+            : [this.getConfiguredDefaultTab()];
         const navigationStack = this.navigationStack; // 局部引用（用于闭包）
         let currentModal = null; // 追踪当前打开的模态框
 
@@ -2727,14 +2767,8 @@ class MusicPlayerApp {
             }, 300);
         };
         
-        // 初始化时显示"队列"模块
-        const firstNavItem = navItems[0];
-        if (firstNavItem) {
-            this.setActiveBottomNavTab('playlists');
-            
-            // ✅ 【修复】初始化时只显示播放列表，不打开歌单管理模态框
-            this.showPlaylistContent();
-            
+        // 初始化时收口模态框，保留已应用的默认栏目
+        if (navItems.length > 0) {
             // 隐藏所有模态框
             Object.values(modals).forEach(modal => {
                 if (modal) {
@@ -2843,8 +2877,7 @@ class MusicPlayerApp {
                     this.navigationStack.pop();
                 }
 
-                this.showPlaylistContent();
-                this.setActiveBottomNavTab('playlists');
+                this.showQueueHome();
             }
         );
     }

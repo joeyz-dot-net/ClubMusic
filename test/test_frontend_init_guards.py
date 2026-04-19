@@ -12,3 +12,21 @@ def test_main_init_applies_settings_nav_visibility_before_binding_events():
     bind_events_index = source.index('this.bindEventListeners();', apply_visibility_index)
 
     assert settings_init_index < apply_visibility_index < bind_events_index
+
+
+def test_main_init_applies_startup_default_tab_after_albums_init():
+    source = (_REPO_ROOT / 'static' / 'js' / 'main.js').read_text(encoding='utf-8')
+
+    settings_init_index = source.index('await settingsManager.init();')
+    albums_init_index = source.index('await albumsManager.init({ container: this.elements.albums });', settings_init_index)
+    startup_tab_index = source.index('await this.applyStartupDefaultTab();', albums_init_index)
+    bind_events_index = source.index('this.bindEventListeners();', startup_tab_index)
+
+    assert settings_init_index < albums_init_index < startup_tab_index < bind_events_index
+
+
+def test_main_navigation_stack_defaults_to_configured_tab():
+    source = (_REPO_ROOT / 'static' / 'js' / 'main.js').read_text(encoding='utf-8')
+
+    assert '[this.getConfiguredDefaultTab()]' in source
+    assert "this.navigationStack = this.navigationStack || ['playlists'];" not in source

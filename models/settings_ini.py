@@ -50,6 +50,7 @@ _SETTINGS_SCHEMA = {
             "youtube_controls": "是否显示 YouTube 原生控件。",
             "expand_button": "是否显示自定义放大按钮。",
             "settings_nav_visible": "是否在底部导航栏显示 Settings 按钮。",
+            "default_page": "默认启动显示的页面，可选 playlists 或 albums。",
         },
     },
     "cache": {
